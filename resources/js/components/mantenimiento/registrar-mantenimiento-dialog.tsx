@@ -278,6 +278,17 @@ export function RegistrarMantenimientoDialog({
                                     }
                                 />
                                 <InputError message={errors.odometro} />
+                                {data.odometro !== '' &&
+                                    Number(data.odometro) < odometroMinimo && (
+                                        <p className="text-xs text-amber-600">
+                                            Menor al último registro conocido (
+                                            {odometroMinimo.toLocaleString(
+                                                'es-PE',
+                                            )}{' '}
+                                            km). Puedes continuar si es un
+                                            mantenimiento pasado.
+                                        </p>
+                                    )}
                             </div>
                             <div className="grid gap-1.5">
                                 <Label>Proveedor / Taller — opcional</Label>

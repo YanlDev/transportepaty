@@ -2,9 +2,7 @@
 
 namespace App\Http\Requests;
 
-use App\Models\Mantenimiento;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
 
 class StoreMantenimientoRequest extends FormRequest
 {
@@ -34,23 +32,5 @@ class StoreMantenimientoRequest extends FormRequest
             'fotos' => ['nullable', 'array', 'max:5'],
             'fotos.*' => ['image', 'mimes:jpeg,png,webp', 'max:5120'],
         ];
-    }
-
-    public function withValidator(Validator $validator): void
-    {
-        $validator->after(function (Validator $validator): void {
-            $vehiculo = $this->route('vehiculo');
-            $odometroMaximo = max(
-                $vehiculo->kilometraje,
-                Mantenimiento::where('vehiculo_id', $vehiculo->id)->max('odometro') ?? 0,
-            );
-
-            if ((int) $this->input('odometro') < $odometroMaximo) {
-                $validator->errors()->add(
-                    'odometro',
-                    "El odómetro ({$this->input('odometro')}) es menor al último registro conocido ($odometroMaximo).",
-                );
-            }
-        });
     }
 }

@@ -136,6 +136,26 @@ it('lets an admin register a maintenance with items', function (): void {
         ->and((float) $mantenimiento->costo_total)->toBe(165.0);
 });
 
+it('allows backfilling a past maintenance with a lower odometer', function (): void {
+    $vehiculo = Vehiculo::factory()->create(['kilometraje' => 54710]);
+    Mantenimiento::factory()->for($vehiculo)->create(['odometro' => 50000]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vehiculos.mantenimiento.store', $vehiculo), [
+            'fecha_realizado' => '2026-03-21',
+            'odometro' => 40000,
+            'items' => [
+                ['nombre' => 'Cambio de aceite', 'tipo_mantenimiento' => 'aceite'],
+            ],
+        ])
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(
+        Mantenimiento::where('vehiculo_id', $vehiculo->id)->where('odometro', 40000)->exists()
+    )->toBeTrue();
+});
+
 it('links a registered item to its maintenance template', function (): void {
     $vehiculo = Vehiculo::factory()->create(['kilometraje' => 10000, 'marca' => 'Toyota', 'modelo' => 'Hilux']);
     $plantilla = PlantillaMantenimiento::factory()->create([
