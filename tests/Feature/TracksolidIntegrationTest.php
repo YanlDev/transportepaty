@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Conductor;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Models\Vehiculo;
@@ -268,19 +269,30 @@ it('renders the live camera page for admins', function (): void {
         );
 });
 
-it('forbids non-admins from the camera page', function (): void {
+it('lets a viewer open any camera page', function (): void {
     fakeTracksolid();
     $vehiculo = Vehiculo::factory()->create(['imei' => '860112070376688']);
 
     actingAs(User::factory()->create()->assignRole('visor'))
         ->get(route('integraciones.tracksolid.camaras', $vehiculo))
-        ->assertForbidden();
+        ->assertSuccessful();
 });
 
-it('forbids non-admins from the camera', function (): void {
+it('lets a driver open the camera of their own vehicle', function (): void {
+    fakeTracksolid();
+    $user = User::factory()->create()->assignRole('conductor');
+    $conductor = Conductor::factory()->create(['user_id' => $user->id]);
+    $vehiculo = Vehiculo::factory()->for($conductor)->create(['imei' => '860112070376688']);
+
+    actingAs($user)
+        ->get(route('integraciones.tracksolid.camaras', $vehiculo))
+        ->assertSuccessful();
+});
+
+it('forbids a driver from the camera of a vehicle that is not theirs', function (): void {
     $vehiculo = Vehiculo::factory()->create(['imei' => '860112070376688']);
 
-    actingAs(User::factory()->create()->assignRole('visor'))
+    actingAs(User::factory()->create()->assignRole('conductor'))
         ->getJson(route('integraciones.tracksolid.camara', $vehiculo))
         ->assertForbidden();
 });

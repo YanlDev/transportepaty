@@ -99,23 +99,21 @@ export function AppSidebar() {
     const puedeGestionar = esAdmin || auth.roles.includes('visor');
     const esConductor = auth.roles.includes('conductor');
 
-    const pendientesNavItems: NavItem[] = esAdmin
-        ? [
-              {
-                  title: 'Cargas por procesar',
-                  href: combustiblePendientes(),
-                  icon: Fuel,
-                  badge: combustiblePendiente,
-              },
-          ]
-        : [];
-
-    const items = [
+    // Operación: lo que usa el día a día. El conductor registra carga; el
+    // admin además ve la bandeja de cargas pendientes.
+    const operacionItems: NavItem[] = [
         ...mainNavItems,
         ...(esConductor ? conductorNavItems : []),
-        ...pendientesNavItems,
-        ...(puedeGestionar ? gestionNavItems : []),
-        ...(esAdmin ? adminNavItems : []),
+        ...(esAdmin
+            ? [
+                  {
+                      title: 'Cargas por procesar',
+                      href: combustiblePendientes(),
+                      icon: Fuel,
+                      badge: combustiblePendiente,
+                  },
+              ]
+            : []),
     ];
 
     return (
@@ -137,7 +135,13 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={items} />
+                <NavMain label="Operación" items={operacionItems} />
+                {puedeGestionar && (
+                    <NavMain label="Gestión" items={gestionNavItems} />
+                )}
+                {esAdmin && (
+                    <NavMain label="Administración" items={adminNavItems} />
+                )}
             </SidebarContent>
 
             <SidebarFooter>

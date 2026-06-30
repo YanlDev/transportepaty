@@ -230,7 +230,7 @@ class TracksolidController extends Controller
      */
     public function camaraPage(Vehiculo $vehiculo): Response
     {
-        Gate::authorize('gestionar-gps');
+        Gate::authorize('view', $vehiculo);
 
         $urlInicial = null;
 
@@ -245,7 +245,10 @@ class TracksolidController extends Controller
         return Inertia::render('vehiculos/camara', [
             'vehiculo' => $vehiculo->only(['id', 'placa', 'marca', 'modelo']),
             'urlInicial' => $urlInicial,
+            // El selector lista solo los vehículos visibles para el usuario:
+            // el conductor ve los suyos; admin y visor, toda la flota con GPS.
             'vehiculosGps' => Vehiculo::query()
+                ->visibleParaUsuario(request()->user())
                 ->whereNotNull('imei')
                 ->orderBy('placa')
                 ->get(['id', 'placa'])
@@ -259,7 +262,7 @@ class TracksolidController extends Controller
      */
     public function camara(Request $request, Vehiculo $vehiculo): JsonResponse
     {
-        Gate::authorize('gestionar-gps');
+        Gate::authorize('view', $vehiculo);
 
         if (! $vehiculo->tieneGps()) {
             return response()->json(['error' => 'Este vehículo no tiene un dispositivo GPS vinculado.'], 422);

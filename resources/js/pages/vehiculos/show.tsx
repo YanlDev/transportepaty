@@ -18,13 +18,13 @@ import {
 } from 'lucide-react';
 import { index as combustible } from '@/actions/App/Http/Controllers/CargaCombustibleController';
 import { camaraPage as camaras } from '@/actions/App/Http/Controllers/Integraciones/TracksolidController';
+import { index as mantenimiento } from '@/actions/App/Http/Controllers/MantenimientoController';
 import { index as mapa } from '@/actions/App/Http/Controllers/MapaController';
 import vehiculos, {
     edit,
     show,
 } from '@/actions/App/Http/Controllers/VehiculoController';
 import { index as documentosIndex } from '@/actions/App/Http/Controllers/VehiculoDocumentoController';
-import { index as mantenimiento } from '@/actions/App/Http/Controllers/MantenimientoController';
 import { ChartRendimiento } from '@/components/combustible/chart-rendimiento';
 import { RegistrarCargaDialog } from '@/components/combustible/registrar-carga-dialog';
 import { EmptyState } from '@/components/empty-state';
@@ -279,18 +279,16 @@ export default function VehiculoShow({
                                         Recorridos
                                     </Link>
                                 </Button>
-                                {puedeGestionar && (
-                                    <Button
-                                        asChild
-                                        variant="outline"
-                                        className="w-full"
-                                    >
-                                        <Link href={camaras(vehiculo.id)}>
-                                            <Video className="size-4" />
-                                            Cámaras en vivo
-                                        </Link>
-                                    </Button>
-                                )}
+                                <Button
+                                    asChild
+                                    variant="outline"
+                                    className="w-full"
+                                >
+                                    <Link href={camaras(vehiculo.id)}>
+                                        <Video className="size-4" />
+                                        Cámaras en vivo
+                                    </Link>
+                                </Button>
                             </div>
                         )}
                     </InfoCard>

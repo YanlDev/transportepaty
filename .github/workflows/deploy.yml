@@ -1,0 +1,25 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: Deploy to VPS Contabo
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🚀 Deploy to server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: 22
+          timeout: 10m
+          command_timeout: 10m
+          script: |
+            cd /var/www/flotascx
+            ./deploy.sh

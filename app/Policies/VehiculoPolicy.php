@@ -31,6 +31,22 @@ class VehiculoPolicy
     }
 
     /**
+     * Determine whether the user can watch the vehicle's dashcam.
+     *
+     * Admins for any vehicle; a driver only for the vehicle assigned to them.
+     * Viewers (visor) do NOT get camera access.
+     */
+    public function verCamara(User $user, Vehiculo $vehiculo): bool
+    {
+        if ($user->hasRole('admin')) {
+            return true;
+        }
+
+        return $user->hasRole('conductor')
+            && $vehiculo->conductor?->user_id === $user->id;
+    }
+
+    /**
      * Determine whether the user can create models.
      */
     public function create(User $user): bool
