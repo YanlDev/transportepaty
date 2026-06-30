@@ -4,6 +4,7 @@ use App\Models\Conductor;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Models\Vehiculo;
+use App\Services\Tracksolid\RecorridoService;
 use App\Services\Tracksolid\TracksolidClient;
 use App\Services\Tracksolid\TracksolidException;
 use Mockery\MockInterface;
@@ -135,66 +136,67 @@ it('imports a device as a new vehicle using its detail', function (): void {
         ->and($vehiculo->sucursal_id)->toBe($sucursal->id);
 });
 
-it('on first sync sets the GPS baseline without moving the odometer', function (): void {
+it('advances the odometer by the GPS track distance on sync', function (): void {
     $vehiculo = Vehiculo::factory()->create([
         'imei' => '868000000000011',
         'kilometraje' => 50000,
-        'gps_km_base' => null,
+        'odometro_sincronizado_en' => now()->subHour(),
     ]);
 
-    fakeTracksolid(detail: ['imei' => '868000000000011', 'currentMileage' => '234']);
+    test()->mock(RecorridoService::class, function (MockInterface $mock): void {
+        $mock->shouldReceive('paraRango')->once()->andReturn([
+            'puntos' => [],
+            'stats' => [
+                'distancia_km' => 10.15,
+                'duracion_min' => 30,
+                'velocidad_prom' => 20,
+                'velocidad_max' => 60,
+                'puntos' => 80,
+                'con_movimiento' => true,
+            ],
+        ]);
+    });
 
     actingAs(adminGps())
         ->post(route('integraciones.tracksolid.sincronizar', $vehiculo))
         ->assertRedirect();
 
-    $fresh = $vehiculo->fresh();
-    expect($fresh->kilometraje)->toBe(50000)
-        ->and($fresh->gps_km_base)->toBe(234);
+    expect($vehiculo->fresh()->kilometraje)->toBe(50010);
 });
 
-it('adds only the GPS delta to the real odometer on later syncs', function (): void {
+it('leaves the odometer unchanged when there is no new track distance', function (): void {
     $vehiculo = Vehiculo::factory()->create([
         'imei' => '868000000000011',
         'kilometraje' => 50000,
-        'gps_km_base' => 234,
+        'odometro_sincronizado_en' => now()->subHour(),
     ]);
 
-    fakeTracksolid(detail: ['imei' => '868000000000011', 'currentMileage' => '334']);
+    test()->mock(RecorridoService::class, function (MockInterface $mock): void {
+        $mock->shouldReceive('paraRango')->once()->andReturn([
+            'puntos' => [],
+            'stats' => [
+                'distancia_km' => 0.0,
+                'duracion_min' => 0,
+                'velocidad_prom' => 0,
+                'velocidad_max' => 0,
+                'puntos' => 0,
+                'con_movimiento' => false,
+            ],
+        ]);
+    });
 
     actingAs(adminGps())
         ->post(route('integraciones.tracksolid.sincronizar', $vehiculo))
         ->assertRedirect();
 
-    $fresh = $vehiculo->fresh();
-    expect($fresh->kilometraje)->toBe(50100)
-        ->and($fresh->gps_km_base)->toBe(334);
+    expect($vehiculo->fresh()->kilometraje)->toBe(50000);
 });
 
-it('does not lower the odometer if the GPS reading resets', function (): void {
-    $vehiculo = Vehiculo::factory()->create([
-        'imei' => '868000000000011',
-        'kilometraje' => 50100,
-        'gps_km_base' => 334,
-    ]);
-
-    fakeTracksolid(detail: ['imei' => '868000000000011', 'currentMileage' => '10']);
-
-    actingAs(adminGps())
-        ->post(route('integraciones.tracksolid.sincronizar', $vehiculo))
-        ->assertRedirect();
-
-    expect($vehiculo->fresh()->kilometraje)->toBe(50100);
-});
-
-it('calibrates the odometer and snapshots the GPS reading', function (): void {
+it('calibrates the odometer to the entered value', function (): void {
     $vehiculo = Vehiculo::factory()->create([
         'imei' => '868000000000020',
         'kilometraje' => 234,
-        'gps_km_base' => 234,
     ]);
-
-    fakeTracksolid(detail: ['imei' => '868000000000020', 'currentMileage' => '234']);
 
     actingAs(adminGps())
         ->post(route('integraciones.tracksolid.calibrar', $vehiculo), ['kilometraje' => 50000])
@@ -202,8 +204,8 @@ it('calibrates the odometer and snapshots the GPS reading', function (): void {
 
     $fresh = $vehiculo->fresh();
     expect($fresh->kilometraje)->toBe(50000)
-        ->and($fresh->gps_km_base)->toBe(234)
-        ->and($fresh->km_calibrado_en)->not->toBeNull();
+        ->and($fresh->km_calibrado_en)->not->toBeNull()
+        ->and($fresh->odometro_sincronizado_en)->not->toBeNull();
 });
 
 it('forbids non-admins from calibrating', function (): void {

@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Integraciones;
 use App\Http\Controllers\Controller;
 use App\Models\Sucursal;
 use App\Models\Vehiculo;
+use App\Services\Tracksolid\RecorridoService;
 use App\Services\Tracksolid\TracksolidClient;
 use App\Services\Tracksolid\TracksolidDevice;
 use App\Services\Tracksolid\TracksolidException;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -156,7 +158,7 @@ class TracksolidController extends Controller
     /**
      * Sincroniza los datos del vehículo desde su dispositivo GPS.
      */
-    public function sincronizar(Vehiculo $vehiculo): RedirectResponse
+    public function sincronizar(Vehiculo $vehiculo, RecorridoService $recorridos): RedirectResponse
     {
         Gate::authorize('gestionar-gps');
 
@@ -167,10 +169,16 @@ class TracksolidController extends Controller
             ]);
         }
 
+        // El odómetro avanza con la distancia REAL del recorrido GPS (track de
+        // posiciones) desde la última sincronización; el campo `currentMileage`
+        // del dispositivo es poco fiable y se descarta.
+        $desde = CarbonImmutable::parse(
+            $vehiculo->odometro_sincronizado_en ?? $vehiculo->km_calibrado_en ?? CarbonImmutable::now()
+        );
+        $hasta = CarbonImmutable::now();
+
         try {
-            $device = TracksolidDevice::fromArray(
-                app(TracksolidClient::class)->deviceDetail((string) $vehiculo->imei)
-            );
+            $recorrido = $recorridos->paraRango((string) $vehiculo->imei, $desde, $hasta);
         } catch (TracksolidException $e) {
             return back()->with('toast', [
                 'type' => 'error',
@@ -178,22 +186,18 @@ class TracksolidController extends Controller
             ]);
         }
 
-        $vehiculo->update($device->toVehiculoAttributes());
-
-        $lecturaGps = $device->kilometraje();
-
-        if ($lecturaGps !== null) {
-            $vehiculo->aplicarLecturaGps($lecturaGps);
-        }
+        $avance = $vehiculo->avanzarOdometroPorRecorrido($recorrido['stats']['distancia_km'], $hasta);
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => 'Datos sincronizados desde el GPS.',
+            'message' => $avance > 0
+                ? "Odómetro actualizado: +{$avance} km recorridos."
+                : 'Sin recorrido nuevo desde la última sincronización.',
         ]);
     }
 
     /**
-     * Calibra el odómetro real del vehículo contra la lectura actual del GPS.
+     * Calibra el odómetro real del vehículo al valor del tablero.
      */
     public function calibrar(Request $request, Vehiculo $vehiculo): RedirectResponse
     {
@@ -203,21 +207,7 @@ class TracksolidController extends Controller
             'kilometraje' => ['required', 'integer', 'min:0', 'max:9999999'],
         ]);
 
-        $lecturaGps = null;
-
-        if ($vehiculo->tieneGps()) {
-            try {
-                $device = TracksolidDevice::fromArray(
-                    app(TracksolidClient::class)->deviceDetail((string) $vehiculo->imei)
-                );
-                $lecturaGps = $device->kilometraje();
-            } catch (TracksolidException) {
-                // Sin lectura del GPS calibramos sólo el valor real; la base se
-                // fijará en la próxima sincronización.
-            }
-        }
-
-        $vehiculo->calibrarOdometro($validated['kilometraje'], $lecturaGps);
+        $vehiculo->calibrarOdometro($validated['kilometraje']);
 
         return back()->with('toast', [
             'type' => 'success',

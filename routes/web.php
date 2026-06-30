@@ -15,7 +15,9 @@ use App\Http\Controllers\VehiculoDocumentoController;
 use App\Http\Controllers\VehiculoFotoController;
 use Illuminate\Support\Facades\Route;
 
-Route::inertia('/', 'welcome')->name('home');
+// La raíz no muestra landing: siempre redirige al login (los usuarios ya
+// autenticados son reenviados al dashboard por el middleware `guest` del login).
+Route::redirect('/', '/login')->name('home');
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');

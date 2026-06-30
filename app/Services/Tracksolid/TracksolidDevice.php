@@ -105,7 +105,7 @@ class TracksolidDevice
     /**
      * Atributos del dispositivo para rellenar un Vehiculo (sólo los que traen
      * valor). El kilometraje NO va aquí: el odómetro se maneja aparte con la
-     * calibración (ver Vehiculo::aplicarLecturaGps()).
+     * calibración y el avance por recorrido (ver Vehiculo::avanzarOdometroPorRecorrido()).
      *
      * @return array<string, string>
      */

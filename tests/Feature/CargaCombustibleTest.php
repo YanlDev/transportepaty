@@ -151,6 +151,51 @@ it('lets an admin register a load directly with data and no photos', function ()
         ->and((float) $carga->precio_por_galon)->toBe(20.0);
 });
 
+it('updates a GPS-less vehicle odometer when a load reads higher', function (): void {
+    $vehiculo = Vehiculo::factory()->create(['imei' => null, 'kilometraje' => 10000]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vehiculos.combustible.store', $vehiculo), [
+            'fecha_carga' => '2026-06-01',
+            'odometro' => 12000,
+            'galones' => 8,
+            'costo_total' => 160,
+        ])
+        ->assertRedirect();
+
+    expect((int) $vehiculo->fresh()->kilometraje)->toBe(12000);
+});
+
+it('does not lower a GPS-less vehicle odometer when a load reads lower', function (): void {
+    $vehiculo = Vehiculo::factory()->create(['imei' => null, 'kilometraje' => 15000]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vehiculos.combustible.store', $vehiculo), [
+            'fecha_carga' => '2026-06-01',
+            'odometro' => 12000,
+            'galones' => 8,
+            'costo_total' => 160,
+        ])
+        ->assertRedirect();
+
+    expect((int) $vehiculo->fresh()->kilometraje)->toBe(15000);
+});
+
+it('does not touch a GPS vehicle odometer from a load', function (): void {
+    $vehiculo = Vehiculo::factory()->create(['imei' => '860112070376688', 'kilometraje' => 10000]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vehiculos.combustible.store', $vehiculo), [
+            'fecha_carga' => '2026-06-01',
+            'odometro' => 99000,
+            'galones' => 8,
+            'costo_total' => 160,
+        ])
+        ->assertRedirect();
+
+    expect((int) $vehiculo->fresh()->kilometraje)->toBe(10000);
+});
+
 it('requires the odometer for a direct registration', function (): void {
     $vehiculo = Vehiculo::factory()->create();
 

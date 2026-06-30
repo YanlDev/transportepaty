@@ -31,6 +31,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $imei
  * @property int|null $gps_km_base
  * @property CarbonImmutable|null $km_calibrado_en
+ * @property CarbonImmutable|null $odometro_sincronizado_en
  * @property TipoVehiculo $tipo
  * @property TipoCombustible $combustible
  * @property EstadoVehiculo $estado
@@ -51,6 +52,7 @@ use Illuminate\Support\Carbon;
     'imei',
     'gps_km_base',
     'km_calibrado_en',
+    'odometro_sincronizado_en',
     'tipo',
     'combustible',
     'estado',
@@ -142,45 +144,54 @@ class Vehiculo extends Model
     }
 
     /**
-     * Calibra el odómetro real: fija el kilometraje a la lectura real del
-     * tablero y recuerda cuánto marcaba el GPS en ese momento, para que las
-     * sincronizaciones siguientes sólo sumen lo recorrido.
+     * Calibra el odómetro real al valor del tablero y fija el punto de partida
+     * desde el cual las sincronizaciones contarán la distancia recorrida.
      */
-    public function calibrarOdometro(int $kilometrajeReal, ?int $lecturaGps): void
+    public function calibrarOdometro(int $kilometrajeReal): void
     {
         $this->kilometraje = $kilometrajeReal;
-        $this->gps_km_base = $lecturaGps;
         $this->km_calibrado_en = now();
+        $this->odometro_sincronizado_en = now();
         $this->save();
     }
 
     /**
-     * Aplica una lectura del odómetro del GPS al kilometraje real, sumando
-     * sólo el avance desde la última lectura. La primera vez fija la base sin
-     * mover el odómetro; si el equipo se reinicia (la lectura baja), no resta.
-     *
-     * @return bool true si el kilometraje real cambió.
+     * Suma al odómetro la distancia recorrida (km del track GPS) desde la
+     * última sincronización y avanza el punto de partida. Devuelve los km
+     * sumados (0 si no hubo recorrido nuevo).
      */
-    public function aplicarLecturaGps(int $lecturaGps): bool
+    public function avanzarOdometroPorRecorrido(float $distanciaKm, CarbonImmutable $hasta): int
     {
-        if ($this->gps_km_base === null) {
-            $this->gps_km_base = $lecturaGps;
-            $this->save();
+        $avance = max(0, (int) round($distanciaKm));
 
-            return false;
+        if ($avance > 0) {
+            $this->kilometraje += $avance;
         }
 
-        $avance = $lecturaGps - $this->gps_km_base;
-
-        if ($avance <= 0) {
-            return false;
-        }
-
-        $this->kilometraje += $avance;
-        $this->gps_km_base = $lecturaGps;
+        $this->odometro_sincronizado_en = $hasta;
         $this->save();
 
-        return true;
+        return $avance;
+    }
+
+    /**
+     * Actualiza el kilometraje a partir del odómetro de una carga de combustible.
+     *
+     * Sólo aplica a unidades SIN GPS: ahí el odómetro de las cargas es la única
+     * fuente de kilometraje y se adopta cuando supera el valor actual. En las
+     * unidades con GPS el kilometraje lo lleva la sincronización, así que la
+     * carga no lo toca para no romper la contabilidad de `gps_km_base`.
+     */
+    public function actualizarKilometrajePorCarga(?int $odometro): void
+    {
+        if ($odometro === null || $this->tieneGps()) {
+            return;
+        }
+
+        if ($odometro > $this->kilometraje) {
+            $this->kilometraje = $odometro;
+            $this->save();
+        }
     }
 
     /**
@@ -213,6 +224,7 @@ class Vehiculo extends Model
             'kilometraje' => 'integer',
             'gps_km_base' => 'integer',
             'km_calibrado_en' => 'datetime',
+            'odometro_sincronizado_en' => 'datetime',
             'fecha_adquisicion' => 'date:Y-m-d',
         ];
     }

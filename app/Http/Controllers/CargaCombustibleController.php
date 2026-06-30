@@ -131,6 +131,8 @@ class CargaCombustibleController extends Controller
 
         $carga = $vehiculo->cargasCombustible()->create($datos);
 
+        $vehiculo->actualizarKilometrajePorCarga($carga->odometro);
+
         if ($request->hasFile('comprobante')) {
             $carga->addMediaFromRequest('comprobante')->toMediaCollection('comprobante');
         }
@@ -166,6 +168,8 @@ class CargaCombustibleController extends Controller
             'procesada_por' => $request->user()->id,
             'procesada_en' => $carga->procesada_en ?? now(),
         ]);
+
+        $vehiculo->actualizarKilometrajePorCarga($carga->odometro);
 
         if ($request->hasFile('comprobante')) {
             $carga->addMediaFromRequest('comprobante')->toMediaCollection('comprobante');
