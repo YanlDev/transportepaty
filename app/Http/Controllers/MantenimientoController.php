@@ -168,7 +168,7 @@ class MantenimientoController extends Controller
     {
         return [
             'id' => $m->id,
-            'fecha_realizado' => $m->fecha_realizado->toIso8601String(),
+            'fecha_realizado' => $m->fecha_realizado->toDateString(),
             'odometro' => $m->odometro,
             'proveedor' => $m->proveedor,
             'factura_numero' => $m->factura_numero,

@@ -1,5 +1,5 @@
 import { Wrench } from 'lucide-react';
-import { formatearFechaHora, formatearSoles } from '@/lib/format';
+import { formatearFecha, formatearSoles } from '@/lib/format';
 import type { Mantenimiento } from '@/types/fleet';
 
 /**
@@ -20,7 +20,7 @@ export function TimelineServicios({
 
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                         <p className="text-sm font-medium text-foreground">
-                            {formatearFechaHora(m.fecha_realizado)}
+                            {formatearFecha(m.fecha_realizado)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                             {m.odometro.toLocaleString('es-PE')} km

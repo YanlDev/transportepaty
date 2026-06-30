@@ -8,7 +8,16 @@ export function formatearFecha(fecha: string | null | undefined): string {
         return '—';
     }
 
-    return new Date(`${fecha}T00:00:00`).toLocaleDateString(LOCALE, {
+    // Acepta tanto "Y-m-d" como ISO con hora. Las fechas puras se anclan a
+    // medianoche local para evitar corrimientos por zona horaria; cualquier
+    // valor no parseable devuelve "—" en vez de "Invalid Date".
+    const d = new Date(fecha.length === 10 ? `${fecha}T00:00:00` : fecha);
+
+    if (Number.isNaN(d.getTime())) {
+        return '—';
+    }
+
+    return d.toLocaleDateString(LOCALE, {
         day: '2-digit',
         month: '2-digit',
         year: 'numeric',
