@@ -186,7 +186,21 @@ class TracksolidController extends Controller
             ]);
         }
 
-        $avance = $vehiculo->avanzarOdometroPorRecorrido($recorrido['stats']['distancia_km'], $hasta);
+        // Anclamos al ÚLTIMO punto GPS recibido, no a "ahora": el track llega
+        // con retraso, así que los puntos que aún no arribaron se contarán en la
+        // próxima sincronización en vez de perderse.
+        $puntos = $recorrido['puntos'];
+        $nuevaAncla = $desde;
+
+        if ($puntos !== []) {
+            $ultimo = end($puntos);
+
+            if (isset($ultimo['hora'])) {
+                $nuevaAncla = CarbonImmutable::parse($ultimo['hora']);
+            }
+        }
+
+        $avance = $vehiculo->avanzarOdometroPorRecorrido($recorrido['stats']['distancia_km'], $nuevaAncla);
 
         return back()->with('toast', [
             'type' => 'success',

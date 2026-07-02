@@ -90,11 +90,19 @@ class PlanMantenimientoService
         $hoy = CarbonImmutable::today();
         $plantillas = $this->plantillasParaVehiculo($vehiculo);
 
-        return $plantillas->map(function (PlantillaMantenimiento $plantilla) use ($vehiculo, $odo, $hoy): array {
+        return $plantillas->map(function (PlantillaMantenimiento $plantilla) use ($vehiculo, $odo, $hoy): ?array {
             $ultimo = Mantenimiento::where('vehiculo_id', $vehiculo->id)
                 ->whereHas('items', fn ($q) => $q->where('plantilla_id', $plantilla->id))
                 ->orderByDesc('odometro')
                 ->first();
+
+            // Servicio único (primer mantenimiento): mientras no se haya hecho
+            // se muestra a su km objetivo; al realizarse desaparece del plan.
+            if ($plantilla->una_vez) {
+                return $ultimo === null
+                    ? $this->vencimientoServicioUnico($plantilla, $odo)
+                    : null;
+            }
 
             if ($ultimo === null) {
                 return $this->vencimientoVacio($plantilla);
@@ -145,8 +153,9 @@ class PlanMantenimientoService
                 'restante_dias' => $restanteDias,
                 'progreso' => round($progreso, 2),
                 'status' => $status,
+                'es_unico' => false,
             ];
-        })->all();
+        })->filter()->values()->all();
     }
 
     /**
@@ -270,6 +279,47 @@ class PlanMantenimientoService
             'restante_dias' => null,
             'progreso' => 0,
             'status' => 'sin_historial',
+            'es_unico' => false,
+        ];
+    }
+
+    /**
+     * Vencimiento de un servicio único (primer mantenimiento): vence al llegar
+     * al km objetivo (`intervalo_km`), restando el odómetro actual.
+     *
+     * @return array<string, mixed>
+     */
+    private function vencimientoServicioUnico(PlantillaMantenimiento $plantilla, int $odo): array
+    {
+        $objetivoKm = $plantilla->intervalo_km;
+
+        $restanteKm = null;
+        $statusKm = null;
+        $progreso = 0.0;
+
+        if ($objetivoKm !== null) {
+            $restanteKm = $objetivoKm - $odo;
+            $statusKm = $this->statusPorKm($restanteKm);
+            $progreso = $objetivoKm > 0
+                ? max(0.0, min(1.0, ($objetivoKm - max($restanteKm, 0)) / $objetivoKm))
+                : 0.0;
+        }
+
+        return [
+            'plantilla_id' => $plantilla->id,
+            'nombre' => $plantilla->nombre,
+            'tipo_mantenimiento' => $plantilla->tipo_mantenimiento,
+            'intervalo_km' => $plantilla->intervalo_km,
+            'intervalo_meses' => $plantilla->intervalo_meses,
+            'ultimo_odometro' => null,
+            'ultima_fecha' => null,
+            'proximo_odometro' => $objetivoKm,
+            'proximo_fecha' => null,
+            'restante_km' => $restanteKm,
+            'restante_dias' => null,
+            'progreso' => round($progreso, 2),
+            'status' => $statusKm ?? 'sin_historial',
+            'es_unico' => true,
         ];
     }
 

@@ -200,6 +200,12 @@ function ambito(p: PlantillaMantenimiento, tipos: EnumOption[]): string {
 }
 
 function intervalo(p: PlantillaMantenimiento): string {
+    if (p.una_vez) {
+        return p.intervalo_km != null
+            ? `Único · ${p.intervalo_km.toLocaleString('es-PE')} km`
+            : 'Único';
+    }
+
     const partes: string[] = [];
 
     if (p.intervalo_km != null) {

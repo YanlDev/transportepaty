@@ -157,10 +157,10 @@ class Vehiculo extends Model
 
     /**
      * Suma al odómetro la distancia recorrida (km del track GPS) desde la
-     * última sincronización y avanza el punto de partida. Devuelve los km
-     * sumados (0 si no hubo recorrido nuevo).
+     * última sincronización y mueve el punto de partida al último punto GPS
+     * procesado. Devuelve los km sumados (0 si no hubo recorrido nuevo).
      */
-    public function avanzarOdometroPorRecorrido(float $distanciaKm, CarbonImmutable $hasta): int
+    public function avanzarOdometroPorRecorrido(float $distanciaKm, CarbonImmutable $nuevaAncla): int
     {
         $avance = max(0, (int) round($distanciaKm));
 
@@ -168,7 +168,7 @@ class Vehiculo extends Model
             $this->kilometraje += $avance;
         }
 
-        $this->odometro_sincronizado_en = $hasta;
+        $this->odometro_sincronizado_en = $nuevaAncla;
         $this->save();
 
         return $avance;

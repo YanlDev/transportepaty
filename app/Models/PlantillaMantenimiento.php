@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $tipo_vehiculo
  * @property int|null $intervalo_km
  * @property int|null $intervalo_meses
+ * @property bool $una_vez
  * @property string|null $descripcion
  * @property float|null $costo_estimado
  * @property int $orden
@@ -32,6 +33,7 @@ use Illuminate\Support\Carbon;
     'tipo_vehiculo',
     'intervalo_km',
     'intervalo_meses',
+    'una_vez',
     'descripcion',
     'costo_estimado',
     'orden',
@@ -52,6 +54,7 @@ class PlantillaMantenimiento extends Model
         return [
             'intervalo_km' => 'integer',
             'intervalo_meses' => 'integer',
+            'una_vez' => 'boolean',
             'costo_estimado' => 'decimal:2',
             'orden' => 'integer',
             'activo' => 'boolean',

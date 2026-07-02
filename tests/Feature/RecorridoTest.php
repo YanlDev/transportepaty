@@ -57,6 +57,10 @@ it('builds the route with distance and speed stats', function (): void {
 });
 
 it('chunks multi-week ranges into 7-day windows', function (): void {
+    // Fijamos la fecha a mitad de mes para que el preset "mes" abarque >7 días
+    // de forma determinista (a inicios de mes abarcaría menos y no trocearía).
+    $this->travelTo('2026-06-20 12:00:00');
+
     $vehiculo = Vehiculo::factory()->create(['imei' => '111']);
 
     test()->mock(TracksolidClient::class, function (MockInterface $mock): void {

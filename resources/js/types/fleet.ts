@@ -243,6 +243,7 @@ export type PlantillaMantenimiento = {
     tipo_vehiculo: string | null;
     intervalo_km: number | null;
     intervalo_meses: number | null;
+    una_vez: boolean;
     descripcion: string | null;
     costo_estimado: number | null;
     orden: number;
@@ -278,6 +279,7 @@ export type PlanMantenimiento = {
     dias_restantes: number | null;
     vencido: boolean;
     progreso: number;
+    es_unico: boolean;
 };
 
 /** Yearly cost-of-ownership breakdown for a vehicle (fuel + maintenance). */

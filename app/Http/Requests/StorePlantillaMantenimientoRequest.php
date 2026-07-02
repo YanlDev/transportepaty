@@ -28,6 +28,7 @@ class StorePlantillaMantenimientoRequest extends FormRequest
             'tipo_vehiculo' => ['nullable', Rule::enum(TipoVehiculo::class)],
             'intervalo_km' => ['nullable', 'integer', 'min:1'],
             'intervalo_meses' => ['nullable', 'integer', 'min:1'],
+            'una_vez' => ['boolean'],
             'descripcion' => ['nullable', 'string', 'max:1000'],
             'costo_estimado' => ['nullable', 'numeric', 'min:0'],
             'orden' => ['nullable', 'integer', 'min:0'],
@@ -42,6 +43,14 @@ class StorePlantillaMantenimientoRequest extends FormRequest
                 $validator->errors()->add(
                     'intervalo_km',
                     'Define al menos un intervalo: por kilómetros o por meses.',
+                );
+            }
+
+            // Un servicio único (primer mantenimiento) necesita el km objetivo.
+            if ($this->boolean('una_vez') && $this->input('intervalo_km') === null) {
+                $validator->errors()->add(
+                    'intervalo_km',
+                    'Un servicio único necesita el km objetivo (ej. 1000).',
                 );
             }
         });

@@ -40,6 +40,7 @@ type FormData = {
     tipo_vehiculo: string;
     intervalo_km: string;
     intervalo_meses: string;
+    una_vez: boolean;
     costo_estimado: string;
     orden: string;
     descripcion: string;
@@ -60,6 +61,7 @@ export function PlantillaFormDialog({
     const esEdicion = !!plantilla;
     const controlado = esEdicion;
     const activoId = useId();
+    const unaVezId = useId();
 
     const form = useForm<FormData>({
         nombre: plantilla?.nombre ?? '',
@@ -79,6 +81,7 @@ export function PlantillaFormDialog({
             plantilla?.costo_estimado != null
                 ? String(plantilla.costo_estimado)
                 : '',
+        una_vez: plantilla?.una_vez ?? false,
         orden: plantilla?.orden != null ? String(plantilla.orden) : '0',
         descripcion: plantilla?.descripcion ?? '',
         activo: plantilla?.activo ?? true,
@@ -226,7 +229,11 @@ export function PlantillaFormDialog({
                             />
                         </Campo>
                         <Campo
-                            label="Intervalo (km)"
+                            label={
+                                data.una_vez
+                                    ? 'Km objetivo (servicio único)'
+                                    : 'Intervalo (km)'
+                            }
                             error={errors.intervalo_km}
                         >
                             <Input
@@ -236,7 +243,7 @@ export function PlantillaFormDialog({
                                 onChange={(e) =>
                                     setData('intervalo_km', e.target.value)
                                 }
-                                placeholder="5000"
+                                placeholder={data.una_vez ? '1000' : '5000'}
                             />
                         </Campo>
                         <Campo
@@ -280,6 +287,23 @@ export function PlantillaFormDialog({
                                     rows={2}
                                 />
                             </Campo>
+                        </div>
+                        <div className="flex items-start gap-2 sm:col-span-2">
+                            <Checkbox
+                                id={unaVezId}
+                                checked={data.una_vez}
+                                onCheckedChange={(v) =>
+                                    setData('una_vez', v === true)
+                                }
+                            />
+                            <Label htmlFor={unaVezId} className="font-normal">
+                                Servicio único (primer mantenimiento)
+                                <span className="block text-xs text-muted-foreground">
+                                    Aparece una sola vez al llegar al km objetivo
+                                    (ej. inspección de los 1000 km en vehículos
+                                    nuevos) y no se repite.
+                                </span>
+                            </Label>
                         </div>
                         <div className="flex items-center gap-2 sm:col-span-2">
                             <Checkbox

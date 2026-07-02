@@ -136,7 +136,7 @@ it('imports a device as a new vehicle using its detail', function (): void {
         ->and($vehiculo->sucursal_id)->toBe($sucursal->id);
 });
 
-it('advances the odometer by the GPS track distance on sync', function (): void {
+it('advances the odometer by the track distance and anchors to the last GPS point', function (): void {
     $vehiculo = Vehiculo::factory()->create([
         'imei' => '868000000000011',
         'kilometraje' => 50000,
@@ -145,13 +145,16 @@ it('advances the odometer by the GPS track distance on sync', function (): void 
 
     test()->mock(RecorridoService::class, function (MockInterface $mock): void {
         $mock->shouldReceive('paraRango')->once()->andReturn([
-            'puntos' => [],
+            'puntos' => [
+                ['lat' => -15.40, 'lng' => -70.10, 'hora' => '2026-06-30 10:00:00', 'velocidad' => 20, 'rumbo' => 0],
+                ['lat' => -15.50, 'lng' => -70.20, 'hora' => '2026-06-30 10:30:00', 'velocidad' => 40, 'rumbo' => 0],
+            ],
             'stats' => [
                 'distancia_km' => 10.15,
                 'duracion_min' => 30,
                 'velocidad_prom' => 20,
                 'velocidad_max' => 60,
-                'puntos' => 80,
+                'puntos' => 2,
                 'con_movimiento' => true,
             ],
         ]);
@@ -161,7 +164,10 @@ it('advances the odometer by the GPS track distance on sync', function (): void 
         ->post(route('integraciones.tracksolid.sincronizar', $vehiculo))
         ->assertRedirect();
 
-    expect($vehiculo->fresh()->kilometraje)->toBe(50010);
+    $fresh = $vehiculo->fresh();
+    // 50000 + round(10.15) = 50010; el ancla queda en el último punto GPS.
+    expect($fresh->kilometraje)->toBe(50010)
+        ->and($fresh->odometro_sincronizado_en->toDateTimeString())->toBe('2026-06-30 10:30:00');
 });
 
 it('leaves the odometer unchanged when there is no new track distance', function (): void {

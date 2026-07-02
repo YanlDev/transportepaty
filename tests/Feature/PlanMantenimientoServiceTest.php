@@ -73,6 +73,30 @@ it('marks a service with no history as sin_historial', function (): void {
     expect($proximos[0]['status'])->toBe('sin_historial');
 });
 
+it('shows a one-time service due at its target km when not yet done', function (): void {
+    $vehiculo = Vehiculo::factory()->create(['imei' => 'x', 'kilometraje' => 800, 'marca' => 'Toyota', 'modelo' => 'Hilux']);
+    PlantillaMantenimiento::factory()->create([
+        'marca' => 'Toyota', 'modelo' => 'Hilux', 'intervalo_km' => 1000, 'intervalo_meses' => null, 'una_vez' => true,
+    ]);
+
+    $proximos = plan()->proximosVencimientos($vehiculo);
+
+    expect($proximos)->toHaveCount(1)
+        ->and($proximos[0]['es_unico'])->toBeTrue()
+        ->and($proximos[0]['proximo_odometro'])->toBe(1000)
+        ->and($proximos[0]['restante_km'])->toBe(200);
+});
+
+it('drops a one-time service from the plan once it is done', function (): void {
+    $vehiculo = Vehiculo::factory()->create(['imei' => 'x', 'kilometraje' => 1200, 'marca' => 'Toyota', 'modelo' => 'Hilux']);
+    $plantilla = PlantillaMantenimiento::factory()->create([
+        'marca' => 'Toyota', 'modelo' => 'Hilux', 'intervalo_km' => 1000, 'intervalo_meses' => null, 'una_vez' => true,
+    ]);
+    registrarServicio($vehiculo, $plantilla, 1000, now()->toDateString());
+
+    expect(plan()->proximosVencimientos($vehiculo))->toBeEmpty();
+});
+
 it('computes a km-based due status from the last service', function (): void {
     $vehiculo = Vehiculo::factory()->create(['imei' => 'x', 'kilometraje' => 14800, 'marca' => 'Toyota', 'modelo' => 'Hilux']);
     $plantilla = PlantillaMantenimiento::factory()->create([

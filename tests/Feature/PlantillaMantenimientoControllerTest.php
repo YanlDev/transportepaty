@@ -84,6 +84,33 @@ it('requires at least one interval', function (): void {
         ->assertSessionHasErrors('intervalo_km');
 });
 
+it('lets an admin create a one-time (primer mantenimiento) template', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('mantenedor.plantillas.store'), datosPlantilla([
+            'nombre' => 'Inspección inicial 1000 km',
+            'intervalo_km' => 1000,
+            'intervalo_meses' => null,
+            'una_vez' => true,
+        ]))
+        ->assertRedirect(route('mantenedor.plantillas.index'));
+
+    $this->assertDatabaseHas('plantillas_mantenimiento', [
+        'nombre' => 'Inspección inicial 1000 km',
+        'intervalo_km' => 1000,
+        'una_vez' => true,
+    ]);
+});
+
+it('requires a target km for a one-time template', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('mantenedor.plantillas.store'), datosPlantilla([
+            'intervalo_km' => null,
+            'intervalo_meses' => 6,
+            'una_vez' => true,
+        ]))
+        ->assertSessionHasErrors('intervalo_km');
+});
+
 it('validates required fields', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('mantenedor.plantillas.store'), datosPlantilla([

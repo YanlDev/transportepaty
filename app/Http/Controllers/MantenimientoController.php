@@ -212,6 +212,7 @@ class MantenimientoController extends Controller
             'dias_restantes' => $p['restante_dias'],
             'vencido' => $p['status'] === 'vencido',
             'progreso' => (int) round($p['progreso'] * 100),
+            'es_unico' => $p['es_unico'] ?? false,
         ];
     }
 
