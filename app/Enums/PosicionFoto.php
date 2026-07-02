@@ -27,7 +27,7 @@ enum PosicionFoto: string
             self::Interior => 'Interior',
             self::Motor => 'Motor',
             self::Tablero => 'Tablero',
-            self::Otro => 'Otro',
+            self::Otro => 'Otro'
         };
     }
 }
