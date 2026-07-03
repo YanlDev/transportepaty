@@ -1,4 +1,6 @@
-import { RefreshCw, Route } from 'lucide-react';
+import { Link } from '@inertiajs/react';
+import { RefreshCw, Route, Video } from 'lucide-react';
+import { camaraPage as camaras } from '@/actions/App/Http/Controllers/Integraciones/TracksolidController';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { estadoGpsInfo } from '@/types/fleet';
@@ -91,6 +93,17 @@ export function PanelVivo({
                                 onClick={() => onRecorrido(m.id)}
                             >
                                 <Route className="size-4" />
+                            </Button>
+                            <Button
+                                asChild
+                                variant="ghost"
+                                size="icon"
+                                className="size-8 shrink-0 text-muted-foreground"
+                                title="Ver cámara"
+                            >
+                                <Link href={camaras(m.id)}>
+                                    <Video className="size-4" />
+                                </Link>
                             </Button>
                         </li>
                     );

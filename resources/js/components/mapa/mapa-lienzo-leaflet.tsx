@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { Video } from 'lucide-react';
 import { useEffect } from 'react';
 import {
     MapContainer,
@@ -12,6 +13,7 @@ import {
     useMap,
     ZoomControl,
 } from 'react-leaflet';
+import { camaraPage as camaras } from '@/actions/App/Http/Controllers/Integraciones/TracksolidController';
 import { show } from '@/actions/App/Http/Controllers/VehiculoController';
 import { estadoGpsInfo } from '@/types/fleet';
 import type { MarcadorVehiculo, PuntoRecorrido } from '@/types/fleet';
@@ -141,9 +143,12 @@ function CapaFlota({ marcadores }: { marcadores: MarcadorVehiculo[] }) {
                         <Popup>
                             <div className="space-y-1.5">
                                 <div className="flex items-center gap-2">
-                                    <span className="font-mono text-sm font-semibold">
+                                    <Link
+                                        href={show(marcador.id)}
+                                        className="font-mono text-sm font-semibold text-emerald-800 hover:underline"
+                                    >
                                         {marcador.placa}
-                                    </span>
+                                    </Link>
                                     <span
                                         className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${info.badge}`}
                                     >
@@ -162,12 +167,21 @@ function CapaFlota({ marcadores }: { marcadores: MarcadorVehiculo[] }) {
                                         ? ` · ${marcador.fecha_gps}`
                                         : ''}
                                 </p>
-                                <Link
-                                    href={show(marcador.id)}
-                                    className="text-xs font-medium text-emerald-800 hover:underline"
-                                >
-                                    Ver detalle →
-                                </Link>
+                                <div className="flex items-center gap-3 pt-0.5">
+                                    <Link
+                                        href={show(marcador.id)}
+                                        className="text-xs font-medium text-emerald-800 hover:underline"
+                                    >
+                                        Ver detalle →
+                                    </Link>
+                                    <Link
+                                        href={camaras(marcador.id)}
+                                        className="inline-flex items-center gap-1 text-xs font-medium text-emerald-800 hover:underline"
+                                    >
+                                        <Video className="size-3" />
+                                        Cámara
+                                    </Link>
+                                </div>
                             </div>
                         </Popup>
                     </Marker>
