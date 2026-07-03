@@ -36,8 +36,11 @@ import { DocumentoItem } from '@/components/vehiculos/documento-item';
 import { EstadoBadge } from '@/components/vehiculos/estado-badge';
 import { FotosCarrusel } from '@/components/vehiculos/fotos-carrusel';
 import { Dato, InfoCard } from '@/components/vehiculos/info-card';
-import { ModuloPlaceholder } from '@/components/vehiculos/modulo-placeholder';
-import { formatearFecha, formatearFechaHora } from '@/lib/format';
+import {
+    formatearFecha,
+    formatearFechaHora,
+    formatearSoles,
+} from '@/lib/format';
 import { combustibleLabels, tipoLabels } from '@/types/fleet';
 import type {
     EnumOption,
@@ -46,11 +49,30 @@ import type {
     VehiculoFotoItem,
 } from '@/types/fleet';
 
+type MantenimientoResumen = {
+    id: number;
+    fecha_realizado: string;
+    odometro: number;
+    costo_total: number | null;
+    items: { id: number; nombre: string }[];
+};
+
+type ActividadItem = {
+    id: string;
+    tipo: 'mantenimiento' | 'combustible' | 'documento';
+    titulo: string;
+    detalle: string | null;
+    fecha: string;
+};
+
 type Props = {
     vehiculo: Vehiculo;
     fotos: VehiculoFotoItem[];
     documentos: VehiculoDocumentoItem[];
     documentosTotal: number;
+    mantenimientos: MantenimientoResumen[];
+    mantenimientosTotal: number;
+    actividadReciente: ActividadItem[];
     tiposDocumento: EnumOption[];
     posicionesFoto: EnumOption[];
     rendimientoCombustible: { fecha: string; rendimiento: number }[];
@@ -62,6 +84,9 @@ export default function VehiculoShow({
     fotos,
     documentos,
     documentosTotal,
+    mantenimientos,
+    mantenimientosTotal,
+    actividadReciente,
     tiposDocumento,
     posicionesFoto,
     rendimientoCombustible,
@@ -367,17 +392,59 @@ export default function VehiculoShow({
                             Mantenimientos
                         </h2>
                     </div>
-                    <p className="mb-4 text-xs text-muted-foreground">
-                        Historial de servicios y próximos mantenimientos
-                        programados.
-                    </p>
+
+                    {mantenimientos.length === 0 ? (
+                        <EmptyState
+                            icon={<Wrench className="size-6" />}
+                            text="Aún no se registraron mantenimientos."
+                        />
+                    ) : (
+                        <ul className="flex flex-col gap-2.5">
+                            {mantenimientos.map((m) => (
+                                <li
+                                    key={m.id}
+                                    className="rounded-lg border border-border p-3"
+                                >
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="text-sm font-medium text-foreground">
+                                            {formatearFecha(m.fecha_realizado)}
+                                        </span>
+                                        <span className="font-mono text-[11px] text-muted-foreground">
+                                            {m.odometro.toLocaleString('es-PE')}{' '}
+                                            km
+                                        </span>
+                                    </div>
+                                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                                        {m.items
+                                            .map((item) => item.nombre)
+                                            .join(', ') || 'Servicio general'}
+                                    </p>
+                                    {m.costo_total !== null && (
+                                        <p className="mt-1 text-xs font-medium text-foreground">
+                                            {formatearSoles(m.costo_total)}
+                                        </p>
+                                    )}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
+
                     <Button
                         asChild
-                        className="w-full bg-emerald-800 hover:bg-emerald-900"
+                        variant={
+                            mantenimientos.length === 0 ? 'default' : 'outline'
+                        }
+                        className={
+                            mantenimientos.length === 0
+                                ? 'mt-4 w-full bg-emerald-800 hover:bg-emerald-900'
+                                : 'mt-3 w-full'
+                        }
                     >
                         <Link href={mantenimiento(vehiculo.id)}>
                             <Wrench className="size-4" />
-                            Ver mantenimientos
+                            {mantenimientos.length === 0
+                                ? 'Registrar mantenimiento'
+                                : `Ver mantenimientos (${mantenimientosTotal})`}
                         </Link>
                     </Button>
                 </section>
@@ -392,31 +459,75 @@ export default function VehiculoShow({
                 </InfoCard>
             )}
 
-            {/* Historial de actividad reciente (próximamente) */}
+            {/* Historial de actividad reciente */}
             <section className="rounded-xl border border-border bg-card p-5">
                 <div className="mb-4 flex items-center justify-between">
                     <h2 className="text-sm font-semibold text-foreground">
                         Historial de actividad reciente
                     </h2>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        Próximamente
-                    </span>
                 </div>
-                <div className="grid gap-3 opacity-40 sm:grid-cols-2 lg:grid-cols-4">
-                    {[0, 1, 2, 3].map((i) => (
-                        <div
-                            key={i}
-                            className="flex items-center gap-3 rounded-lg border border-border p-3"
-                        >
-                            <div className="size-9 shrink-0 rounded-lg bg-muted" />
-                            <div className="flex-1 space-y-1.5">
-                                <div className="h-3 w-3/4 rounded bg-muted" />
-                                <div className="h-2.5 w-1/2 rounded bg-muted" />
-                            </div>
-                        </div>
-                    ))}
-                </div>
+
+                {actividadReciente.length === 0 ? (
+                    <EmptyState
+                        icon={<Clock className="size-6" />}
+                        text="Aún no hay actividad registrada para este vehículo."
+                    />
+                ) : (
+                    <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        {actividadReciente.map((actividad) => (
+                            <ActividadCard
+                                key={actividad.id}
+                                actividad={actividad}
+                            />
+                        ))}
+                    </ul>
+                )}
             </section>
         </div>
+    );
+}
+
+const ACTIVIDAD_ESTILOS: Record<
+    ActividadItem['tipo'],
+    { icon: React.ReactNode; className: string }
+> = {
+    mantenimiento: {
+        icon: <Wrench className="size-4" />,
+        className: 'bg-amber-100 text-amber-700',
+    },
+    combustible: {
+        icon: <Fuel className="size-4" />,
+        className: 'bg-sky-100 text-sky-700',
+    },
+    documento: {
+        icon: <FileText className="size-4" />,
+        className: 'bg-emerald-100 text-emerald-700',
+    },
+};
+
+function ActividadCard({ actividad }: { actividad: ActividadItem }) {
+    const estilo = ACTIVIDAD_ESTILOS[actividad.tipo];
+
+    return (
+        <li className="flex items-start gap-3 rounded-lg border border-border p-3">
+            <span
+                className={`grid size-9 shrink-0 place-items-center rounded-lg ${estilo.className}`}
+            >
+                {estilo.icon}
+            </span>
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground">
+                    {actividad.titulo}
+                </p>
+                {actividad.detalle && (
+                    <p className="truncate text-xs text-muted-foreground">
+                        {actividad.detalle}
+                    </p>
+                )}
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    {formatearFechaHora(actividad.fecha)}
+                </p>
+            </div>
+        </li>
     );
 }

@@ -11,8 +11,10 @@ use App\Http\Requests\StoreVehiculoRequest;
 use App\Http\Requests\UpdateVehiculoRequest;
 use App\Models\CargaCombustible;
 use App\Models\Conductor;
+use App\Models\Mantenimiento;
 use App\Models\Sucursal;
 use App\Models\Vehiculo;
+use App\Models\VehiculoDocumento;
 use App\Models\VehiculoFoto;
 use App\Services\Combustible\RendimientoService;
 use App\Services\Tracksolid\TracksolidClient;
@@ -131,6 +133,13 @@ class VehiculoController extends Controller
             ->take(3)
             ->get();
 
+        $mantenimientos = $vehiculo->mantenimientos()
+            ->with('items:id,mantenimiento_id,nombre,costo')
+            ->orderByDesc('fecha_realizado')
+            ->orderByDesc('id')
+            ->take(3)
+            ->get();
+
         return Inertia::render('vehiculos/show', [
             'rendimientoCombustible' => $this->rendimientoCombustible($vehiculo, $rendimiento),
             'puedeRegistrarCombustible' => request()->user()->can('registrar', [CargaCombustible::class, $vehiculo]),
@@ -144,9 +153,98 @@ class VehiculoController extends Controller
             ]),
             'documentos' => $documentos->map->toFrontArray(),
             'documentosTotal' => $vehiculo->documentos()->count(),
+            'mantenimientos' => $mantenimientos->map(fn (Mantenimiento $m): array => [
+                'id' => $m->id,
+                'fecha_realizado' => $m->fecha_realizado->toDateString(),
+                'odometro' => $m->odometro,
+                'costo_total' => $m->costo_total !== null ? (float) $m->costo_total : null,
+                'items' => $m->items->map(fn ($item): array => [
+                    'id' => $item->id,
+                    'nombre' => $item->nombre,
+                ])->values(),
+            ]),
+            'mantenimientosTotal' => $vehiculo->mantenimientos()->count(),
+            'actividadReciente' => $this->actividadReciente($vehiculo),
             'tiposDocumento' => TipoDocumento::options(),
             'posicionesFoto' => PosicionFoto::options(),
         ]);
+    }
+
+    /**
+     * Unified recent-activity feed (maintenance, fuel loads and documents),
+     * newest first by the moment each entry was recorded in the system.
+     *
+     * @return list<array{id: string, tipo: string, titulo: string, detalle: string|null, fecha: string}>
+     */
+    private function actividadReciente(Vehiculo $vehiculo): array
+    {
+        $mantenimientos = $vehiculo->mantenimientos()
+            ->with('items:id,mantenimiento_id,nombre')
+            ->latest()
+            ->take(8)
+            ->get()
+            ->map(fn (Mantenimiento $m): array => [
+                'id' => "mantenimiento-{$m->id}",
+                'tipo' => 'mantenimiento',
+                'titulo' => 'Mantenimiento registrado',
+                'detalle' => $m->items->pluck('nombre')->join(', ') ?: null,
+                'fecha' => $m->created_at?->toIso8601String() ?? '',
+            ]);
+
+        $cargas = $vehiculo->cargasCombustible()
+            ->latest()
+            ->take(8)
+            ->get()
+            ->map(fn (CargaCombustible $c): array => [
+                'id' => "combustible-{$c->id}",
+                'tipo' => 'combustible',
+                'titulo' => 'Carga de combustible',
+                'detalle' => $this->detalleCarga($c),
+                'fecha' => $c->created_at?->toIso8601String() ?? '',
+            ]);
+
+        $documentos = $vehiculo->documentos()
+            ->latest()
+            ->take(8)
+            ->get()
+            ->map(fn (VehiculoDocumento $d): array => [
+                'id' => "documento-{$d->id}",
+                'tipo' => 'documento',
+                'titulo' => 'Documento agregado',
+                'detalle' => $d->nombre ?: $d->tipo->label(),
+                'fecha' => $d->created_at?->toIso8601String() ?? '',
+            ]);
+
+        return $mantenimientos
+            ->merge($cargas)
+            ->merge($documentos)
+            ->filter(fn (array $a): bool => $a['fecha'] !== '')
+            ->sortByDesc('fecha')
+            ->take(8)
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Human-readable summary of a fuel load for the activity feed.
+     */
+    private function detalleCarga(CargaCombustible $carga): ?string
+    {
+        $partes = [];
+
+        if ($carga->galones !== null) {
+            $partes[] = number_format((float) $carga->galones, 2).' gal';
+        }
+
+        if ($carga->costo_total !== null) {
+            $partes[] = 'S/ '.number_format((float) $carga->costo_total, 2);
+        }
+
+        if ($partes === []) {
+            return $carga->procesada ? null : 'Pendiente de procesar';
+        }
+
+        return implode(' · ', $partes);
     }
 
     /**

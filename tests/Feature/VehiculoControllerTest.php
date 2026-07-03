@@ -3,7 +3,9 @@
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoCombustible;
 use App\Enums\TipoVehiculo;
+use App\Models\CargaCombustible;
 use App\Models\Conductor;
+use App\Models\Mantenimiento;
 use App\Models\Sucursal;
 use App\Models\User;
 use App\Models\Vehiculo;
@@ -216,4 +218,37 @@ it('forbids a driver from viewing a vehicle not assigned to them', function (): 
     actingAs($user)
         ->get(route('vehiculos.show', $vehiculo))
         ->assertForbidden();
+});
+
+it('shows recent maintenances and activity on the vehicle page', function (): void {
+    $admin = usuarioCon('admin');
+    $vehiculo = Vehiculo::factory()->create();
+
+    Mantenimiento::factory()
+        ->conItems(2)
+        ->count(4)
+        ->create(['vehiculo_id' => $vehiculo->id]);
+    CargaCombustible::factory()->create(['vehiculo_id' => $vehiculo->id]);
+
+    actingAs($admin)
+        ->get(route('vehiculos.show', $vehiculo))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('vehiculos/show')
+            ->has('mantenimientos', 3)
+            ->where('mantenimientosTotal', 4)
+            ->has('actividadReciente', 5)
+        );
+});
+
+it('shows an empty maintenance list when none are registered', function (): void {
+    $admin = usuarioCon('admin');
+    $vehiculo = Vehiculo::factory()->create();
+
+    actingAs($admin)
+        ->get(route('vehiculos.show', $vehiculo))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('mantenimientos', 0)
+            ->where('mantenimientosTotal', 0)
+            ->has('actividadReciente', 0)
+        );
 });
