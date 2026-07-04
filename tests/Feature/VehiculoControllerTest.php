@@ -240,6 +240,21 @@ it('shows recent maintenances and activity on the vehicle page', function (): vo
         );
 });
 
+it('builds the activity feed with zero maintenances but other activity', function (): void {
+    $admin = usuarioCon('admin');
+    $vehiculo = Vehiculo::factory()->create();
+
+    CargaCombustible::factory()->count(2)->create(['vehiculo_id' => $vehiculo->id]);
+
+    actingAs($admin)
+        ->get(route('vehiculos.show', $vehiculo))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('mantenimientos', 0)
+            ->has('actividadReciente', 2)
+        );
+});
+
 it('shows an empty maintenance list when none are registered', function (): void {
     $admin = usuarioCon('admin');
     $vehiculo = Vehiculo::factory()->create();

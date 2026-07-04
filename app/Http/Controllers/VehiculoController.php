@@ -215,7 +215,10 @@ class VehiculoController extends Controller
                 'fecha' => $d->created_at?->toIso8601String() ?? '',
             ]);
 
+        // toBase() evita que una EloquentCollection vacía (cuando no hay
+        // mantenimientos) use su merge() basado en getKey() sobre arrays.
         return $mantenimientos
+            ->toBase()
             ->merge($cargas)
             ->merge($documentos)
             ->filter(fn (array $a): bool => $a['fecha'] !== '')
