@@ -98,7 +98,12 @@ class PlanMantenimientoService
 
             // Servicio único (primer mantenimiento): mientras no se haya hecho
             // se muestra a su km objetivo; al realizarse desaparece del plan.
+            // Sólo aplica a unidades que ingresaron nuevas a la flota.
             if ($plantilla->una_vez) {
+                if (! $this->servicioUnicoAplica($plantilla, $vehiculo)) {
+                    return null;
+                }
+
                 return $ultimo === null
                     ? $this->vencimientoServicioUnico($plantilla, $odo)
                     : null;
@@ -281,6 +286,23 @@ class PlanMantenimientoService
             'status' => 'sin_historial',
             'es_unico' => false,
         ];
+    }
+
+    /**
+     * Un servicio único por km (p. ej. "inspección inicial 1000 km") sólo aplica
+     * a unidades que ingresaron nuevas a la flota: su odómetro de alta debe
+     * estar por debajo del km objetivo. Un vehículo registrado con 40.000 km no
+     * es candidato. Los servicios únicos sólo por tiempo (sin km) aplican siempre.
+     */
+    private function servicioUnicoAplica(PlantillaMantenimiento $plantilla, Vehiculo $vehiculo): bool
+    {
+        if ($plantilla->intervalo_km === null) {
+            return true;
+        }
+
+        $inicial = $vehiculo->kilometraje_inicial ?? $vehiculo->kilometraje;
+
+        return $inicial <= $plantilla->intervalo_km;
     }
 
     /**

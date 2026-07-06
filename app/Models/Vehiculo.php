@@ -36,6 +36,7 @@ use Illuminate\Support\Carbon;
  * @property TipoCombustible $combustible
  * @property EstadoVehiculo $estado
  * @property int $kilometraje
+ * @property int|null $kilometraje_inicial
  * @property Carbon|null $fecha_adquisicion
  * @property string|null $observaciones
  */
@@ -57,6 +58,7 @@ use Illuminate\Support\Carbon;
     'combustible',
     'estado',
     'kilometraje',
+    'kilometraje_inicial',
     'fecha_adquisicion',
     'observaciones',
 ])]
@@ -64,6 +66,20 @@ class Vehiculo extends Model
 {
     /** @use HasFactory<VehiculoFactory> */
     use HasFactory, SoftDeletes;
+
+    /**
+     * Al dar de alta un vehículo, si no se indicó un odómetro inicial explícito
+     * se toma el kilometraje de registro. Ese valor congela cuán "nuevo" entró a
+     * la flota y decide si los servicios de vehículo nuevo aplican.
+     */
+    protected static function booted(): void
+    {
+        static::creating(function (Vehiculo $vehiculo): void {
+            if ($vehiculo->kilometraje_inicial === null) {
+                $vehiculo->kilometraje_inicial = $vehiculo->kilometraje;
+            }
+        });
+    }
 
     /**
      * The model's default values for attributes.
@@ -222,6 +238,7 @@ class Vehiculo extends Model
             'estado' => EstadoVehiculo::class,
             'anio' => 'integer',
             'kilometraje' => 'integer',
+            'kilometraje_inicial' => 'integer',
             'gps_km_base' => 'integer',
             'km_calibrado_en' => 'datetime',
             'odometro_sincronizado_en' => 'datetime',

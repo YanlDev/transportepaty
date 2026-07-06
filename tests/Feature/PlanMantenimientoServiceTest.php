@@ -88,13 +88,42 @@ it('shows a one-time service due at its target km when not yet done', function (
 });
 
 it('drops a one-time service from the plan once it is done', function (): void {
-    $vehiculo = Vehiculo::factory()->create(['imei' => 'x', 'kilometraje' => 1200, 'marca' => 'Toyota', 'modelo' => 'Hilux']);
+    $vehiculo = Vehiculo::factory()->create(['imei' => 'x', 'kilometraje' => 1200, 'kilometraje_inicial' => 100, 'marca' => 'Toyota', 'modelo' => 'Hilux']);
     $plantilla = PlantillaMantenimiento::factory()->create([
         'marca' => 'Toyota', 'modelo' => 'Hilux', 'intervalo_km' => 1000, 'intervalo_meses' => null, 'una_vez' => true,
     ]);
     registrarServicio($vehiculo, $plantilla, 1000, now()->toDateString());
 
     expect(plan()->proximosVencimientos($vehiculo))->toBeEmpty();
+});
+
+it('excludes a one-time new-vehicle service when the unit joined the fleet used', function (): void {
+    // Alta con 40.000 km: la inspección de "vehículo nuevo" no aplica.
+    $vehiculo = Vehiculo::factory()->create(['imei' => 'x', 'kilometraje' => 40000, 'kilometraje_inicial' => 40000, 'marca' => 'Toyota', 'modelo' => 'Hilux']);
+    PlantillaMantenimiento::factory()->create([
+        'marca' => 'Toyota', 'modelo' => 'Hilux', 'intervalo_km' => 1000, 'intervalo_meses' => null, 'una_vez' => true,
+    ]);
+
+    expect(plan()->proximosVencimientos($vehiculo))->toBeEmpty();
+});
+
+it('keeps a one-time service overdue for a new vehicle that passed the target', function (): void {
+    // Entró nuevo (10 km) y ya superó los 1000 sin hacerla: sigue como vencido.
+    $vehiculo = Vehiculo::factory()->create(['imei' => 'x', 'kilometraje' => 1600, 'kilometraje_inicial' => 10, 'marca' => 'Toyota', 'modelo' => 'Hilux']);
+    PlantillaMantenimiento::factory()->create([
+        'marca' => 'Toyota', 'modelo' => 'Hilux', 'intervalo_km' => 1000, 'intervalo_meses' => null, 'una_vez' => true,
+    ]);
+
+    $proximos = plan()->proximosVencimientos($vehiculo);
+
+    expect($proximos)->toHaveCount(1)
+        ->and($proximos[0]['status'])->toBe('vencido');
+});
+
+it('captures kilometraje_inicial from kilometraje on registration', function (): void {
+    $vehiculo = Vehiculo::factory()->create(['kilometraje' => 25000]);
+
+    expect($vehiculo->fresh()->kilometraje_inicial)->toBe(25000);
 });
 
 it('computes a km-based due status from the last service', function (): void {
