@@ -51,7 +51,7 @@ $PHP artisan view:cache
 $PHP artisan event:cache
 
 echo "→ Symlink de storage (fotos)"
-$PHP artisan storage:link || true
+$PHP artisan storage:link --force || true
 
 echo "→ Permisos (todo el árbol a www-data; storage y cache escribibles)"
 chown -R www-data:www-data "$APP_DIR"
