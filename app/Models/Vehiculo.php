@@ -152,6 +152,14 @@ class Vehiculo extends Model
     }
 
     /**
+     * @return HasMany<Activacion, $this>
+     */
+    public function activaciones(): HasMany
+    {
+        return $this->hasMany(Activacion::class);
+    }
+
+    /**
      * Whether the vehicle is linked to a Tracksolid / GPS device.
      */
     public function tieneGps(): bool

@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\PosicionFoto;
+use App\Enums\ResultadoActivacion;
 use App\Enums\TipoCombustible;
 use App\Enums\TipoDocumento;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\StoreVehiculoRequest;
 use App\Http\Requests\UpdateVehiculoRequest;
+use App\Models\Activacion;
 use App\Models\CargaCombustible;
 use App\Models\Conductor;
 use App\Models\Mantenimiento;
@@ -164,6 +166,10 @@ class VehiculoController extends Controller
                 ])->values(),
             ]),
             'mantenimientosTotal' => $vehiculo->mantenimientos()->count(),
+            'activacionesTotal' => $vehiculo->activaciones()->count(),
+            'ultimaActivacion' => optional($vehiculo->activaciones()->latest('fecha')->first())->fecha?->toIso8601String(),
+            'puedeRegistrarActivacion' => request()->user()->can('registrar', [Activacion::class, $vehiculo]),
+            'resultadosActivacion' => ResultadoActivacion::options(),
             'actividadReciente' => $this->actividadReciente($vehiculo),
             'tiposDocumento' => TipoDocumento::options(),
             'posicionesFoto' => PosicionFoto::options(),

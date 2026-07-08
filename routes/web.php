@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ActivacionController;
 use App\Http\Controllers\CargaCombustibleController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\DashboardController;
@@ -76,6 +77,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('vehiculos.combustible.update');
     Route::delete('vehiculos/{vehiculo}/combustible/{carga}', [CargaCombustibleController::class, 'destroy'])
         ->name('vehiculos.combustible.destroy');
+
+    // Registro de Activación de Unidad en Reposo (Subproceso 3). Anclado al
+    // vehículo; la activación se valida contra su vehículo en el controlador.
+    Route::get('vehiculos/{vehiculo}/activaciones', [ActivacionController::class, 'index'])
+        ->name('vehiculos.activaciones.index');
+    Route::post('vehiculos/{vehiculo}/activaciones', [ActivacionController::class, 'store'])
+        ->name('vehiculos.activaciones.store');
+    Route::delete('vehiculos/{vehiculo}/activaciones/{activacion}', [ActivacionController::class, 'destroy'])
+        ->name('vehiculos.activaciones.destroy');
 
     Route::get('vehiculos/{vehiculo}/mantenimiento', [MantenimientoController::class, 'index'])
         ->name('vehiculos.mantenimiento.index');

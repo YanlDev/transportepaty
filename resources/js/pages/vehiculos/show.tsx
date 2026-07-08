@@ -9,6 +9,7 @@ import {
     Gauge,
     MapPin,
     Pencil,
+    Power,
     Route,
     Satellite,
     Trash2,
@@ -16,6 +17,7 @@ import {
     Video,
     Wrench,
 } from 'lucide-react';
+import { index as activaciones } from '@/actions/App/Http/Controllers/ActivacionController';
 import { index as combustible } from '@/actions/App/Http/Controllers/CargaCombustibleController';
 import { camaraPage as camaras } from '@/actions/App/Http/Controllers/Integraciones/TracksolidController';
 import { index as mantenimiento } from '@/actions/App/Http/Controllers/MantenimientoController';
@@ -25,6 +27,7 @@ import vehiculos, {
     show,
 } from '@/actions/App/Http/Controllers/VehiculoController';
 import { index as documentosIndex } from '@/actions/App/Http/Controllers/VehiculoDocumentoController';
+import { RegistrarActivacionDialog } from '@/components/activaciones/registrar-activacion-dialog';
 import { ChartRendimiento } from '@/components/combustible/chart-rendimiento';
 import { RegistrarCargaDialog } from '@/components/combustible/registrar-carga-dialog';
 import { EmptyState } from '@/components/empty-state';
@@ -77,6 +80,10 @@ type Props = {
     posicionesFoto: EnumOption[];
     rendimientoCombustible: { fecha: string; rendimiento: number }[];
     puedeRegistrarCombustible: boolean;
+    activacionesTotal: number;
+    ultimaActivacion: string | null;
+    puedeRegistrarActivacion: boolean;
+    resultadosActivacion: EnumOption[];
 };
 
 export default function VehiculoShow({
@@ -91,6 +98,10 @@ export default function VehiculoShow({
     posicionesFoto,
     rendimientoCombustible,
     puedeRegistrarCombustible,
+    activacionesTotal,
+    ultimaActivacion,
+    puedeRegistrarActivacion,
+    resultadosActivacion,
 }: Props) {
     const { auth } = usePage().props;
     const puedeGestionar = auth.roles.includes('admin');
@@ -445,6 +456,64 @@ export default function VehiculoShow({
                             {mantenimientos.length === 0
                                 ? 'Registrar mantenimiento'
                                 : `Ver mantenimientos (${mantenimientosTotal})`}
+                        </Link>
+                    </Button>
+                </section>
+
+                {/* Activaciones periódicas de unidad en reposo (Subproceso 3) */}
+                <section className="rounded-xl border border-border bg-card p-5">
+                    <div className="mb-4 flex items-center justify-between">
+                        <h2 className="text-sm font-semibold text-foreground">
+                            Activaciones en reposo
+                        </h2>
+                        {puedeRegistrarActivacion && (
+                            <RegistrarActivacionDialog
+                                vehiculoId={vehiculo.id}
+                                resultados={resultadosActivacion}
+                                kilometrajeSugerido={vehiculo.kilometraje}
+                                compacto
+                            />
+                        )}
+                    </div>
+
+                    {activacionesTotal === 0 ? (
+                        <EmptyState
+                            icon={<Power className="size-6" />}
+                            text="Aún no se registraron activaciones."
+                        />
+                    ) : (
+                        <p className="text-sm text-muted-foreground">
+                            {activacionesTotal}{' '}
+                            {activacionesTotal === 1
+                                ? 'activación registrada'
+                                : 'activaciones registradas'}
+                            {ultimaActivacion && (
+                                <>
+                                    {' · última el '}
+                                    <span className="font-medium text-foreground">
+                                        {formatearFecha(ultimaActivacion)}
+                                    </span>
+                                </>
+                            )}
+                        </p>
+                    )}
+
+                    <Button
+                        asChild
+                        variant={
+                            activacionesTotal === 0 ? 'default' : 'outline'
+                        }
+                        className={
+                            activacionesTotal === 0
+                                ? 'mt-4 w-full bg-emerald-800 hover:bg-emerald-900'
+                                : 'mt-3 w-full'
+                        }
+                    >
+                        <Link href={activaciones(vehiculo.id)}>
+                            <Power className="size-4" />
+                            {activacionesTotal === 0
+                                ? 'Registrar activación'
+                                : `Ver activaciones (${activacionesTotal})`}
                         </Link>
                     </Button>
                 </section>
