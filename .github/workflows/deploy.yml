@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to VPS Contabo
+    name: Deploy to server (elastika)
     runs-on: ubuntu-latest
 
     steps:
@@ -16,10 +16,10 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          password: ${{ secrets.SSH_PASSWORD }}
           port: 22
           timeout: 10m
           command_timeout: 10m
           script: |
-            cd /var/www/flotascx
+            cd /var/www/flotaselcosi
             ./deploy.sh

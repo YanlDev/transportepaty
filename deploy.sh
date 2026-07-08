@@ -1,22 +1,28 @@
 #!/usr/bin/env bash
 #
-# Deploy de FlotaVehicular en el VPS Contabo (/var/www/flotascx).
-# Lo ejecuta el usuario `deploy`, vía GitHub Actions (.github/workflows/deploy.yml)
-# o manualmente:  cd /var/www/flotascx && ./deploy.sh
+# Deploy de Flota (flotav3) en el server de la EMPRESA (elastika, /var/www/flotaselcosi).
+# Se ejecuta como `root`, vía GitHub Actions (.github/workflows/deploy.yml)
+# o manualmente:  cd /var/www/flotaselcosi && ./deploy.sh
 #
-# Requisitos en el server (una sola vez):
-#   - Primer montaje hecho a mano (clone, .env, key:generate, migrate, seed,
-#     storage:link) — ver provision-flotascx.sh / finish-flotascx.sh.
-#   - /etc/sudoers.d/deploy-flotascx con NOPASSWD para chown/chmod de storage y
-#     bootstrap/cache, supervisorctl restart flotascx-worker:* y (global)
-#     systemctl reload php8.4-fpm.
+# Requisitos en el server (una sola vez, ya hechos):
+#   - Primer montaje a mano (clone con deploy key, .env, key:generate, migrate,
+#     storage:link, import de datos).
+#   - PHP 8.4 (php8.4-fpm) — Laravel 13 + Symfony 8 exige >= 8.4.1.
+#   - Supervisor con el programa `flota-worker` (queue:work).
 #
 set -euo pipefail
 
-cd /var/www/flotascx
+APP_DIR=/var/www/flotaselcosi
+PHP=php8.4
+COMPOSER="php8.4 /usr/local/bin/composer"
+export COMPOSER_ALLOW_SUPERUSER=1
+
+cd "$APP_DIR"
+# El repo es propiedad de www-data; permitir que root use git aquí.
+git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
 
 echo "→ Activando modo mantenimiento"
-php artisan down --retry=15 || true
+$PHP artisan down --retry=15 || true
 
 # Si algo falla, NO levantamos la app: se queda en mantenimiento (mejor que un 500).
 trap 'echo "✗ Deploy FALLÓ — la app sigue en mantenimiento. Revisa el log."; exit 1' ERR
@@ -26,37 +32,37 @@ git fetch --all --prune
 git reset --hard origin/main
 
 echo "→ Limpiando cachés ANTES de construir (clave: rutas frescas para Wayfinder)"
-php artisan optimize:clear
+$PHP artisan optimize:clear
 
 echo "→ Dependencias PHP (producción)"
-composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
+$COMPOSER install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 
 echo "→ Build de assets (Node) — Wayfinder ya lee rutas frescas"
 npm ci
 npm run build
 
 echo "→ Migraciones"
-php artisan migrate --force
+$PHP artisan migrate --force
 
 echo "→ Regenerando cachés de producción"
-php artisan config:cache
-php artisan route:cache
-php artisan view:cache
-php artisan event:cache
+$PHP artisan config:cache
+$PHP artisan route:cache
+$PHP artisan view:cache
+$PHP artisan event:cache
 
 echo "→ Symlink de storage (fotos)"
-php artisan storage:link || true
+$PHP artisan storage:link || true
 
-echo "→ Permisos de storage y bootstrap/cache"
-sudo chown -R deploy:www-data /var/www/flotascx/storage /var/www/flotascx/bootstrap/cache
-sudo chmod -R 775 /var/www/flotascx/storage /var/www/flotascx/bootstrap/cache
+echo "→ Permisos (todo el árbol a www-data; storage y cache escribibles)"
+chown -R www-data:www-data "$APP_DIR"
+chmod -R 775 "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
 
 echo "→ Reiniciando queue worker"
-sudo supervisorctl restart flotascx-worker:* || true
+supervisorctl restart flota-worker:* || true
 
 echo "→ Recargando PHP-FPM (limpia OPcache)"
-sudo systemctl reload php8.4-fpm
+systemctl reload php8.4-fpm
 
 # Sólo llegamos aquí si TODO fue bien:
-php artisan up
+$PHP artisan up
 echo "✓ Deploy completado"
