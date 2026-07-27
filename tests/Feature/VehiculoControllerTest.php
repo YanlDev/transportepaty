@@ -1,12 +1,8 @@
 <?php
 
 use App\Enums\EstadoVehiculo;
-use App\Enums\TipoCombustible;
+use App\Enums\TipoCaja;
 use App\Enums\TipoVehiculo;
-use App\Models\CargaCombustible;
-use App\Models\Conductor;
-use App\Models\Mantenimiento;
-use App\Models\Sucursal;
 use App\Models\User;
 use App\Models\Vehiculo;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -25,22 +21,23 @@ function usuarioCon(string $rol): User
     return User::factory()->create()->assignRole($rol);
 }
 
-function datosVehiculo(Sucursal $sucursal, array $overrides = []): array
+function datosVehiculo(array $overrides = []): array
 {
     return array_merge([
-        'sucursal_id' => $sucursal->id,
-        'conductor_id' => null,
         'placa' => 'ABC-123',
-        'marca' => 'Toyota',
-        'modelo' => 'Hilux',
+        'marca' => 'INTERNATIONAL',
+        'modelo' => 'LT625 6X4',
         'anio' => 2023,
-        'color' => 'Blanco',
-        'numero_serie' => null,
-        'numero_motor' => null,
-        'tipo' => TipoVehiculo::Camioneta->value,
-        'combustible' => TipoCombustible::Diesel->value,
+        'tipo' => TipoVehiculo::Tracto->value,
         'estado' => EstadoVehiculo::Activo->value,
-        'kilometraje' => 1500,
+        'caja' => TipoCaja::Mecanica->value,
+        'vin' => null,
+        'numero_motor' => null,
+        'color' => 'BLANCO',
+        'ejes' => 3,
+        'peso_neto' => 8000,
+        'peso_bruto' => 27000,
+        'carga_util' => 19000,
         'fecha_adquisicion' => null,
         'observaciones' => null,
     ], $overrides);
@@ -63,9 +60,8 @@ it('lets authenticated users see the list', function (): void {
 });
 
 it('filters the list by search term', function (): void {
-    $sucursal = Sucursal::factory()->create();
-    Vehiculo::factory()->for($sucursal)->create(['placa' => 'XYZ-999', 'marca' => 'Nissan']);
-    Vehiculo::factory()->for($sucursal)->create(['placa' => 'ABC-111', 'marca' => 'Toyota']);
+    Vehiculo::factory()->create(['placa' => 'XYZ-999', 'marca' => 'VOLVO']);
+    Vehiculo::factory()->create(['placa' => 'ABC-111', 'marca' => 'SCANIA']);
 
     actingAs(usuarioCon('admin'))
         ->get(route('vehiculos.index', ['buscar' => 'XYZ']))
@@ -73,91 +69,128 @@ it('filters the list by search term', function (): void {
         ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
 });
 
-it('allows an admin to create a vehicle', function (): void {
-    $sucursal = Sucursal::factory()->create();
+it('filters the list by tipo', function (): void {
+    Vehiculo::factory()->create();
+    Vehiculo::factory()->carreta()->create();
 
     actingAs(usuarioCon('admin'))
-        ->post(route('vehiculos.store'), datosVehiculo($sucursal))
+        ->get(route('vehiculos.index', ['tipo' => TipoVehiculo::Carreta->value]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
+});
+
+it('filters the list by caja', function (): void {
+    Vehiculo::factory()->create(['caja' => TipoCaja::Mecanica]);
+    Vehiculo::factory()->create(['caja' => TipoCaja::Automatica]);
+    Vehiculo::factory()->carreta()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index', ['caja' => TipoCaja::Mecanica->value]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('vehiculos.data', 1)
+            ->where('vehiculos.data.0.caja', TipoCaja::Mecanica->value)
+        );
+});
+
+it('filters the list by units without a gearbox', function (): void {
+    Vehiculo::factory()->create(['caja' => TipoCaja::Mecanica]);
+    Vehiculo::factory()->create(['caja' => TipoCaja::Automatica]);
+    Vehiculo::factory()->carreta()->count(2)->create();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index', ['caja' => 'sin_caja']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('vehiculos.data', 2)
+            ->where('vehiculos.data.0.caja', null)
+        );
+});
+
+it('combines the tipo and caja filters', function (): void {
+    Vehiculo::factory()->create(['caja' => TipoCaja::Automatica]);
+    Vehiculo::factory()->create(['caja' => TipoCaja::Mecanica]);
+    Vehiculo::factory()->carreta()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index', [
+            'tipo' => TipoVehiculo::Tracto->value,
+            'caja' => TipoCaja::Automatica->value,
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
+});
+
+it('offers every gearbox option plus the one for units without a motor', function (): void {
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('cajas', 3)
+            ->where('cajas.2.value', 'sin_caja')
+        );
+});
+
+it('allows an admin to create a tracto', function (): void {
+    actingAs(usuarioCon('admin'))
+        ->post(route('vehiculos.store'), datosVehiculo())
         ->assertRedirect();
 
     $this->assertDatabaseHas('vehiculos', [
         'placa' => 'ABC-123',
-        'sucursal_id' => $sucursal->id,
+        'tipo' => TipoVehiculo::Tracto->value,
+        'caja' => TipoCaja::Mecanica->value,
+    ]);
+});
+
+it('drops the caja when the vehicle is a carreta', function (): void {
+    actingAs(usuarioCon('admin'))
+        ->post(route('vehiculos.store'), datosVehiculo([
+            'tipo' => TipoVehiculo::Carreta->value,
+            'caja' => TipoCaja::Automatica->value,
+        ]))
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('vehiculos', [
+        'placa' => 'ABC-123',
+        'tipo' => TipoVehiculo::Carreta->value,
+        'caja' => null,
     ]);
 });
 
 it('forbids a viewer from creating a vehicle', function (): void {
-    $sucursal = Sucursal::factory()->create();
-
     actingAs(usuarioCon('visor'))
-        ->post(route('vehiculos.store'), datosVehiculo($sucursal))
+        ->post(route('vehiculos.store'), datosVehiculo())
         ->assertForbidden();
 
     $this->assertDatabaseCount('vehiculos', 0);
 });
 
 it('validates required fields when creating', function (): void {
-    $sucursal = Sucursal::factory()->create();
-
     actingAs(usuarioCon('admin'))
-        ->post(route('vehiculos.store'), datosVehiculo($sucursal, ['placa' => '']))
+        ->post(route('vehiculos.store'), datosVehiculo(['placa' => '']))
         ->assertSessionHasErrors('placa');
 });
 
 it('rejects a duplicate placa', function (): void {
-    $sucursal = Sucursal::factory()->create();
-    Vehiculo::factory()->for($sucursal)->create(['placa' => 'ABC-123']);
+    Vehiculo::factory()->create(['placa' => 'ABC-123']);
 
     actingAs(usuarioCon('admin'))
-        ->post(route('vehiculos.store'), datosVehiculo($sucursal, ['placa' => 'ABC-123']))
+        ->post(route('vehiculos.store'), datosVehiculo(['placa' => 'ABC-123']))
         ->assertSessionHasErrors('placa');
-});
-
-it('registers a vehicle with a GPS imei from the normal form', function (): void {
-    $sucursal = Sucursal::factory()->create();
-
-    actingAs(usuarioCon('admin'))
-        ->post(route('vehiculos.store'), datosVehiculo($sucursal, ['imei' => '860112070376688']))
-        ->assertRedirect();
-
-    $this->assertDatabaseHas('vehiculos', [
-        'placa' => 'ABC-123',
-        'imei' => '860112070376688',
-    ]);
-});
-
-it('rejects a duplicate imei', function (): void {
-    $sucursal = Sucursal::factory()->create();
-    Vehiculo::factory()->for($sucursal)->create(['imei' => '860112070376688']);
-
-    actingAs(usuarioCon('admin'))
-        ->post(route('vehiculos.store'), datosVehiculo($sucursal, ['placa' => 'NEW-001', 'imei' => '860112070376688']))
-        ->assertSessionHasErrors('imei');
-});
-
-it('rejects a driver from another branch', function (): void {
-    $sucursal = Sucursal::factory()->create();
-    $otraSucursal = Sucursal::factory()->create();
-    $conductor = Conductor::factory()->for($otraSucursal)->create();
-
-    actingAs(usuarioCon('admin'))
-        ->post(route('vehiculos.store'), datosVehiculo($sucursal, ['conductor_id' => $conductor->id]))
-        ->assertSessionHasErrors('conductor_id');
 });
 
 it('allows an admin to update a vehicle', function (): void {
     $vehiculo = Vehiculo::factory()->create();
 
     actingAs(usuarioCon('admin'))
-        ->put(route('vehiculos.update', $vehiculo), datosVehiculo($vehiculo->sucursal, [
+        ->put(route('vehiculos.update', $vehiculo), datosVehiculo([
             'placa' => $vehiculo->placa,
-            'kilometraje' => 99000,
             'estado' => EstadoVehiculo::EnMantenimiento->value,
         ]))
         ->assertRedirect();
 
     expect($vehiculo->refresh())
-        ->kilometraje->toBe(99000)
         ->estado->toBe(EstadoVehiculo::EnMantenimiento);
 });
 
@@ -181,89 +214,19 @@ it('forbids a viewer from deleting a vehicle', function (): void {
     $this->assertNotSoftDeleted($vehiculo);
 });
 
-it('shows a driver only the vehicles assigned to them', function (): void {
-    $user = usuarioCon('conductor');
-    $conductor = Conductor::factory()->create(['user_id' => $user->id]);
-
-    Vehiculo::factory()->create([
-        'conductor_id' => $conductor->id,
-        'sucursal_id' => $conductor->sucursal_id,
-    ]);
-    Vehiculo::factory()->count(2)->create();
-
-    actingAs($user)
-        ->get(route('vehiculos.index'))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
-});
-
-it('lets a driver view a vehicle assigned to them', function (): void {
-    $user = usuarioCon('conductor');
-    $conductor = Conductor::factory()->create(['user_id' => $user->id]);
-    $vehiculo = Vehiculo::factory()->create([
-        'conductor_id' => $conductor->id,
-        'sucursal_id' => $conductor->sucursal_id,
-    ]);
-
-    actingAs($user)
-        ->get(route('vehiculos.show', $vehiculo))
-        ->assertSuccessful();
-});
-
-it('forbids a driver from viewing a vehicle not assigned to them', function (): void {
-    $user = usuarioCon('conductor');
-    Conductor::factory()->create(['user_id' => $user->id]);
-    $vehiculo = Vehiculo::factory()->create();
-
-    actingAs($user)
-        ->get(route('vehiculos.show', $vehiculo))
-        ->assertForbidden();
-});
-
-it('shows recent maintenances and activity on the vehicle page', function (): void {
+it('offers the soat only for tractos', function (): void {
+    $tracto = Vehiculo::factory()->create();
+    $carreta = Vehiculo::factory()->carreta()->create();
     $admin = usuarioCon('admin');
-    $vehiculo = Vehiculo::factory()->create();
-
-    Mantenimiento::factory()
-        ->conItems(2)
-        ->count(4)
-        ->create(['vehiculo_id' => $vehiculo->id]);
-    CargaCombustible::factory()->create(['vehiculo_id' => $vehiculo->id]);
 
     actingAs($admin)
-        ->get(route('vehiculos.show', $vehiculo))
+        ->get(route('vehiculos.show', $tracto))
         ->assertInertia(fn (Assert $page) => $page
             ->component('vehiculos/show')
-            ->has('mantenimientos', 3)
-            ->where('mantenimientosTotal', 4)
-            ->has('actividadReciente', 5)
+            ->has('tiposDocumento', 6)
         );
-});
-
-it('builds the activity feed with zero maintenances but other activity', function (): void {
-    $admin = usuarioCon('admin');
-    $vehiculo = Vehiculo::factory()->create();
-
-    CargaCombustible::factory()->count(2)->create(['vehiculo_id' => $vehiculo->id]);
 
     actingAs($admin)
-        ->get(route('vehiculos.show', $vehiculo))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('mantenimientos', 0)
-            ->has('actividadReciente', 2)
-        );
-});
-
-it('shows an empty maintenance list when none are registered', function (): void {
-    $admin = usuarioCon('admin');
-    $vehiculo = Vehiculo::factory()->create();
-
-    actingAs($admin)
-        ->get(route('vehiculos.show', $vehiculo))
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('mantenimientos', 0)
-            ->where('mantenimientosTotal', 0)
-            ->has('actividadReciente', 0)
-        );
+        ->get(route('vehiculos.show', $carreta))
+        ->assertInertia(fn (Assert $page) => $page->has('tiposDocumento', 5));
 });

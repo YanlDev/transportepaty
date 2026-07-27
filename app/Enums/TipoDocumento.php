@@ -10,9 +10,9 @@ enum TipoDocumento: string
 
     case TarjetaPropiedad = 'tarjeta_propiedad';
     case Soat = 'soat';
-    case RevisionTecnica = 'revision_tecnica';
-    case Seguro = 'seguro';
-    case PermisoLunasPolarizadas = 'permiso_lunas_polarizadas';
+    case RevisionTecnicaCarga = 'revision_tecnica_carga';
+    case HabilitacionMtc = 'habilitacion_mtc';
+    case Matpel = 'matpel';
     case Otro = 'otro';
 
     public function label(): string
@@ -20,11 +20,25 @@ enum TipoDocumento: string
         return match ($this) {
             self::TarjetaPropiedad => 'Tarjeta de propiedad',
             self::Soat => 'SOAT',
-            self::RevisionTecnica => 'Revisión técnica',
-            self::Seguro => 'Seguro vehicular',
-            self::PermisoLunasPolarizadas => 'Permiso de lunas polarizadas',
+            self::RevisionTecnicaCarga => 'Revisión técnica de mercancías',
+            self::HabilitacionMtc => 'TUC (habilitación MTC)',
+            self::Matpel => 'MATPEL (materiales peligrosos)',
             self::Otro => 'Otro',
         };
+    }
+
+    /**
+     * Indica si el documento aplica al tipo de vehículo indicado. Las carretas
+     * exigen los mismos documentos que el tracto salvo el SOAT, que solo
+     * corresponde a la unidad motriz.
+     */
+    public function aplicaA(TipoVehiculo $tipo): bool
+    {
+        if ($this === self::Soat) {
+            return $tipo === TipoVehiculo::Tracto;
+        }
+
+        return true;
     }
 
     /**
@@ -34,8 +48,8 @@ enum TipoDocumento: string
     public function sueleVencer(): bool
     {
         return match ($this) {
-            self::Soat, self::RevisionTecnica, self::Seguro => true,
-            self::TarjetaPropiedad, self::PermisoLunasPolarizadas, self::Otro => false,
+            self::Soat, self::RevisionTecnicaCarga, self::HabilitacionMtc, self::Matpel => true,
+            self::TarjetaPropiedad, self::Otro => false,
         };
     }
 }

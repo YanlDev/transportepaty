@@ -13,7 +13,6 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
-            combustiblePendiente: number;
             [key: string]: unknown;
         };
     }

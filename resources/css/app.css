@@ -17,6 +17,19 @@
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
 
+    /* Paleta azul naval: color de marca de la aplicación. */
+    --color-navy-50: oklch(0.972 0.012 255);
+    --color-navy-100: oklch(0.936 0.026 255);
+    --color-navy-200: oklch(0.874 0.048 255);
+    --color-navy-300: oklch(0.782 0.079 255);
+    --color-navy-400: oklch(0.664 0.114 255);
+    --color-navy-500: oklch(0.558 0.132 256);
+    --color-navy-600: oklch(0.472 0.124 257);
+    --color-navy-700: oklch(0.394 0.105 258);
+    --color-navy-800: oklch(0.322 0.085 259);
+    --color-navy-900: oklch(0.262 0.068 260);
+    --color-navy-950: oklch(0.194 0.051 261);
+
     --color-background: var(--background);
     --color-foreground: var(--foreground);
 
@@ -63,73 +76,73 @@
 
 :root {
     --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
+    --foreground: oklch(0.18 0.02 260);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
+    --card-foreground: oklch(0.18 0.02 260);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.18 0.02 260);
+    --primary: var(--color-navy-800);
     --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.965 0.008 255);
+    --secondary-foreground: var(--color-navy-800);
+    --muted: oklch(0.965 0.008 255);
+    --muted-foreground: oklch(0.53 0.03 258);
+    --accent: var(--color-navy-50);
+    --accent-foreground: var(--color-navy-800);
     --destructive: oklch(0.577 0.245 27.325);
     --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
+    --border: oklch(0.912 0.012 255);
+    --input: oklch(0.912 0.012 255);
+    --ring: var(--color-navy-500);
+    --chart-1: var(--color-navy-800);
+    --chart-2: var(--color-navy-600);
+    --chart-3: var(--color-navy-400);
+    --chart-4: var(--color-navy-300);
+    --chart-5: var(--color-navy-200);
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
+    --sidebar: oklch(0.98 0.006 255);
+    --sidebar-foreground: oklch(0.18 0.02 260);
+    --sidebar-primary: var(--color-navy-800);
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
+    --sidebar-accent: var(--color-navy-50);
+    --sidebar-accent-foreground: var(--color-navy-800);
+    --sidebar-border: oklch(0.912 0.012 255);
+    --sidebar-ring: var(--color-navy-500);
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
+    --background: oklch(0.168 0.028 261);
+    --foreground: oklch(0.975 0.006 255);
+    --card: oklch(0.205 0.032 261);
+    --card-foreground: oklch(0.975 0.006 255);
+    --popover: oklch(0.205 0.032 261);
+    --popover-foreground: oklch(0.975 0.006 255);
+    --primary: var(--color-navy-300);
+    --primary-foreground: var(--color-navy-950);
+    --secondary: oklch(0.272 0.038 260);
+    --secondary-foreground: oklch(0.975 0.006 255);
+    --muted: oklch(0.272 0.038 260);
+    --muted-foreground: oklch(0.73 0.035 258);
+    --accent: oklch(0.272 0.038 260);
+    --accent-foreground: oklch(0.975 0.006 255);
     --destructive: oklch(0.396 0.141 25.723);
     --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    --border: oklch(0.29 0.038 260);
+    --input: oklch(0.29 0.038 260);
+    --ring: var(--color-navy-400);
+    --chart-1: var(--color-navy-300);
+    --chart-2: var(--color-navy-400);
+    --chart-3: var(--color-navy-500);
+    --chart-4: var(--color-navy-600);
+    --chart-5: var(--color-navy-200);
+    --sidebar: oklch(0.205 0.032 261);
+    --sidebar-foreground: oklch(0.975 0.006 255);
+    --sidebar-primary: var(--color-navy-300);
+    --sidebar-primary-foreground: var(--color-navy-950);
+    --sidebar-accent: oklch(0.272 0.038 260);
+    --sidebar-accent-foreground: oklch(0.975 0.006 255);
+    --sidebar-border: oklch(0.29 0.038 260);
+    --sidebar-ring: var(--color-navy-400);
 }
 
 @layer base {
@@ -143,9 +156,9 @@
 }
 
 /* Etiqueta de placa permanente sobre los marcadores del mapa de flota.
-   Color neutro a propósito: el estado (verde/ámbar/gris) lo indica el auto. */
+   Color de marca a propósito: el estado (ámbar/rojo/gris) lo indica el auto. */
 .leaflet-tooltip.placa-tooltip {
-    background: #27272a;
+    background: var(--color-navy-900);
     color: #fff;
     border: none;
     border-radius: 9999px;
@@ -157,5 +170,5 @@
 }
 
 .leaflet-tooltip.placa-tooltip::before {
-    border-top-color: #27272a;
+    border-top-color: var(--color-navy-900);
 }

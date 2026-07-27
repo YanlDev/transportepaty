@@ -9,12 +9,10 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $sucursal_id
  * @property int|null $user_id
  * @property string $nombres
  * @property string $apellidos
@@ -24,11 +22,12 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $licencia_vence
  * @property string|null $telefono
  * @property string|null $email
+ * @property Carbon|null $fecha_nacimiento
+ * @property string|null $procedencia
  * @property bool $activo
  * @property-read string $nombre_completo
  */
 #[Fillable([
-    'sucursal_id',
     'user_id',
     'nombres',
     'apellidos',
@@ -38,6 +37,8 @@ use Illuminate\Support\Carbon;
     'licencia_vence',
     'telefono',
     'email',
+    'fecha_nacimiento',
+    'procedencia',
     'activo',
 ])]
 #[Appends(['nombre_completo'])]
@@ -49,27 +50,11 @@ class Conductor extends Model
     protected $table = 'conductores';
 
     /**
-     * @return BelongsTo<Sucursal, $this>
-     */
-    public function sucursal(): BelongsTo
-    {
-        return $this->belongsTo(Sucursal::class);
-    }
-
-    /**
      * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
-    }
-
-    /**
-     * @return HasMany<Vehiculo, $this>
-     */
-    public function vehiculos(): HasMany
-    {
-        return $this->hasMany(Vehiculo::class);
     }
 
     /**
@@ -87,6 +72,7 @@ class Conductor extends Model
     {
         return [
             'licencia_vence' => 'date:Y-m-d',
+            'fecha_nacimiento' => 'date:Y-m-d',
             'activo' => 'boolean',
         ];
     }

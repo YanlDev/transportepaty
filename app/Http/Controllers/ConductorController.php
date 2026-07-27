@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreConductorRequest;
 use App\Http\Requests\UpdateConductorRequest;
 use App\Models\Conductor;
-use App\Models\Sucursal;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -23,18 +22,17 @@ class ConductorController extends Controller
         ];
 
         $conductores = Conductor::query()
-            ->with('sucursal:id,nombre')
-            ->withCount('vehiculos')
             ->when($filtros['buscar'], function ($query, string $buscar): void {
                 $query->where(function ($query) use ($buscar): void {
                     $query->whereLike('nombres', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('apellidos', "%{$buscar}%", caseSensitive: false)
-                        ->orWhereLike('documento', "%{$buscar}%", caseSensitive: false);
+                        ->orWhereLike('documento', "%{$buscar}%", caseSensitive: false)
+                        ->orWhereLike('licencia', "%{$buscar}%", caseSensitive: false);
                 });
             })
             ->orderBy('apellidos')
             ->orderBy('nombres')
-            ->paginate(12)
+            ->paginate(25)
             ->withQueryString();
 
         return Inertia::render('conductores/index', [
@@ -84,15 +82,6 @@ class ConductorController extends Controller
     {
         $this->authorize('delete', $conductor);
 
-        $conductor->loadCount('vehiculos');
-
-        if ($conductor->vehiculos_count > 0) {
-            return back()->with('toast', [
-                'type' => 'error',
-                'message' => 'No se puede eliminar: el conductor tiene vehículos asignados.',
-            ]);
-        }
-
         $conductor->delete();
 
         return to_route('conductores.index')
@@ -105,10 +94,6 @@ class ConductorController extends Controller
     private function datosFormulario(): array
     {
         return [
-            'sucursales' => Sucursal::query()
-                ->where('activa', true)
-                ->orderBy('nombre')
-                ->get(['id', 'nombre']),
             'usuarios' => User::query()
                 ->orderBy('name')
                 ->get(['id', 'name', 'email']),

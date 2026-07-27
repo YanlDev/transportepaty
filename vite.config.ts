@@ -28,9 +28,4 @@ export default defineConfig({
             formVariants: true,
         }),
     ],
-    optimizeDeps: {
-        // Pre-bundle Leaflet/react-leaflet de forma determinista para que el
-        // dev server no resuelva el módulo como objeto (ESM/CJS interop).
-        include: ['leaflet', 'react-leaflet', '@react-leaflet/core'],
-    },
 });

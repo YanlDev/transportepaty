@@ -24,8 +24,6 @@ export function DeleteConductorDialog({ conductor, trigger }: Props) {
     const [open, setOpen] = useState(false);
     const { delete: destroyConductor, processing } = useForm();
 
-    const tieneDependientes = conductor.vehiculos_count > 0;
-
     const eliminar = () => {
         destroyConductor(destroy(conductor.id).url, {
             preserveScroll: true,
@@ -40,24 +38,11 @@ export function DeleteConductorDialog({ conductor, trigger }: Props) {
                 <DialogHeader>
                     <DialogTitle>Eliminar conductor</DialogTitle>
                     <DialogDescription>
-                        {tieneDependientes ? (
-                            <>
-                                No puedes eliminar{' '}
-                                <span className="font-medium text-foreground">
-                                    {conductor.nombre_completo}
-                                </span>{' '}
-                                porque tiene {conductor.vehiculos_count}{' '}
-                                vehículo(s) asignados. Reasígnalos primero.
-                            </>
-                        ) : (
-                            <>
-                                ¿Seguro que deseas eliminar{' '}
-                                <span className="font-medium text-foreground">
-                                    {conductor.nombre_completo}
-                                </span>
-                                ? Esta acción no se puede deshacer.
-                            </>
-                        )}
+                        ¿Seguro que deseas eliminar{' '}
+                        <span className="font-medium text-foreground">
+                            {conductor.nombre_completo}
+                        </span>
+                        ? Esta acción no se puede deshacer.
                     </DialogDescription>
                 </DialogHeader>
                 <DialogFooter>
@@ -69,7 +54,7 @@ export function DeleteConductorDialog({ conductor, trigger }: Props) {
                     <Button
                         variant="destructive"
                         onClick={eliminar}
-                        disabled={processing || tieneDependientes}
+                        disabled={processing}
                     >
                         {processing && <Spinner />}
                         Eliminar

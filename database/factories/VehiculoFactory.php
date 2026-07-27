@@ -3,10 +3,8 @@
 namespace Database\Factories;
 
 use App\Enums\EstadoVehiculo;
-use App\Enums\TipoCombustible;
+use App\Enums\TipoCaja;
 use App\Enums\TipoVehiculo;
-use App\Models\Conductor;
-use App\Models\Sucursal;
 use App\Models\Vehiculo;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -24,51 +22,51 @@ class VehiculoFactory extends Factory
     {
         /** @var array<string, list<string>> $modelos */
         $modelos = [
-            'Toyota' => ['Hilux', 'Land Cruiser Prado', 'Fortuner', 'Yaris'],
-            'Hyundai' => ['Tucson', 'Santa Fe', 'Accent'],
-            'Nissan' => ['Frontier', 'Navara', 'Sentra'],
-            'Mitsubishi' => ['L200', 'Montero Sport'],
+            'INTERNATIONAL' => ['LT625 6X4', 'PROSTAR 6X4'],
+            'VOLVO' => ['FH 440 6X4', 'FM 440'],
+            'SCANIA' => ['R450 A6X4', 'G410 A6X4'],
+            'FREIGHTLINER' => ['CASCADIA 6X4'],
         ];
 
         $marca = fake()->randomElement(array_keys($modelos));
-        $modelo = fake()->randomElement($modelos[$marca]);
+        $pesoNeto = fake()->numberBetween(7000, 9500);
+        $pesoBruto = fake()->numberBetween(25000, 30000);
 
         return [
-            'sucursal_id' => Sucursal::factory(),
-            'conductor_id' => null,
             'placa' => strtoupper(fake()->unique()->bothify('???-###')),
             'marca' => $marca,
-            'modelo' => $modelo,
+            'modelo' => fake()->randomElement($modelos[$marca]),
             'anio' => fake()->numberBetween(2016, 2026),
-            'color' => fake()->randomElement(['Blanco', 'Negro', 'Gris', 'Plata', 'Rojo', 'Azul']),
-            'numero_serie' => strtoupper(fake()->unique()->bothify('?#?#?#?#?#?#?#?#?')),
-            'numero_motor' => strtoupper(fake()->bothify('??#######')),
-            'tipo' => fake()->randomElement(TipoVehiculo::cases()),
-            'combustible' => fake()->randomElement(TipoCombustible::cases()),
+            'tipo' => TipoVehiculo::Tracto,
             'estado' => EstadoVehiculo::Activo,
-            'kilometraje' => fake()->numberBetween(0, 180000),
+            'caja' => fake()->randomElement(TipoCaja::cases()),
+            'vin' => strtoupper(fake()->unique()->bothify('?#?#?#?#?#?#?#?#?')),
+            'numero_motor' => strtoupper(fake()->bothify('??#######')),
+            'color' => fake()->randomElement(['BLANCO', 'NEGRO', 'GRIS', 'PLATA', 'ROJO', 'AZUL']),
+            'ejes' => 3,
+            'peso_neto' => $pesoNeto,
+            'peso_bruto' => $pesoBruto,
+            'carga_util' => $pesoBruto - $pesoNeto,
             'fecha_adquisicion' => fake()->dateTimeBetween('-6 years', 'now'),
             'observaciones' => null,
         ];
     }
 
+    /**
+     * Una carreta: unidad remolcada, sin caja ni motor.
+     */
+    public function carreta(): static
+    {
+        return $this->state(fn (): array => [
+            'tipo' => TipoVehiculo::Carreta,
+            'caja' => null,
+            'numero_motor' => null,
+            'ejes' => 3,
+        ]);
+    }
+
     public function enMantenimiento(): static
     {
         return $this->state(fn (): array => ['estado' => EstadoVehiculo::EnMantenimiento]);
-    }
-
-    public function sinConductor(): static
-    {
-        return $this->state(fn (): array => ['conductor_id' => null]);
-    }
-
-    /**
-     * Assign the vehicle to a specific (or new) driver.
-     */
-    public function paraConductor(?Conductor $conductor = null): static
-    {
-        return $this->state(fn (): array => [
-            'conductor_id' => $conductor ?? Conductor::factory(),
-        ]);
     }
 }

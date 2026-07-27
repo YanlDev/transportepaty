@@ -22,7 +22,10 @@ return new class extends Migration
             $table->text('observaciones')->nullable();
             $table->timestamps();
 
-            $table->index(['vehiculo_id', 'tipo']);
+            // Un vehículo tiene como máximo un documento de cada tipo: no puede
+            // haber dos SOAT, dos TUC ni dos de ningún otro tipo. Al renovar se
+            // actualiza el documento existente, no se agrega otro.
+            $table->unique(['vehiculo_id', 'tipo']);
             $table->index('fecha_vencimiento');
         });
     }

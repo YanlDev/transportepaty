@@ -4,19 +4,14 @@ import conductores, {
 } from '@/actions/App/Http/Controllers/ConductorController';
 import { ConductorForm } from '@/components/conductores/conductor-form';
 import type { User } from '@/types/auth';
-import type { Conductor, SucursalOption } from '@/types/fleet';
+import type { Conductor } from '@/types/fleet';
 
 type Props = {
     conductor: Conductor;
-    sucursales: SucursalOption[];
     usuarios: User[];
 };
 
-export default function ConductorEdit({
-    conductor,
-    sucursales,
-    usuarios,
-}: Props) {
+export default function ConductorEdit({ conductor, usuarios }: Props) {
     setLayoutProps({
         breadcrumbs: [
             { title: 'Conductores', href: conductores.index().url },
@@ -40,7 +35,6 @@ export default function ConductorEdit({
             <ConductorForm
                 mode="edit"
                 conductor={conductor}
-                sucursales={sucursales}
                 usuarios={usuarios}
             />
         </div>

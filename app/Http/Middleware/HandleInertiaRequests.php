@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\CargaCombustible;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -46,9 +45,6 @@ class HandleInertiaRequests extends Middleware
                 'roles' => $user ? $user->getRoleNames()->all() : [],
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
-            'combustiblePendiente' => $user && $user->hasRole('admin')
-                ? CargaCombustible::whereNull('procesada_en')->count()
-                : 0,
         ];
     }
 }

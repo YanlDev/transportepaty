@@ -230,7 +230,7 @@ export function UserForm({ mode, usuario, roles, conductores }: Props) {
                 <Button
                     type="submit"
                     disabled={processing}
-                    className="bg-emerald-800 hover:bg-emerald-900"
+                    className="bg-navy-800 hover:bg-navy-900"
                 >
                     {processing && <Spinner />}
                     {mode === 'create' ? 'Crear usuario' : 'Guardar cambios'}

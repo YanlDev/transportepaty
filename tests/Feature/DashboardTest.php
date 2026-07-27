@@ -20,28 +20,26 @@ it('redirects guests to login', function (): void {
     $this->get(route('dashboard'))->assertRedirect(route('login'));
 });
 
-it('shows the dashboard with KPIs and panels to an admin', function (): void {
+it('summarises the fleet by type and status', function (): void {
     Vehiculo::factory()->count(2)->create(['estado' => EstadoVehiculo::Activo]);
     Vehiculo::factory()->create(['estado' => EstadoVehiculo::EnMantenimiento]);
+    Vehiculo::factory()->carreta()->create();
+    Conductor::factory()->count(3)->create();
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('dashboard')
-            ->where('esGestor', true)
-            ->where('kpis.vehiculos_total', 3)
-            ->where('kpis.vehiculos_operativos', 2)
-            ->where('kpis.vehiculos_mantenimiento', 1)
-            ->has('alertasDocumentos')
-            ->has('alertasMantenimiento')
-            ->has('combustibleSerie', 6)
-            ->has('flotaPorEstado')
-            ->has('actividad')
+            ->where('resumen.tractos', 3)
+            ->where('resumen.carretas', 1)
+            ->where('resumen.operativos', 3)
+            ->where('resumen.conductores', 3)
+            ->has('documentosPorVencer')
         );
 });
 
-it('surfaces a document about to expire as a document alert', function (): void {
+it('surfaces a document about to expire', function (): void {
     $vehiculo = Vehiculo::factory()->create();
 
     VehiculoDocumento::create([
@@ -53,9 +51,26 @@ it('surfaces a document about to expire as a document alert', function (): void 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->has('alertasDocumentos', 1)
-            ->where('alertasDocumentos.0.tipo', 'SOAT')
-            ->where('alertasDocumentos.0.estado', 'critico')
+            ->has('documentosPorVencer', 1)
+            ->where('documentosPorVencer.0.tipo_label', 'SOAT')
+            ->where('documentosPorVencer.0.vencido', false)
+        );
+});
+
+it('flags an already expired document', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Matpel,
+        'fecha_vencimiento' => now()->subDay()->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('documentosPorVencer', 1)
+            ->where('documentosPorVencer.0.vencido', true)
         );
 });
 
@@ -70,21 +85,5 @@ it('ignores documents that expire far in the future', function (): void {
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page->has('alertasDocumentos', 0));
-});
-
-it('scopes the dashboard to the vehicles a driver can see', function (): void {
-    $user = actorConRol('conductor');
-    $conductor = Conductor::factory()->create(['user_id' => $user->id]);
-    Vehiculo::factory()->paraConductor($conductor)->create();
-    Vehiculo::factory()->create(); // de otro conductor, no debe contar
-
-    actingAs($user)
-        ->get(route('dashboard'))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('esGestor', false)
-            ->where('kpis.vehiculos_total', 1)
-            ->where('kpis.conductores_activos', 0)
-        );
+        ->assertInertia(fn (Assert $page) => $page->has('documentosPorVencer', 0));
 });

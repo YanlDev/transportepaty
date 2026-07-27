@@ -18,7 +18,7 @@ type Props = {
 const ROLE_BADGES: Record<string, { label: string; className: string }> = {
     admin: {
         label: 'Administrador',
-        className: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20',
+        className: 'bg-navy-50 text-navy-700 ring-1 ring-navy-600/20',
     },
     conductor: {
         label: 'Conductor',
@@ -68,7 +68,7 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
                     </p>
                 </div>
 
-                <Button asChild className="bg-emerald-800 hover:bg-emerald-900">
+                <Button asChild className="bg-navy-800 hover:bg-navy-900">
                     <Link href={create()}>
                         <Plus className="size-4" />
                         Nuevo usuario
@@ -129,7 +129,7 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
                                         disabled={!link.url}
                                         className={
                                             link.active
-                                                ? 'bg-emerald-800 hover:bg-emerald-900'
+                                                ? 'bg-navy-800 hover:bg-navy-900'
                                                 : ''
                                         }
                                     >
@@ -173,7 +173,7 @@ function UsuarioCard({
         <article className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-800">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy-800">
                         <ShieldCheck className="size-4.5" />
                     </span>
                     <div>

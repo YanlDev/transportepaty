@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import type { User } from '@/types/auth';
-import type { Conductor, SucursalOption } from '@/types/fleet';
+import type { Conductor } from '@/types/fleet';
 
 // Radix Select no admite items con value vacío, así que usamos un centinela
 // para representar "sin usuario asignado".
@@ -27,12 +27,10 @@ const SIN_USUARIO = '__sin_usuario__';
 type Props = {
     mode: 'create' | 'edit';
     conductor?: Conductor;
-    sucursales: SucursalOption[];
     usuarios: User[];
 };
 
 type FormData = {
-    sucursal_id: string;
     user_id: string | null;
     nombres: string;
     apellidos: string;
@@ -42,17 +40,13 @@ type FormData = {
     licencia_vence: string;
     telefono: string;
     email: string;
+    fecha_nacimiento: string;
+    procedencia: string;
     activo: boolean;
 };
 
-export function ConductorForm({
-    mode,
-    conductor,
-    sucursales,
-    usuarios,
-}: Props) {
+export function ConductorForm({ mode, conductor, usuarios }: Props) {
     const { data, setData, post, put, processing, errors } = useForm<FormData>({
-        sucursal_id: String(conductor?.sucursal_id ?? ''),
         user_id: conductor?.user_id ? String(conductor.user_id) : null,
         nombres: conductor?.nombres ?? '',
         apellidos: conductor?.apellidos ?? '',
@@ -62,6 +56,8 @@ export function ConductorForm({
         licencia_vence: conductor?.licencia_vence ?? '',
         telefono: conductor?.telefono ?? '',
         email: conductor?.email ?? '',
+        fecha_nacimiento: conductor?.fecha_nacimiento ?? '',
+        procedencia: conductor?.procedencia ?? '',
         activo: conductor?.activo ?? true,
     });
 
@@ -128,28 +124,31 @@ export function ConductorForm({
                             />
                         )}
                     </Field>
-                    <Field label="Sucursal" error={errors.sucursal_id} required>
+                    <Field
+                        label="Fecha de nacimiento"
+                        error={errors.fecha_nacimiento}
+                    >
                         {(id) => (
-                            <Select
-                                value={data.sucursal_id}
-                                onValueChange={(value) =>
-                                    setData('sucursal_id', value)
+                            <Input
+                                id={id}
+                                type="date"
+                                value={data.fecha_nacimiento}
+                                onChange={(e) =>
+                                    setData('fecha_nacimiento', e.target.value)
                                 }
-                            >
-                                <SelectTrigger id={id}>
-                                    <SelectValue placeholder="Seleccionar sucursal" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {sucursales.map((s) => (
-                                        <SelectItem
-                                            key={s.id}
-                                            value={String(s.id)}
-                                        >
-                                            {s.nombre}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                            />
+                        )}
+                    </Field>
+                    <Field label="Procedencia" error={errors.procedencia}>
+                        {(id) => (
+                            <Input
+                                id={id}
+                                value={data.procedencia}
+                                onChange={(e) =>
+                                    setData('procedencia', e.target.value)
+                                }
+                                placeholder="Puno"
+                            />
                         )}
                     </Field>
                     <Field label="Teléfono" error={errors.telefono}>
@@ -160,7 +159,7 @@ export function ConductorForm({
                                 onChange={(e) =>
                                     setData('telefono', e.target.value)
                                 }
-                                placeholder="+51 999 888 777"
+                                placeholder="999888777"
                             />
                         )}
                     </Field>
@@ -201,11 +200,14 @@ export function ConductorForm({
                                     <SelectValue placeholder="Seleccionar categoría" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="A-I">A-I</SelectItem>
-                                    <SelectItem value="A-IIa">A-IIa</SelectItem>
-                                    <SelectItem value="A-IIb">A-IIb</SelectItem>
                                     <SelectItem value="A-IIIa">
                                         A-IIIa
+                                    </SelectItem>
+                                    <SelectItem value="A-IIIb">
+                                        A-IIIb
+                                    </SelectItem>
+                                    <SelectItem value="A-IIIc">
+                                        A-IIIc
                                     </SelectItem>
                                 </SelectContent>
                             </Select>
@@ -262,7 +264,7 @@ export function ConductorForm({
                             }
                         />
                         <Label htmlFor={activoId} className="font-normal">
-                            Conductor activo (disponible para asignar vehículos)
+                            Conductor activo
                         </Label>
                     </div>
                     <InputError message={errors.activo} />
@@ -276,7 +278,7 @@ export function ConductorForm({
                 <Button
                     type="submit"
                     disabled={processing}
-                    className="bg-emerald-800 hover:bg-emerald-900"
+                    className="bg-navy-800 hover:bg-navy-900"
                 >
                     {processing && <Spinner />}
                     {mode === 'create'

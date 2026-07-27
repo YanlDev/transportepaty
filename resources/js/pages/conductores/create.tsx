@@ -3,15 +3,13 @@ import conductores, {
     create,
 } from '@/actions/App/Http/Controllers/ConductorController';
 import { ConductorForm } from '@/components/conductores/conductor-form';
-import type { SucursalOption } from '@/types/fleet';
 import type { User } from '@/types/auth';
 
 type Props = {
-    sucursales: SucursalOption[];
     usuarios: User[];
 };
 
-export default function ConductorCreate({ sucursales, usuarios }: Props) {
+export default function ConductorCreate({ usuarios }: Props) {
     return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
             <Head title="Nuevo conductor" />
@@ -21,15 +19,11 @@ export default function ConductorCreate({ sucursales, usuarios }: Props) {
                     Nuevo conductor
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                    Registra un conductor para asignarle vehículos.
+                    Registra un conductor en el padrón.
                 </p>
             </div>
 
-            <ConductorForm
-                mode="create"
-                sucursales={sucursales}
-                usuarios={usuarios}
-            />
+            <ConductorForm mode="create" usuarios={usuarios} />
         </div>
     );
 }

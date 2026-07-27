@@ -1,8 +1,6 @@
 <?php
 
 use App\Models\Conductor;
-use App\Models\Sucursal;
-use App\Models\Vehiculo;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -20,18 +18,16 @@ beforeEach(function (): void {
  */
 function datosConductor(array $overrides = []): array
 {
-    $sucursal = Sucursal::factory()->create();
-
     return array_merge([
-        'sucursal_id' => $sucursal->id,
         'nombres' => 'Juan Carlos',
         'apellidos' => 'García Pérez',
         'documento' => '12345678',
         'licencia' => 'Q12345678',
-        'categoria_licencia' => 'A-IIa',
+        'categoria_licencia' => 'A-IIIa',
         'licencia_vence' => now()->addYear()->format('Y-m-d'),
-        'telefono' => '+51 999 888 777',
+        'telefono' => '999888777',
         'email' => 'juan@ejemplo.com',
+        'procedencia' => 'Puno',
         'activo' => true,
     ], $overrides);
 }
@@ -40,9 +36,8 @@ it('redirects guests to login', function (): void {
     $this->get(route('conductores.index'))->assertRedirect(route('login'));
 });
 
-it('lets admins and viewers see the list with counts', function (): void {
+it('lets admins and viewers see the list', function (): void {
     $conductor = Conductor::factory()->create();
-    Vehiculo::factory()->count(2)->for($conductor)->create();
 
     actingAs(actorConRol('visor'))
         ->get(route('conductores.index'))
@@ -50,9 +45,18 @@ it('lets admins and viewers see the list with counts', function (): void {
         ->assertInertia(fn (Assert $page) => $page
             ->component('conductores/index')
             ->has('conductores.data', 1)
-            ->where('conductores.data.0.vehiculos_count', 2)
             ->where('conductores.data.0.nombre_completo', $conductor->nombre_completo)
         );
+});
+
+it('filters the list by licencia', function (): void {
+    Conductor::factory()->create(['licencia' => 'Q11111111']);
+    Conductor::factory()->create(['licencia' => 'Q22222222']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.index', ['buscar' => 'Q1111']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->has('conductores.data', 1));
 });
 
 it('exposes the edit form with a date-only license expiry', function (): void {
@@ -98,14 +102,12 @@ it('validates required fields when creating', function (): void {
             'nombres' => '',
             'apellidos' => '',
             'documento' => '',
-            'sucursal_id' => '',
         ]))
-        ->assertSessionHasErrors(['nombres', 'apellidos', 'documento', 'sucursal_id']);
+        ->assertSessionHasErrors(['nombres', 'apellidos', 'documento']);
 });
 
 it('rejects a duplicate documento', function (): void {
-    $sucursal = Sucursal::factory()->create();
-    Conductor::factory()->for($sucursal)->create(['documento' => '12345678']);
+    Conductor::factory()->create(['documento' => '12345678']);
 
     actingAs(actorConRol('admin'))
         ->post(route('conductores.store'), datosConductor(['documento' => '12345678']))
@@ -117,7 +119,6 @@ it('allows an admin to update a conductor', function (): void {
 
     actingAs(actorConRol('admin'))
         ->put(route('conductores.update', $conductor), datosConductor([
-            'sucursal_id' => $conductor->sucursal_id,
             'nombres' => 'Carlos Editado',
         ]))
         ->assertRedirect(route('conductores.index'));
@@ -130,7 +131,6 @@ it('keeps its own documento when updating', function (): void {
 
     actingAs(actorConRol('admin'))
         ->put(route('conductores.update', $conductor), datosConductor([
-            'sucursal_id' => $conductor->sucursal_id,
             'documento' => '87654321',
             'nombres' => 'Nuevo Nombre',
         ]))
@@ -139,7 +139,7 @@ it('keeps its own documento when updating', function (): void {
     expect($conductor->fresh()->nombres)->toBe('Nuevo Nombre');
 });
 
-it('deletes a conductor without vehicles', function (): void {
+it('deletes a conductor', function (): void {
     $conductor = Conductor::factory()->create();
 
     actingAs(actorConRol('admin'))
@@ -147,17 +147,6 @@ it('deletes a conductor without vehicles', function (): void {
         ->assertRedirect(route('conductores.index'));
 
     $this->assertDatabaseMissing('conductores', ['id' => $conductor->id]);
-});
-
-it('refuses to delete a conductor with vehicles', function (): void {
-    $conductor = Conductor::factory()->create();
-    Vehiculo::factory()->for($conductor)->create();
-
-    actingAs(actorConRol('admin'))
-        ->delete(route('conductores.destroy', $conductor))
-        ->assertRedirect();
-
-    $this->assertDatabaseHas('conductores', ['id' => $conductor->id]);
 });
 
 it('forbids a viewer from deleting a conductor', function (): void {

@@ -1,5 +1,5 @@
 import { Link, useForm } from '@inertiajs/react';
-import { useId, useMemo } from 'react';
+import { useId } from 'react';
 import vehiculos, {
     show,
     store,
@@ -18,84 +18,63 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import type {
-    ConductorOption,
-    DispositivoGpsOption,
-    EnumOption,
-    SucursalOption,
-    Vehiculo,
-} from '@/types/fleet';
-
-const SIN_CONDUCTOR = 'none';
+import type { EnumOption, Vehiculo } from '@/types/fleet';
 
 type Props = {
     mode: 'create' | 'edit';
     vehiculo?: Vehiculo;
-    sucursales: SucursalOption[];
-    conductores: ConductorOption[];
     tipos: EnumOption[];
-    combustibles: EnumOption[];
+    cajas: EnumOption[];
     estados: EnumOption[];
-    dispositivosGps: DispositivoGpsOption[];
 };
 
 type FormData = {
-    sucursal_id: number | '';
-    conductor_id: number | null;
     placa: string;
     marca: string;
     modelo: string;
-    anio: number;
-    color: string;
-    numero_serie: string;
-    numero_motor: string;
+    anio: number | '';
     tipo: string;
-    combustible: string;
     estado: string;
-    kilometraje: number;
+    caja: string;
+    vin: string;
+    numero_motor: string;
+    color: string;
+    ejes: number | '';
+    peso_neto: number | '';
+    peso_bruto: number | '';
+    carga_util: number | '';
     fecha_adquisicion: string;
     observaciones: string;
-    imei: string;
 };
 
 export function VehiculoForm({
     mode,
     vehiculo,
-    sucursales,
-    conductores,
     tipos,
-    combustibles,
+    cajas,
     estados,
-    dispositivosGps,
 }: Props) {
     const { data, setData, post, put, processing, errors } = useForm<FormData>({
-        sucursal_id: vehiculo?.sucursal_id ?? '',
-        conductor_id: vehiculo?.conductor_id ?? null,
         placa: vehiculo?.placa ?? '',
         marca: vehiculo?.marca ?? '',
         modelo: vehiculo?.modelo ?? '',
-        anio: vehiculo?.anio ?? new Date().getFullYear(),
-        color: vehiculo?.color ?? '',
-        numero_serie: vehiculo?.numero_serie ?? '',
-        numero_motor: vehiculo?.numero_motor ?? '',
-        tipo: vehiculo?.tipo ?? 'camioneta',
-        combustible: vehiculo?.combustible ?? 'diesel',
+        anio: vehiculo?.anio ?? '',
+        tipo: vehiculo?.tipo ?? 'tracto',
         estado: vehiculo?.estado ?? 'activo',
-        kilometraje: vehiculo?.kilometraje ?? 0,
+        caja: vehiculo?.caja ?? '',
+        vin: vehiculo?.vin ?? '',
+        numero_motor: vehiculo?.numero_motor ?? '',
+        color: vehiculo?.color ?? '',
+        ejes: vehiculo?.ejes ?? '',
+        peso_neto: vehiculo?.peso_neto ?? '',
+        peso_bruto: vehiculo?.peso_bruto ?? '',
+        carga_util: vehiculo?.carga_util ?? '',
         fecha_adquisicion: vehiculo?.fecha_adquisicion ?? '',
         observaciones: vehiculo?.observaciones ?? '',
-        imei: vehiculo?.imei ?? '',
     });
 
-    const datalistId = useId();
-
-    const conductoresDeSucursal = useMemo(
-        () =>
-            conductores.filter(
-                (conductor) => conductor.sucursal_id === data.sucursal_id,
-            ),
-        [conductores, data.sucursal_id],
-    );
+    // La carreta es remolcada: no tiene transmisión ni motor propio.
+    const esTracto = data.tipo === 'tracto';
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -113,7 +92,7 @@ export function VehiculoForm({
         <form onSubmit={submit} className="flex flex-col gap-6">
             <Section
                 title="Datos generales"
-                description="Identificación y características del vehículo."
+                description="Identificación y características de la unidad."
             >
                 <Field label="Placa" error={errors.placa} required>
                     {(id) => (
@@ -132,39 +111,54 @@ export function VehiculoForm({
                         <SelectField
                             id={id}
                             value={data.tipo}
-                            onChange={(value) => setData('tipo', value)}
+                            onChange={(value) => {
+                                setData('tipo', value);
+
+                                if (value !== 'tracto') {
+                                    setData('caja', '');
+                                }
+                            }}
                             options={tipos}
                         />
                     )}
                 </Field>
-                <Field label="Marca" error={errors.marca} required>
+                <Field label="Marca" error={errors.marca}>
                     {(id) => (
                         <Input
                             id={id}
                             value={data.marca}
-                            onChange={(e) => setData('marca', e.target.value)}
-                            placeholder="Toyota"
+                            onChange={(e) =>
+                                setData('marca', e.target.value.toUpperCase())
+                            }
+                            placeholder="INTERNATIONAL"
                         />
                     )}
                 </Field>
-                <Field label="Modelo" error={errors.modelo} required>
+                <Field label="Modelo" error={errors.modelo}>
                     {(id) => (
                         <Input
                             id={id}
                             value={data.modelo}
-                            onChange={(e) => setData('modelo', e.target.value)}
-                            placeholder="Hilux"
+                            onChange={(e) =>
+                                setData('modelo', e.target.value.toUpperCase())
+                            }
+                            placeholder="LT625 6X4"
                         />
                     )}
                 </Field>
-                <Field label="Año" error={errors.anio} required>
+                <Field label="Año" error={errors.anio}>
                     {(id) => (
                         <Input
                             id={id}
                             type="number"
                             value={data.anio}
                             onChange={(e) =>
-                                setData('anio', Number(e.target.value))
+                                setData(
+                                    'anio',
+                                    e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value),
+                                )
                             }
                             min={1950}
                             max={new Date().getFullYear() + 1}
@@ -176,21 +170,25 @@ export function VehiculoForm({
                         <Input
                             id={id}
                             value={data.color}
-                            onChange={(e) => setData('color', e.target.value)}
-                            placeholder="Negro"
+                            onChange={(e) =>
+                                setData('color', e.target.value.toUpperCase())
+                            }
+                            placeholder="BLANCO"
                         />
                     )}
                 </Field>
-                <Field label="Combustible" error={errors.combustible} required>
-                    {(id) => (
-                        <SelectField
-                            id={id}
-                            value={data.combustible}
-                            onChange={(value) => setData('combustible', value)}
-                            options={combustibles}
-                        />
-                    )}
-                </Field>
+                {esTracto && (
+                    <Field label="Caja" error={errors.caja}>
+                        {(id) => (
+                            <SelectField
+                                id={id}
+                                value={data.caja}
+                                onChange={(value) => setData('caja', value)}
+                                options={cajas}
+                            />
+                        )}
+                    </Field>
+                )}
                 <Field label="Estado" error={errors.estado} required>
                     {(id) => (
                         <SelectField
@@ -201,122 +199,123 @@ export function VehiculoForm({
                         />
                     )}
                 </Field>
-                <Field label="Kilometraje" error={errors.kilometraje} required>
+            </Section>
+
+            <Section
+                title="Identificación técnica"
+                description="Datos que figuran en la tarjeta de propiedad."
+            >
+                <Field label="VIN" error={errors.vin}>
+                    {(id) => (
+                        <Input
+                            id={id}
+                            value={data.vin}
+                            onChange={(e) =>
+                                setData('vin', e.target.value.toUpperCase())
+                            }
+                        />
+                    )}
+                </Field>
+                {esTracto && (
+                    <Field label="N.° de motor" error={errors.numero_motor}>
+                        {(id) => (
+                            <Input
+                                id={id}
+                                value={data.numero_motor}
+                                onChange={(e) =>
+                                    setData(
+                                        'numero_motor',
+                                        e.target.value.toUpperCase(),
+                                    )
+                                }
+                            />
+                        )}
+                    </Field>
+                )}
+                <Field label="Ejes" error={errors.ejes}>
                     {(id) => (
                         <Input
                             id={id}
                             type="number"
-                            value={data.kilometraje}
+                            value={data.ejes}
                             onChange={(e) =>
-                                setData('kilometraje', Number(e.target.value))
+                                setData(
+                                    'ejes',
+                                    e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value),
+                                )
                             }
-                            min={0}
-                        />
-                    )}
-                </Field>
-                <Field label="N.° de serie (VIN)" error={errors.numero_serie}>
-                    {(id) => (
-                        <Input
-                            id={id}
-                            value={data.numero_serie}
-                            onChange={(e) =>
-                                setData('numero_serie', e.target.value)
-                            }
-                        />
-                    )}
-                </Field>
-                <Field label="N.° de motor" error={errors.numero_motor}>
-                    {(id) => (
-                        <Input
-                            id={id}
-                            value={data.numero_motor}
-                            onChange={(e) =>
-                                setData('numero_motor', e.target.value)
-                            }
+                            min={1}
+                            max={10}
                         />
                     )}
                 </Field>
             </Section>
 
             <Section
-                title="Asignación"
-                description="Sucursal a la que pertenece y conductor responsable."
+                title="Pesos"
+                description="Expresados en kilogramos, según tarjeta de propiedad."
             >
-                <Field label="Sucursal" error={errors.sucursal_id} required>
+                <Field label="Peso neto (kg)" error={errors.peso_neto}>
                     {(id) => (
-                        <Select
-                            value={
-                                data.sucursal_id ? String(data.sucursal_id) : ''
-                            }
-                            onValueChange={(value) => {
-                                setData('sucursal_id', Number(value));
-                                setData('conductor_id', null);
-                            }}
-                        >
-                            <SelectTrigger id={id} className="w-full">
-                                <SelectValue placeholder="Selecciona una sucursal" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {sucursales.map((sucursal) => (
-                                    <SelectItem
-                                        key={sucursal.id}
-                                        value={String(sucursal.id)}
-                                    >
-                                        {sucursal.nombre}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    )}
-                </Field>
-                <Field label="Conductor" error={errors.conductor_id}>
-                    {(id) => (
-                        <Select
-                            value={
-                                data.conductor_id
-                                    ? String(data.conductor_id)
-                                    : SIN_CONDUCTOR
-                            }
-                            onValueChange={(value) =>
+                        <Input
+                            id={id}
+                            type="number"
+                            value={data.peso_neto}
+                            onChange={(e) =>
                                 setData(
-                                    'conductor_id',
-                                    value === SIN_CONDUCTOR
-                                        ? null
-                                        : Number(value),
+                                    'peso_neto',
+                                    e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value),
                                 )
                             }
-                            disabled={!data.sucursal_id}
-                        >
-                            <SelectTrigger id={id} className="w-full">
-                                <SelectValue
-                                    placeholder={
-                                        data.sucursal_id
-                                            ? 'Sin asignar'
-                                            : 'Elige una sucursal primero'
-                                    }
-                                />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value={SIN_CONDUCTOR}>
-                                    Sin asignar
-                                </SelectItem>
-                                {conductoresDeSucursal.map((conductor) => (
-                                    <SelectItem
-                                        key={conductor.id}
-                                        value={String(conductor.id)}
-                                    >
-                                        {conductor.nombre_completo}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            min={0}
+                        />
+                    )}
+                </Field>
+                <Field label="Peso bruto (kg)" error={errors.peso_bruto}>
+                    {(id) => (
+                        <Input
+                            id={id}
+                            type="number"
+                            value={data.peso_bruto}
+                            onChange={(e) =>
+                                setData(
+                                    'peso_bruto',
+                                    e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value),
+                                )
+                            }
+                            min={0}
+                        />
+                    )}
+                </Field>
+                <Field label="Carga útil (kg)" error={errors.carga_util}>
+                    {(id) => (
+                        <Input
+                            id={id}
+                            type="number"
+                            value={data.carga_util}
+                            onChange={(e) =>
+                                setData(
+                                    'carga_util',
+                                    e.target.value === ''
+                                        ? ''
+                                        : Number(e.target.value),
+                                )
+                            }
+                            min={0}
+                        />
                     )}
                 </Field>
             </Section>
 
             <Section
                 title="Adquisición"
-                description="Fecha en que ingresó a la flota. Los documentos (SOAT, revisión técnica, etc.) se gestionan desde el detalle del vehículo."
+                description="Fecha en que ingresó a la flota. Los documentos (SOAT, TUC, MATPEL, etc.) se gestionan desde el detalle del vehículo."
             >
                 <Field
                     label="Fecha de adquisición"
@@ -331,38 +330,6 @@ export function VehiculoForm({
                                 setData('fecha_adquisicion', e.target.value)
                             }
                         />
-                    )}
-                </Field>
-            </Section>
-
-            <Section
-                title="Dispositivo GPS"
-                description="Opcional. Vincula este vehículo a su rastreador/dashcam Tracksolid por su IMEI. Déjalo vacío si el vehículo no tiene GPS."
-            >
-                <Field label="IMEI del dispositivo" error={errors.imei}>
-                    {(id) => (
-                        <>
-                            <Input
-                                id={id}
-                                value={data.imei}
-                                onChange={(e) =>
-                                    setData('imei', e.target.value.trim())
-                                }
-                                list={datalistId}
-                                inputMode="numeric"
-                                placeholder="860112070376688"
-                            />
-                            <datalist id={datalistId}>
-                                {dispositivosGps.map((dispositivo) => (
-                                    <option
-                                        key={dispositivo.imei}
-                                        value={dispositivo.imei}
-                                    >
-                                        {dispositivo.label}
-                                    </option>
-                                ))}
-                            </datalist>
-                        </>
                     )}
                 </Field>
             </Section>
@@ -391,7 +358,7 @@ export function VehiculoForm({
                 <Button
                     type="submit"
                     disabled={processing}
-                    className="bg-emerald-800 hover:bg-emerald-900"
+                    className="bg-navy-800 hover:bg-navy-900"
                 >
                     {processing && <Spinner />}
                     {mode === 'create'

@@ -19,7 +19,6 @@ abstract class ConductorRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'sucursal_id' => ['required', 'exists:sucursales,id'],
             'user_id' => ['nullable', 'exists:users,id'],
             'nombres' => ['required', 'string', 'max:100'],
             'apellidos' => ['required', 'string', 'max:100'],
@@ -29,6 +28,8 @@ abstract class ConductorRequest extends FormRequest
             'licencia_vence' => ['nullable', 'date'],
             'telefono' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
+            'fecha_nacimiento' => ['nullable', 'date'],
+            'procedencia' => ['nullable', 'string', 'max:100'],
             'activo' => ['required', 'boolean'],
         ];
     }

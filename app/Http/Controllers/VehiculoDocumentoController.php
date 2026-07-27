@@ -19,15 +19,13 @@ class VehiculoDocumentoController extends Controller
     {
         $this->authorize('view', $vehiculo);
 
-        $vehiculo->load('sucursal:id,nombre');
-
         return Inertia::render('vehiculos/documentos', [
             'vehiculo' => [
                 'id' => $vehiculo->id,
                 'placa' => $vehiculo->placa,
                 'marca' => $vehiculo->marca,
                 'modelo' => $vehiculo->modelo,
-                'sucursal' => $vehiculo->sucursal?->nombre,
+                'tipo_label' => $vehiculo->tipo->label(),
             ],
             'documentos' => $vehiculo->documentos()
                 ->with('media')
@@ -35,7 +33,14 @@ class VehiculoDocumentoController extends Controller
                 ->get()
                 ->map
                 ->toFrontArray(),
-            'tiposDocumento' => TipoDocumento::options(),
+            // El SOAT solo aplica a tractos, así que la carreta no debe ofrecerlo.
+            'tiposDocumento' => array_map(
+                fn (TipoDocumento $tipo): array => [
+                    'value' => $tipo->value,
+                    'label' => $tipo->label(),
+                ],
+                $vehiculo->tipo->documentosExigibles(),
+            ),
         ]);
     }
 

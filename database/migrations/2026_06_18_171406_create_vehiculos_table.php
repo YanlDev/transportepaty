@@ -1,7 +1,6 @@
 <?php
 
 use App\Enums\EstadoVehiculo;
-use App\Enums\TipoCombustible;
 use App\Enums\TipoVehiculo;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
@@ -16,32 +15,36 @@ return new class extends Migration
     {
         Schema::create('vehiculos', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('sucursal_id')->constrained('sucursales')->cascadeOnDelete();
-            $table->foreignId('conductor_id')->nullable()->constrained('conductores')->nullOnDelete();
 
             $table->string('placa')->unique();
-            $table->string('marca');
-            $table->string('modelo');
-            $table->unsignedSmallInteger('anio');
-            $table->string('color')->nullable();
-            $table->string('numero_serie')->nullable()->unique();
-            $table->string('numero_motor')->nullable();
+            $table->string('marca')->nullable();
+            $table->string('modelo')->nullable();
+            $table->unsignedSmallInteger('anio')->nullable();
 
-            $table->string('tipo')->default(TipoVehiculo::Camioneta->value);
-            $table->string('combustible')->default(TipoCombustible::Diesel->value);
+            $table->string('tipo')->default(TipoVehiculo::Tracto->value);
             $table->string('estado')->default(EstadoVehiculo::Activo->value);
 
-            $table->unsignedInteger('kilometraje')->default(0);
+            // Solo aplica a tractos: la carreta es remolcada y no tiene transmisión.
+            $table->string('caja', 20)->nullable();
+
+            $table->string('vin')->nullable();
+            $table->string('numero_motor')->nullable();
+            $table->string('color')->nullable();
+            $table->unsignedSmallInteger('ejes')->nullable();
+
+            // Pesos en kilogramos, según tarjeta de propiedad.
+            $table->unsignedInteger('peso_neto')->nullable();
+            $table->unsignedInteger('peso_bruto')->nullable();
+            $table->unsignedInteger('carga_util')->nullable();
+
             $table->date('fecha_adquisicion')->nullable();
-            $table->date('soat_vence')->nullable();
-            $table->date('revision_tecnica_vence')->nullable();
             $table->text('observaciones')->nullable();
 
             $table->timestamps();
             $table->softDeletes();
 
-            $table->index(['sucursal_id', 'estado']);
-            $table->index('conductor_id');
+            $table->index('estado');
+            $table->index('tipo');
         });
     }
 

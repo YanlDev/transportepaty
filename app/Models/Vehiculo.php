@@ -3,15 +3,13 @@
 namespace App\Models;
 
 use App\Enums\EstadoVehiculo;
-use App\Enums\TipoCombustible;
+use App\Enums\TipoCaja;
+use App\Enums\TipoDocumento;
 use App\Enums\TipoVehiculo;
-use Carbon\CarbonImmutable;
 use Database\Factories\VehiculoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
@@ -19,46 +17,38 @@ use Illuminate\Support\Carbon;
 
 /**
  * @property int $id
- * @property int $sucursal_id
- * @property int|null $conductor_id
  * @property string $placa
- * @property string $marca
- * @property string $modelo
- * @property int $anio
- * @property string|null $color
- * @property string|null $numero_serie
- * @property string|null $numero_motor
- * @property string|null $imei
- * @property int|null $gps_km_base
- * @property CarbonImmutable|null $km_calibrado_en
- * @property CarbonImmutable|null $odometro_sincronizado_en
+ * @property string|null $marca
+ * @property string|null $modelo
+ * @property int|null $anio
  * @property TipoVehiculo $tipo
- * @property TipoCombustible $combustible
  * @property EstadoVehiculo $estado
- * @property int $kilometraje
- * @property int|null $kilometraje_inicial
+ * @property TipoCaja|null $caja
+ * @property string|null $vin
+ * @property string|null $numero_motor
+ * @property string|null $color
+ * @property int|null $ejes
+ * @property int|null $peso_neto
+ * @property int|null $peso_bruto
+ * @property int|null $carga_util
  * @property Carbon|null $fecha_adquisicion
  * @property string|null $observaciones
  */
 #[Fillable([
-    'sucursal_id',
-    'conductor_id',
     'placa',
     'marca',
     'modelo',
     'anio',
-    'color',
-    'numero_serie',
-    'numero_motor',
-    'imei',
-    'gps_km_base',
-    'km_calibrado_en',
-    'odometro_sincronizado_en',
     'tipo',
-    'combustible',
     'estado',
-    'kilometraje',
-    'kilometraje_inicial',
+    'caja',
+    'vin',
+    'numero_motor',
+    'color',
+    'ejes',
+    'peso_neto',
+    'peso_bruto',
+    'carga_util',
     'fecha_adquisicion',
     'observaciones',
 ])]
@@ -68,63 +58,26 @@ class Vehiculo extends Model
     use HasFactory, SoftDeletes;
 
     /**
-     * Al dar de alta un vehículo, si no se indicó un odómetro inicial explícito
-     * se toma el kilometraje de registro. Ese valor congela cuán "nuevo" entró a
-     * la flota y decide si los servicios de vehículo nuevo aplican.
-     */
-    protected static function booted(): void
-    {
-        static::creating(function (Vehiculo $vehiculo): void {
-            if ($vehiculo->kilometraje_inicial === null) {
-                $vehiculo->kilometraje_inicial = $vehiculo->kilometraje;
-            }
-        });
-    }
-
-    /**
      * The model's default values for attributes.
      *
      * @var array<string, mixed>
      */
     protected $attributes = [
-        'tipo' => TipoVehiculo::Camioneta->value,
-        'combustible' => TipoCombustible::Diesel->value,
+        'tipo' => TipoVehiculo::Tracto->value,
         'estado' => EstadoVehiculo::Activo->value,
-        'kilometraje' => 0,
     ];
 
     /**
-     * @return BelongsTo<Sucursal, $this>
+     * Las carretas no tienen transmisión, así que se descarta cualquier caja
+     * que llegue del formulario cuando el tipo no es tracto.
      */
-    public function sucursal(): BelongsTo
+    protected static function booted(): void
     {
-        return $this->belongsTo(Sucursal::class);
-    }
-
-    /**
-     * @return BelongsTo<Conductor, $this>
-     */
-    public function conductor(): BelongsTo
-    {
-        return $this->belongsTo(Conductor::class);
-    }
-
-    /**
-     * @return HasMany<VehiculoFoto, $this>
-     */
-    public function fotos(): HasMany
-    {
-        return $this->hasMany(VehiculoFoto::class)->orderBy('orden');
-    }
-
-    /**
-     * Foto de portada (la de menor orden), para miniaturas en listados.
-     *
-     * @return HasOne<VehiculoFoto, $this>
-     */
-    public function fotoPrincipal(): HasOne
-    {
-        return $this->hasOne(VehiculoFoto::class)->orderBy('orden');
+        static::saving(function (Vehiculo $vehiculo): void {
+            if (! $vehiculo->tipo->tieneCaja()) {
+                $vehiculo->caja = null;
+            }
+        });
     }
 
     /**
@@ -136,103 +89,28 @@ class Vehiculo extends Model
     }
 
     /**
-     * @return HasMany<Mantenimiento, $this>
-     */
-    public function mantenimientos(): HasMany
-    {
-        return $this->hasMany(Mantenimiento::class);
-    }
-
-    /**
-     * @return HasMany<CargaCombustible, $this>
-     */
-    public function cargasCombustible(): HasMany
-    {
-        return $this->hasMany(CargaCombustible::class);
-    }
-
-    /**
-     * @return HasMany<Activacion, $this>
-     */
-    public function activaciones(): HasMany
-    {
-        return $this->hasMany(Activacion::class);
-    }
-
-    /**
-     * Whether the vehicle is linked to a Tracksolid / GPS device.
-     */
-    public function tieneGps(): bool
-    {
-        return $this->imei !== null && $this->imei !== '';
-    }
-
-    /**
-     * Calibra el odómetro real al valor del tablero y fija el punto de partida
-     * desde el cual las sincronizaciones contarán la distancia recorrida.
-     */
-    public function calibrarOdometro(int $kilometrajeReal): void
-    {
-        $this->kilometraje = $kilometrajeReal;
-        $this->km_calibrado_en = now();
-        $this->odometro_sincronizado_en = now();
-        $this->save();
-    }
-
-    /**
-     * Suma al odómetro la distancia recorrida (km del track GPS) desde la
-     * última sincronización y mueve el punto de partida al último punto GPS
-     * procesado. Devuelve los km sumados (0 si no hubo recorrido nuevo).
-     */
-    public function avanzarOdometroPorRecorrido(float $distanciaKm, CarbonImmutable $nuevaAncla): int
-    {
-        $avance = max(0, (int) round($distanciaKm));
-
-        if ($avance > 0) {
-            $this->kilometraje += $avance;
-        }
-
-        $this->odometro_sincronizado_en = $nuevaAncla;
-        $this->save();
-
-        return $avance;
-    }
-
-    /**
-     * Actualiza el kilometraje a partir del odómetro de una carga de combustible.
+     * La habilitación vigente del MTC, conocida como TUC. Es un documento y no
+     * una columna del vehículo, así que se expone como relación para poder
+     * precargarla en los listados sin caer en N+1.
      *
-     * Sólo aplica a unidades SIN GPS: ahí el odómetro de las cargas es la única
-     * fuente de kilometraje y se adopta cuando supera el valor actual. En las
-     * unidades con GPS el kilometraje lo lleva la sincronización, así que la
-     * carga no lo toca para no romper la contabilidad de `gps_km_base`.
+     * @return HasOne<VehiculoDocumento, $this>
      */
-    public function actualizarKilometrajePorCarga(?int $odometro): void
+    public function tuc(): HasOne
     {
-        if ($odometro === null || $this->tieneGps()) {
-            return;
-        }
-
-        if ($odometro > $this->kilometraje) {
-            $this->kilometraje = $odometro;
-            $this->save();
-        }
+        return $this->hasOne(VehiculoDocumento::class)
+            ->where('tipo', TipoDocumento::HabilitacionMtc)
+            ->latestOfMany();
     }
 
     /**
-     * Scope the query to vehicles the given user is allowed to see.
-     *
-     * Admins and viewers see every vehicle; drivers only see the ones
-     * assigned to them.
-     *
-     * @param  Builder<Vehiculo>  $query
+     * Descripción corta para listados: marca y modelo, o la placa si el
+     * vehículo aún no tiene esos datos cargados (caso típico de las carretas).
      */
-    public function scopeVisibleParaUsuario(Builder $query, User $user): void
+    public function descripcion(): string
     {
-        if ($user->hasAnyRole(['admin', 'visor'])) {
-            return;
-        }
+        $partes = array_filter([$this->marca, $this->modelo]);
 
-        $query->whereHas('conductor', fn (Builder $query) => $query->where('user_id', $user->id));
+        return $partes === [] ? $this->placa : implode(' ', $partes);
     }
 
     /**
@@ -242,14 +120,13 @@ class Vehiculo extends Model
     {
         return [
             'tipo' => TipoVehiculo::class,
-            'combustible' => TipoCombustible::class,
             'estado' => EstadoVehiculo::class,
+            'caja' => TipoCaja::class,
             'anio' => 'integer',
-            'kilometraje' => 'integer',
-            'kilometraje_inicial' => 'integer',
-            'gps_km_base' => 'integer',
-            'km_calibrado_en' => 'datetime',
-            'odometro_sincronizado_en' => 'datetime',
+            'ejes' => 'integer',
+            'peso_neto' => 'integer',
+            'peso_bruto' => 'integer',
+            'carga_util' => 'integer',
             'fecha_adquisicion' => 'date:Y-m-d',
         ];
     }

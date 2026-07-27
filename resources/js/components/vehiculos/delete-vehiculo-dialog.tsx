@@ -15,7 +15,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 
 type Props = {
-    vehiculo: { id: number; placa: string; marca: string; modelo: string };
+    vehiculo: { id: number; placa: string };
     trigger: React.ReactNode;
 };
 
@@ -39,8 +39,7 @@ export function DeleteVehiculoDialog({ vehiculo, trigger }: Props) {
                     <DialogDescription>
                         ¿Seguro que deseas eliminar{' '}
                         <span className="font-medium text-foreground">
-                            {vehiculo.marca} {vehiculo.modelo} ({vehiculo.placa}
-                            )
+                            {vehiculo.placa}
                         </span>
                         ? Podrás recuperarlo más adelante, pero dejará de
                         aparecer en la lista.

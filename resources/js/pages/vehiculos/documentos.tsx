@@ -13,9 +13,9 @@ import type { EnumOption, VehiculoDocumentoItem } from '@/types/fleet';
 type VehiculoResumen = {
     id: number;
     placa: string;
-    marca: string;
-    modelo: string;
-    sucursal: string | null;
+    marca: string | null;
+    modelo: string | null;
+    tipo_label: string;
 };
 
 type Props = {
@@ -61,8 +61,9 @@ export default function VehiculoDocumentos({
                         Documentación
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        {vehiculo.marca} {vehiculo.modelo} · {vehiculo.placa}
-                        {vehiculo.sucursal && ` · ${vehiculo.sucursal}`}
+                        {vehiculo.tipo_label} · {vehiculo.placa}
+                        {vehiculo.marca && ` · ${vehiculo.marca}`}
+                        {vehiculo.modelo && ` ${vehiculo.modelo}`}
                     </p>
                 </div>
 

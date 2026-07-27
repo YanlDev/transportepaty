@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import { FileText, Trash2 } from 'lucide-react';
 import { destroy } from '@/actions/App/Http/Controllers/VehiculoDocumentoController';
+import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { formatearFecha } from '@/lib/format';
 import type { VehiculoDocumentoItem } from '@/types/fleet';
 
@@ -17,32 +18,35 @@ export function DocumentoItem({
 }: Props) {
     return (
         <div className="flex items-center gap-2 rounded-lg border border-border p-3">
-            <a
-                href={documento.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex min-w-0 flex-1 items-center gap-3"
-            >
-                <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700">
-                    <FileText className="size-4" />
-                </div>
-                <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-foreground">
-                        {documento.tipo_label}
-                        {documento.numero && (
-                            <span className="text-muted-foreground">
-                                {' · '}
-                                {documento.numero}
-                            </span>
-                        )}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                        {documento.fecha_vencimiento
-                            ? `Vence: ${formatearFecha(documento.fecha_vencimiento)}`
-                            : 'Sin vencimiento'}
-                    </p>
-                </div>
-            </a>
+            <DocumentoVisorDialog
+                documento={documento}
+                trigger={
+                    <button
+                        type="button"
+                        className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                        <div className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy-700">
+                            <FileText className="size-4" />
+                        </div>
+                        <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-foreground">
+                                {documento.tipo_label}
+                                {documento.numero && (
+                                    <span className="text-muted-foreground">
+                                        {' · '}
+                                        {documento.numero}
+                                    </span>
+                                )}
+                            </p>
+                            <p className="truncate text-xs text-muted-foreground">
+                                {documento.fecha_vencimiento
+                                    ? `Vence: ${formatearFecha(documento.fecha_vencimiento)}`
+                                    : 'Sin vencimiento'}
+                            </p>
+                        </div>
+                    </button>
+                }
+            />
 
             <DocumentoEstadoBadge fecha={documento.fecha_vencimiento} />
 
@@ -83,7 +87,7 @@ function DocumentoEstadoBadge({ fecha }: { fecha: string | null }) {
             clase = 'bg-amber-100 text-amber-700';
             etiqueta = 'Próximo a vencer';
         } else {
-            clase = 'bg-emerald-50 text-emerald-700';
+            clase = 'bg-navy-50 text-navy-700';
             etiqueta = 'Vigente';
         }
     }

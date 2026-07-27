@@ -23,7 +23,5 @@ class DatabaseSeeder extends Seeder
         ])->assignRole('admin');
 
         $this->call(ImportOldUsersSeeder::class);
-        $this->call(FlotaDemoSeeder::class);
-        $this->call(PlantillaMantenimientoSeeder::class);
     }
 }

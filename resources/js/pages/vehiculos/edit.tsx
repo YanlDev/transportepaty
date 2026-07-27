@@ -4,22 +4,13 @@ import vehiculos, {
     show,
 } from '@/actions/App/Http/Controllers/VehiculoController';
 import { VehiculoForm } from '@/components/vehiculos/vehiculo-form';
-import type {
-    ConductorOption,
-    DispositivoGpsOption,
-    EnumOption,
-    SucursalOption,
-    Vehiculo,
-} from '@/types/fleet';
+import type { EnumOption, Vehiculo } from '@/types/fleet';
 
 type Props = {
     vehiculo: Vehiculo;
-    sucursales: SucursalOption[];
-    conductores: ConductorOption[];
     tipos: EnumOption[];
-    combustibles: EnumOption[];
+    cajas: EnumOption[];
     estados: EnumOption[];
-    dispositivosGps: DispositivoGpsOption[];
 };
 
 export default function VehiculoEdit({ vehiculo, ...props }: Props) {

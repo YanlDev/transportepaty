@@ -11,14 +11,4 @@ class StoreVehiculoRequest extends VehiculoRequest
     {
         return Rule::unique('vehiculos', 'placa');
     }
-
-    protected function reglaNumeroSerieUnico(): Unique
-    {
-        return Rule::unique('vehiculos', 'numero_serie');
-    }
-
-    protected function reglaImeiUnico(): Unique
-    {
-        return Rule::unique('vehiculos', 'imei');
-    }
 }

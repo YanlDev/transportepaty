@@ -9,21 +9,22 @@ import {
 } from '@/components/ui/select';
 import { useVehiculoFiltros } from '@/hooks/use-vehiculo-filtros';
 import type { FiltrosVehiculo } from '@/hooks/use-vehiculo-filtros';
-import type { EnumOption, SucursalOption } from '@/types/fleet';
+import type { EnumOption } from '@/types/fleet';
 
 const TODOS = 'todos';
 
 type Props = {
     filtros: FiltrosVehiculo;
-    sucursales: SucursalOption[];
+    tipos: EnumOption[];
     estados: EnumOption[];
+    cajas: EnumOption[];
 };
 
-export function VehiculoFiltros({ filtros, sucursales, estados }: Props) {
+export function VehiculoFiltros({ filtros, tipos, estados, cajas }: Props) {
     const { buscar, setBuscar, aplicar } = useVehiculoFiltros(filtros);
 
     return (
-        <div className="flex flex-col gap-3 sm:flex-row">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <div className="relative flex-1">
                 <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
@@ -34,6 +35,44 @@ export function VehiculoFiltros({ filtros, sucursales, estados }: Props) {
                     aria-label="Buscar vehículos"
                 />
             </div>
+
+            <Select
+                value={filtros.tipo ?? TODOS}
+                onValueChange={(value) =>
+                    aplicar({ tipo: value === TODOS ? null : value })
+                }
+            >
+                <SelectTrigger className="sm:w-44">
+                    <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value={TODOS}>Todos los tipos</SelectItem>
+                    {tipos.map((tipo) => (
+                        <SelectItem key={tipo.value} value={tipo.value}>
+                            {tipo.label}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
+
+            <Select
+                value={filtros.caja ?? TODOS}
+                onValueChange={(value) =>
+                    aplicar({ caja: value === TODOS ? null : value })
+                }
+            >
+                <SelectTrigger className="sm:w-52">
+                    <SelectValue placeholder="Caja" />
+                </SelectTrigger>
+                <SelectContent>
+                    <SelectItem value={TODOS}>Todas las cajas</SelectItem>
+                    {cajas.map((caja) => (
+                        <SelectItem key={caja.value} value={caja.value}>
+                            {caja.label}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
 
             <Select
                 value={filtros.estado ?? TODOS}
@@ -49,32 +88,6 @@ export function VehiculoFiltros({ filtros, sucursales, estados }: Props) {
                     {estados.map((estado) => (
                         <SelectItem key={estado.value} value={estado.value}>
                             {estado.label}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-
-            <Select
-                value={
-                    filtros.sucursal_id ? String(filtros.sucursal_id) : TODOS
-                }
-                onValueChange={(value) =>
-                    aplicar({
-                        sucursal_id: value === TODOS ? null : Number(value),
-                    })
-                }
-            >
-                <SelectTrigger className="sm:w-52">
-                    <SelectValue placeholder="Sucursal" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value={TODOS}>Todas las sucursales</SelectItem>
-                    {sucursales.map((sucursal) => (
-                        <SelectItem
-                            key={sucursal.id}
-                            value={String(sucursal.id)}
-                        >
-                            {sucursal.nombre}
                         </SelectItem>
                     ))}
                 </SelectContent>

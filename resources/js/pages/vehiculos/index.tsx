@@ -1,31 +1,37 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Car, Plus } from 'lucide-react';
+import { Plus, Truck } from 'lucide-react';
 import vehiculos, {
     create,
+    show,
 } from '@/actions/App/Http/Controllers/VehiculoController';
 import { Button } from '@/components/ui/button';
-import { VehiculoCard } from '@/components/vehiculos/vehiculo-card';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import { EstadoBadge } from '@/components/vehiculos/estado-badge';
 import { VehiculoFiltros } from '@/components/vehiculos/vehiculo-filtros';
 import type { FiltrosVehiculo } from '@/hooks/use-vehiculo-filtros';
-import type {
-    EnumOption,
-    Paginator,
-    SucursalOption,
-    VehiculoListItem,
-} from '@/types/fleet';
+import type { EnumOption, Paginator, VehiculoListItem } from '@/types/fleet';
 
 type Props = {
     vehiculos: Paginator<VehiculoListItem>;
     filtros: FiltrosVehiculo;
-    sucursales: SucursalOption[];
     estados: EnumOption[];
+    tipos: EnumOption[];
+    cajas: EnumOption[];
 };
 
 export default function VehiculosIndex({
     vehiculos: paginador,
     filtros,
-    sucursales,
     estados,
+    tipos,
+    cajas,
 }: Props) {
     const { auth } = usePage().props;
     const puedeGestionar = auth.roles.includes('admin');
@@ -48,10 +54,7 @@ export default function VehiculosIndex({
                 </div>
 
                 {puedeGestionar && (
-                    <Button
-                        asChild
-                        className="bg-emerald-800 hover:bg-emerald-900"
-                    >
+                    <Button asChild className="bg-navy-800 hover:bg-navy-900">
                         <Link href={create()}>
                             <Plus className="size-4" />
                             Nuevo vehículo
@@ -62,14 +65,15 @@ export default function VehiculosIndex({
 
             <VehiculoFiltros
                 filtros={filtros}
-                sucursales={sucursales}
+                tipos={tipos}
                 estados={estados}
+                cajas={cajas}
             />
 
             {paginador.data.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
                     <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
-                        <Car className="size-7" />
+                        <Truck className="size-7" />
                     </div>
                     <p className="font-medium">No se encontraron vehículos</p>
                     <p className="mt-1 max-w-sm text-sm text-muted-foreground">
@@ -87,13 +91,66 @@ export default function VehiculosIndex({
                 </div>
             ) : (
                 <>
-                    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
-                        {paginador.data.map((vehiculo) => (
-                            <VehiculoCard
-                                key={vehiculo.id}
-                                vehiculo={vehiculo}
-                            />
-                        ))}
+                    <div className="rounded-xl border">
+                        <Table>
+                            <TableHeader>
+                                <TableRow className="hover:bg-transparent">
+                                    <TableHead>Placa</TableHead>
+                                    <TableHead>Tipo</TableHead>
+                                    <TableHead>Marca</TableHead>
+                                    <TableHead>Modelo</TableHead>
+                                    <TableHead className="text-right">
+                                        Año
+                                    </TableHead>
+                                    <TableHead>Caja</TableHead>
+                                    <TableHead>Color</TableHead>
+                                    <TableHead className="text-right">
+                                        Ejes
+                                    </TableHead>
+                                    <TableHead>Estado</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {paginador.data.map((vehiculo) => (
+                                    <TableRow key={vehiculo.id}>
+                                        <TableCell className="font-medium">
+                                            <Link
+                                                href={show(vehiculo.id)}
+                                                className="hover:underline"
+                                            >
+                                                {vehiculo.placa}
+                                            </Link>
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {vehiculo.tipo_label}
+                                        </TableCell>
+                                        <TableCell>
+                                            {vehiculo.marca ?? '—'}
+                                        </TableCell>
+                                        <TableCell>
+                                            {vehiculo.modelo ?? '—'}
+                                        </TableCell>
+                                        <TableCell className="text-right tabular-nums">
+                                            {vehiculo.anio ?? '—'}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {vehiculo.caja_label ?? '—'}
+                                        </TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {vehiculo.color ?? '—'}
+                                        </TableCell>
+                                        <TableCell className="text-right tabular-nums">
+                                            {vehiculo.ejes ?? '—'}
+                                        </TableCell>
+                                        <TableCell>
+                                            <EstadoBadge
+                                                estado={vehiculo.estado}
+                                            />
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+                        </Table>
                     </div>
 
                     <Paginacion paginador={paginador} />
@@ -122,9 +179,7 @@ function Paginacion({ paginador }: { paginador: Paginator<VehiculoListItem> }) {
                         variant={link.active ? 'default' : 'outline'}
                         disabled={!link.url}
                         className={
-                            link.active
-                                ? 'bg-emerald-800 hover:bg-emerald-900'
-                                : ''
+                            link.active ? 'bg-navy-800 hover:bg-navy-900' : ''
                         }
                     >
                         {link.url ? (

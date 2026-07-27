@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::create('conductores', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('sucursal_id')->constrained('sucursales')->cascadeOnDelete();
             $table->foreignId('user_id')->nullable()->constrained()->nullOnDelete();
             $table->string('nombres');
             $table->string('apellidos');
@@ -23,6 +22,8 @@ return new class extends Migration
             $table->date('licencia_vence')->nullable();
             $table->string('telefono')->nullable();
             $table->string('email')->nullable();
+            $table->date('fecha_nacimiento')->nullable();
+            $table->string('procedencia')->nullable();
             $table->boolean('activo')->default(true);
             $table->timestamps();
         });

@@ -115,7 +115,7 @@ export function ResetPasswordDialog({ usuarioId, trigger }: Props) {
                         <Button
                             type="submit"
                             disabled={processing}
-                            className="bg-emerald-800 hover:bg-emerald-900"
+                            className="bg-navy-800 hover:bg-navy-900"
                         >
                             {processing && <Spinner />}
                             Guardar contraseña

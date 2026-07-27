@@ -92,7 +92,7 @@ export default function Login({ status, canResetPassword }: Props) {
 
                             <Button
                                 type="submit"
-                                className="mt-4 w-full bg-emerald-800 text-white hover:bg-emerald-900"
+                                className="mt-4 w-full bg-navy-800 text-white hover:bg-navy-900"
                                 tabIndex={4}
                                 disabled={processing}
                                 data-test="login-button"
@@ -106,7 +106,7 @@ export default function Login({ status, canResetPassword }: Props) {
             </Form>
 
             {status && (
-                <div className="mb-4 text-center text-sm font-medium text-green-600">
+                <div className="mb-4 text-center text-sm font-medium text-navy-600">
                     {status}
                 </div>
             )}

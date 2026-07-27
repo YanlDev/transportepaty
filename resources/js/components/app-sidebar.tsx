@@ -1,24 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
-import {
-    Building2,
-    Car,
-    Fuel,
-    LayoutGrid,
-    Map,
-    Satellite,
-    User,
-    Users,
-    Wrench,
-} from 'lucide-react';
-import {
-    pendientes as combustiblePendientes,
-    rapido as registrarCarga,
-} from '@/actions/App/Http/Controllers/CargaCombustibleController';
+import { LayoutGrid, Truck, User, Users } from 'lucide-react';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
-import tracksolid from '@/actions/App/Http/Controllers/Integraciones/TracksolidController';
-import { index as mapa } from '@/actions/App/Http/Controllers/MapaController';
-import { index as plantillasMantenimiento } from '@/actions/App/Http/Controllers/PlantillaMantenimientoController';
-import sucursales from '@/actions/App/Http/Controllers/SucursalController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import AppLogo from '@/components/app-logo';
@@ -36,7 +18,7 @@ import {
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
-const mainNavItems: NavItem[] = [
+const operacionNavItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
@@ -45,12 +27,7 @@ const mainNavItems: NavItem[] = [
     {
         title: 'Vehículos',
         href: vehiculos.index(),
-        icon: Car,
-    },
-    {
-        title: 'Mapa de flota',
-        href: mapa(),
-        icon: Map,
+        icon: Truck,
     },
 ];
 
@@ -60,19 +37,6 @@ const gestionNavItems: NavItem[] = [
         href: conductores.index(),
         icon: User,
     },
-    {
-        title: 'Sucursales',
-        href: sucursales.index(),
-        icon: Building2,
-    },
-];
-
-const conductorNavItems: NavItem[] = [
-    {
-        title: 'Registrar carga',
-        href: registrarCarga(),
-        icon: Fuel,
-    },
 ];
 
 const adminNavItems: NavItem[] = [
@@ -81,40 +45,12 @@ const adminNavItems: NavItem[] = [
         href: usuarios.index(),
         icon: Users,
     },
-    {
-        title: 'Plantillas de mant.',
-        href: plantillasMantenimiento(),
-        icon: Wrench,
-    },
-    {
-        title: 'Dispositivos GPS',
-        href: tracksolid.index(),
-        icon: Satellite,
-    },
 ];
 
 export function AppSidebar() {
-    const { auth, combustiblePendiente } = usePage().props;
+    const { auth } = usePage().props;
     const esAdmin = auth.roles.includes('admin');
     const puedeGestionar = esAdmin || auth.roles.includes('visor');
-    const esConductor = auth.roles.includes('conductor');
-
-    // Operación: lo que usa el día a día. El conductor registra carga; el
-    // admin además ve la bandeja de cargas pendientes.
-    const operacionItems: NavItem[] = [
-        ...mainNavItems,
-        ...(esConductor ? conductorNavItems : []),
-        ...(esAdmin
-            ? [
-                  {
-                      title: 'Cargas por procesar',
-                      href: combustiblePendientes(),
-                      icon: Fuel,
-                      badge: combustiblePendiente,
-                  },
-              ]
-            : []),
-    ];
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -135,7 +71,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain label="Operación" items={operacionItems} />
+                <NavMain label="Operación" items={operacionNavItems} />
                 {puedeGestionar && (
                     <NavMain label="Gestión" items={gestionNavItems} />
                 )}

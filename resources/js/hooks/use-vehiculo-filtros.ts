@@ -5,12 +5,13 @@ import { index } from '@/actions/App/Http/Controllers/VehiculoController';
 export type FiltrosVehiculo = {
     buscar: string | null;
     estado: string | null;
-    sucursal_id: number | null;
+    tipo: string | null;
+    caja: string | null;
 };
 
 /**
  * Manages the vehicle list filters: keeps the search text local (debounced)
- * while branch/status changes apply immediately. Navigation always uses the
+ * while type/status changes apply immediately. Navigation always uses the
  * current local search value, never the value echoed back by the server.
  */
 export function useVehiculoFiltros(filtros: FiltrosVehiculo) {
@@ -21,11 +22,12 @@ export function useVehiculoFiltros(filtros: FiltrosVehiculo) {
         const merged: FiltrosVehiculo = {
             buscar,
             estado: filtros.estado,
-            sucursal_id: filtros.sucursal_id,
+            tipo: filtros.tipo,
+            caja: filtros.caja,
             ...cambios,
         };
 
-        const params: Record<string, string | number> = {};
+        const params: Record<string, string> = {};
 
         if (merged.buscar) {
             params.buscar = merged.buscar;
@@ -35,8 +37,12 @@ export function useVehiculoFiltros(filtros: FiltrosVehiculo) {
             params.estado = merged.estado;
         }
 
-        if (merged.sucursal_id) {
-            params.sucursal_id = merged.sucursal_id;
+        if (merged.tipo) {
+            params.tipo = merged.tipo;
+        }
+
+        if (merged.caja) {
+            params.caja = merged.caja;
         }
 
         router.get(index().url, params, {
@@ -46,7 +52,7 @@ export function useVehiculoFiltros(filtros: FiltrosVehiculo) {
         });
     };
 
-    // Debounce the free-text search; branch/status call `aplicar` directly.
+    // Debounce the free-text search; type/status call `aplicar` directly.
     // Only navigate when the user actually changed the text relative to what
     // the server already has. This prevents pagination (which re-renders this
     // component without touching `buscar`) from resetting back to page 1.
