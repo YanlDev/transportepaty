@@ -9,12 +9,19 @@ type Props = {
  * "Coming soon" placeholder card for vehicle modules not yet implemented
  * (fuel usage, maintenance history, etc.).
  */
-export function ModuloPlaceholder({ icon, title, description, variante }: Props) {
+export function ModuloPlaceholder({
+    icon,
+    title,
+    description,
+    variante,
+}: Props) {
     return (
         <section className="rounded-xl border border-border bg-card p-5">
             <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-foreground">{title}</h2>
-                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                <h2 className="text-sm font-semibold text-foreground">
+                    {title}
+                </h2>
+                <span className="rounded-none bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
                     Próximamente
                 </span>
             </div>

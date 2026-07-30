@@ -50,3 +50,10 @@ export function formatearFechaHora(fecha: string): string {
         minute: '2-digit',
     });
 }
+
+/**
+ * Placa sin separadores, como la pide la operación: `BJF-934` → `BJF934`.
+ */
+export function formatearPlaca(placa: string): string {
+    return placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+}

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\TipoDocumentoConductor;
 use App\Http\Requests\StoreConductorRequest;
 use App\Http\Requests\UpdateConductorRequest;
 use App\Models\Conductor;
@@ -22,6 +23,8 @@ class ConductorController extends Controller
         ];
 
         $conductores = Conductor::query()
+            // Una sola carga alimenta el semáforo documental de cada fila.
+            ->with(['documentos:id,conductor_id,tipo,numero,fecha_vencimiento'])
             ->when($filtros['buscar'], function ($query, string $buscar): void {
                 $query->where(function ($query) use ($buscar): void {
                     $query->whereLike('nombres', "%{$buscar}%", caseSensitive: false)
@@ -33,11 +36,40 @@ class ConductorController extends Controller
             ->orderBy('apellidos')
             ->orderBy('nombres')
             ->paginate(25)
-            ->withQueryString();
+            ->withQueryString()
+            ->through(fn (Conductor $conductor): array => [
+                'id' => $conductor->id,
+                'nombres' => $conductor->nombres,
+                'apellidos' => $conductor->apellidos,
+                'nombre_completo' => $conductor->nombre_completo,
+                'documento' => $conductor->documento,
+                'licencia' => $conductor->licencia,
+                'categoria_licencia' => $conductor->categoria_licencia,
+                'licencia_vence' => $conductor->licencia_vence?->toDateString(),
+                'telefono' => $conductor->telefono,
+                'email' => $conductor->email,
+                'procedencia' => $conductor->procedencia,
+                'activo' => $conductor->activo,
+                'documentacion' => $conductor->estadoDocumental(),
+            ]);
 
         return Inertia::render('conductores/index', [
             'conductores' => $conductores,
             'filtros' => $filtros,
+        ]);
+    }
+
+    public function show(Conductor $conductor): Response
+    {
+        $this->authorize('view', $conductor);
+
+        $conductor->load('documentos.media');
+
+        return Inertia::render('conductores/show', [
+            'conductor' => $conductor,
+            'documentacion' => $conductor->estadoDocumental(),
+            'ranuras' => $conductor->ranurasDocumentales(),
+            'tiposDocumento' => TipoDocumentoConductor::options(),
         ]);
     }
 
@@ -81,6 +113,16 @@ class ConductorController extends Controller
     public function destroy(Conductor $conductor): RedirectResponse
     {
         $this->authorize('delete', $conductor);
+
+        // Borrar al conductor arrastraría sus asignaciones (cascade) y con
+        // ellas el historial de quién manejó qué unidad. Al que ya trabajó se
+        // le marca inactivo; borrar queda solo para registros equivocados.
+        if ($conductor->asignaciones()->exists()) {
+            return back()->with('toast', [
+                'type' => 'error',
+                'message' => "{$conductor->nombre_completo} tiene historial de asignaciones. Márcalo como inactivo en lugar de eliminarlo.",
+            ]);
+        }
 
         $conductor->delete();
 

@@ -28,6 +28,22 @@ enum TipoDocumento: string
     }
 
     /**
+     * Etiqueta corta para listados densos, donde el nombre completo no entra.
+     * El nombre largo va siempre en el tooltip.
+     */
+    public function abreviatura(): string
+    {
+        return match ($this) {
+            self::TarjetaPropiedad => 'T. PROP',
+            self::Soat => 'SOAT',
+            self::RevisionTecnicaCarga => 'REV. TÉC',
+            self::HabilitacionMtc => 'TUC',
+            self::Matpel => 'MATPEL',
+            self::Otro => 'OTRO',
+        };
+    }
+
+    /**
      * Indica si el documento aplica al tipo de vehículo indicado. Las carretas
      * exigen los mismos documentos que el tracto salvo el SOAT, que solo
      * corresponde a la unidad motriz.
@@ -39,6 +55,16 @@ enum TipoDocumento: string
         }
 
         return true;
+    }
+
+    /**
+     * Indica si el documento es exigible para que la unidad salga a ruta. Todos
+     * lo son salvo «Otro», que es un cajón para papeles sueltos y no un
+     * requisito, así que no entra en el semáforo documental.
+     */
+    public function esObligatorio(): bool
+    {
+        return $this !== self::Otro;
     }
 
     /**

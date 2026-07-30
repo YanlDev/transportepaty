@@ -1,9 +1,15 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import { Plus, Truck } from 'lucide-react';
 import vehiculos, {
     create,
     show,
 } from '@/actions/App/Http/Controllers/VehiculoController';
+import { Copiable } from '@/components/copiable';
+import {
+    filaSemaforo,
+    LeyendaSemaforo,
+    ResumenProblemas,
+} from '@/components/semaforo-documental';
 import { Button } from '@/components/ui/button';
 import {
     Table,
@@ -15,7 +21,9 @@ import {
 } from '@/components/ui/table';
 import { EstadoBadge } from '@/components/vehiculos/estado-badge';
 import { VehiculoFiltros } from '@/components/vehiculos/vehiculo-filtros';
+import { VehiculoTarjetaMovil } from '@/components/vehiculos/vehiculo-tarjeta-movil';
 import type { FiltrosVehiculo } from '@/hooks/use-vehiculo-filtros';
+import { formatearPlaca } from '@/lib/format';
 import type { EnumOption, Paginator, VehiculoListItem } from '@/types/fleet';
 
 type Props = {
@@ -54,7 +62,7 @@ export default function VehiculosIndex({
                 </div>
 
                 {puedeGestionar && (
-                    <Button asChild className="bg-navy-800 hover:bg-navy-900">
+                    <Button asChild>
                         <Link href={create()}>
                             <Plus className="size-4" />
                             Nuevo vehículo
@@ -72,7 +80,7 @@ export default function VehiculosIndex({
 
             {paginador.data.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
+                    <div className="mb-4 grid size-14 place-items-center rounded-none bg-muted text-muted-foreground">
                         <Truck className="size-7" />
                     </div>
                     <p className="font-medium">No se encontraron vehículos</p>
@@ -91,44 +99,75 @@ export default function VehiculosIndex({
                 </div>
             ) : (
                 <>
-                    <div className="rounded-xl border">
+                    <LeyendaSemaforo />
+
+                    <div className="flex flex-col gap-2 sm:hidden">
+                        {paginador.data.map((vehiculo) => (
+                            <VehiculoTarjetaMovil
+                                key={vehiculo.id}
+                                vehiculo={vehiculo}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="hidden overflow-x-auto border sm:block">
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead>Placa</TableHead>
-                                    <TableHead>Tipo</TableHead>
+                                    <TableHead>TUC</TableHead>
                                     <TableHead>Marca</TableHead>
-                                    <TableHead>Modelo</TableHead>
+                                    <TableHead>Tipo</TableHead>
                                     <TableHead className="text-right">
                                         Año
                                     </TableHead>
                                     <TableHead>Caja</TableHead>
                                     <TableHead>Color</TableHead>
-                                    <TableHead className="text-right">
-                                        Ejes
-                                    </TableHead>
+                                    <TableHead>Documentación</TableHead>
                                     <TableHead>Estado</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {paginador.data.map((vehiculo) => (
-                                    <TableRow key={vehiculo.id}>
+                                    <TableRow
+                                        key={vehiculo.id}
+                                        onClick={(evento) =>
+                                            irAlVehiculo(evento, vehiculo.id)
+                                        }
+                                        className={`group/fila cursor-pointer ${
+                                            filaSemaforo[
+                                                vehiculo.documentacion.semaforo
+                                            ]
+                                        }`}
+                                    >
                                         <TableCell className="font-medium">
-                                            <Link
-                                                href={show(vehiculo.id)}
-                                                className="hover:underline"
+                                            <Copiable
+                                                valor={formatearPlaca(
+                                                    vehiculo.placa,
+                                                )}
+                                                etiqueta="placa"
                                             >
-                                                {vehiculo.placa}
-                                            </Link>
+                                                <Link
+                                                    href={show(vehiculo.id)}
+                                                    className="hover:underline"
+                                                >
+                                                    {formatearPlaca(
+                                                        vehiculo.placa,
+                                                    )}
+                                                </Link>
+                                            </Copiable>
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {vehiculo.tipo_label}
+                                        <TableCell className="text-muted-foreground tabular-nums">
+                                            <Copiable
+                                                valor={vehiculo.tuc_numero}
+                                                etiqueta="TUC"
+                                            />
                                         </TableCell>
                                         <TableCell>
                                             {vehiculo.marca ?? '—'}
                                         </TableCell>
-                                        <TableCell>
-                                            {vehiculo.modelo ?? '—'}
+                                        <TableCell className="text-muted-foreground">
+                                            {vehiculo.tipo_label}
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {vehiculo.anio ?? '—'}
@@ -139,8 +178,10 @@ export default function VehiculosIndex({
                                         <TableCell className="text-muted-foreground">
                                             {vehiculo.color ?? '—'}
                                         </TableCell>
-                                        <TableCell className="text-right tabular-nums">
-                                            {vehiculo.ejes ?? '—'}
+                                        <TableCell>
+                                            <ResumenProblemas
+                                                estado={vehiculo.documentacion}
+                                            />
                                         </TableCell>
                                         <TableCell>
                                             <EstadoBadge
@@ -158,6 +199,32 @@ export default function VehiculosIndex({
             )}
         </div>
     );
+}
+
+/**
+ * Lleva al detalle del vehículo al hacer clic en cualquier parte de la fila.
+ *
+ * Se abstiene cuando el clic cayó sobre algo interactivo —el enlace de la placa,
+ * los botones de copiar, los chips de documentación— porque esos elementos ya
+ * tienen su propia acción. También respeta la selección de texto: si el usuario
+ * estaba marcando una placa para copiarla a mano, soltar el mouse no debe
+ * cambiar de página.
+ */
+function irAlVehiculo(
+    evento: React.MouseEvent<HTMLTableRowElement>,
+    vehiculoId: number,
+) {
+    const objetivo = evento.target as HTMLElement;
+
+    if (objetivo.closest('a, button, [role="button"]')) {
+        return;
+    }
+
+    if (window.getSelection()?.toString()) {
+        return;
+    }
+
+    router.visit(show(vehiculoId).url);
 }
 
 function Paginacion({ paginador }: { paginador: Paginator<VehiculoListItem> }) {
@@ -178,9 +245,6 @@ function Paginacion({ paginador }: { paginador: Paginator<VehiculoListItem> }) {
                         size="sm"
                         variant={link.active ? 'default' : 'outline'}
                         disabled={!link.url}
-                        className={
-                            link.active ? 'bg-navy-800 hover:bg-navy-900' : ''
-                        }
                     >
                         {link.url ? (
                             <Link

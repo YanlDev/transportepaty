@@ -2,6 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\TipoVehiculo;
+use App\Models\Conductor;
+use App\Models\User;
+use App\Models\Vehiculo;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -44,7 +48,24 @@ class HandleInertiaRequests extends Middleware
                 'user' => $user,
                 'roles' => $user ? $user->getRoleNames()->all() : [],
             ],
+            'sinAsignar' => $this->totalSinAsignar($user),
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];
+    }
+
+    /**
+     * Cuántos fierros y conductores están parados sin unidad, para el aviso del
+     * menú lateral. Son tres conteos sobre índices; solo se calcula para quien
+     * puede ver el módulo de asignaciones.
+     */
+    private function totalSinAsignar(?User $user): int
+    {
+        if ($user === null || ! $user->hasAnyRole(['admin', 'visor'])) {
+            return 0;
+        }
+
+        return Vehiculo::query()->sinAsignar(TipoVehiculo::Tracto)->count()
+            + Vehiculo::query()->sinAsignar(TipoVehiculo::Carreta)->count()
+            + Conductor::query()->sinAsignar()->count();
     }
 }

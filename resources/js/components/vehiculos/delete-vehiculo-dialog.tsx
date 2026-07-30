@@ -13,6 +13,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
+import { formatearPlaca } from '@/lib/format';
 
 type Props = {
     vehiculo: { id: number; placa: string };
@@ -39,7 +40,7 @@ export function DeleteVehiculoDialog({ vehiculo, trigger }: Props) {
                     <DialogDescription>
                         ¿Seguro que deseas eliminar{' '}
                         <span className="font-medium text-foreground">
-                            {vehiculo.placa}
+                            {formatearPlaca(vehiculo.placa)}
                         </span>
                         ? Podrás recuperarlo más adelante, pero dejará de
                         aparecer en la lista.

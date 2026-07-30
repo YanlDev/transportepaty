@@ -45,7 +45,14 @@ it('requires the soat only on tractos', function (): void {
         ->and(TipoDocumento::Matpel->aplicaA(TipoVehiculo::Carreta))->toBeTrue();
 });
 
-it('lists one less required document for carretas', function (): void {
-    expect(TipoVehiculo::Tracto->documentosExigibles())->toHaveCount(6)
-        ->and(TipoVehiculo::Carreta->documentosExigibles())->toHaveCount(5);
+it('lists one less applicable document for carretas', function (): void {
+    expect(TipoVehiculo::Tracto->documentosAplicables())->toHaveCount(6)
+        ->and(TipoVehiculo::Carreta->documentosAplicables())->toHaveCount(5);
+});
+
+it('leaves "otro" out of the mandatory documents', function (): void {
+    expect(TipoVehiculo::Tracto->documentosObligatorios())->toHaveCount(5)
+        ->and(TipoVehiculo::Carreta->documentosObligatorios())->toHaveCount(4)
+        ->and(TipoVehiculo::Tracto->documentosObligatorios())
+        ->not->toContain(TipoDocumento::Otro);
 });

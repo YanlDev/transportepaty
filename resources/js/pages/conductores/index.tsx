@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import conductores, {
     create,
     edit,
+    show,
 } from '@/actions/App/Http/Controllers/ConductorController';
+import { ConductorTarjetaMovil } from '@/components/conductores/conductor-tarjeta-movil';
 import { DeleteConductorDialog } from '@/components/conductores/delete-conductor-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,7 +68,7 @@ export default function ConductoresIndex({
                 </div>
 
                 {puedeGestionar && (
-                    <Button asChild className="bg-navy-800 hover:bg-navy-900">
+                    <Button asChild>
                         <Link href={create()}>
                             <Plus className="size-4" />
                             Nuevo conductor
@@ -84,7 +86,7 @@ export default function ConductoresIndex({
 
             {paginador.data.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
+                    <div className="mb-4 grid size-14 place-items-center rounded-none bg-muted text-muted-foreground">
                         <User className="size-7" />
                     </div>
                     <p className="font-medium">No se encontraron conductores</p>
@@ -103,7 +105,17 @@ export default function ConductoresIndex({
                 </div>
             ) : (
                 <>
-                    <div className="rounded-xl border">
+                    <div className="flex flex-col gap-2 sm:hidden">
+                        {paginador.data.map((conductor) => (
+                            <ConductorTarjetaMovil
+                                key={conductor.id}
+                                conductor={conductor}
+                                puedeGestionar={puedeGestionar}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="hidden overflow-x-auto border sm:block">
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
@@ -126,7 +138,12 @@ export default function ConductoresIndex({
                                 {paginador.data.map((conductor) => (
                                     <TableRow key={conductor.id}>
                                         <TableCell className="font-medium">
-                                            {conductor.nombre_completo}
+                                            <Link
+                                                href={show(conductor.id)}
+                                                className="hover:underline"
+                                            >
+                                                {conductor.nombre_completo}
+                                            </Link>
                                         </TableCell>
                                         <TableCell className="font-mono text-xs text-muted-foreground">
                                             {conductor.documento}
@@ -151,8 +168,8 @@ export default function ConductoresIndex({
                                             <span
                                                 className={
                                                     conductor.activo
-                                                        ? 'inline-flex items-center rounded-full bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-700 ring-1 ring-navy-600/20'
-                                                        : 'inline-flex items-center rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 ring-1 ring-zinc-500/20'
+                                                        ? 'inline-flex items-center rounded-none bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-600/20'
+                                                        : 'inline-flex items-center rounded-none bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 ring-1 ring-zinc-500/20'
                                                 }
                                             >
                                                 {conductor.activo
@@ -167,6 +184,7 @@ export default function ConductoresIndex({
                                                         asChild
                                                         variant="ghost"
                                                         size="sm"
+                                                        className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
                                                     >
                                                         <Link
                                                             href={edit(
@@ -215,11 +233,6 @@ export default function ConductoresIndex({
                                             link.active ? 'default' : 'outline'
                                         }
                                         disabled={!link.url}
-                                        className={
-                                            link.active
-                                                ? 'bg-navy-800 hover:bg-navy-900'
-                                                : ''
-                                        }
                                     >
                                         {link.url ? (
                                             <Link

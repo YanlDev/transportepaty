@@ -13,9 +13,16 @@
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
         'Noto Color Emoji';
 
-    --radius-lg: var(--radius);
-    --radius-md: calc(var(--radius) - 2px);
-    --radius-sm: calc(var(--radius) - 4px);
+    /* Diseño recto: se anula todo el namespace de radios de Tailwind para que
+       ninguna utilidad `rounded-*` redondee, sin tener que tocar cada clase. */
+    --radius-xs: 0px;
+    --radius-sm: 0px;
+    --radius-md: 0px;
+    --radius-lg: 0px;
+    --radius-xl: 0px;
+    --radius-2xl: 0px;
+    --radius-3xl: 0px;
+    --radius-4xl: 0px;
 
     /* Paleta azul naval: color de marca de la aplicación. */
     --color-navy-50: oklch(0.972 0.012 255);
@@ -99,7 +106,7 @@
     --chart-3: var(--color-navy-400);
     --chart-4: var(--color-navy-300);
     --chart-5: var(--color-navy-200);
-    --radius: 0.625rem;
+    --radius: 0px;
     --sidebar: oklch(0.98 0.006 255);
     --sidebar-foreground: oklch(0.18 0.02 260);
     --sidebar-primary: var(--color-navy-800);
@@ -161,7 +168,7 @@
     background: var(--color-navy-900);
     color: #fff;
     border: none;
-    border-radius: 9999px;
+    border-radius: 0;
     padding: 2px 8px;
     font-weight: 600;
     font-size: 11px;

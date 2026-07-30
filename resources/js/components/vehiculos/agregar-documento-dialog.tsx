@@ -36,15 +36,24 @@ type DocumentoForm = {
 type Props = {
     vehiculoId: number;
     tipos: EnumOption[];
+    /** Tipo ya elegido al abrir, para subir el documento de una ranura vacía. */
+    tipoInicial?: string;
+    /** Disparador propio; si no se pasa, se usa el botón «Agregar documento». */
+    trigger?: React.ReactNode;
 };
 
-export function AgregarDocumentoDialog({ vehiculoId, tipos }: Props) {
+export function AgregarDocumentoDialog({
+    vehiculoId,
+    tipos,
+    tipoInicial,
+    trigger,
+}: Props) {
     const [open, setOpen] = useState(false);
     const fileInput = useRef<HTMLInputElement>(null);
 
     const { data, setData, post, processing, errors, reset, clearErrors } =
         useForm<DocumentoForm>({
-            tipo: tipos[0]?.value ?? 'otro',
+            tipo: tipoInicial ?? tipos[0]?.value ?? 'otro',
             numero: '',
             fecha_emision: '',
             fecha_vencimiento: '',
@@ -60,6 +69,8 @@ export function AgregarDocumentoDialog({ vehiculoId, tipos }: Props) {
             onSuccess: () => {
                 reset();
 
+                // `reset` devuelve el tipo al valor inicial del formulario, que
+                // ya es el de la ranura cuando el diálogo se abrió desde una.
                 if (fileInput.current) {
                     fileInput.current.value = '';
                 }
@@ -81,10 +92,12 @@ export function AgregarDocumentoDialog({ vehiculoId, tipos }: Props) {
             }}
         >
             <DialogTrigger asChild>
-                <Button size="sm" variant="outline">
-                    <Plus className="size-4" />
-                    Agregar documento
-                </Button>
+                {trigger ?? (
+                    <Button size="sm" variant="outline">
+                        <Plus className="size-4" />
+                        Agregar documento
+                    </Button>
+                )}
             </DialogTrigger>
             <DialogContent>
                 <form onSubmit={submit}>
@@ -182,11 +195,7 @@ export function AgregarDocumentoDialog({ vehiculoId, tipos }: Props) {
                     </div>
 
                     <DialogFooter>
-                        <Button
-                            type="submit"
-                            disabled={processing}
-                            className="bg-navy-800 hover:bg-navy-900"
-                        >
+                        <Button type="submit" disabled={processing}>
                             {processing && <Spinner />}
                             Subir documento
                         </Button>

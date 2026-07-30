@@ -2,7 +2,9 @@
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoDocumento;
+use App\Enums\TipoDocumentoConductor;
 use App\Models\Conductor;
+use App\Models\ConductorDocumento;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -86,4 +88,137 @@ it('ignores documents that expire far in the future', function (): void {
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page->has('documentosPorVencer', 0));
+});
+
+it('leaves out documents of vehicles that were deleted', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->subDay()->toDateString(),
+    ]);
+
+    $vehiculo->delete();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->has('documentosPorVencer', 0));
+});
+
+it('surfaces an expiring conductor licencia next to vehicle documents', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    ConductorDocumento::create([
+        'conductor_id' => $conductor->id,
+        'tipo' => TipoDocumentoConductor::LicenciaConducir,
+        'fecha_vencimiento' => now()->addDays(5)->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('documentosPorVencer', 1)
+            ->where('documentosPorVencer.0.titular', $conductor->nombre_completo)
+            ->where('documentosPorVencer.0.conductor_id', $conductor->id)
+            ->where('documentosPorVencer.0.vencido', false)
+        );
+});
+
+it('treats a document expiring today as por vencer, matching the semáforo', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('documentosPorVencer', 1)
+            ->where('documentosPorVencer.0.vencido', false)
+        );
+});
+
+it('orders mixed vencimientos by urgency', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+    $conductor = Conductor::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->addDays(20)->toDateString(),
+    ]);
+    ConductorDocumento::create([
+        'conductor_id' => $conductor->id,
+        'tipo' => TipoDocumentoConductor::LicenciaConducir,
+        'fecha_vencimiento' => now()->addDays(3)->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('documentosPorVencer', 2)
+            ->where('documentosPorVencer.0.titular', $conductor->nombre_completo)
+            ->where('documentosPorVencer.1.tipo_label', 'SOAT')
+        );
+});
+
+it('narrows the vencimientos window to 15 days', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->addDays(10)->toDateString(),
+    ]);
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Matpel,
+        'fecha_vencimiento' => now()->addDays(25)->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['dias' => 15]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filtros.dias', 15)
+            ->has('documentosPorVencer', 1)
+            ->where('documentosPorVencer.0.tipo_label', 'SOAT')
+        );
+});
+
+it('keeps already expired documents visible on the shorter window', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->subMonths(3)->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['dias' => 15]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('documentosPorVencer', 1)
+            ->where('documentosPorVencer.0.vencido', true)
+        );
+});
+
+it('falls back to 30 days when the filter value is not offered', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->addDays(25)->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['dias' => 999]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filtros.dias', 30)
+            ->has('documentosPorVencer', 1)
+        );
 });

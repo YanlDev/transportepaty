@@ -227,11 +227,7 @@ export function UserForm({ mode, usuario, roles, conductores }: Props) {
                 <Button asChild variant="outline" type="button">
                     <Link href={usuarios.index()}>Cancelar</Link>
                 </Button>
-                <Button
-                    type="submit"
-                    disabled={processing}
-                    className="bg-navy-800 hover:bg-navy-900"
-                >
+                <Button type="submit" disabled={processing}>
                     {processing && <Spinner />}
                     {mode === 'create' ? 'Crear usuario' : 'Guardar cambios'}
                 </Button>

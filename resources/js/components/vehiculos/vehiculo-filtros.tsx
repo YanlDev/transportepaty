@@ -1,5 +1,4 @@
-import { Search } from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { FiltrosBarra } from '@/components/filtros-barra';
 import {
     Select,
     SelectContent,
@@ -23,75 +22,80 @@ type Props = {
 export function VehiculoFiltros({ filtros, tipos, estados, cajas }: Props) {
     const { buscar, setBuscar, aplicar } = useVehiculoFiltros(filtros);
 
+    const activos = [filtros.tipo, filtros.caja, filtros.estado].filter(
+        Boolean,
+    ).length;
+
     return (
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <div className="relative flex-1">
-                <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                    value={buscar}
-                    onChange={(event) => setBuscar(event.target.value)}
-                    placeholder="Buscar por placa, marca o modelo..."
-                    className="pl-10"
-                    aria-label="Buscar vehículos"
-                />
-            </div>
+        <FiltrosBarra
+            buscar={buscar}
+            onBuscar={setBuscar}
+            placeholder="Buscar por placa, marca o modelo..."
+            etiquetaBusqueda="Buscar vehículos"
+            activos={activos}
+            onLimpiar={() => aplicar({ tipo: null, caja: null, estado: null })}
+        >
+            <FiltroSelect
+                valor={filtros.tipo}
+                onCambio={(tipo) => aplicar({ tipo })}
+                todos="Todos los tipos"
+                etiqueta="Tipo"
+                opciones={tipos}
+            />
+            <FiltroSelect
+                valor={filtros.caja}
+                onCambio={(caja) => aplicar({ caja })}
+                todos="Todas las cajas"
+                etiqueta="Caja"
+                opciones={cajas}
+            />
+            <FiltroSelect
+                valor={filtros.estado}
+                onCambio={(estado) => aplicar({ estado })}
+                todos="Todos los estados"
+                etiqueta="Estado"
+                opciones={estados}
+            />
+        </FiltrosBarra>
+    );
+}
 
-            <Select
-                value={filtros.tipo ?? TODOS}
-                onValueChange={(value) =>
-                    aplicar({ tipo: value === TODOS ? null : value })
-                }
+/**
+ * Ocupa todo el ancho dentro del panel móvil y se ajusta al contenido en
+ * escritorio, donde comparte fila con la búsqueda.
+ */
+function FiltroSelect({
+    valor,
+    onCambio,
+    todos,
+    etiqueta,
+    opciones,
+}: {
+    valor: string | null;
+    onCambio: (valor: string | null) => void;
+    todos: string;
+    etiqueta: string;
+    opciones: EnumOption[];
+}) {
+    return (
+        <Select
+            value={valor ?? TODOS}
+            onValueChange={(nuevo) => onCambio(nuevo === TODOS ? null : nuevo)}
+        >
+            <SelectTrigger
+                aria-label={etiqueta}
+                className="h-9 w-full sm:w-auto sm:min-w-36"
             >
-                <SelectTrigger className="sm:w-44">
-                    <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value={TODOS}>Todos los tipos</SelectItem>
-                    {tipos.map((tipo) => (
-                        <SelectItem key={tipo.value} value={tipo.value}>
-                            {tipo.label}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-
-            <Select
-                value={filtros.caja ?? TODOS}
-                onValueChange={(value) =>
-                    aplicar({ caja: value === TODOS ? null : value })
-                }
-            >
-                <SelectTrigger className="sm:w-52">
-                    <SelectValue placeholder="Caja" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value={TODOS}>Todas las cajas</SelectItem>
-                    {cajas.map((caja) => (
-                        <SelectItem key={caja.value} value={caja.value}>
-                            {caja.label}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-
-            <Select
-                value={filtros.estado ?? TODOS}
-                onValueChange={(value) =>
-                    aplicar({ estado: value === TODOS ? null : value })
-                }
-            >
-                <SelectTrigger className="sm:w-48">
-                    <SelectValue placeholder="Estado" />
-                </SelectTrigger>
-                <SelectContent>
-                    <SelectItem value={TODOS}>Todos los estados</SelectItem>
-                    {estados.map((estado) => (
-                        <SelectItem key={estado.value} value={estado.value}>
-                            {estado.label}
-                        </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-        </div>
+                <SelectValue placeholder={etiqueta} />
+            </SelectTrigger>
+            <SelectContent>
+                <SelectItem value={TODOS}>{todos}</SelectItem>
+                {opciones.map((opcion) => (
+                    <SelectItem key={opcion.value} value={opcion.value}>
+                        {opcion.label}
+                    </SelectItem>
+                ))}
+            </SelectContent>
+        </Select>
     );
 }

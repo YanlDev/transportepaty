@@ -29,15 +29,32 @@ enum TipoVehiculo: string
     }
 
     /**
-     * Tipos de documento exigibles para este tipo de vehículo.
+     * Tipos de documento que se pueden cargar para este tipo de vehículo,
+     * incluido «Otro». Es lo que ofrece el formulario de carga.
      *
      * @return array<int, TipoDocumento>
      */
-    public function documentosExigibles(): array
+    public function documentosAplicables(): array
     {
         return array_values(array_filter(
             TipoDocumento::cases(),
             fn (TipoDocumento $documento): bool => $documento->aplicaA($this),
+        ));
+    }
+
+    /**
+     * Documentos sin los cuales la unidad no debería salir a ruta: TUC, tarjeta
+     * de propiedad, revisión técnica de mercancías, MATPEL y —solo en el
+     * tracto— el SOAT, que cubre a la unidad motriz. Es la lista contra la que
+     * se calcula el semáforo documental.
+     *
+     * @return array<int, TipoDocumento>
+     */
+    public function documentosObligatorios(): array
+    {
+        return array_values(array_filter(
+            $this->documentosAplicables(),
+            fn (TipoDocumento $documento): bool => $documento->esObligatorio(),
         ));
     }
 }

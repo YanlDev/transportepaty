@@ -4,6 +4,7 @@ import vehiculos, {
     show,
 } from '@/actions/App/Http/Controllers/VehiculoController';
 import { VehiculoForm } from '@/components/vehiculos/vehiculo-form';
+import { formatearPlaca } from '@/lib/format';
 import type { EnumOption, Vehiculo } from '@/types/fleet';
 
 type Props = {
@@ -17,21 +18,25 @@ export default function VehiculoEdit({ vehiculo, ...props }: Props) {
     setLayoutProps({
         breadcrumbs: [
             { title: 'Vehículos', href: vehiculos.index().url },
-            { title: vehiculo.placa, href: show(vehiculo.id).url },
+            {
+                title: formatearPlaca(vehiculo.placa),
+                href: show(vehiculo.id).url,
+            },
             { title: 'Editar', href: edit(vehiculo.id).url },
         ],
     });
 
     return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
-            <Head title={`Editar ${vehiculo.placa}`} />
+            <Head title={`Editar ${formatearPlaca(vehiculo.placa)}`} />
 
             <div>
                 <h1 className="text-2xl font-semibold tracking-tight">
                     Editar vehículo
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                    {vehiculo.marca} {vehiculo.modelo} · {vehiculo.placa}
+                    {vehiculo.marca} {vehiculo.modelo} ·{' '}
+                    {formatearPlaca(vehiculo.placa)}
                 </p>
             </div>
 

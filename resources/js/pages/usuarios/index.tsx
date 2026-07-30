@@ -68,7 +68,7 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
                     </p>
                 </div>
 
-                <Button asChild className="bg-navy-800 hover:bg-navy-900">
+                <Button asChild>
                     <Link href={create()}>
                         <Plus className="size-4" />
                         Nuevo usuario
@@ -85,7 +85,7 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
 
             {paginador.data.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
+                    <div className="mb-4 grid size-14 place-items-center rounded-none bg-muted text-muted-foreground">
                         <Users className="size-7" />
                     </div>
                     <p className="font-medium">No se encontraron usuarios</p>
@@ -127,11 +127,6 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
                                             link.active ? 'default' : 'outline'
                                         }
                                         disabled={!link.url}
-                                        className={
-                                            link.active
-                                                ? 'bg-navy-800 hover:bg-navy-900'
-                                                : ''
-                                        }
                                     >
                                         {link.url ? (
                                             <Link
@@ -193,7 +188,7 @@ function UsuarioCard({
                 </div>
                 {badge && (
                     <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
+                        className={`inline-flex items-center rounded-none px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
                     >
                         {badge.label}
                     </span>
@@ -201,7 +196,12 @@ function UsuarioCard({
             </div>
 
             <div className="mt-auto flex items-center gap-2 border-t border-border pt-3">
-                <Button asChild variant="outline" size="sm" className="flex-1">
+                <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="flex-1 border-amber-300 text-amber-700 hover:bg-amber-50 hover:text-amber-800 dark:border-amber-800 dark:text-amber-500 dark:hover:bg-amber-950"
+                >
                     <Link href={edit(usuario.id)}>
                         <Pencil className="size-4" />
                         Editar

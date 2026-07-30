@@ -1,6 +1,14 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { AlertTriangle, Container, Truck, Users } from 'lucide-react';
+import { show as showConductor } from '@/actions/App/Http/Controllers/ConductorController';
 import { show } from '@/actions/App/Http/Controllers/VehiculoController';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import {
     Table,
     TableBody,
@@ -11,10 +19,18 @@ import {
 } from '@/components/ui/table';
 import { dashboard } from '@/routes';
 
+/** Horizontes del filtro de vencimientos; deben calzar con el backend. */
+const horizontes = [
+    { value: '15', label: 'Próximos 15 días' },
+    { value: '30', label: 'Próximos 30 días' },
+];
+
 type DocumentoPorVencer = {
-    id: number;
-    vehiculo_id: number;
-    placa: string;
+    clave: string;
+    /** Placa del vehículo o nombre del conductor, según a quién pertenezca. */
+    titular: string;
+    vehiculo_id: number | null;
+    conductor_id: number | null;
     tipo_label: string;
     fecha_vencimiento: string | null;
     vencido: boolean;
@@ -27,10 +43,23 @@ type Props = {
         operativos: number;
         conductores: number;
     };
+    filtros: { dias: number };
     documentosPorVencer: DocumentoPorVencer[];
 };
 
-export default function Dashboard({ resumen, documentosPorVencer }: Props) {
+export default function Dashboard({
+    resumen,
+    filtros,
+    documentosPorVencer,
+}: Props) {
+    const cambiarHorizonte = (dias: string) => {
+        router.get(
+            dashboard().url,
+            { dias },
+            { preserveState: true, preserveScroll: true, replace: true },
+        );
+    };
+
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Dashboard" />
@@ -68,22 +97,47 @@ export default function Dashboard({ resumen, documentosPorVencer }: Props) {
             </div>
 
             <section className="rounded-xl border border-border bg-card">
-                <div className="flex items-center gap-2 border-b p-5">
+                <div className="flex flex-wrap items-center gap-2 border-b p-5">
                     <AlertTriangle className="size-4 text-amber-500" />
                     <h2 className="text-sm font-semibold">
-                        Documentos vencidos o por vencer (30 días)
+                        Documentos vencidos o por vencer
                     </h2>
+
+                    <div className="ml-auto">
+                        <Select
+                            value={String(filtros.dias)}
+                            onValueChange={cambiarHorizonte}
+                        >
+                            <SelectTrigger
+                                size="sm"
+                                aria-label="Horizonte de vencimientos"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {horizontes.map((horizonte) => (
+                                    <SelectItem
+                                        key={horizonte.value}
+                                        value={horizonte.value}
+                                    >
+                                        {horizonte.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
                 </div>
 
                 {documentosPorVencer.length === 0 ? (
                     <p className="p-5 text-sm text-muted-foreground">
-                        No hay documentos próximos a vencer.
+                        No hay documentos vencidos ni que venzan en los próximos{' '}
+                        {filtros.dias} días.
                     </p>
                 ) : (
                     <Table>
                         <TableHeader>
                             <TableRow className="hover:bg-transparent">
-                                <TableHead>Placa</TableHead>
+                                <TableHead>Unidad / Conductor</TableHead>
                                 <TableHead>Documento</TableHead>
                                 <TableHead>Vence</TableHead>
                                 <TableHead>Estado</TableHead>
@@ -91,16 +145,27 @@ export default function Dashboard({ resumen, documentosPorVencer }: Props) {
                         </TableHeader>
                         <TableBody>
                             {documentosPorVencer.map((documento) => (
-                                <TableRow key={documento.id}>
+                                <TableRow key={documento.clave}>
                                     <TableCell className="font-medium">
                                         <Link
-                                            href={show(documento.vehiculo_id)}
+                                            href={
+                                                documento.vehiculo_id !== null
+                                                    ? show(
+                                                          documento.vehiculo_id,
+                                                      )
+                                                    : showConductor(
+                                                          documento.conductor_id ??
+                                                              0,
+                                                      )
+                                            }
                                             className="hover:underline"
                                         >
-                                            {documento.placa}
+                                            {documento.titular}
                                         </Link>
                                     </TableCell>
-                                    <TableCell>{documento.tipo_label}</TableCell>
+                                    <TableCell>
+                                        {documento.tipo_label}
+                                    </TableCell>
                                     <TableCell className="tabular-nums">
                                         {documento.fecha_vencimiento ?? '—'}
                                     </TableCell>
@@ -108,8 +173,8 @@ export default function Dashboard({ resumen, documentosPorVencer }: Props) {
                                         <span
                                             className={
                                                 documento.vencido
-                                                    ? 'inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-600/20'
-                                                    : 'inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-600/20'
+                                                    ? 'inline-flex items-center rounded-none bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-600/20'
+                                                    : 'inline-flex items-center rounded-none bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-600/20'
                                             }
                                         >
                                             {documento.vencido

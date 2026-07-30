@@ -2,9 +2,13 @@
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoCaja;
+use App\Enums\TipoDocumento;
 use App\Enums\TipoVehiculo;
+use App\Models\Asignacion;
 use App\Models\User;
 use App\Models\Vehiculo;
+use App\Models\VehiculoDocumento;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -131,6 +135,82 @@ it('offers every gearbox option plus the one for units without a motor', functio
         );
 });
 
+it('gives every row in the list its own semáforo', function (): void {
+    $alDia = Vehiculo::factory()->create(['placa' => 'AAA-111']);
+    Vehiculo::factory()->create(['placa' => 'ZZZ-999']);
+
+    foreach ($alDia->tipo->documentosObligatorios() as $tipo) {
+        VehiculoDocumento::create([
+            'vehiculo_id' => $alDia->id,
+            'tipo' => $tipo,
+            'fecha_vencimiento' => now()->addYear()->format('Y-m-d'),
+        ]);
+    }
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vehiculos.data.0.documentacion.semaforo', 'verde')
+            ->where('vehiculos.data.1.documentacion.semaforo', 'rojo')
+            ->missing('vehiculos.data.0.modelo')
+        );
+});
+
+it('leaves loose documents out of the semáforo', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    foreach ($vehiculo->tipo->documentosObligatorios() as $tipo) {
+        VehiculoDocumento::create([
+            'vehiculo_id' => $vehiculo->id,
+            'tipo' => $tipo,
+            'fecha_vencimiento' => now()->addYear()->format('Y-m-d'),
+        ]);
+    }
+
+    // Un papel suelto ya vencido no debería ensuciar el semáforo.
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Otro,
+        'fecha_vencimiento' => now()->subYear()->format('Y-m-d'),
+    ]);
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vehiculos.data.0.documentacion.semaforo', 'verde')
+            ->where('vehiculos.data.0.documentacion.vencidos', [])
+        );
+});
+
+it('loads the documents without an N+1 query', function (): void {
+    $vehiculos = Vehiculo::factory()->count(5)->create();
+
+    foreach ($vehiculos as $vehiculo) {
+        VehiculoDocumento::create([
+            'vehiculo_id' => $vehiculo->id,
+            'tipo' => TipoDocumento::HabilitacionMtc,
+            'numero' => "TUC-{$vehiculo->id}",
+            'fecha_vencimiento' => '2028-02-05',
+        ]);
+    }
+
+    DB::enableQueryLog();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful();
+
+    $consultasDocumentos = collect(DB::getQueryLog())
+        ->filter(fn (array $consulta): bool => str_contains($consulta['query'], 'vehiculo_documentos'))
+        ->count();
+
+    DB::disableQueryLog();
+
+    expect($consultasDocumentos)->toBe(1);
+});
+
 it('allows an admin to create a tracto', function (): void {
     actingAs(usuarioCon('admin'))
         ->post(route('vehiculos.store'), datosVehiculo())
@@ -229,4 +309,232 @@ it('offers the soat only for tractos', function (): void {
     actingAs($admin)
         ->get(route('vehiculos.show', $carreta))
         ->assertInertia(fn (Assert $page) => $page->has('tiposDocumento', 5));
+});
+
+it('muestra el semáforo documental en el listado', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+    $vehiculo->documentos()->create([
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->subDay()->format('Y-m-d'),
+    ]);
+
+    actingAs(actorConRol('visor'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vehiculos.data.0.documentacion.semaforo', 'rojo')
+            ->where('vehiculos.data.0.documentacion.vencidos', ['SOAT'])
+            ->has('vehiculos.data.0.documentacion.faltantes', 4)
+        );
+});
+
+it('lists tractos before carretas', function (): void {
+    Vehiculo::factory()->carreta()->create(['placa' => 'AAA-111']);
+    Vehiculo::factory()->create(['placa' => 'ZZZ-999']);
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vehiculos.data.0.placa', 'ZZZ-999')
+            ->where('vehiculos.data.0.tipo', TipoVehiculo::Tracto->value)
+            ->where('vehiculos.data.1.placa', 'AAA-111')
+        );
+});
+
+it('keeps every obligatory document in a fixed slot on the detail page', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    // Solo el MATPEL cargado: los otros cuatro deben seguir apareciendo, cada
+    // uno en su sitio, en vez de que el MATPEL se corra al primer lugar.
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Matpel,
+        'fecha_vencimiento' => now()->addYear()->format('Y-m-d'),
+    ]);
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.show', $vehiculo))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('vehiculos/show')
+            ->has('ranuras', 5)
+            ->where('ranuras.0.tipo', 'tarjeta_propiedad')
+            ->where('ranuras.1.tipo', 'soat')
+            ->where('ranuras.2.tipo', 'revision_tecnica_carga')
+            ->where('ranuras.3.tipo', 'habilitacion_mtc')
+            ->where('ranuras.4.tipo', 'matpel')
+            ->where('ranuras.0.documento', null)
+            ->where('ranuras.0.estado', 'faltante')
+            ->where('ranuras.4.estado', 'vigente')
+            ->where('ranuras.4.documento.tipo', 'matpel')
+        );
+});
+
+it('does not offer a soat slot for a carreta', function (): void {
+    $carreta = Vehiculo::factory()->carreta()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.show', $carreta))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('ranuras', 4)
+            ->where('ranuras.0.tipo', 'tarjeta_propiedad')
+            ->where('ranuras.1.tipo', 'revision_tecnica_carga')
+        );
+});
+
+it('puts loose documents after the obligatory slots', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Otro,
+        'nombre' => 'Póliza de responsabilidad civil',
+    ]);
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.show', $vehiculo))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('ranuras', 6)
+            ->where('ranuras.5.obligatorio', false)
+            ->where('ranuras.5.label', 'Póliza de responsabilidad civil')
+            ->where('ranuras.0.obligatorio', true)
+        );
+});
+
+it('shares the same slots with the documents page', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.documentos.index', $vehiculo))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('vehiculos/documentos')
+            ->has('ranuras', 5)
+            ->where('ranuras.0.tipo', 'tarjeta_propiedad')
+        );
+});
+
+it('exposes the TUC number so the list can copy it', function (): void {
+    $conTuc = Vehiculo::factory()->create(['placa' => 'AAA-111']);
+    Vehiculo::factory()->create(['placa' => 'BBB-222']);
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $conTuc->id,
+        'tipo' => TipoDocumento::HabilitacionMtc,
+        'numero' => '21M22000405E',
+        'fecha_vencimiento' => '2028-02-05',
+    ]);
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vehiculos.data.0.tuc_numero', '21M22000405E')
+            ->where('vehiculos.data.1.tuc_numero', null)
+        );
+});
+
+it('does not mistake another document for the TUC number', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'numero' => 'SOAT-123',
+        'fecha_vencimiento' => '2027-01-01',
+    ]);
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vehiculos.data.0.tuc_numero', null)
+        );
+});
+
+it('reads the TUC number without extra queries', function (): void {
+    $vehiculos = Vehiculo::factory()->count(5)->create();
+
+    foreach ($vehiculos as $vehiculo) {
+        VehiculoDocumento::create([
+            'vehiculo_id' => $vehiculo->id,
+            'tipo' => TipoDocumento::HabilitacionMtc,
+            'numero' => "TUC-{$vehiculo->id}",
+            'fecha_vencimiento' => '2028-02-05',
+        ]);
+    }
+
+    DB::enableQueryLog();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index'))
+        ->assertSuccessful();
+
+    $consultas = collect(DB::getQueryLog())
+        ->filter(fn (array $consulta): bool => str_contains($consulta['query'], 'vehiculo_documentos'))
+        ->count();
+
+    DB::disableQueryLog();
+
+    expect($consultas)->toBe(1);
+});
+
+it('refuses to delete a tracto that is in a current assignment', function (): void {
+    $asignacion = Asignacion::factory()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->from(route('vehiculos.index'))
+        ->delete(route('vehiculos.destroy', $asignacion->tracto))
+        ->assertRedirect(route('vehiculos.index'));
+
+    expect(Vehiculo::find($asignacion->tracto_id))->not->toBeNull()
+        ->and($asignacion->refresh()->estaVigente())->toBeTrue();
+});
+
+it('refuses to delete a carreta that is in a current assignment', function (): void {
+    $asignacion = Asignacion::factory()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->from(route('vehiculos.index'))
+        ->delete(route('vehiculos.destroy', $asignacion->carreta))
+        ->assertRedirect(route('vehiculos.index'));
+
+    expect(Vehiculo::find($asignacion->carreta_id))->not->toBeNull();
+});
+
+it('deletes a vehicle once its assignment was closed', function (): void {
+    $cerrada = Asignacion::factory()->finalizada()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->delete(route('vehiculos.destroy', $cerrada->tracto))
+        ->assertRedirect(route('vehiculos.index'));
+
+    expect(Vehiculo::find($cerrada->tracto_id))->toBeNull();
+});
+
+it('finds a placa searched without its hyphen', function (): void {
+    Vehiculo::factory()->create(['placa' => 'BJF-934']);
+    Vehiculo::factory()->create(['placa' => 'ZZZ-999']);
+
+    // Lo que el usuario copia de la tabla viene sin guion.
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index', ['buscar' => 'BJF934']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('vehiculos.data', 1)
+            ->where('vehiculos.data.0.placa', 'BJF-934')
+        );
+});
+
+it('still finds a placa searched with its hyphen', function (): void {
+    Vehiculo::factory()->create(['placa' => 'BJF-934']);
+    Vehiculo::factory()->create(['placa' => 'ZZZ-999']);
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('vehiculos.index', ['buscar' => 'BJF-934']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
 });

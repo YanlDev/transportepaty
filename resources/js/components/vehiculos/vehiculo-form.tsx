@@ -47,13 +47,7 @@ type FormData = {
     observaciones: string;
 };
 
-export function VehiculoForm({
-    mode,
-    vehiculo,
-    tipos,
-    cajas,
-    estados,
-}: Props) {
+export function VehiculoForm({ mode, vehiculo, tipos, cajas, estados }: Props) {
     const { data, setData, post, put, processing, errors } = useForm<FormData>({
         placa: vehiculo?.placa ?? '',
         marca: vehiculo?.marca ?? '',
@@ -355,11 +349,7 @@ export function VehiculoForm({
                 <Button asChild variant="outline" type="button">
                     <Link href={volver}>Cancelar</Link>
                 </Button>
-                <Button
-                    type="submit"
-                    disabled={processing}
-                    className="bg-navy-800 hover:bg-navy-900"
-                >
+                <Button type="submit" disabled={processing}>
                     {processing && <Spinner />}
                     {mode === 'create'
                         ? 'Registrar vehículo'

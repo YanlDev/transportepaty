@@ -42,9 +42,12 @@ class VehiculoController extends Controller
                 'id', 'placa', 'marca', 'modelo', 'anio', 'tipo',
                 'estado', 'caja', 'color', 'ejes',
             ])
+            // El semáforo documental de cada fila se calcula sobre esta única
+            // carga de documentos, sin una consulta por vehículo.
+            ->with(['documentos:id,vehiculo_id,tipo,numero,fecha_vencimiento'])
             ->when($filtros['buscar'], function ($query, string $buscar): void {
                 $query->where(function ($query) use ($buscar): void {
-                    $query->whereLike('placa', "%{$buscar}%", caseSensitive: false)
+                    $query->wherePlacaLike($buscar)
                         ->orWhereLike('marca', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('modelo', "%{$buscar}%", caseSensitive: false);
                 });
@@ -54,7 +57,10 @@ class VehiculoController extends Controller
             ->when($filtros['caja'], fn ($query, string $caja) => $caja === self::SIN_CAJA
                 ? $query->whereNull('caja')
                 : $query->where('caja', $caja))
-            ->orderBy('tipo')
+            // Los tractos primero: son la unidad motriz y lo que se busca al
+            // entrar. Un orderBy plano pondría antes a las carretas, porque
+            // ordena alfabéticamente y «carreta» precede a «tracto».
+            ->orderByRaw('CASE WHEN tipo = ? THEN 0 ELSE 1 END', [TipoVehiculo::Tracto->value])
             ->orderBy('placa')
             ->paginate(25)
             ->withQueryString()
@@ -62,7 +68,6 @@ class VehiculoController extends Controller
                 'id' => $vehiculo->id,
                 'placa' => $vehiculo->placa,
                 'marca' => $vehiculo->marca,
-                'modelo' => $vehiculo->modelo,
                 'anio' => $vehiculo->anio,
                 'tipo' => $vehiculo->tipo->value,
                 'tipo_label' => $vehiculo->tipo->label(),
@@ -71,6 +76,8 @@ class VehiculoController extends Controller
                 'caja_label' => $vehiculo->caja?->label(),
                 'color' => $vehiculo->color,
                 'ejes' => $vehiculo->ejes,
+                'tuc_numero' => $vehiculo->tuc()?->numero,
+                'documentacion' => $vehiculo->estadoDocumental(),
             ]);
 
         return Inertia::render('vehiculos/index', [
@@ -126,12 +133,12 @@ class VehiculoController extends Controller
     {
         $this->authorize('view', $vehiculo);
 
-        $documentos = $vehiculo->documentos()->with('media')->get();
+        $vehiculo->load('documentos.media');
 
         return Inertia::render('vehiculos/show', [
             'vehiculo' => $vehiculo,
-            'documentos' => $documentos->map->toFrontArray(),
-            'documentosTotal' => $documentos->count(),
+            'documentacion' => $vehiculo->estadoDocumental(),
+            'ranuras' => $vehiculo->ranurasDocumentales(),
             'tiposDocumento' => $this->tiposDocumento($vehiculo),
         ]);
     }
@@ -169,6 +176,19 @@ class VehiculoController extends Controller
     {
         $this->authorize('delete', $vehiculo);
 
+        // Un fierro en una unidad vigente no se puede eliminar: la asignación
+        // quedaría apuntando a un vehículo inexistente y el conductor seguiría
+        // ocupado por una unidad fantasma.
+        $enUso = $vehiculo->asignacionVigenteComoTracto()->exists()
+            || $vehiculo->asignacionVigenteComoCarreta()->exists();
+
+        if ($enUso) {
+            return back()->with('toast', [
+                'type' => 'error',
+                'message' => "El vehículo {$vehiculo->placa} está en una unidad asignada. Libera la unidad antes de eliminarlo.",
+            ]);
+        }
+
         $vehiculo->delete();
 
         return to_route('vehiculos.index')
@@ -188,7 +208,7 @@ class VehiculoController extends Controller
                 'value' => $tipo->value,
                 'label' => $tipo->label(),
             ],
-            $vehiculo->tipo->documentosExigibles(),
+            $vehiculo->tipo->documentosAplicables(),
         );
     }
 

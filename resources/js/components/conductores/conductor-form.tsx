@@ -275,11 +275,7 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                 <Button asChild variant="outline" type="button">
                     <Link href={volver}>Cancelar</Link>
                 </Button>
-                <Button
-                    type="submit"
-                    disabled={processing}
-                    className="bg-navy-800 hover:bg-navy-900"
-                >
+                <Button type="submit" disabled={processing}>
                     {processing && <Spinner />}
                     {mode === 'create'
                         ? 'Registrar conductor'

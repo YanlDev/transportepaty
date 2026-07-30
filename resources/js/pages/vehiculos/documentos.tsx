@@ -1,14 +1,14 @@
 import { Head, Link, setLayoutProps, usePage } from '@inertiajs/react';
-import { ArrowLeft, FileText } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import vehiculos, {
     show,
 } from '@/actions/App/Http/Controllers/VehiculoController';
 import { index as documentosIndex } from '@/actions/App/Http/Controllers/VehiculoDocumentoController';
-import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { AgregarDocumentoDialog } from '@/components/vehiculos/agregar-documento-dialog';
-import { DocumentoItem } from '@/components/vehiculos/documento-item';
-import type { EnumOption, VehiculoDocumentoItem } from '@/types/fleet';
+import { DocumentoRanura } from '@/components/vehiculos/documento-ranura';
+import { formatearPlaca } from '@/lib/format';
+import type { EnumOption, RanuraDocumental } from '@/types/fleet';
 
 type VehiculoResumen = {
     id: number;
@@ -20,13 +20,13 @@ type VehiculoResumen = {
 
 type Props = {
     vehiculo: VehiculoResumen;
-    documentos: VehiculoDocumentoItem[];
+    ranuras: RanuraDocumental[];
     tiposDocumento: EnumOption[];
 };
 
 export default function VehiculoDocumentos({
     vehiculo,
-    documentos,
+    ranuras,
     tiposDocumento,
 }: Props) {
     const { auth } = usePage().props;
@@ -35,14 +35,17 @@ export default function VehiculoDocumentos({
     setLayoutProps({
         breadcrumbs: [
             { title: 'Vehículos', href: vehiculos.index().url },
-            { title: vehiculo.placa, href: show(vehiculo.id).url },
+            {
+                title: formatearPlaca(vehiculo.placa),
+                href: show(vehiculo.id).url,
+            },
             { title: 'Documentos', href: documentosIndex(vehiculo.id).url },
         ],
     });
 
     return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
-            <Head title={`Documentos · ${vehiculo.placa}`} />
+            <Head title={`Documentos · ${formatearPlaca(vehiculo.placa)}`} />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <div>
@@ -61,7 +64,7 @@ export default function VehiculoDocumentos({
                         Documentación
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        {vehiculo.tipo_label} · {vehiculo.placa}
+                        {vehiculo.tipo_label} · {formatearPlaca(vehiculo.placa)}
                         {vehiculo.marca && ` · ${vehiculo.marca}`}
                         {vehiculo.modelo && ` ${vehiculo.modelo}`}
                     </p>
@@ -75,24 +78,17 @@ export default function VehiculoDocumentos({
                 )}
             </div>
 
-            {documentos.length === 0 ? (
-                <EmptyState
-                    icon={<FileText className="size-6" />}
-                    text="Este vehículo aún no tiene documentos."
-                    className="rounded-xl py-16"
-                />
-            ) : (
-                <div className="flex flex-col gap-2.5">
-                    {documentos.map((documento) => (
-                        <DocumentoItem
-                            key={documento.id}
-                            documento={documento}
-                            vehiculoId={vehiculo.id}
-                            puedeGestionar={puedeGestionar}
-                        />
-                    ))}
-                </div>
-            )}
+            <div className="flex flex-col gap-1.5">
+                {ranuras.map((ranura) => (
+                    <DocumentoRanura
+                        key={ranura.documento?.id ?? ranura.tipo}
+                        ranura={ranura}
+                        vehiculoId={vehiculo.id}
+                        tipos={tiposDocumento}
+                        puedeGestionar={puedeGestionar}
+                    />
+                ))}
+            </div>
         </div>
     );
 }

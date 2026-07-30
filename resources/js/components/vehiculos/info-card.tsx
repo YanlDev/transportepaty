@@ -1,20 +1,3 @@
-type InfoCardProps = {
-    title: string;
-    children: React.ReactNode;
-};
-
-/**
- * Bordered card with a section title, used across the vehicle detail view.
- */
-export function InfoCard({ title, children }: InfoCardProps) {
-    return (
-        <section className="h-full rounded-xl border border-border bg-card p-5">
-            <h2 className="mb-4 text-sm font-semibold text-foreground">{title}</h2>
-            {children}
-        </section>
-    );
-}
-
 type DatoProps = {
     icon?: React.ReactNode;
     label: string;
@@ -23,7 +6,7 @@ type DatoProps = {
 };
 
 /**
- * A single label/value pair inside an {@link InfoCard}.
+ * Un par etiqueta/valor de la ficha del vehículo.
  */
 export function Dato({ icon, label, value, full }: DatoProps) {
     return (

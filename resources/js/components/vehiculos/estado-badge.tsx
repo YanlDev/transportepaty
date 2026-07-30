@@ -13,12 +13,12 @@ export function EstadoBadge({
     return (
         <span
             className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium',
+                'inline-flex items-center gap-1.5 rounded-none px-2.5 py-0.5 text-xs font-medium',
                 info.badge,
                 className,
             )}
         >
-            <span className={cn('size-1.5 rounded-full', info.dot)} />
+            <span className={cn('size-1.5 rounded-none', info.dot)} />
             {info.label}
         </span>
     );

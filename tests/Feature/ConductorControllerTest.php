@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Asignacion;
 use App\Models\Conductor;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
@@ -157,4 +158,26 @@ it('forbids a viewer from deleting a conductor', function (): void {
         ->assertForbidden();
 
     $this->assertDatabaseHas('conductores', ['id' => $conductor->id]);
+});
+
+it('refuses to delete a conductor with assignment history', function (): void {
+    $asignacion = Asignacion::factory()->finalizada()->create();
+
+    actingAs(actorConRol('admin'))
+        ->from(route('conductores.index'))
+        ->delete(route('conductores.destroy', $asignacion->conductor))
+        ->assertRedirect(route('conductores.index'));
+
+    expect(Conductor::find($asignacion->conductor_id))->not->toBeNull()
+        ->and(Asignacion::count())->toBe(1);
+});
+
+it('deletes a conductor that never had an assignment', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->delete(route('conductores.destroy', $conductor))
+        ->assertRedirect(route('conductores.index'));
+
+    expect(Conductor::find($conductor->id))->toBeNull();
 });
