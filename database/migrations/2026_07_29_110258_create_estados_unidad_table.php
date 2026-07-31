@@ -29,14 +29,11 @@ return new class extends Migration
             $table->string('cliente')->nullable();
             $table->string('fase')->nullable();
 
-            $table->foreignId('origen_id')->nullable()->constrained('ubicaciones')->nullOnDelete();
-            $table->foreignId('destino_id')->nullable()->constrained('ubicaciones')->nullOnDelete();
-            $table->foreignId('ubicacion_id')->nullable()->constrained('ubicaciones')->nullOnDelete();
-
-            // Lo que decía el reporte cuando el punto no se pudo resolver. La
-            // fila se guarda igual y queda en la cola por resolver; adivinar la
-            // ubicación sería peor que dejarla pendiente.
-            $table->string('ubicacion_texto')->nullable();
+            // Texto libre: no hay catálogo de puntos contra el cual resolver
+            // origen/destino/ubicación, así que se anota tal cual llega.
+            $table->string('origen')->nullable();
+            $table->string('destino')->nullable();
+            $table->string('ubicacion')->nullable();
 
             // Procedencia por campo —del reporte, deducida o confirmada a mano—
             // en vez de una columna por cada una. Es lo que permite que una

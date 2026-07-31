@@ -23,30 +23,11 @@ final class ValidadorEstadoUnidad
     public function validar(EstadoUnidad $estado): array
     {
         return array_values(array_filter([
-            $this->ubicacionSinResolver($estado),
             $this->rutaIncompleta($estado),
-            $this->rutaIncompatibleConLaCarga($estado),
-            $this->ubicacionFueraDeLaRuta($estado),
             $this->sinConductor($estado),
             $this->conductorDistintoAlAsignado($estado),
             $this->carretaDistintaALaAsignada($estado),
         ]));
-    }
-
-    /**
-     * El texto llegó pero no se reconoció ningún punto del catálogo. La fila
-     * queda válida y en la cola por resolver.
-     */
-    private function ubicacionSinResolver(EstadoUnidad $estado): ?Alerta
-    {
-        if (! $estado->tieneUbicacionSinResolver()) {
-            return null;
-        }
-
-        return new Alerta(
-            TipoAlerta::UbicacionSinResolver,
-            "«{$estado->ubicacion_texto}» no corresponde a ningún punto conocido.",
-        );
     }
 
     /**
@@ -59,64 +40,15 @@ final class ValidadorEstadoUnidad
             return null;
         }
 
-        if ($estado->origen_id !== null && $estado->destino_id !== null) {
+        if ($estado->origen !== null && $estado->destino !== null) {
             return null;
         }
 
-        $falta = $estado->origen_id === null ? 'el origen' : 'el destino';
+        $falta = $estado->origen === null ? 'el origen' : 'el destino';
 
         return new Alerta(
             TipoAlerta::RutaIncompleta,
             "La carga es {$estado->tipo_carga->label()} pero falta {$falta}.",
-        );
-    }
-
-    /**
-     * La combinación de carga y ruta no existe en el circuito. Atrapa los dos
-     * errores más frecuentes del reporte: anotar la carga futura en vez de
-     * «vacío» cuando la unidad sube a mina, y arrastrar la ruta del viaje
-     * anterior junto con la carga nueva.
-     */
-    private function rutaIncompatibleConLaCarga(EstadoUnidad $estado): ?Alerta
-    {
-        if ($estado->tipo_carga === null || $estado->origen === null || $estado->destino === null) {
-            return null;
-        }
-
-        if ($estado->tipo_carga->permiteRuta($estado->origen->codigo, $estado->destino->codigo)) {
-            return null;
-        }
-
-        return new Alerta(
-            TipoAlerta::RutaIncompatibleConCarga,
-            "{$estado->tipo_carga->label()} no circula de {$estado->origen->nombre} a {$estado->destino->nombre}.",
-        );
-    }
-
-    /**
-     * La unidad está en un punto que no pertenece al tramo que declara. Es lo
-     * que delata a la que dice llevar concentrado hacia Pisco estando en
-     * Arequipa, que es destino válido pero queda fuera del corredor.
-     */
-    private function ubicacionFueraDeLaRuta(EstadoUnidad $estado): ?Alerta
-    {
-        if ($estado->ubicacion === null || $estado->origen === null || $estado->destino === null) {
-            return null;
-        }
-
-        // Si algún extremo queda fuera del corredor no hay tramo contra el cual
-        // comparar, y afirmar que está fuera sería inventar.
-        if (! $estado->origen->estaEnCorredor() || ! $estado->destino->estaEnCorredor()) {
-            return null;
-        }
-
-        if ($estado->ubicacion->estaEntre($estado->origen, $estado->destino)) {
-            return null;
-        }
-
-        return new Alerta(
-            TipoAlerta::UbicacionFueraDeRuta,
-            "{$estado->ubicacion->nombre} no está entre {$estado->origen->nombre} y {$estado->destino->nombre}.",
         );
     }
 

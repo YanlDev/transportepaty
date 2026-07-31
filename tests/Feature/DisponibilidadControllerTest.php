@@ -6,9 +6,7 @@ use App\Enums\TipoAlerta;
 use App\Enums\TipoCaja;
 use App\Enums\TipoCarga;
 use App\Models\EstadoUnidad;
-use App\Models\Ubicacion;
 use App\Models\Vehiculo;
-use Database\Seeders\UbicacionSeeder;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -18,14 +16,7 @@ beforeEach(function (): void {
     foreach (['admin', 'visor', 'conductor'] as $role) {
         Role::findOrCreate($role, 'web');
     }
-
-    $this->seed(UbicacionSeeder::class);
 });
-
-function ubicacionId(string $codigo): int
-{
-    return Ubicacion::query()->where('codigo', $codigo)->value('id');
-}
 
 it('exige sesión para ver la disponibilidad', function (): void {
     $this->get(route('disponibilidad.index'))->assertRedirect(route('login'));
@@ -89,20 +80,20 @@ it('cae en el día de hoy cuando la fecha pedida no sirve', function (): void {
 });
 
 it('entrega las alertas junto a cada fila', function (): void {
-    // Concentrado subiendo a mina: la carga futura anotada en vez de vacío.
+    // Carga registrada pero sin destino: falta un extremo de la ruta.
     EstadoUnidad::factory()->create([
         'fecha' => '2026-07-21',
         'tipo_carga' => TipoCarga::Concentrado,
-        'origen_id' => ubicacionId('juliaca'),
-        'destino_id' => ubicacionId('san_rafael'),
+        'origen' => 'Juliaca',
+        'destino' => null,
     ]);
 
     actingAs(actorConRol('admin'))
         ->get(route('disponibilidad.index', ['fecha' => '2026-07-21']))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('filas.0.imposibles', 1)
-            ->where('filas.0.alertas.0.tipo', TipoAlerta::RutaIncompatibleConCarga->value)
-            ->where('resumen.imposibles', 1)
+            ->where('filas.0.improbables', 1)
+            ->where('filas.0.alertas.0.tipo', TipoAlerta::RutaIncompleta->value)
+            ->where('resumen.improbables', 1)
         );
 });
 
@@ -130,29 +121,29 @@ it('actualiza el estado existente sin pisar los demás campos', function (): voi
     actingAs(actorConRol('admin'))
         ->patch(route('disponibilidad.celda', $estado->tracto), [
             'fecha' => '2026-07-21',
-            'campo' => 'ubicacion_id',
-            'valor' => ubicacionId('nazca'),
+            'campo' => 'ubicacion',
+            'valor' => 'Nazca',
         ])
         ->assertRedirect();
 
     $estado->refresh();
 
-    expect($estado->ubicacion_id)->toBe(ubicacionId('nazca'))
-        ->and($estado->origenDe('ubicacion_id'))->toBe(OrigenDato::Manual)
+    expect($estado->ubicacion)->toBe('Nazca')
+        ->and($estado->origenDe('ubicacion'))->toBe(OrigenDato::Manual)
         ->and($estado->tipo_carga)->toBe(TipoCarga::Concentrado);
 });
 
 it('permite volver a editar un campo ya confirmado a mano', function (): void {
     $estado = EstadoUnidad::factory()
-        ->en('nazca')
-        ->confirmado(['ubicacion_id'])
+        ->en('Nazca')
+        ->confirmado(['ubicacion'])
         ->create(['fecha' => '2026-07-21']);
 
     actingAs(actorConRol('admin'))
         ->patch(route('disponibilidad.celda', $estado->tracto), [
             'fecha' => '2026-07-21',
-            'campo' => 'ubicacion_id',
-            'valor' => ubicacionId('pisco'),
+            'campo' => 'ubicacion',
+            'valor' => 'Pisco',
         ])
         ->assertRedirect();
 
@@ -160,7 +151,7 @@ it('permite volver a editar un campo ya confirmado a mano', function (): void {
 
     // El endpoint de celda ES la vía manual: reeditar un campo manual lo pisa,
     // nunca se bloquea por admiteSobrescritura (eso protege de la importación).
-    expect($estado->ubicacion_id)->toBe(ubicacionId('pisco'));
+    expect($estado->ubicacion)->toBe('Pisco');
 });
 
 it('no marca origen para observaciones', function (): void {
@@ -267,7 +258,7 @@ it('no acepta un vehículo que no sea tracto', function (): void {
 it('vacía la carga y la ruta sin tocar carreta ni conductor', function (): void {
     $estado = EstadoUnidad::factory()
         ->conCarga(TipoCarga::Concentrado)
-        ->en('nazca')
+        ->en('Nazca')
         ->create(['fecha' => '2026-07-21']);
 
     $carretaId = $estado->carreta_id;
@@ -284,15 +275,15 @@ it('vacía la carga y la ruta sin tocar carreta ni conductor', function (): void
         ->and($estado->conductor_id)->toBe($conductorId)
         ->and($estado->tipo_carga)->toBeNull()
         ->and($estado->cliente)->toBeNull()
-        ->and($estado->origen_id)->toBeNull()
-        ->and($estado->destino_id)->toBeNull()
-        ->and($estado->ubicacion_id)->toBeNull();
+        ->and($estado->origen)->toBeNull()
+        ->and($estado->destino)->toBeNull()
+        ->and($estado->ubicacion)->toBeNull();
 });
 
 it('arrastra al día las unidades del último día registrado', function (): void {
     $ayer = EstadoUnidad::factory()
         ->conCarga(TipoCarga::Concentrado)
-        ->en('nazca')
+        ->en('Nazca')
         ->create(['fecha' => '2026-07-20']);
 
     actingAs(actorConRol('admin'))
@@ -303,30 +294,30 @@ it('arrastra al día las unidades del último día registrado', function (): voi
 
     expect($hoy->tracto_id)->toBe($ayer->tracto_id)
         ->and($hoy->tipo_carga)->toBe(TipoCarga::Concentrado)
-        ->and($hoy->ubicacion_id)->toBe($ayer->ubicacion_id);
+        ->and($hoy->ubicacion)->toBe($ayer->ubicacion);
 });
 
 it('arrastra sin heredar lo que ya estaba confirmado', function (): void {
     // Un día nuevo es una observación nueva: lo de ayer vuelve a ser suposición
     // hasta que alguien lo mire.
-    $ayer = EstadoUnidad::factory()->en('nazca')->create(['fecha' => '2026-07-20']);
-    $ayer->confirmar(['ubicacion_id'])->save();
+    $ayer = EstadoUnidad::factory()->en('Nazca')->create(['fecha' => '2026-07-20']);
+    $ayer->confirmar(['ubicacion'])->save();
 
     actingAs(actorConRol('admin'))->post(route('disponibilidad.arrastrar'), ['fecha' => '2026-07-21']);
 
     $hoy = EstadoUnidad::query()->delDia('2026-07-21')->firstOrFail();
 
-    expect($hoy->esManual('ubicacion_id'))->toBeFalse();
+    expect($hoy->esManual('ubicacion'))->toBeFalse();
 });
 
 it('no pisa las unidades que ya estaban cargadas en el día', function (): void {
     $tracto = Vehiculo::factory()->create();
 
-    EstadoUnidad::factory()->en('nazca')->create([
+    EstadoUnidad::factory()->en('Nazca')->create([
         'tracto_id' => $tracto->id,
         'fecha' => '2026-07-20',
     ]);
-    EstadoUnidad::factory()->en('pisco')->create([
+    EstadoUnidad::factory()->en('Pisco')->create([
         'tracto_id' => $tracto->id,
         'fecha' => '2026-07-21',
     ]);
@@ -334,7 +325,7 @@ it('no pisa las unidades que ya estaban cargadas en el día', function (): void 
     actingAs(actorConRol('admin'))->post(route('disponibilidad.arrastrar'), ['fecha' => '2026-07-21']);
 
     expect(EstadoUnidad::query()->delDia('2026-07-21')->count())->toBe(1)
-        ->and(EstadoUnidad::query()->delDia('2026-07-21')->first()->ubicacion->codigo)->toBe('pisco');
+        ->and(EstadoUnidad::query()->delDia('2026-07-21')->first()->ubicacion)->toBe('Pisco');
 });
 
 it('anuncia cuántas unidades quedan por arrastrar', function (): void {

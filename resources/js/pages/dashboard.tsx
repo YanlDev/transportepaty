@@ -1,7 +1,23 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { AlertTriangle, Container, Truck, Users } from 'lucide-react';
+import { AlertTriangle, FileWarning, Truck, Users } from 'lucide-react';
+import {
+    Bar,
+    BarChart,
+    CartesianGrid,
+    LabelList,
+    XAxis,
+    YAxis,
+} from 'recharts';
 import { show as showConductor } from '@/actions/App/Http/Controllers/ConductorController';
 import { show } from '@/actions/App/Http/Controllers/VehiculoController';
+import type { ChartConfig } from '@/components/ui/chart';
+import {
+    ChartContainer,
+    ChartLegend,
+    ChartLegendContent,
+    ChartTooltip,
+    ChartTooltipContent,
+} from '@/components/ui/chart';
 import {
     Select,
     SelectContent,
@@ -36,21 +52,58 @@ type DocumentoPorVencer = {
     vencido: boolean;
 };
 
+type ConteoCategoria = { label: string; valor: number };
+type SaludDocumental = {
+    entidad: string;
+    label: string;
+    verde: number;
+    ambar: number;
+    rojo: number;
+};
+
 type Props = {
     resumen: {
         tractos: number;
         carretas: number;
         operativos: number;
         conductores: number;
+        novedadesActivas: number;
+        documentosVencidos: number;
     };
     filtros: { dias: number };
     documentosPorVencer: DocumentoPorVencer[];
+    estadoFlota: ConteoCategoria[];
+    fasesCiclo: ConteoCategoria[];
+    novedadesPorTipo: ConteoCategoria[];
+    saludDocumental: SaludDocumental[];
 };
+
+const estadoFlotaConfig = {
+    valor: { label: 'Unidades', color: 'var(--chart-2)' },
+} satisfies ChartConfig;
+
+const fasesCicloConfig = {
+    valor: { label: 'Unidades', color: 'var(--chart-2)' },
+} satisfies ChartConfig;
+
+const novedadesConfig = {
+    valor: { label: 'Unidades', color: '#f59e0b' },
+} satisfies ChartConfig;
+
+const saludDocumentalConfig = {
+    verde: { label: 'Al día', color: '#10b981' },
+    ambar: { label: 'Por vencer', color: '#f59e0b' },
+    rojo: { label: 'Con problemas', color: '#ef4444' },
+} satisfies ChartConfig;
 
 export default function Dashboard({
     resumen,
     filtros,
     documentosPorVencer,
+    estadoFlota,
+    fasesCiclo,
+    novedadesPorTipo,
+    saludDocumental,
 }: Props) {
     const cambiarHorizonte = (dias: string) => {
         router.get(
@@ -59,6 +112,11 @@ export default function Dashboard({
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
+
+    const totalFlota = resumen.tractos + resumen.carretas;
+    const hayFlota = totalFlota > 0;
+    const hayFasesRegistradas = fasesCiclo.some((fase) => fase.valor > 0);
+    const hayNovedades = novedadesPorTipo.some((novedad) => novedad.valor > 0);
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -69,24 +127,16 @@ export default function Dashboard({
                     Resumen de flota
                 </h1>
                 <p className="text-sm text-muted-foreground">
-                    Estado general de las unidades y su documentación.
+                    Estado general de las unidades, su documentación y la
+                    operación del día.
                 </p>
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <Tarjeta
-                    label="Tractos"
-                    valor={resumen.tractos}
-                    icon={<Truck className="size-5" />}
-                />
-                <Tarjeta
-                    label="Carretas"
-                    valor={resumen.carretas}
-                    icon={<Container className="size-5" />}
-                />
-                <Tarjeta
-                    label="Operativos"
+                    label="Flota operativa"
                     valor={resumen.operativos}
+                    detalle={`de ${totalFlota} unidades`}
                     icon={<Truck className="size-5" />}
                 />
                 <Tarjeta
@@ -94,6 +144,217 @@ export default function Dashboard({
                     valor={resumen.conductores}
                     icon={<Users className="size-5" />}
                 />
+                <Tarjeta
+                    label="No programables hoy"
+                    valor={resumen.novedadesActivas}
+                    detalle="unidades con novedad vigente"
+                    icon={<AlertTriangle className="size-5" />}
+                    tono={resumen.novedadesActivas > 0 ? 'ambar' : 'normal'}
+                />
+                <Tarjeta
+                    label="Documentos vencidos"
+                    valor={resumen.documentosVencidos}
+                    detalle="de fierros y conductores"
+                    icon={<FileWarning className="size-5" />}
+                    tono={resumen.documentosVencidos > 0 ? 'rojo' : 'normal'}
+                />
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
+                <Panel titulo="Estado de la flota">
+                    {hayFlota ? (
+                        <ChartContainer
+                            config={estadoFlotaConfig}
+                            className="h-64 w-full"
+                        >
+                            <BarChart
+                                data={estadoFlota}
+                                layout="vertical"
+                                margin={{ left: 4, right: 28 }}
+                            >
+                                <CartesianGrid horizontal={false} />
+                                <XAxis type="number" hide />
+                                <YAxis
+                                    dataKey="label"
+                                    type="category"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    width={110}
+                                    tick={{ fontSize: 12 }}
+                                />
+                                <ChartTooltip
+                                    cursor={{ fill: 'var(--muted)' }}
+                                    content={<ChartTooltipContent hideLabel />}
+                                />
+                                <Bar
+                                    dataKey="valor"
+                                    fill="var(--color-valor)"
+                                    radius={0}
+                                    barSize={22}
+                                >
+                                    <LabelList
+                                        dataKey="valor"
+                                        position="right"
+                                        className="fill-foreground"
+                                        fontSize={12}
+                                    />
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+                    ) : (
+                        <EstadoVacio texto="Aún no hay vehículos registrados." />
+                    )}
+                </Panel>
+
+                <Panel titulo="Salud documental">
+                    {hayFlota ? (
+                        <ChartContainer
+                            config={saludDocumentalConfig}
+                            className="h-64 w-full"
+                        >
+                            <BarChart
+                                data={saludDocumental}
+                                layout="vertical"
+                                margin={{ left: 4, right: 12 }}
+                            >
+                                <CartesianGrid horizontal={false} />
+                                <XAxis type="number" hide />
+                                <YAxis
+                                    dataKey="label"
+                                    type="category"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    width={90}
+                                    tick={{ fontSize: 12 }}
+                                />
+                                <ChartTooltip
+                                    cursor={{ fill: 'var(--muted)' }}
+                                    content={<ChartTooltipContent />}
+                                />
+                                <ChartLegend content={<ChartLegendContent />} />
+                                <Bar
+                                    dataKey="verde"
+                                    stackId="salud"
+                                    fill="var(--color-verde)"
+                                    stroke="var(--card)"
+                                    strokeWidth={2}
+                                    radius={0}
+                                    barSize={28}
+                                />
+                                <Bar
+                                    dataKey="ambar"
+                                    stackId="salud"
+                                    fill="var(--color-ambar)"
+                                    stroke="var(--card)"
+                                    strokeWidth={2}
+                                    radius={0}
+                                    barSize={28}
+                                />
+                                <Bar
+                                    dataKey="rojo"
+                                    stackId="salud"
+                                    fill="var(--color-rojo)"
+                                    stroke="var(--card)"
+                                    strokeWidth={2}
+                                    radius={0}
+                                    barSize={28}
+                                />
+                            </BarChart>
+                        </ChartContainer>
+                    ) : (
+                        <EstadoVacio texto="Aún no hay vehículos registrados." />
+                    )}
+                </Panel>
+
+                <Panel titulo="Unidades por fase del circuito">
+                    {hayFasesRegistradas ? (
+                        <ChartContainer
+                            config={fasesCicloConfig}
+                            className="h-64 w-full"
+                        >
+                            <BarChart
+                                data={fasesCiclo}
+                                layout="vertical"
+                                margin={{ left: 4, right: 28 }}
+                            >
+                                <CartesianGrid horizontal={false} />
+                                <XAxis type="number" hide />
+                                <YAxis
+                                    dataKey="label"
+                                    type="category"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    width={130}
+                                    tick={{ fontSize: 12 }}
+                                />
+                                <ChartTooltip
+                                    cursor={{ fill: 'var(--muted)' }}
+                                    content={<ChartTooltipContent hideLabel />}
+                                />
+                                <Bar
+                                    dataKey="valor"
+                                    fill="var(--color-valor)"
+                                    radius={0}
+                                    barSize={22}
+                                >
+                                    <LabelList
+                                        dataKey="valor"
+                                        position="right"
+                                        className="fill-foreground"
+                                        fontSize={12}
+                                    />
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+                    ) : (
+                        <EstadoVacio texto="Todavía no hay reportes de ubicación para hoy." />
+                    )}
+                </Panel>
+
+                <Panel titulo="Novedades activas por tipo">
+                    {hayNovedades ? (
+                        <ChartContainer
+                            config={novedadesConfig}
+                            className="h-64 w-full"
+                        >
+                            <BarChart
+                                data={novedadesPorTipo}
+                                layout="vertical"
+                                margin={{ left: 4, right: 28 }}
+                            >
+                                <CartesianGrid horizontal={false} />
+                                <XAxis type="number" hide />
+                                <YAxis
+                                    dataKey="label"
+                                    type="category"
+                                    tickLine={false}
+                                    axisLine={false}
+                                    width={150}
+                                    tick={{ fontSize: 12 }}
+                                />
+                                <ChartTooltip
+                                    cursor={{ fill: 'var(--muted)' }}
+                                    content={<ChartTooltipContent hideLabel />}
+                                />
+                                <Bar
+                                    dataKey="valor"
+                                    fill="var(--color-valor)"
+                                    radius={0}
+                                    barSize={18}
+                                >
+                                    <LabelList
+                                        dataKey="valor"
+                                        position="right"
+                                        className="fill-foreground"
+                                        fontSize={12}
+                                    />
+                                </Bar>
+                            </BarChart>
+                        </ChartContainer>
+                    ) : (
+                        <EstadoVacio texto="Sin novedades: toda la flota está programable." />
+                    )}
+                </Panel>
             </div>
 
             <section className="rounded-xl border border-border bg-card">
@@ -192,14 +453,24 @@ export default function Dashboard({
     );
 }
 
+const tonoValor: Record<'normal' | 'ambar' | 'rojo', string> = {
+    normal: '',
+    ambar: 'text-amber-700 dark:text-amber-500',
+    rojo: 'text-red-700 dark:text-red-500',
+};
+
 function Tarjeta({
     label,
     valor,
+    detalle,
     icon,
+    tono = 'normal',
 }: {
     label: string;
     valor: number;
+    detalle?: string;
     icon: React.ReactNode;
+    tono?: 'normal' | 'ambar' | 'rojo';
 }) {
     return (
         <div className="rounded-xl border border-border bg-card p-5">
@@ -207,7 +478,39 @@ function Tarjeta({
                 <p className="text-sm text-muted-foreground">{label}</p>
                 <span className="text-muted-foreground">{icon}</span>
             </div>
-            <p className="mt-2 text-3xl font-semibold tabular-nums">{valor}</p>
+            <p
+                className={`mt-2 text-3xl font-semibold tabular-nums ${tonoValor[tono]}`}
+            >
+                {valor}
+            </p>
+            {detalle && (
+                <p className="mt-1 text-xs text-muted-foreground">{detalle}</p>
+            )}
+        </div>
+    );
+}
+
+function Panel({
+    titulo,
+    children,
+}: {
+    titulo: string;
+    children: React.ReactNode;
+}) {
+    return (
+        <section className="rounded-xl border border-border bg-card">
+            <div className="border-b p-5">
+                <h2 className="text-sm font-semibold">{titulo}</h2>
+            </div>
+            <div className="p-5">{children}</div>
+        </section>
+    );
+}
+
+function EstadoVacio({ texto }: { texto: string }) {
+    return (
+        <div className="flex h-64 items-center justify-center text-center text-sm text-muted-foreground">
+            {texto}
         </div>
     );
 }

@@ -22,9 +22,9 @@ type CampoEditable =
     | 'conductor_id'
     | 'tipo_carga'
     | 'cliente'
-    | 'origen_id'
-    | 'destino_id'
-    | 'ubicacion_id'
+    | 'origen'
+    | 'destino'
+    | 'ubicacion'
     | 'observaciones'
     | 'proximas_paradas'
     | 'fecha_disponible';

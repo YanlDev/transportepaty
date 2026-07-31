@@ -6,7 +6,6 @@ use App\Enums\OrigenDato;
 use App\Enums\TipoCarga;
 use App\Models\Conductor;
 use App\Models\EstadoUnidad;
-use App\Models\Ubicacion;
 use App\Models\Vehiculo;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -28,57 +27,28 @@ class EstadoUnidadFactory extends Factory
             'carreta_id' => Vehiculo::factory()->carreta(),
             'conductor_id' => Conductor::factory(),
             'tipo_carga' => null,
-            'origen_id' => null,
-            'destino_id' => null,
-            'ubicacion_id' => null,
-            'ubicacion_texto' => null,
+            'origen' => null,
+            'destino' => null,
+            'ubicacion' => null,
             'observaciones' => null,
         ];
     }
 
     /**
-     * Un estado con carga y ruta coherentes: se toma la primera ruta declarada
-     * para ese tipo de carga y se resuelven sus extremos contra el catálogo, de
-     * modo que la fila nazca sin alertas de ruta. La carga particular no
-     * declara rutas —varía de viaje en viaje—, así que queda sin origen ni
-     * destino a menos que el test los ponga aparte.
+     * Un estado con carga registrada. Origen/destino/ubicación son texto libre;
+     * el test que los necesite los pone aparte con `->create([...])`.
      */
     public function conCarga(TipoCarga $carga): static
     {
-        return $this->state(function () use ($carga): array {
-            $rutas = $carga->rutasValidas();
-
-            if ($rutas === []) {
-                return ['tipo_carga' => $carga];
-            }
-
-            $ruta = $rutas[0];
-
-            return [
-                'tipo_carga' => $carga,
-                'origen_id' => $this->ubicacion($ruta['origen']),
-                'destino_id' => $this->ubicacion($ruta['destino']),
-            ];
-        });
+        return $this->state(fn (): array => ['tipo_carga' => $carga]);
     }
 
     /**
-     * Sitúa la unidad en el punto indicado por su código de catálogo.
+     * Sitúa la unidad en el punto indicado.
      */
-    public function en(string $codigo): static
+    public function en(string $ubicacion): static
     {
-        return $this->state(fn (): array => ['ubicacion_id' => $this->ubicacion($codigo)]);
-    }
-
-    /**
-     * Una ubicación que llegó como texto y no se pudo resolver.
-     */
-    public function conUbicacionSinResolver(string $texto = 'Grifo del kilómetro 48'): static
-    {
-        return $this->state(fn (): array => [
-            'ubicacion_id' => null,
-            'ubicacion_texto' => $texto,
-        ]);
+        return $this->state(fn (): array => ['ubicacion' => $ubicacion]);
     }
 
     public function sinConductor(): static
@@ -97,16 +67,5 @@ class EstadoUnidadFactory extends Factory
         return $this->state(fn (): array => [
             'origenes' => array_fill_keys($campos, OrigenDato::Manual->value),
         ]);
-    }
-
-    /**
-     * Resuelve un código del catálogo, creando el punto si el seeder no corrió.
-     */
-    private function ubicacion(string $codigo): int
-    {
-        return Ubicacion::query()->firstOrCreate(
-            ['codigo' => $codigo],
-            ['nombre' => str($codigo)->replace('_', ' ')->title()->value()],
-        )->id;
     }
 }

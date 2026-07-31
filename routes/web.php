@@ -5,15 +5,10 @@ use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DisponibilidadController;
-use App\Http\Controllers\FlotaController;
-use App\Http\Controllers\ImportacionDisponibilidadController;
 use App\Http\Controllers\NovedadController;
-use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
-use App\Http\Controllers\ViajeController;
-use App\Http\Controllers\ViajeGuiaController;
 use Illuminate\Support\Facades\Route;
 
 // La raíz no muestra landing: siempre redirige al login (los usuarios ya
@@ -47,22 +42,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('asignaciones/{asignacion}/reasignar', [AsignacionController::class, 'reasignar'])
         ->name('asignaciones.reasignar');
 
-    Route::get('programacion', [ProgramacionController::class, 'index'])
-        ->name('programacion.index');
     Route::post('novedades', [NovedadController::class, 'store'])->name('novedades.store');
     Route::post('novedades/{novedad}/levantar', [NovedadController::class, 'levantar'])
         ->name('novedades.levantar');
-
-    Route::get('flota', [FlotaController::class, 'index'])->name('flota.index');
-    Route::get('flota/{vehiculo}', [FlotaController::class, 'unidad'])->name('flota.unidad');
-
-    Route::resource('importaciones', ImportacionDisponibilidadController::class)
-        ->parameters(['importaciones' => 'importacion'])
-        ->only(['index', 'create', 'store', 'show', 'destroy']);
-    Route::post('importaciones/{importacion}/confirmar', [ImportacionDisponibilidadController::class, 'confirmar'])
-        ->name('importaciones.confirmar');
-    Route::patch('importaciones/{importacion}/filas/{fila}', [ImportacionDisponibilidadController::class, 'actualizarFila'])
-        ->name('importaciones.filas.update');
 
     Route::get('disponibilidad', [DisponibilidadController::class, 'index'])
         ->name('disponibilidad.index');
@@ -72,15 +54,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('disponibilidad.celda');
     Route::delete('disponibilidad/{estado}', [DisponibilidadController::class, 'destroy'])
         ->name('disponibilidad.destroy');
-
-    Route::resource('viajes', ViajeController::class)->except(['show']);
-
-    Route::scopeBindings()->group(function () {
-        Route::post('viajes/{viaje}/guias', [ViajeGuiaController::class, 'store'])
-            ->name('viajes.guias.store');
-        Route::delete('viajes/{viaje}/guias/{tipo}', [ViajeGuiaController::class, 'destroy'])
-            ->name('viajes.guias.destroy');
-    });
 
     Route::resource('usuarios', UserController::class)
         ->parameters(['usuarios' => 'user'])

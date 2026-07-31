@@ -76,9 +76,9 @@ it('no deja que la fase contradiga a la carga', function (): void {
 
 it('distingue qué campos admiten sobrescritura al reimportar', function (): void {
     $estado = EstadoUnidad::factory()->create(['tipo_carga' => TipoCarga::Concentrado]);
-    $estado->confirmar(['ubicacion_id'])->save();
+    $estado->confirmar(['ubicacion'])->save();
 
-    expect($estado->admiteSobrescritura('ubicacion_id'))->toBeFalse()
+    expect($estado->admiteSobrescritura('ubicacion'))->toBeFalse()
         ->and($estado->admiteSobrescritura('cliente'))->toBeTrue()
         // Un campo del que nunca se anotó procedencia se puede escribir.
         ->and($estado->admiteSobrescritura('observaciones'))->toBeTrue();
@@ -124,12 +124,4 @@ it('ignora los estados de otras unidades al buscar el anterior', function (): vo
     $estado = EstadoUnidad::factory()->create(['tracto_id' => $tracto->id, 'fecha' => '2026-07-21']);
 
     expect($estado->anterior())->toBeNull();
-});
-
-it('lista los estados con la ubicación todavía sin resolver', function (): void {
-    EstadoUnidad::factory()->en('juliaca')->create();
-    $pendiente = EstadoUnidad::factory()->conUbicacionSinResolver()->create();
-
-    expect(EstadoUnidad::query()->sinUbicacionResuelta()->pluck('id')->all())
-        ->toBe([$pendiente->id]);
 });

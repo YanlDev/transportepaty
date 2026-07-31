@@ -12,4 +12,6 @@ export type NavItem = {
     icon?: LucideIcon | null;
     isActive?: boolean;
     badge?: number;
+    /** Subitems que convierten la entrada en un desplegable. */
+    items?: NavItem[];
 };

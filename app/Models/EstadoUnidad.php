@@ -31,10 +31,9 @@ use Illuminate\Support\Carbon;
  * @property EstadoCarga|null $estado_carga
  * @property Cliente|null $cliente
  * @property FaseCiclo|null $fase
- * @property int|null $origen_id
- * @property int|null $destino_id
- * @property int|null $ubicacion_id
- * @property string|null $ubicacion_texto
+ * @property string|null $origen
+ * @property string|null $destino
+ * @property string|null $ubicacion
  * @property array<string, string>|null $origenes
  * @property string|null $observaciones
  * @property string|null $proximas_paradas
@@ -42,9 +41,6 @@ use Illuminate\Support\Carbon;
  * @property-read Vehiculo $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
- * @property-read Ubicacion|null $origen
- * @property-read Ubicacion|null $destino
- * @property-read Ubicacion|null $ubicacion
  */
 #[Fillable([
     'fecha',
@@ -55,10 +51,9 @@ use Illuminate\Support\Carbon;
     'estado_carga',
     'cliente',
     'fase',
-    'origen_id',
-    'destino_id',
-    'ubicacion_id',
-    'ubicacion_texto',
+    'origen',
+    'destino',
+    'ubicacion',
     'observaciones',
     'proximas_paradas',
     'fecha_disponible',
@@ -101,9 +96,9 @@ class EstadoUnidad extends Model
         'conductor_id',
         'tipo_carga',
         'cliente',
-        'origen_id',
-        'destino_id',
-        'ubicacion_id',
+        'origen',
+        'destino',
+        'ubicacion',
     ];
 
     /**
@@ -198,14 +193,6 @@ class EstadoUnidad extends Model
     }
 
     /**
-     * Indica si la ubicación llegó pero no se pudo resolver contra el catálogo.
-     */
-    public function tieneUbicacionSinResolver(): bool
-    {
-        return $this->ubicacion_id === null && $this->ubicacion_texto !== null;
-    }
-
-    /**
      * Estado inmediatamente anterior de la misma unidad. Es contra este que se
      * comparan las transiciones, y no contra «ayer»: si hubo fin de semana o un
      * día sin reporte, el salto se juzga con los días que de verdad pasaron.
@@ -291,45 +278,11 @@ class EstadoUnidad extends Model
     }
 
     /**
-     * @return BelongsTo<Ubicacion, $this>
-     */
-    public function origen(): BelongsTo
-    {
-        return $this->belongsTo(Ubicacion::class, 'origen_id');
-    }
-
-    /**
-     * @return BelongsTo<Ubicacion, $this>
-     */
-    public function destino(): BelongsTo
-    {
-        return $this->belongsTo(Ubicacion::class, 'destino_id');
-    }
-
-    /**
-     * @return BelongsTo<Ubicacion, $this>
-     */
-    public function ubicacion(): BelongsTo
-    {
-        return $this->belongsTo(Ubicacion::class, 'ubicacion_id');
-    }
-
-    /**
      * @param  Builder<$this>  $query
      */
     public function scopeDelDia(Builder $query, string $fecha): void
     {
         $query->where('fecha', $fecha);
-    }
-
-    /**
-     * Estados con la ubicación todavía sin resolver contra el catálogo.
-     *
-     * @param  Builder<$this>  $query
-     */
-    public function scopeSinUbicacionResuelta(Builder $query): void
-    {
-        $query->whereNull('ubicacion_id')->whereNotNull('ubicacion_texto');
     }
 
     /**

@@ -1,13 +1,10 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
-    CalendarClock,
     ClipboardList,
-    FileSpreadsheet,
+    FileText,
     LayoutGrid,
     Link2,
     Link2Off,
-    Map,
-    Route,
     Truck,
     User,
     Users,
@@ -15,12 +12,8 @@ import {
 import asignaciones from '@/actions/App/Http/Controllers/AsignacionController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
 import disponibilidad from '@/actions/App/Http/Controllers/DisponibilidadController';
-import flota from '@/actions/App/Http/Controllers/FlotaController';
-import importaciones from '@/actions/App/Http/Controllers/ImportacionDisponibilidadController';
-import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
-import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -43,34 +36,19 @@ const navItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
+];
+
+/**
+ * El padrón de vehículos y conductores, y su documentación: un desplegable
+ * con las dos entradas adentro. Vehículos lo ve cualquier usuario con acceso
+ * al sistema (incluido el conductor); Conductores exige admin o visor y se
+ * agrega aparte según el rol.
+ */
+const documentosSubitems: NavItem[] = [
     {
         title: 'Vehículos',
         href: vehiculos.index(),
         icon: Truck,
-    },
-];
-
-/** Requiere rol admin o visor: todo lo que arma y sigue la programación diaria de la flota. */
-const flotaNavItems: NavItem[] = [
-    {
-        title: 'Programación',
-        href: programacion.index(),
-        icon: CalendarClock,
-    },
-    {
-        title: 'Flota',
-        href: flota.index(),
-        icon: Map,
-    },
-    {
-        title: 'Disponibilidad',
-        href: disponibilidad.index(),
-        icon: ClipboardList,
-    },
-    {
-        title: 'Importaciones',
-        href: importaciones.index(),
-        icon: FileSpreadsheet,
     },
 ];
 
@@ -81,14 +59,9 @@ const flotaNavItems: NavItem[] = [
  */
 const gestionNavItems: NavItem[] = [
     {
-        title: 'Viajes',
-        href: viajes.index(),
-        icon: Route,
-    },
-    {
-        title: 'Conductores',
-        href: conductores.index(),
-        icon: User,
+        title: 'Disponibilidad',
+        href: disponibilidad.index(),
+        icon: ClipboardList,
     },
     {
         title: 'Asignaciones',
@@ -116,6 +89,24 @@ export function AppSidebar() {
     const esAdmin = auth.roles.includes('admin');
     const puedeGestionar = esAdmin || auth.roles.includes('visor');
 
+    // Conductores exige admin o visor, así que solo se agrega al desplegable
+    // documental cuando el rol alcanza; el conductor de a pie solo ve Vehículos.
+    const documentos: NavItem = {
+        title: 'Documentos',
+        href: vehiculos.index(),
+        icon: FileText,
+        items: puedeGestionar
+            ? [
+                  ...documentosSubitems,
+                  {
+                      title: 'Conductores',
+                      href: conductores.index(),
+                      icon: User,
+                  },
+              ]
+            : documentosSubitems,
+    };
+
     // El aviso de lo que está parado se pinta sobre la entrada correspondiente.
     const gestion = gestionNavItems.map((item) =>
         item.title === 'Sin asignar' ? { ...item, badge: sinAsignar } : item,
@@ -140,16 +131,8 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={navItems} />
-                {puedeGestionar && (
-                    <>
-                        <NavMain
-                            items={flotaNavItems}
-                            label="Programación de Flota"
-                        />
-                        <NavMain items={gestion} />
-                    </>
-                )}
+                <NavMain items={[...navItems, documentos]} />
+                {puedeGestionar && <NavMain items={gestion} />}
                 {esAdmin && <NavMain items={adminNavItems} />}
             </SidebarContent>
 

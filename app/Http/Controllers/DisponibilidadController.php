@@ -13,7 +13,6 @@ use App\Http\Requests\ActualizarCeldaEstadoUnidadRequest;
 use App\Models\Asignacion;
 use App\Models\Conductor;
 use App\Models\EstadoUnidad;
-use App\Models\Ubicacion;
 use App\Models\Vehiculo;
 use App\Services\Alerta;
 use App\Services\ValidadorEstadoUnidad;
@@ -47,10 +46,9 @@ class DisponibilidadController extends Controller
         'estado_carga',
         'cliente',
         'fase',
-        'origen_id',
-        'destino_id',
-        'ubicacion_id',
-        'ubicacion_texto',
+        'origen',
+        'destino',
+        'ubicacion',
     ];
 
     /**
@@ -66,9 +64,6 @@ class DisponibilidadController extends Controller
         'tracto.asignacionVigenteComoTracto.carreta:id,placa',
         'carreta:id,placa',
         'conductor:id,nombres,apellidos',
-        'origen',
-        'destino',
-        'ubicacion',
     ];
 
     public function index(Request $request): Response
@@ -97,11 +92,7 @@ class DisponibilidadController extends Controller
             ->get()
             ->keyBy('tracto_id');
 
-        $anteriores = EstadoUnidad::ultimosAntesDe(
-            $fecha,
-            $estados->keys()->all(),
-            ['ubicacion'],
-        );
+        $anteriores = EstadoUnidad::ultimosAntesDe($fecha, $estados->keys()->all());
 
         $porFila = new ValidadorEstadoUnidad;
         $porTransicion = new ValidadorTransicion;
@@ -241,10 +232,9 @@ class DisponibilidadController extends Controller
             'carreta_id' => $anterior->carreta_id,
             'conductor_id' => $anterior->conductor_id,
             'tipo_carga' => $anterior->tipo_carga,
-            'origen_id' => $anterior->origen_id,
-            'destino_id' => $anterior->destino_id,
-            'ubicacion_id' => $anterior->ubicacion_id,
-            'ubicacion_texto' => $anterior->ubicacion_texto,
+            'origen' => $anterior->origen,
+            'destino' => $anterior->destino,
+            'ubicacion' => $anterior->ubicacion,
             'fecha_disponible' => $anterior->fecha_disponible,
         ]);
     }
@@ -290,7 +280,7 @@ class DisponibilidadController extends Controller
 
     /**
      * @param  Collection<int, array<string, mixed>>  $filas
-     * @return array{total: int, reportadas: int, imposibles: int, improbables: int, sin_resolver: int}
+     * @return array{total: int, reportadas: int, imposibles: int, improbables: int}
      */
     private function resumen(Collection $filas): array
     {
@@ -299,8 +289,6 @@ class DisponibilidadController extends Controller
             'reportadas' => $filas->filter(fn (array $fila): bool => $fila['id'] !== null)->count(),
             'imposibles' => $filas->sum(fn (array $fila): int => $fila['imposibles']),
             'improbables' => $filas->sum(fn (array $fila): int => $fila['improbables']),
-            'sin_resolver' => $filas->filter(fn (array $fila): bool => $fila['ubicacion'] === null
-                && $fila['ubicacion_texto'] !== null)->count(),
         ];
     }
 
@@ -328,14 +316,6 @@ class DisponibilidadController extends Controller
                 ->map(fn (Conductor $conductor): array => [
                     'value' => (string) $conductor->id,
                     'label' => $conductor->nombre_completo,
-                ]),
-            'ubicaciones' => Ubicacion::query()
-                ->orderBy('nombre')
-                ->get(['id', 'nombre', 'es_zona_base'])
-                ->map(fn (Ubicacion $ubicacion): array => [
-                    'value' => (string) $ubicacion->id,
-                    'label' => $ubicacion->nombre,
-                    'es_zona_base' => $ubicacion->es_zona_base,
                 ]),
             'cargas' => TipoCarga::options(),
             'estados_carga' => EstadoCarga::options(),
@@ -374,10 +354,9 @@ class DisponibilidadController extends Controller
             'cliente_label' => $estado->cliente?->label(),
             'fase' => $estado->fase?->value,
             'fase_label' => $estado->fase?->label(),
-            'origen' => $this->comoPunto($estado->origen),
-            'destino' => $this->comoPunto($estado->destino),
-            'ubicacion' => $this->comoPunto($estado->ubicacion),
-            'ubicacion_texto' => $estado->ubicacion_texto,
+            'origen' => $estado->origen,
+            'destino' => $estado->destino,
+            'ubicacion' => $estado->ubicacion,
             'observaciones' => $estado->observaciones,
             'proximas_paradas' => $estado->proximas_paradas,
             'fecha_disponible' => $estado->fecha_disponible?->toDateString(),
@@ -420,7 +399,6 @@ class DisponibilidadController extends Controller
             'origen' => null,
             'destino' => null,
             'ubicacion' => null,
-            'ubicacion_texto' => null,
             'observaciones' => null,
             'proximas_paradas' => null,
             'fecha_disponible' => null,
@@ -441,13 +419,5 @@ class DisponibilidadController extends Controller
             'conductor' => $asignacion->conductor->nombre_completo,
             'carreta' => $asignacion->carreta?->placa,
         ];
-    }
-
-    /**
-     * @return array{id: int, nombre: string}|null
-     */
-    private function comoPunto(?Ubicacion $ubicacion): ?array
-    {
-        return $ubicacion === null ? null : ['id' => $ubicacion->id, 'nombre' => $ubicacion->nombre];
     }
 }

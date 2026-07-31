@@ -1,4 +1,4 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import {
     ArrowDown,
     ArrowUp,
@@ -6,15 +6,12 @@ import {
     ChevronLeft,
     ChevronRight,
     CopyPlus,
-    MapPin,
     Search,
     Trash2,
     Truck,
-    Upload,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import disponibilidad from '@/actions/App/Http/Controllers/DisponibilidadController';
-import { create as crearImportacion } from '@/actions/App/Http/Controllers/ImportacionDisponibilidadController';
 import { CeldaEditable } from '@/components/disponibilidad/celda-editable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,10 +62,10 @@ const VALOR_COLUMNA: Record<string, (fila: DisponibilidadFila) => string> = {
     conductor: (fila) => fila.conductor?.nombre_completo ?? '',
     tipo_carga: (fila) => fila.tipo_carga_label ?? '',
     cliente: (fila) => fila.cliente_label ?? '',
-    origen: (fila) => fila.origen?.nombre ?? '',
-    destino: (fila) => fila.destino?.nombre ?? '',
+    origen: (fila) => fila.origen ?? '',
+    destino: (fila) => fila.destino ?? '',
     paradas: (fila) => fila.proximas_paradas ?? '',
-    ubicacion: (fila) => fila.ubicacion?.nombre ?? fila.ubicacion_texto ?? '',
+    ubicacion: (fila) => fila.ubicacion ?? '',
     observaciones: (fila) => fila.observaciones ?? '',
     fecha_disponible: (fila) => fila.fecha_disponible ?? '',
 };
@@ -227,19 +224,11 @@ export default function DisponibilidadIndex({
                             ` · ${resumen.imposibles} por corregir`}
                         {resumen.improbables > 0 &&
                             ` · ${resumen.improbables} por confirmar`}
-                        {resumen.sin_resolver > 0 &&
-                            ` · ${resumen.sin_resolver} sin ubicación resuelta`}
                     </p>
                 </div>
 
                 {puedeGestionar && (
                     <div className="flex flex-wrap gap-2">
-                        <Button variant="outline" asChild>
-                            <Link href={crearImportacion()}>
-                                <Upload className="size-4" />
-                                Importar Excel
-                            </Link>
-                        </Button>
                         {arrastrables > 0 && (
                             <Button variant="outline" onClick={arrastrar}>
                                 <CopyPlus className="size-4" />
@@ -584,26 +573,18 @@ export default function DisponibilidadIndex({
                                             <CeldaEditable
                                                 tractoId={fila.tracto.id}
                                                 fecha={fecha}
-                                                campo="origen_id"
-                                                valor={
-                                                    fila.origen
-                                                        ? String(fila.origen.id)
-                                                        : null
-                                                }
-                                                valorLabel={
-                                                    fila.origen?.nombre ?? null
-                                                }
-                                                origen={fila.origenes.origen_id}
+                                                campo="origen"
+                                                valor={fila.origen}
+                                                valorLabel={fila.origen}
+                                                origen={fila.origenes.origen}
                                                 control={{
-                                                    tipo: 'select',
-                                                    opciones:
-                                                        opciones.ubicaciones,
+                                                    tipo: 'texto',
                                                     placeholder:
                                                         'Sin registrar',
                                                 }}
                                             />
                                         ) : (
-                                            (fila.origen?.nombre ?? '—')
+                                            (fila.origen ?? '—')
                                         )}
                                     </TableCell>
 
@@ -612,30 +593,18 @@ export default function DisponibilidadIndex({
                                             <CeldaEditable
                                                 tractoId={fila.tracto.id}
                                                 fecha={fecha}
-                                                campo="destino_id"
-                                                valor={
-                                                    fila.destino
-                                                        ? String(
-                                                              fila.destino.id,
-                                                          )
-                                                        : null
-                                                }
-                                                valorLabel={
-                                                    fila.destino?.nombre ?? null
-                                                }
-                                                origen={
-                                                    fila.origenes.destino_id
-                                                }
+                                                campo="destino"
+                                                valor={fila.destino}
+                                                valorLabel={fila.destino}
+                                                origen={fila.origenes.destino}
                                                 control={{
-                                                    tipo: 'select',
-                                                    opciones:
-                                                        opciones.ubicaciones,
+                                                    tipo: 'texto',
                                                     placeholder:
                                                         'Sin registrar',
                                                 }}
                                             />
                                         ) : (
-                                            (fila.destino?.nombre ?? '—')
+                                            (fila.destino ?? '—')
                                         )}
                                     </TableCell>
 
@@ -663,39 +632,21 @@ export default function DisponibilidadIndex({
                                             <CeldaEditable
                                                 tractoId={fila.tracto.id}
                                                 fecha={fecha}
-                                                campo="ubicacion_id"
-                                                valor={
-                                                    fila.ubicacion
-                                                        ? String(
-                                                              fila.ubicacion.id,
-                                                          )
-                                                        : null
-                                                }
-                                                valorLabel={
-                                                    fila.ubicacion?.nombre ??
-                                                    null
-                                                }
+                                                campo="ubicacion"
+                                                valor={fila.ubicacion}
+                                                valorLabel={fila.ubicacion}
                                                 origen={
-                                                    fila.origenes.ubicacion_id
+                                                    fila.origenes.ubicacion
                                                 }
                                                 control={{
-                                                    tipo: 'select',
-                                                    opciones:
-                                                        opciones.ubicaciones,
+                                                    tipo: 'texto',
                                                     placeholder:
                                                         'Sin registrar',
                                                 }}
                                             />
                                         ) : (
-                                            (fila.ubicacion?.nombre ?? '—')
+                                            (fila.ubicacion ?? '—')
                                         )}
-                                        {!fila.ubicacion &&
-                                            fila.ubicacion_texto && (
-                                                <span className="mt-1 inline-flex items-center gap-1 text-sm text-muted-foreground">
-                                                    <MapPin className="size-3" />
-                                                    {fila.ubicacion_texto}
-                                                </span>
-                                            )}
                                     </TableCell>
 
                                     <TableCell

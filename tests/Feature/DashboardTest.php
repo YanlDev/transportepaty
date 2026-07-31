@@ -1,10 +1,15 @@
 <?php
 
 use App\Enums\EstadoVehiculo;
+use App\Enums\FaseCiclo;
+use App\Enums\TipoCarga;
 use App\Enums\TipoDocumento;
 use App\Enums\TipoDocumentoConductor;
+use App\Enums\TipoNovedad;
 use App\Models\Conductor;
 use App\Models\ConductorDocumento;
+use App\Models\EstadoUnidad;
+use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -38,6 +43,105 @@ it('summarises the fleet by type and status', function (): void {
             ->where('resumen.operativos', 3)
             ->where('resumen.conductores', 3)
             ->has('documentosPorVencer')
+            ->where('estadoFlota', fn ($estados) => collect($estados)
+                ->firstWhere('estado', EstadoVehiculo::Activo->value)['valor'] === 3
+                && collect($estados)->firstWhere('estado', EstadoVehiculo::EnMantenimiento->value)['valor'] === 1)
+        );
+});
+
+it('counts expired documents across vehicles and drivers for the alert tile', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+    $conductor = Conductor::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->subDay()->toDateString(),
+    ]);
+    ConductorDocumento::create([
+        'conductor_id' => $conductor->id,
+        'tipo' => TipoDocumentoConductor::LicenciaConducir,
+        'fecha_vencimiento' => now()->subWeek()->toDateString(),
+    ]);
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Matpel,
+        'fecha_vencimiento' => now()->addMonths(6)->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('resumen.documentosVencidos', 2)
+        );
+});
+
+it('counts active novedades for the not-schedulable tile and grouped by tipo', function (): void {
+    Novedad::factory()->de(TipoNovedad::NoHabido)->create();
+    Novedad::factory()->de(TipoNovedad::Taller)->create();
+    // Ya levantada: no debe contar como vigente.
+    Novedad::factory()->de(TipoNovedad::EnMina)->levantada(now()->toDateString())->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('resumen.novedadesActivas', 2)
+            ->where('novedadesPorTipo', fn ($tipos) => collect($tipos)
+                ->firstWhere('tipo', TipoNovedad::NoHabido->value)['valor'] === 1
+                && collect($tipos)->firstWhere('tipo', TipoNovedad::Taller->value)['valor'] === 1
+                && collect($tipos)->firstWhere('tipo', TipoNovedad::EnMina->value)['valor'] === 0)
+        );
+});
+
+it('groups today’s cycle phase from the latest estado of each tracto', function (): void {
+    $tracto = Vehiculo::factory()->create();
+
+    EstadoUnidad::create([
+        'tracto_id' => $tracto->id,
+        'tipo_carga' => TipoCarga::Vacio,
+        'fecha' => now()->subDays(2)->toDateString(),
+    ]);
+    EstadoUnidad::create([
+        'tracto_id' => $tracto->id,
+        'tipo_carga' => TipoCarga::Concentrado,
+        'fecha' => now()->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('fasesCiclo', fn ($fases) => collect($fases)
+                ->firstWhere('fase', FaseCiclo::MinaPisco->value)['valor'] === 1
+                && collect($fases)->firstWhere('fase', FaseCiclo::SubidaMina->value)['valor'] === 0)
+        );
+});
+
+it('breaks down documentation health by semáforo for vehicles and drivers', function (): void {
+    $alDia = Vehiculo::factory()->create();
+    $conProblemas = Vehiculo::factory()->create();
+
+    foreach ($alDia->tipo->documentosObligatorios() as $tipo) {
+        VehiculoDocumento::create([
+            'vehiculo_id' => $alDia->id,
+            'tipo' => $tipo,
+            'fecha_vencimiento' => null,
+        ]);
+    }
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $conProblemas->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->subDay()->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('saludDocumental', function ($salud) {
+                $vehiculos = collect($salud)->firstWhere('entidad', 'vehiculos');
+
+                return $vehiculos['rojo'] === 1 && $vehiculos['verde'] === 1;
+            })
         );
 });
 

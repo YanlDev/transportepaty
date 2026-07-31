@@ -50,7 +50,7 @@ class ActualizarCeldaEstadoUnidadRequest extends FormRequest
             'conductor_id' => ['nullable', 'exists:conductores,id'],
             'tipo_carga' => ['nullable', Rule::enum(TipoCarga::class)],
             'cliente' => ['nullable', Rule::enum(Cliente::class)],
-            'origen_id', 'destino_id', 'ubicacion_id' => ['nullable', 'exists:ubicaciones,id'],
+            'origen', 'destino', 'ubicacion' => ['nullable', 'string', 'max:255'],
             'observaciones', 'proximas_paradas' => ['nullable', 'string', 'max:1000'],
             'fecha_disponible' => ['nullable', 'date'],
             default => ['nullable'],

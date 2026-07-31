@@ -312,11 +312,6 @@ export type AlertaEstado = {
     detalle: string | null;
 };
 
-export type PuntoRef = {
-    id: number;
-    nombre: string;
-};
-
 /** Una unidad en la disponibilidad de un día, con sus alertas ya calculadas. */
 export type DisponibilidadFila = {
     id: number | null;
@@ -331,10 +326,9 @@ export type DisponibilidadFila = {
     cliente_label: string | null;
     fase: string | null;
     fase_label: string | null;
-    origen: PuntoRef | null;
-    destino: PuntoRef | null;
-    ubicacion: PuntoRef | null;
-    ubicacion_texto: string | null;
+    origen: string | null;
+    destino: string | null;
+    ubicacion: string | null;
     observaciones: string | null;
     proximas_paradas: string | null;
     fecha_disponible: string | null;
@@ -348,12 +342,9 @@ export type DisponibilidadFila = {
     improbables: number;
 };
 
-export type UbicacionOption = EnumOption & { es_zona_base: boolean };
-
 export type DisponibilidadOpciones = {
     carretas: EnumOption[];
     conductores: EnumOption[];
-    ubicaciones: UbicacionOption[];
     cargas: EnumOption[];
     estados_carga: EnumOption[];
     clientes: EnumOption[];
@@ -366,160 +357,6 @@ export type DisponibilidadResumen = {
     reportadas: number;
     imposibles: number;
     improbables: number;
-    sin_resolver: number;
-};
-
-export type UnidadEnPunto = {
-    id: number;
-    placa: string;
-    tipo_carga_label: string | null;
-    destino: string | null;
-    fecha: string;
-};
-
-/** Un punto del mapa con todas las unidades reportadas ahí. */
-export type PuntoMapa = {
-    id: number;
-    nombre: string;
-    latitud: number;
-    longitud: number;
-    es_zona_base: boolean;
-    unidades: UnidadEnPunto[];
-    total: number;
-};
-
-export type EstimacionLlegada = {
-    dias: number;
-    fecha: string;
-    label: string;
-    kilometros: number;
-    /** False mientras la estimación se apoye en la velocidad de referencia. */
-    calibrada: boolean;
-};
-
-export type DescargaUnidad = {
-    estado_id: number;
-    tracto_id: number;
-    placa: string;
-    carreta: string | null;
-    conductor: string | null;
-    tipo_carga_label: string | null;
-    ubicacion: string | null;
-    destino_id: number | null;
-    destino: string | null;
-    reportado: string;
-    fecha_estimada: string;
-    estimacion: EstimacionLlegada;
-};
-
-export type GrupoDescarga = {
-    destino_id: number;
-    destino: string;
-    unidades: DescargaUnidad[];
-    total: number;
-};
-
-export type ResumenFlota = {
-    unidades: number;
-    en_base: number;
-    sin_posicion: number;
-    estimacion_calibrada: boolean;
-    kilometros_por_dia: number;
-};
-
-export type PasoLineaTiempo = {
-    id: number;
-    fecha: string;
-    ubicacion: string | null;
-    tipo_carga_label: string | null;
-    fase_label: string | null;
-    ruta: { origen: string | null; destino: string | null } | null;
-    conductor: string | null;
-    carreta: string | null;
-    observaciones: string | null;
-};
-
-export type GuiaRemision = {
-    tipo: 'remitente' | 'transportista';
-    label: string;
-    /** GRR o GRT. */
-    abreviatura: string;
-    numero: string | null;
-    /** Null mientras no se haya adjuntado el archivo. */
-    url: string | null;
-    es_pdf: boolean;
-};
-
-export type ViajeListItem = {
-    id: number;
-    tracto: { id: number; placa: string };
-    carreta: { id: number; placa: string } | null;
-    conductor: string | null;
-    tipo_carga_label: string;
-    fase_label: string | null;
-    origen: string;
-    destino: string;
-    fecha_salida: string;
-    /** Null mientras el viaje sigue en curso. */
-    fecha_llegada: string | null;
-    en_curso: boolean;
-    dias: number;
-    guias: GuiaRemision[];
-    observaciones: string | null;
-};
-
-/** El viaje tal como lo carga el formulario de edición. */
-export type ViajeEditable = {
-    id: number;
-    tracto_id: number;
-    carreta_id: number | null;
-    conductor_id: number | null;
-    tipo_carga: string;
-    origen_id: number;
-    destino_id: number;
-    fecha_salida: string;
-    fecha_llegada: string | null;
-    numero_guia_remitente: string | null;
-    numero_guia_transportista: string | null;
-    observaciones: string | null;
-    tracto_placa: string;
-};
-
-export type ViajeOpciones = {
-    tractos: EnumOption[];
-    carretas: EnumOption[];
-    conductores: EnumOption[];
-    ubicaciones: EnumOption[];
-    cargas: EnumOption[];
-};
-
-/** Una línea de la tabla que se envía a mina. */
-export type FilaProgramacion = {
-    tracto_id: number;
-    /** Null en las cargadas que ya van subiendo: no compiten por cupo. */
-    numero: number | null;
-    fecha: string;
-    hora: string | null;
-    empresa: string;
-    vehiculo: string;
-    conductor: string | null;
-    tipo_carga: string | null;
-    estado_unidad: string | null;
-    observaciones: string | null;
-    /** Solo en las no programables. */
-    motivo: string | null;
-};
-
-export type ResultadoProgramacion = {
-    fecha: string;
-    cupos: number;
-    cupos_libres: number;
-    en_transito: FilaProgramacion[];
-    titulares: FilaProgramacion[];
-    reservas: FilaProgramacion[];
-    no_programables: FilaProgramacion[];
-    /** En tránsito primero y después los titulares, en su orden definitivo. */
-    tabla: FilaProgramacion[];
 };
 
 export type NovedadItem = {
@@ -531,42 +368,4 @@ export type NovedadItem = {
     motivo: string;
     desde: string;
     vigente: boolean;
-};
-
-export type ImportacionListItem = {
-    id: number;
-    fecha: string;
-    archivo_original: string;
-    usuario: string;
-    confirmada: boolean;
-    filas_totales: number;
-    filas_resueltas: number;
-    creada: string;
-};
-
-/** Una fila del Excel ya resuelta contra el catálogo, en previsualización. */
-export type ImportacionFilaItem = {
-    id: number;
-    numero_fila: number;
-    crudo: Record<string, string>;
-    tracto: string | null;
-    carreta: string | null;
-    conductor: string | null;
-    tipo_carga_label: string | null;
-    origen: string | null;
-    destino: string | null;
-    ubicacion: string | null;
-    observaciones: string | null;
-    problemas: string[];
-    incluir: boolean;
-    puede_aplicarse: boolean;
-};
-
-export type ImportacionDetalle = {
-    id: number;
-    fecha: string;
-    archivo_original: string;
-    confirmada: boolean;
-    filas_totales: number;
-    filas_resueltas: number;
 };
