@@ -6,12 +6,14 @@ import {
     DialogTitle,
     DialogTrigger,
 } from '@/components/ui/dialog';
-import { formatearFecha } from '@/lib/format';
-import type { VehiculoDocumentoItem } from '@/types/fleet';
 
 type Props = {
-    documento: VehiculoDocumentoItem;
+    /** Vacío cuando el registro todavía no tiene archivo adjunto. */
+    url: string;
+    esPdf: boolean;
     titulo: string;
+    /** Línea chica junto al título — número de documento, fecha, cliente, etc. */
+    detalle?: string;
     trigger: React.ReactNode;
 };
 
@@ -21,20 +23,20 @@ type Props = {
  * el contexto; para un escaneo apaisado o un plano grande está «Abrir en pestaña
  * nueva», que sí usa toda la pantalla.
  *
+ * Genérico a propósito —no depende de `VehiculoDocumentoItem`— porque también
+ * lo usa el visor de GR de viajes, que no es un documento del expediente.
+ *
  * Se cierra con Escape, con la X o haciendo clic fuera. Ojo: si haces clic
  * dentro del PDF, el visor del navegador se queda con el teclado y Escape deja
  * de llegar; un clic en la barra devuelve el control.
  */
-export function DocumentoVisorDialog({ documento, titulo, trigger }: Props) {
-    const detalle = [
-        documento.numero,
-        documento.fecha_vencimiento
-            ? `Vence ${formatearFecha(documento.fecha_vencimiento)}`
-            : null,
-    ]
-        .filter(Boolean)
-        .join(' · ');
-
+export function DocumentoVisorDialog({
+    url,
+    esPdf,
+    titulo,
+    detalle,
+    trigger,
+}: Props) {
     return (
         <Dialog>
             <DialogTrigger asChild>{trigger}</DialogTrigger>
@@ -54,17 +56,17 @@ export function DocumentoVisorDialog({ documento, titulo, trigger }: Props) {
                     )}
 
                     <div className="ml-auto flex shrink-0 items-center">
-                        {documento.url !== '' && (
+                        {url !== '' && (
                             <>
                                 <AccionBarra
-                                    href={documento.url}
+                                    href={url}
                                     etiqueta="Abrir en pestaña nueva"
                                     externa
                                 >
                                     <ExternalLink className="size-4" />
                                 </AccionBarra>
                                 <AccionBarra
-                                    href={documento.url}
+                                    href={url}
                                     etiqueta="Descargar"
                                     descargar
                                 >
@@ -77,13 +79,13 @@ export function DocumentoVisorDialog({ documento, titulo, trigger }: Props) {
                 </div>
 
                 <div className="min-h-0 flex-1 bg-muted">
-                    {documento.url === '' ? (
+                    {url === '' ? (
                         <div className="grid h-full place-items-center p-6 text-center text-sm text-muted-foreground">
                             Este documento no tiene archivo adjunto.
                         </div>
-                    ) : documento.es_pdf ? (
+                    ) : esPdf ? (
                         <object
-                            data={`${documento.url}#toolbar=1&navpanes=0&view=FitH`}
+                            data={`${url}#toolbar=1&navpanes=0&view=FitH`}
                             type="application/pdf"
                             className="size-full"
                             aria-label={titulo}
@@ -96,7 +98,7 @@ export function DocumentoVisorDialog({ documento, titulo, trigger }: Props) {
                     ) : (
                         <div className="grid h-full place-items-center overflow-auto">
                             <img
-                                src={documento.url}
+                                src={url}
                                 alt={titulo}
                                 className="max-h-full max-w-full object-contain"
                             />

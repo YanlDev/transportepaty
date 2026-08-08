@@ -1,14 +1,11 @@
 <?php
 
 use App\Enums\EstadoVehiculo;
-use App\Enums\FaseCiclo;
-use App\Enums\TipoCarga;
 use App\Enums\TipoDocumento;
 use App\Enums\TipoDocumentoConductor;
 use App\Enums\TipoNovedad;
 use App\Models\Conductor;
 use App\Models\ConductorDocumento;
-use App\Models\EstadoUnidad;
 use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
@@ -90,29 +87,6 @@ it('counts active novedades for the not-schedulable tile and grouped by tipo', f
                 ->firstWhere('tipo', TipoNovedad::NoHabido->value)['valor'] === 1
                 && collect($tipos)->firstWhere('tipo', TipoNovedad::Taller->value)['valor'] === 1
                 && collect($tipos)->firstWhere('tipo', TipoNovedad::EnMina->value)['valor'] === 0)
-        );
-});
-
-it('groups today’s cycle phase from the latest estado of each tracto', function (): void {
-    $tracto = Vehiculo::factory()->create();
-
-    EstadoUnidad::create([
-        'tracto_id' => $tracto->id,
-        'tipo_carga' => TipoCarga::Vacio,
-        'fecha' => now()->subDays(2)->toDateString(),
-    ]);
-    EstadoUnidad::create([
-        'tracto_id' => $tracto->id,
-        'tipo_carga' => TipoCarga::Concentrado,
-        'fecha' => now()->toDateString(),
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('fasesCiclo', fn ($fases) => collect($fases)
-                ->firstWhere('fase', FaseCiclo::MinaPisco->value)['valor'] === 1
-                && collect($fases)->firstWhere('fase', FaseCiclo::SubidaMina->value)['valor'] === 0)
         );
 });
 

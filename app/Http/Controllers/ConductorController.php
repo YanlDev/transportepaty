@@ -26,11 +26,18 @@ class ConductorController extends Controller
             // Una sola carga alimenta el semáforo documental de cada fila.
             ->with(['documentos:id,conductor_id,tipo,numero,fecha_vencimiento'])
             ->when($filtros['buscar'], function ($query, string $buscar): void {
-                $query->where(function ($query) use ($buscar): void {
+                // La lista muestra "APELLIDOS NOMBRES" (como en las GR), así que
+                // hay que poder buscar por ese nombre completo y no solo por
+                // nombres o apellidos por separado.
+                $comodin = '%'.mb_strtolower($buscar).'%';
+
+                $query->where(function ($query) use ($buscar, $comodin): void {
                     $query->whereLike('nombres', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('apellidos', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('documento', "%{$buscar}%", caseSensitive: false)
-                        ->orWhereLike('licencia', "%{$buscar}%", caseSensitive: false);
+                        ->orWhereLike('licencia', "%{$buscar}%", caseSensitive: false)
+                        ->orWhereRaw("LOWER(apellidos || ' ' || nombres) LIKE ?", [$comodin])
+                        ->orWhereRaw("LOWER(nombres || ' ' || apellidos) LIKE ?", [$comodin]);
                 });
             })
             ->orderBy('apellidos')
@@ -106,11 +113,11 @@ class ConductorController extends Controller
 
         $conductor->update($request->validated());
 
-        return to_route('conductores.index')
+        return to_route('conductores.index', $request->query())
             ->with('toast', ['type' => 'success', 'message' => 'Conductor actualizado correctamente.']);
     }
 
-    public function destroy(Conductor $conductor): RedirectResponse
+    public function destroy(Request $request, Conductor $conductor): RedirectResponse
     {
         $this->authorize('delete', $conductor);
 
@@ -126,7 +133,7 @@ class ConductorController extends Controller
 
         $conductor->delete();
 
-        return to_route('conductores.index')
+        return to_route('conductores.index', $request->query())
             ->with('toast', ['type' => 'success', 'message' => 'Conductor eliminado correctamente.']);
     }
 

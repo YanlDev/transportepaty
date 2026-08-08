@@ -117,8 +117,17 @@ export function DocumentoTarjeta({
                     {documento !== null && (
                         <>
                             <DocumentoVisorDialog
-                                documento={documento}
+                                url={documento.url}
+                                esPdf={documento.es_pdf}
                                 titulo={ranura.label}
+                                detalle={[
+                                    documento.numero,
+                                    documento.fecha_vencimiento
+                                        ? `Vence ${formatearFecha(documento.fecha_vencimiento)}`
+                                        : null,
+                                ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
                                 trigger={
                                     <button
                                         type="button"

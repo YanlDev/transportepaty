@@ -1,4 +1,4 @@
-import { Link, useForm } from '@inertiajs/react';
+import { Link, useForm, usePage } from '@inertiajs/react';
 import { useId } from 'react';
 import conductores, {
     store,
@@ -63,17 +63,23 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
 
     const activoId = useId();
 
+    // El listado agrega su página y búsqueda actuales a la URL de edición
+    // (?page=2&buscar=...) para poder volver ahí mismo tras guardar, en vez
+    // de regresar siempre a la página 1.
+    const { url } = usePage();
+    const query = url.includes('?') ? url.slice(url.indexOf('?')) : '';
+
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
 
         if (mode === 'create') {
             post(store().url);
         } else if (conductor) {
-            put(update(conductor.id).url);
+            put(update(conductor.id).url + query);
         }
     };
 
-    const volver = conductores.index();
+    const volver = conductores.index().url + query;
 
     return (
         <form onSubmit={submit} className="flex flex-col gap-6">

@@ -1,14 +1,16 @@
 <?php
 
 use App\Http\Controllers\AsignacionController;
+use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DisponibilidadController;
 use App\Http\Controllers\NovedadController;
+use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
+use App\Http\Controllers\ViajeController;
 use Illuminate\Support\Facades\Route;
 
 // La raíz no muestra landing: siempre redirige al login (los usuarios ya
@@ -46,14 +48,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('novedades/{novedad}/levantar', [NovedadController::class, 'levantar'])
         ->name('novedades.levantar');
 
-    Route::get('disponibilidad', [DisponibilidadController::class, 'index'])
-        ->name('disponibilidad.index');
-    Route::post('disponibilidad/arrastrar', [DisponibilidadController::class, 'arrastrar'])
-        ->name('disponibilidad.arrastrar');
-    Route::patch('disponibilidad/{vehiculo}/celda', [DisponibilidadController::class, 'actualizarCelda'])
-        ->name('disponibilidad.celda');
-    Route::delete('disponibilidad/{estado}', [DisponibilidadController::class, 'destroy'])
-        ->name('disponibilidad.destroy');
+    Route::get('viajes', [ViajeController::class, 'index'])->name('viajes.index');
+    Route::post('viajes', [ViajeController::class, 'store'])->name('viajes.store');
+    Route::get('viajes/manual', [ViajeController::class, 'create'])->name('viajes.manual.create');
+    Route::post('viajes/manual', [ViajeController::class, 'storeManual'])->name('viajes.manual.store');
+    Route::post('viajes/resolver', [ViajeController::class, 'resolver'])->name('viajes.resolver');
+    Route::patch('viajes/{viaje}/tipo-carga', [ViajeController::class, 'actualizarTipoCarga'])
+        ->name('viajes.actualizarTipoCarga');
+    Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])->name('viajes.destroy');
+
+    Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
+    Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');
+    Route::delete('asistencia/{asistencia}', [AsistenciaController::class, 'destroy'])->name('asistencia.destroy');
+
+    Route::get('programacion', [ProgramacionController::class, 'index'])->name('programacion.index');
+    Route::patch('programacion/{vehiculo}', [ProgramacionController::class, 'marcar'])->name('programacion.marcar');
+    Route::delete('programacion/{programacion}', [ProgramacionController::class, 'destroy'])->name('programacion.destroy');
 
     Route::resource('usuarios', UserController::class)
         ->parameters(['usuarios' => 'user'])

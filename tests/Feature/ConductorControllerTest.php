@@ -60,6 +60,16 @@ it('filters the list by licencia', function (): void {
         ->assertInertia(fn (Assert $page) => $page->has('conductores.data', 1));
 });
 
+it('filters the list by the full "apellidos nombres" name shown in the table', function (): void {
+    Conductor::factory()->create(['nombres' => 'David', 'apellidos' => 'Vilca Choquehuanca']);
+    Conductor::factory()->create(['nombres' => 'Martin', 'apellidos' => 'Noa Benavente']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.index', ['buscar' => 'Vilca Choquehuanca David']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->has('conductores.data', 1));
+});
+
 it('exposes the edit form with a date-only license expiry', function (): void {
     $conductor = Conductor::factory()->create([
         'licencia_vence' => '2030-05-15',

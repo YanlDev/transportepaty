@@ -298,65 +298,98 @@ export const cajaLabels: Record<string, string> = {
     automatica: 'Automática',
 };
 
-/** De dónde salió el valor de un campo del estado diario. */
-export type OrigenDato = 'importado' | 'deducido' | 'manual';
-
-/** Gravedad de una inconsistencia. Ninguna bloquea el guardado. */
-export type NivelAlerta = 'imposible' | 'improbable';
-
-export type AlertaEstado = {
-    tipo: string;
-    label: string;
-    nivel: NivelAlerta;
-    nivel_label: string;
-    detalle: string | null;
+/** Un viaje registrado a partir de la GR-transportista subida. */
+export type ViajeListItem = {
+    id: number;
+    numero_gr: string;
+    fecha_traslado: string;
+    placa_tracto: string;
+    placa_carreta: string | null;
+    /** Null cuando la placa no matcheó contra el padrón. */
+    tracto_id: number | null;
+    carreta_id: number | null;
+    conductor_nombre: string;
+    /** Null cuando el DNI no matcheó contra el padrón. */
+    conductor_id: number | null;
+    cliente: string;
+    destinatario: string;
+    origen: string;
+    /** Dirección completa; para la tabla usa `destino_region`. */
+    destino: string;
+    /** Departamento/región, el final de la dirección (ej. «PUNO»). */
+    destino_region: string;
+    tipo_carga: string;
+    tipo_carga_label: string;
+    peso: number;
+    unidad_peso: string;
+    /** Null si por alguna razón el PDF no quedó adjunto. */
+    archivo_url: string | null;
 };
 
-/** Una unidad en la disponibilidad de un día, con sus alertas ya calculadas. */
-export type DisponibilidadFila = {
-    id: number | null;
-    tracto: { id: number; placa: string; caja: string | null };
-    carreta: { id: number; placa: string } | null;
-    conductor: { id: number; nombre_completo: string } | null;
-    tipo_carga: string | null;
-    tipo_carga_label: string | null;
-    estado_carga: string | null;
-    estado_carga_label: string | null;
-    cliente: string | null;
-    cliente_label: string | null;
-    fase: string | null;
-    fase_label: string | null;
-    origen: string | null;
+/** El estado de un conductor en un día puntual del rooster. */
+export type EstadoAsistencia =
+    | 'asistencia'
+    | 'falta'
+    | 'vacaciones'
+    | 'descanso';
+
+/** Una columna del rooster: un día del mes consultado. */
+export type AsistenciaDia = {
+    numero: number;
+    fecha: string;
+    /** L, M, X, J, V, S o D. */
+    dia_semana: string;
+    es_domingo: boolean;
+};
+
+/** Una celda marcada del rooster. Sin entrada para una fecha = sin marcar. */
+export type AsistenciaMarca = {
+    asistencia_id: number;
+    estado: EstadoAsistencia;
+    estado_label: string;
+};
+
+/** Una fila del rooster: un conductor y sus marcas del mes, por fecha. */
+export type AsistenciaFila = {
+    conductor_id: number;
+    nombre_completo: string;
+    marcas: Record<string, AsistenciaMarca>;
+};
+
+/** Lo que un aviso de WhatsApp reportó para un tracto: carga o libre. */
+export type EstadoProgramacion =
+    | 'metalico'
+    | 'concentrado'
+    | 'escoria'
+    | 'ransa'
+    | 'polytex'
+    | 'particular'
+    | 'salida'
+    | 'libre';
+
+/** La marca de un tracto para un día. Sin marca = sin aviso todavía. */
+export type ProgramacionMarca = {
+    programacion_id: number;
+    estado: EstadoProgramacion;
+    estado_label: string;
+    /** Vistazo rápido: cuál era el estado justo antes de este cambio. */
+    estado_anterior_label: string | null;
+    /** Hora (H:i) del último cambio de estado, o null si nunca cambió hoy. */
+    estado_cambiado_en: string | null;
+    /** Hacia dónde va la unidad (Callao, Pisco, mina...). */
     destino: string | null;
-    ubicacion: string | null;
+    /** El cliente final del viaje, solo cuando `estado` es "particular". */
+    cliente: string | null;
     observaciones: string | null;
-    proximas_paradas: string | null;
-    fecha_disponible: string | null;
-    origenes: Record<string, OrigenDato>;
-    asignacion_vigente: {
-        conductor: string | null;
-        carreta: string | null;
-    } | null;
-    alertas: AlertaEstado[];
-    imposibles: number;
-    improbables: number;
 };
 
-export type DisponibilidadOpciones = {
-    carretas: EnumOption[];
-    conductores: EnumOption[];
-    cargas: EnumOption[];
-    estados_carga: EnumOption[];
-    clientes: EnumOption[];
-    fases: EnumOption[];
-    cajas: EnumOption[];
-};
-
-export type DisponibilidadResumen = {
-    total: number;
-    reportadas: number;
-    imposibles: number;
-    improbables: number;
+/** Una fila del tablero de programación: un tracto y su marca del día. */
+export type ProgramacionFila = {
+    vehiculo_id: number;
+    placa: string;
+    caja_label: string | null;
+    conductor_nombre: string | null;
+    marca: ProgramacionMarca | null;
 };
 
 export type NovedadItem = {

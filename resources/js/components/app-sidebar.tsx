@@ -1,19 +1,23 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    CalendarCheck,
     ClipboardList,
     FileText,
     LayoutGrid,
     Link2,
     Link2Off,
+    Route as RouteIcon,
     Truck,
     User,
     Users,
 } from 'lucide-react';
 import asignaciones from '@/actions/App/Http/Controllers/AsignacionController';
+import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
-import disponibilidad from '@/actions/App/Http/Controllers/DisponibilidadController';
+import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
+import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -59,9 +63,19 @@ const documentosSubitems: NavItem[] = [
  */
 const gestionNavItems: NavItem[] = [
     {
-        title: 'Disponibilidad',
-        href: disponibilidad.index(),
+        title: 'Programación',
+        href: programacion.index(),
         icon: ClipboardList,
+    },
+    {
+        title: 'Viajes',
+        href: viajes.index(),
+        icon: RouteIcon,
+    },
+    {
+        title: 'Asistencia',
+        href: asistencia.index(),
+        icon: CalendarCheck,
     },
     {
         title: 'Asignaciones',

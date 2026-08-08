@@ -35,46 +35,29 @@ enum TipoCarga: string
     }
 
     /**
-     * Si la unidad va cargada o vacía. Se deduce del tipo de carga en vez de
-     * pedirse aparte: es el mismo dato dicho de dos maneras, y tenerlo duplicado
-     * en el Excel es justamente lo que produce filas que se contradicen solas.
-     */
-    public function estadoCarga(): EstadoCarga
-    {
-        return $this === self::Vacio
-            ? EstadoCarga::Vacio
-            : EstadoCarga::Cargado;
-    }
-
-    /**
-     * Para quién es el viaje. Todo lo que se mueve dentro del circuito de mina
-     * es de Minsur; la carga de terceros que se levanta en Lima es particular.
+     * Sacos y Vacío describen el estado de una unidad en ruta abierta (ficha
+     * de disponibilidad); no tienen sentido como contenido de un viaje ya
+     * cerrado con GR entregada.
      *
-     * Una unidad vacía todavía no tiene cliente, así que devuelve null en vez
-     * de inventarle uno.
+     * @return list<self>
      */
-    public function cliente(): ?Cliente
+    public static function excluidosDeViaje(): array
     {
-        return match ($this) {
-            self::Concentrado, self::Metalico, self::Escoria, self::Materiales, self::Sacos => Cliente::Minsur,
-            self::Particular => Cliente::Particular,
-            self::Vacio => null,
-        };
+        return [self::Sacos, self::Vacio];
     }
 
     /**
-     * Tramo del circuito al que corresponde esta carga. Es lo que permite
-     * detectar saltos imposibles entre un reporte y el siguiente: si la carga
-     * de hoy pertenece a una fase que no se alcanza desde la de ayer, alguien
-     * escribió mal una de las dos.
+     * Opciones para el selector de tipo de carga en un viaje ya cerrado.
+     *
+     * @return array<int, array{value: string, label: string}>
      */
-    public function fase(): FaseCiclo
+    public static function opcionesDeViaje(): array
     {
-        return match ($this) {
-            self::Vacio => FaseCiclo::SubidaMina,
-            self::Concentrado => FaseCiclo::MinaPisco,
-            self::Metalico, self::Escoria, self::Materiales, self::Sacos => FaseCiclo::RetornoPisco,
-            self::Particular => FaseCiclo::LimaJuliaca,
-        };
+        $excluidos = array_map(fn (self $caso): string => $caso->value, self::excluidosDeViaje());
+
+        return array_values(array_filter(
+            self::options(),
+            fn (array $opcion): bool => ! in_array($opcion['value'], $excluidos, true),
+        ));
     }
 }

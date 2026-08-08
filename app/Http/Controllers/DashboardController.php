@@ -4,17 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoDocumento;
 use App\Enums\EstadoVehiculo;
-use App\Enums\FaseCiclo;
 use App\Enums\TipoNovedad;
 use App\Enums\TipoVehiculo;
 use App\Models\Conductor;
 use App\Models\ConductorDocumento;
-use App\Models\EstadoUnidad;
 use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -53,7 +50,6 @@ class DashboardController extends Controller
             'filtros' => ['dias' => $dias],
             'documentosPorVencer' => $this->documentosPorVencer($dias),
             'estadoFlota' => $this->estadoFlota(),
-            'fasesCiclo' => $this->fasesCiclo(),
             'novedadesPorTipo' => $this->novedadesPorTipo(),
             'saludDocumental' => $this->saludDocumental(),
         ]);
@@ -162,31 +158,6 @@ class DashboardController extends Controller
                 'valor' => (int) ($conteos[$estado->value] ?? 0),
             ],
             EstadoVehiculo::cases(),
-        );
-    }
-
-    /**
-     * En qué tramo del circuito está cada unidad hoy, a partir del último
-     * estado reportado de cada tracto. Es la misma lectura que usa la
-     * programación del día, así que el panel nunca cuenta una unidad que ya
-     * fue dada de baja o de la que no se tiene reporte.
-     *
-     * @return list<array{fase: string, label: string, valor: int}>
-     */
-    private function fasesCiclo(): array
-    {
-        $manana = Carbon::now()->addDay()->toDateString();
-
-        $conteos = EstadoUnidad::ultimosAntesDe($manana)
-            ->countBy(fn (EstadoUnidad $estado): string => $estado->fase === null ? '' : $estado->fase->value);
-
-        return array_map(
-            fn (FaseCiclo $fase): array => [
-                'fase' => $fase->value,
-                'label' => $fase->label(),
-                'valor' => (int) ($conteos[$fase->value] ?? 0),
-            ],
-            FaseCiclo::cases(),
         );
     }
 

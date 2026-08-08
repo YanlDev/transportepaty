@@ -36,12 +36,40 @@ function TableBody({ className, ...props }: React.ComponentProps<'tbody'>) {
     );
 }
 
-function TableRow({ className, ...props }: React.ComponentProps<'tr'>) {
+/**
+ * Elementos que ya manejan su propio foco (botones, links, selects, celdas
+ * editables). Si el click viene de ahí, la fila no debe robarles el foco:
+ * pasaría, por ejemplo, con el input de una celda editable a medio escribir.
+ */
+function esElementoInteractivo(elemento: HTMLElement): boolean {
+    return (
+        elemento.closest(
+            'button, a, input, select, textarea, [role="menuitem"], [contenteditable="true"]',
+        ) !== null
+    );
+}
+
+function TableRow({
+    className,
+    onClick,
+    ...props
+}: React.ComponentProps<'tr'>) {
     return (
         <tr
             data-slot="table-row"
+            tabIndex={-1}
+            onClick={(evento) => {
+                if (
+                    !evento.currentTarget.closest('thead') &&
+                    !esElementoInteractivo(evento.target as HTMLElement)
+                ) {
+                    evento.currentTarget.focus();
+                }
+
+                onClick?.(evento);
+            }}
             className={cn(
-                'border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted',
+                'border-b outline-none transition-colors hover:bg-muted/50 focus:bg-navy-100 data-[state=selected]:bg-muted dark:focus:bg-navy-900/50',
                 className,
             )}
             {...props}
@@ -54,7 +82,7 @@ function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
         <th
             data-slot="table-head"
             className={cn(
-                'h-10 px-3 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground',
+                'h-8 px-2 text-left align-middle text-xs font-medium whitespace-nowrap text-muted-foreground',
                 className,
             )}
             {...props}
@@ -66,7 +94,10 @@ function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
     return (
         <td
             data-slot="table-cell"
-            className={cn('p-3 align-middle whitespace-nowrap', className)}
+            className={cn(
+                'px-2 py-1.5 align-middle text-xs whitespace-nowrap',
+                className,
+            )}
             {...props}
         />
     );

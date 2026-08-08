@@ -73,16 +73,11 @@ type Props = {
     filtros: { dias: number };
     documentosPorVencer: DocumentoPorVencer[];
     estadoFlota: ConteoCategoria[];
-    fasesCiclo: ConteoCategoria[];
     novedadesPorTipo: ConteoCategoria[];
     saludDocumental: SaludDocumental[];
 };
 
 const estadoFlotaConfig = {
-    valor: { label: 'Unidades', color: 'var(--chart-2)' },
-} satisfies ChartConfig;
-
-const fasesCicloConfig = {
     valor: { label: 'Unidades', color: 'var(--chart-2)' },
 } satisfies ChartConfig;
 
@@ -101,7 +96,6 @@ export default function Dashboard({
     filtros,
     documentosPorVencer,
     estadoFlota,
-    fasesCiclo,
     novedadesPorTipo,
     saludDocumental,
 }: Props) {
@@ -115,7 +109,6 @@ export default function Dashboard({
 
     const totalFlota = resumen.tractos + resumen.carretas;
     const hayFlota = totalFlota > 0;
-    const hayFasesRegistradas = fasesCiclo.some((fase) => fase.valor > 0);
     const hayNovedades = novedadesPorTipo.some((novedad) => novedad.valor > 0);
 
     return (
@@ -263,51 +256,6 @@ export default function Dashboard({
                         </ChartContainer>
                     ) : (
                         <EstadoVacio texto="Aún no hay vehículos registrados." />
-                    )}
-                </Panel>
-
-                <Panel titulo="Unidades por fase del circuito">
-                    {hayFasesRegistradas ? (
-                        <ChartContainer
-                            config={fasesCicloConfig}
-                            className="h-64 w-full"
-                        >
-                            <BarChart
-                                data={fasesCiclo}
-                                layout="vertical"
-                                margin={{ left: 4, right: 28 }}
-                            >
-                                <CartesianGrid horizontal={false} />
-                                <XAxis type="number" hide />
-                                <YAxis
-                                    dataKey="label"
-                                    type="category"
-                                    tickLine={false}
-                                    axisLine={false}
-                                    width={130}
-                                    tick={{ fontSize: 12 }}
-                                />
-                                <ChartTooltip
-                                    cursor={{ fill: 'var(--muted)' }}
-                                    content={<ChartTooltipContent hideLabel />}
-                                />
-                                <Bar
-                                    dataKey="valor"
-                                    fill="var(--color-valor)"
-                                    radius={0}
-                                    barSize={22}
-                                >
-                                    <LabelList
-                                        dataKey="valor"
-                                        position="right"
-                                        className="fill-foreground"
-                                        fontSize={12}
-                                    />
-                                </Bar>
-                            </BarChart>
-                        </ChartContainer>
-                    ) : (
-                        <EstadoVacio texto="Todavía no hay reportes de ubicación para hoy." />
                     )}
                 </Panel>
 

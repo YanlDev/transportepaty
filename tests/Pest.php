@@ -1,8 +1,6 @@
 <?php
 
-use App\Enums\TipoAlerta;
 use App\Models\User;
-use App\Services\Alerta;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -50,32 +48,4 @@ expect()->extend('toBeOne', function () {
 function actorConRol(string $rol): User
 {
     return User::factory()->create()->assignRole($rol);
-}
-
-/**
- * Códigos de las alertas detectadas, para afirmar sobre ellas sin depender del
- * orden en que los validadores hacen sus comprobaciones.
- *
- * @param  list<Alerta>  $alertas
- * @return list<string>
- */
-function tiposDeAlerta(array $alertas): array
-{
-    return array_map(fn (Alerta $alerta): string => $alerta->tipo->value, $alertas);
-}
-
-/**
- * La alerta del tipo indicado, o null si no se detectó.
- *
- * @param  list<Alerta>  $alertas
- */
-function alertaDe(array $alertas, TipoAlerta $tipo): ?Alerta
-{
-    foreach ($alertas as $alerta) {
-        if ($alerta->tipo === $tipo) {
-            return $alerta;
-        }
-    }
-
-    return null;
 }

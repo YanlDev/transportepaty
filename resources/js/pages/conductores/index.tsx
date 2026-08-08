@@ -29,8 +29,10 @@ export default function ConductoresIndex({
     conductores: paginador,
     filtros,
 }: Props) {
-    const { auth } = usePage().props;
+    const { props, url } = usePage();
+    const { auth } = props;
     const puedeGestionar = auth.roles.includes('admin');
+    const query = url.includes('?') ? url.slice(url.indexOf('?')) : '';
 
     const [buscar, setBuscar] = useState(filtros.buscar ?? '');
 
@@ -119,6 +121,7 @@ export default function ConductoresIndex({
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
+                                    <TableHead className="w-12">N.°</TableHead>
                                     <TableHead>Conductor</TableHead>
                                     <TableHead>DNI</TableHead>
                                     <TableHead>Licencia</TableHead>
@@ -135,14 +138,17 @@ export default function ConductoresIndex({
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {paginador.data.map((conductor) => (
+                                {paginador.data.map((conductor, indice) => (
                                     <TableRow key={conductor.id}>
+                                        <TableCell className="text-muted-foreground tabular-nums">
+                                            {(paginador.from ?? 1) + indice}
+                                        </TableCell>
                                         <TableCell className="font-medium">
                                             <Link
                                                 href={show(conductor.id)}
                                                 className="hover:underline"
                                             >
-                                                {conductor.nombre_completo}
+                                                {`${conductor.apellidos} ${conductor.nombres}`.toUpperCase()}
                                             </Link>
                                         </TableCell>
                                         <TableCell className="font-mono text-xs text-muted-foreground">
@@ -187,9 +193,7 @@ export default function ConductoresIndex({
                                                         className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
                                                     >
                                                         <Link
-                                                            href={edit(
-                                                                conductor.id,
-                                                            )}
+                                                            href={`${edit(conductor.id).url}${query}`}
                                                             aria-label={`Editar ${conductor.nombre_completo}`}
                                                         >
                                                             <Pencil className="size-4" />
