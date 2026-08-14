@@ -24,18 +24,28 @@
     --radius-3xl: 0px;
     --radius-4xl: 0px;
 
-    /* Paleta azul naval: color de marca de la aplicación. */
-    --color-navy-50: oklch(0.972 0.012 255);
-    --color-navy-100: oklch(0.936 0.026 255);
-    --color-navy-200: oklch(0.874 0.048 255);
-    --color-navy-300: oklch(0.782 0.079 255);
-    --color-navy-400: oklch(0.664 0.114 255);
-    --color-navy-500: oklch(0.558 0.132 256);
-    --color-navy-600: oklch(0.472 0.124 257);
-    --color-navy-700: oklch(0.394 0.105 258);
-    --color-navy-800: oklch(0.322 0.085 259);
-    --color-navy-900: oklch(0.262 0.068 260);
-    --color-navy-950: oklch(0.194 0.051 261);
+    /* Paleta azul naval: color de marca de la aplicación, calibrada sobre el
+       azul real del logo de Transportes Paty (~#1E5AA8 — el navy-600 de abajo
+       cae casi exacto sobre ese valor). Mismo tono e igual progresión de luz
+       que antes, con más saturación para que se vea el azul vivo del logo en
+       vez de un navy apagado. */
+    --color-navy-50: oklch(0.972 0.013 255);
+    --color-navy-100: oklch(0.936 0.029 255);
+    --color-navy-200: oklch(0.874 0.054 255);
+    --color-navy-300: oklch(0.782 0.088 255);
+    --color-navy-400: oklch(0.664 0.128 255);
+    --color-navy-500: oklch(0.558 0.148 256);
+    --color-navy-600: oklch(0.472 0.139 257);
+    --color-navy-700: oklch(0.394 0.118 258);
+    --color-navy-800: oklch(0.322 0.095 259);
+    --color-navy-900: oklch(0.262 0.076 260);
+    --color-navy-950: oklch(0.194 0.057 261);
+
+    /* Gris grafito del logo real (el «EMPRESA DE» / «S.C.R.L.» y el doble
+       trazo en L): neutro, sin tinte azul, para que se distinga a propósito
+       del --foreground general de la app. Solo se usa dentro del wordmark de
+       marca (`app-logo-full.tsx`), no como color de texto general. */
+    --color-graphite: oklch(0.348 0 0);
 
     --color-background: var(--background);
     --color-foreground: var(--foreground);
@@ -88,7 +98,10 @@
     --card-foreground: oklch(0.18 0.02 260);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.18 0.02 260);
-    --primary: var(--color-navy-800);
+    /* navy-600, no navy-800: es el paso que coincide con el azul real del
+       logo (#1E5AA8). navy-800 se usa aparte para texto sobre fondo claro
+       (`secondary-foreground`/`accent-foreground`), donde conviene más oscuro. */
+    --primary: var(--color-navy-600);
     --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.965 0.008 255);
     --secondary-foreground: var(--color-navy-800);
@@ -109,7 +122,7 @@
     --radius: 0px;
     --sidebar: oklch(0.98 0.006 255);
     --sidebar-foreground: oklch(0.18 0.02 260);
-    --sidebar-primary: var(--color-navy-800);
+    --sidebar-primary: var(--color-navy-600);
     --sidebar-primary-foreground: oklch(0.985 0 0);
     --sidebar-accent: var(--color-navy-50);
     --sidebar-accent-foreground: var(--color-navy-800);

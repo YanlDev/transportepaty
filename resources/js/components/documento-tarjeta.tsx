@@ -107,7 +107,7 @@ export function DocumentoTarjeta({
                                   type="button"
                                   title={`Cargar ${ranura.label}`}
                                   aria-label={`Cargar ${ranura.label}`}
-                                  className="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-navy-800 hover:text-white"
+                                  className="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
                               >
                                   <Upload className="size-4" />
                               </button>,
@@ -133,7 +133,7 @@ export function DocumentoTarjeta({
                                         type="button"
                                         title={`Ver ${ranura.label}`}
                                         aria-label={`Ver ${ranura.label}`}
-                                        className="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-navy-800 hover:text-white"
+                                        className="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
                                     >
                                         <Eye className="size-4" />
                                     </button>

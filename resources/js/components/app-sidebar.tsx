@@ -1,16 +1,16 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarCheck,
-    ClipboardList,
-    FileText,
-    LayoutGrid,
-    Link2,
-    Link2Off,
-    Route as RouteIcon,
+    Clock,
+    IconContext,
+    IdentificationCard,
+    Link as LinkIcon,
+    LinkBreak,
+    Path,
+    SquaresFour,
     Truck,
-    User,
-    Users,
-} from 'lucide-react';
+    UsersThree,
+} from '@phosphor-icons/react';
 import asignaciones from '@/actions/App/Http/Controllers/AsignacionController';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
@@ -38,17 +38,8 @@ const navItems: NavItem[] = [
     {
         title: 'Dashboard',
         href: dashboard(),
-        icon: LayoutGrid,
+        icon: SquaresFour,
     },
-];
-
-/**
- * El padrón de vehículos y conductores, y su documentación: un desplegable
- * con las dos entradas adentro. Vehículos lo ve cualquier usuario con acceso
- * al sistema (incluido el conductor); Conductores exige admin o visor y se
- * agrega aparte según el rol.
- */
-const documentosSubitems: NavItem[] = [
     {
         title: 'Vehículos',
         href: vehiculos.index(),
@@ -63,14 +54,28 @@ const documentosSubitems: NavItem[] = [
  */
 const gestionNavItems: NavItem[] = [
     {
-        title: 'Programación',
-        href: programacion.index(),
-        icon: ClipboardList,
-    },
-    {
         title: 'Viajes',
         href: viajes.index(),
-        icon: RouteIcon,
+        icon: Path,
+    },
+    {
+        title: 'Asignaciones',
+        href: asignaciones.index(),
+        icon: LinkIcon,
+    },
+    {
+        title: 'Sin asignar',
+        href: asignaciones.disponibles(),
+        icon: LinkBreak,
+    },
+];
+
+/** Solo para admin: gestión de personas y control interno, no lectura de flota. */
+const adminNavItems: NavItem[] = [
+    {
+        title: 'Programación',
+        href: programacion.index(),
+        icon: Clock,
     },
     {
         title: 'Asistencia',
@@ -78,23 +83,9 @@ const gestionNavItems: NavItem[] = [
         icon: CalendarCheck,
     },
     {
-        title: 'Asignaciones',
-        href: asignaciones.index(),
-        icon: Link2,
-    },
-    {
-        title: 'Sin asignar',
-        href: asignaciones.disponibles(),
-        icon: Link2Off,
-    },
-];
-
-/** Solo para admin. */
-const adminNavItems: NavItem[] = [
-    {
         title: 'Usuarios',
         href: usuarios.index(),
-        icon: Users,
+        icon: UsersThree,
     },
 ];
 
@@ -103,23 +94,17 @@ export function AppSidebar() {
     const esAdmin = auth.roles.includes('admin');
     const puedeGestionar = esAdmin || auth.roles.includes('visor');
 
-    // Conductores exige admin o visor, así que solo se agrega al desplegable
-    // documental cuando el rol alcanza; el conductor de a pie solo ve Vehículos.
-    const documentos: NavItem = {
-        title: 'Documentos',
-        href: vehiculos.index(),
-        icon: FileText,
-        items: puedeGestionar
-            ? [
-                  ...documentosSubitems,
-                  {
-                      title: 'Conductores',
-                      href: conductores.index(),
-                      icon: User,
-                  },
-              ]
-            : documentosSubitems,
-    };
+    // Conductores exige admin o visor; el conductor de a pie solo ve Vehículos.
+    const principales = puedeGestionar
+        ? [
+              ...navItems,
+              {
+                  title: 'Conductores',
+                  href: conductores.index(),
+                  icon: IdentificationCard,
+              },
+          ]
+        : navItems;
 
     // El aviso de lo que está parado se pinta sobre la entrada correspondiente.
     const gestion = gestionNavItems.map((item) =>
@@ -145,9 +130,11 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={[...navItems, documentos]} />
-                {puedeGestionar && <NavMain items={gestion} />}
-                {esAdmin && <NavMain items={adminNavItems} />}
+                <IconContext.Provider value={{ weight: 'duotone' }}>
+                    <NavMain items={principales} />
+                    {puedeGestionar && <NavMain items={gestion} />}
+                    {esAdmin && <NavMain items={adminNavItems} />}
+                </IconContext.Provider>
             </SidebarContent>
 
             <SidebarFooter>

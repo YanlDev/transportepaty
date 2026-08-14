@@ -9,7 +9,7 @@ class ProgramacionPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'visor']);
+        return $user->hasRole('admin');
     }
 
     public function create(User $user): bool

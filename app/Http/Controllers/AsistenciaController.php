@@ -24,12 +24,10 @@ class AsistenciaController extends Controller
 {
     /**
      * El ciclo de planilla no sigue el mes calendario: siempre empieza el
-     * día 28 y dura 30 días exactos (28 de un mes al 26 del siguiente, o
-     * corrido si el mes tiene menos días).
+     * día 28 y termina el día antes del próximo 28, sin importar cuántos
+     * días tenga el mes de por medio (28-31, según el mes de inicio).
      */
     private const DIA_INICIO_CICLO = 28;
-
-    private const DURACION_CICLO_DIAS = 30;
 
     /**
      * Iniciales de los días de la semana en el mismo orden que Carbon
@@ -44,7 +42,7 @@ class AsistenciaController extends Controller
         $this->authorize('viewAny', Asistencia::class);
 
         $inicioCiclo = $this->inicioCicloPedido($request);
-        $finCiclo = $inicioCiclo->addDays(self::DURACION_CICLO_DIAS - 1);
+        $finCiclo = $inicioCiclo->addMonth()->subDay();
 
         $conductores = Conductor::query()
             ->where('activo', true)

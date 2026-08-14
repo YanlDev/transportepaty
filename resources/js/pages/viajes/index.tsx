@@ -10,6 +10,8 @@ import {
     Upload,
 } from 'lucide-react';
 import { useRef, useState } from 'react';
+import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
+import { show as mostrarVehiculo } from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes, {
     actualizarTipoCarga,
     create,
@@ -196,9 +198,7 @@ export default function ViajesIndex({
                                         >
                                             <PlacaCelda
                                                 placa={viaje.placa_tracto}
-                                                resuelta={
-                                                    viaje.tracto_id !== null
-                                                }
+                                                vehiculoId={viaje.tracto_id}
                                             />
                                         </TableCell>
                                         <TableCell
@@ -210,9 +210,8 @@ export default function ViajesIndex({
                                             {viaje.placa_carreta ? (
                                                 <PlacaCelda
                                                     placa={viaje.placa_carreta}
-                                                    resuelta={
-                                                        viaje.carreta_id !==
-                                                        null
+                                                    vehiculoId={
+                                                        viaje.carreta_id
                                                     }
                                                 />
                                             ) : (
@@ -227,9 +226,7 @@ export default function ViajesIndex({
                                         >
                                             <NombreCelda
                                                 nombre={viaje.conductor_nombre}
-                                                resuelta={
-                                                    viaje.conductor_id !== null
-                                                }
+                                                conductorId={viaje.conductor_id}
                                             />
                                         </TableCell>
                                         <TableCell
@@ -317,13 +314,26 @@ export default function ViajesIndex({
 }
 
 /**
- * Placa tal como vino en la GR. Si no matcheó contra el padrón de vehículos,
- * se marca en ámbar: mismo lenguaje visual que el resto de la app para «esto
- * necesita que alguien lo revise».
+ * Placa tal como vino en la GR. Si matcheó contra el padrón de vehículos,
+ * enlaza a su ficha; si no, se marca en ámbar: mismo lenguaje visual que el
+ * resto de la app para «esto necesita que alguien lo revise».
  */
-function PlacaCelda({ placa, resuelta }: { placa: string; resuelta: boolean }) {
-    if (resuelta) {
-        return <span>{formatearPlaca(placa)}</span>;
+function PlacaCelda({
+    placa,
+    vehiculoId,
+}: {
+    placa: string;
+    vehiculoId: number | null;
+}) {
+    if (vehiculoId !== null) {
+        return (
+            <Link
+                href={mostrarVehiculo(vehiculoId)}
+                className="hover:underline"
+            >
+                {formatearPlaca(placa)}
+            </Link>
+        );
     }
 
     return (
@@ -343,13 +353,20 @@ function PlacaCelda({ placa, resuelta }: { placa: string; resuelta: boolean }) {
 
 function NombreCelda({
     nombre,
-    resuelta,
+    conductorId,
 }: {
     nombre: string;
-    resuelta: boolean;
+    conductorId: number | null;
 }) {
-    if (resuelta) {
-        return <span>{nombre}</span>;
+    if (conductorId !== null) {
+        return (
+            <Link
+                href={mostrarConductor(conductorId)}
+                className="hover:underline"
+            >
+                {nombre}
+            </Link>
+        );
     }
 
     return (

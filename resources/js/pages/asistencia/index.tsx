@@ -98,9 +98,9 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
                         Asistencia
                     </h1>
                     <p className="text-sm text-muted-foreground">
-                        Rooster del ciclo de planilla (30 días, del 28 al 27):
-                        quién trabajó, faltó, o está de vacaciones o descanso.
-                        Click en una celda para marcarla.
+                        Rooster del ciclo de planilla (del 28 al 27 del mes
+                        siguiente): quién trabajó, faltó, o está de vacaciones o
+                        descanso. Click en una celda para marcarla.
                     </p>
                 </div>
 
@@ -148,14 +148,14 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
                 )}
             </div>
 
-            <div className="max-h-[75vh] overflow-auto border border-border">
+            <div className="overflow-x-auto border border-border">
                 <Table className="border-separate border-spacing-0">
                     <TableHeader>
                         <TableRow className="hover:bg-transparent">
                             <TableHead
                                 className={cn(
                                     CELDA_CON_BORDE,
-                                    'sticky top-0 left-0 z-30 min-w-[180px] bg-background',
+                                    'sticky top-0 left-0 z-30 w-36 bg-background',
                                 )}
                             >
                                 Conductor
@@ -185,9 +185,10 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
                         {filas.map((fila) => (
                             <TableRow key={fila.conductor_id}>
                                 <TableCell
+                                    title={fila.nombre_completo}
                                     className={cn(
                                         CELDA_CON_BORDE,
-                                        'sticky left-0 z-10 bg-background font-medium tracking-wide whitespace-nowrap uppercase',
+                                        'sticky left-0 z-10 w-36 max-w-36 truncate bg-background font-medium tracking-wide uppercase',
                                     )}
                                 >
                                     {fila.nombre_completo}

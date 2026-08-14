@@ -22,12 +22,12 @@ it('redirects guests to login', function (): void {
     $this->get(route('programacion.index'))->assertRedirect(route('login'));
 });
 
-it('lets a visor see the board but not mark it', function (): void {
+it('forbids a visor from seeing the board or marking it', function (): void {
     $tracto = Vehiculo::factory()->create();
 
     actingAs(actorConRol('visor'))
         ->get(route('programacion.index'))
-        ->assertSuccessful();
+        ->assertForbidden();
 
     actingAs(actorConRol('visor'))
         ->patch(route('programacion.marcar', $tracto), [

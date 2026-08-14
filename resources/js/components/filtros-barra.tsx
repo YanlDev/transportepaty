@@ -98,7 +98,7 @@ export function FiltrosBarra({
                     >
                         <SlidersHorizontal className="size-4" />
                         {activos > 0 && (
-                            <span className="grid size-5 place-items-center bg-navy-800 text-[11px] font-bold text-white">
+                            <span className="grid size-5 place-items-center bg-primary text-[11px] font-bold text-primary-foreground">
                                 {activos}
                             </span>
                         )}

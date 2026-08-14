@@ -19,12 +19,12 @@ it('redirects guests to login', function (): void {
     $this->get(route('asistencia.index'))->assertRedirect(route('login'));
 });
 
-it('lets a visor see the roster but not mark it', function (): void {
+it('forbids a visor from seeing the roster or marking it', function (): void {
     $conductor = Conductor::factory()->create();
 
     actingAs(actorConRol('visor'))
         ->get(route('asistencia.index'))
-        ->assertSuccessful();
+        ->assertForbidden();
 
     actingAs(actorConRol('visor'))
         ->patch(route('asistencia.marcar', $conductor), [
@@ -34,7 +34,7 @@ it('lets a visor see the roster but not mark it', function (): void {
         ->assertForbidden();
 });
 
-it('builds a 30-day cycle starting on the 28th, not a calendar month', function (): void {
+it('builds a cycle starting on the 28th that runs through the day before the next 28th', function (): void {
     $marcado = Conductor::factory()->create(['nombres' => 'Ana', 'apellidos' => 'Alarcon']);
     $sinMarcar = Conductor::factory()->create(['nombres' => 'Beto', 'apellidos' => 'Zeta']);
     Conductor::factory()->inactivo()->create();
@@ -45,11 +45,11 @@ it('builds a 30-day cycle starting on the 28th, not a calendar month', function 
         'estado' => EstadoAsistencia::Falta,
     ]);
 
-    // Un día después de que cierra el ciclo (28 ene - 26 feb): no debe
-    // aparecer en esta grilla.
+    // Un día después de que cierra el ciclo (28 ene - 27 feb, enero tiene
+    // 31 días): no debe aparecer en esta grilla.
     Asistencia::create([
         'conductor_id' => $marcado->id,
-        'fecha' => '2026-02-27',
+        'fecha' => '2026-02-28',
         'estado' => EstadoAsistencia::Vacaciones,
     ]);
 
@@ -58,14 +58,14 @@ it('builds a 30-day cycle starting on the 28th, not a calendar month', function 
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('inicioCiclo', '2026-01-28')
-            ->has('dias', 30)
+            ->has('dias', 31)
             ->where('dias.0.fecha', '2026-01-28')
-            ->where('dias.29.fecha', '2026-02-26')
+            ->where('dias.30.fecha', '2026-02-27')
             ->has('filas', 2)
             ->where('filas.0.conductor_id', $marcado->id)
             ->where('filas.0.marcas.2026-02-10.estado', 'falta')
             ->where('filas.0.marcas.2026-02-10.asistencia_id', $asistencia->id)
-            ->missing('filas.0.marcas.2026-02-27')
+            ->missing('filas.0.marcas.2026-02-28')
             ->where('filas.1.conductor_id', $sinMarcar->id)
             ->where('filas.1.marcas', [])
         );
