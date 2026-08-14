@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy:
-    name: Deploy to server (elastika)
+    name: Deploy to server (Contabo)
     runs-on: ubuntu-latest
 
     steps:
@@ -16,10 +16,10 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          password: ${{ secrets.SSH_PASSWORD }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: 22
           timeout: 10m
           command_timeout: 10m
           script: |
-            cd /var/www/flotaselcosi
+            cd /var/www/transpaty
             ./deploy.sh
