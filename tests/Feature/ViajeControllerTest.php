@@ -372,3 +372,16 @@ it('finds a viaje by placa, cliente or GR number', function (): void {
         ->get(route('viajes.index', ['buscar' => 'EG03-00011965']))
         ->assertInertia(fn ($page) => $page->has('viajes.data', 1));
 });
+
+it('finds a viaje by destino', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr()]])
+        ->assertSessionHasNoErrors();
+
+    $destino = Viaje::query()->sole()->destino;
+    $fragmento = mb_substr($destino, 0, 8);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.index', ['buscar' => $fragmento]))
+        ->assertInertia(fn ($page) => $page->has('viajes.data', 1));
+});

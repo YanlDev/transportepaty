@@ -107,7 +107,7 @@ export default function ViajesIndex({
             <FiltrosBarra
                 buscar={buscar}
                 onBuscar={setBuscar}
-                placeholder="Buscar por placa, cliente, conductor o N° de GR..."
+                placeholder="Buscar por placa, cliente, conductor, destino o N° de GR..."
                 etiquetaBusqueda="Buscar viajes"
                 activos={0}
                 onLimpiar={() => {}}

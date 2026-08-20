@@ -39,7 +39,9 @@ class ViajeController extends Controller
                         ->orWhereLike('cliente', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('destinatario', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('conductor_nombre', "%{$buscar}%", caseSensitive: false)
-                        ->orWhereLike('numero_gr', "%{$buscar}%", caseSensitive: false);
+                        ->orWhereLike('numero_gr', "%{$buscar}%", caseSensitive: false)
+                        ->orWhereLike('origen', "%{$buscar}%", caseSensitive: false)
+                        ->orWhereLike('destino', "%{$buscar}%", caseSensitive: false);
                 });
             })
             ->orderByDesc('fecha_traslado')
