@@ -106,6 +106,34 @@ it('extracts the destinatario when its RUC label wraps onto the next line', func
     expect($campos['destinatario_ruc'])->toBe('20448484816');
 });
 
+it('extracts every field from a GRE Remitente, not just the GRE Transportista that Paty issues', function (): void {
+    // A diferencia de la GRE Transportista, acá quien emite el documento es
+    // el dueño de la carga (no hay sección «Datos del remitente:»): el
+    // cliente real sale de la razón social que encabeza el PDF.
+    $campos = (new LectorGuiaRemision)->extraerDesdeArchivo(
+        base_path('tests/Fixtures/guias/gr-melma-remitente.pdf'),
+    );
+
+    expect($campos)->toMatchArray([
+        'numero_gr' => 'EG07-00000193',
+        'fecha_emision' => '05/08/2026 03:01 PM',
+        'fecha_traslado' => '05/08/2026',
+        'cliente' => 'IMPORTACIONES MELMA S.A.C.',
+        'cliente_ruc' => '20600812913',
+        'destinatario' => 'IMPORTACIONES MELMA S.A.C.',
+        'destinatario_ruc' => '20600812913',
+        'peso' => '32,500',
+        'unidad_peso' => 'KGM',
+        'placa_tracto' => 'BJI770',
+        'placa_carreta' => 'VFK972',
+        'conductor_nombre' => 'PINEDA TITO LUCIO',
+        'conductor_dni' => '02411719',
+    ]);
+
+    expect($campos['origen'])->toBe('MZ. 02 Z.I. BALNEARIOS DEL SUR LOTE 3, 4, 5, 6 SECTOR D - ILO - ILO - MOQUEGUA');
+    expect($campos['destino'])->toBe('JR. MARIANO MELGAR NRO. 706 TUPAC AMARU - JULIACA - SAN ROMAN - PUNO');
+});
+
 it('throws when the file is not a parseable PDF', function (): void {
     // El lector no atrapa esto a propósito: es `ImportadorViaje` quien decide
     // qué hacer con un archivo que no se puede leer (saltarlo sin tumbar el

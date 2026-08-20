@@ -98,13 +98,35 @@ class LectorGuiaRemision
      */
     private function extraerCampos(string $texto): array
     {
+        // La GRE Remitente (la emite el propio dueño de la carga, no Paty) no
+        // trae sección «Datos del remitente:» —el remitente es quien genera
+        // el documento— así que el cliente real se saca de la razón social
+        // que encabeza el PDF, y el bloque de destino corta contra «Datos del
+        // Destinatario» en vez de esa sección inexistente.
+        $esRemitente = (bool) preg_match('/GUÍA DE REMISIÓN ELECTRÓNICA\R+REMITENTE\b/u', $texto);
+
         return [
             'numero_gr' => $this->normalizarNumero($this->capturar('/N°\s*([A-Z0-9]+\s*-\s*\d+)/u', $texto)),
-            'fecha_emision' => $this->capturar('/Fecha y hora de emisión:\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}\s*[AP]M)/u', $texto),
-            'fecha_traslado' => $this->capturar('/Fecha de inicio de Traslado:\s*(\d{2}\/\d{2}\/\d{4})/u', $texto),
-            'origen' => $this->capturarBloque('Punto de Partida:', 'Punto de llegada:', $texto),
-            'destino' => $this->capturarBloque('Punto de llegada:', 'Datos del remitente:', $texto),
-            ...$this->extraerEmpresa('cliente', 'Datos del remitente:', $texto),
+            'fecha_emision' => $this->capturar('/Fecha y hora de emisión\s*:\s*(\d{2}\/\d{2}\/\d{4}\s+\d{2}:\d{2}\s*[AP]M)/u', $texto),
+            'fecha_traslado' => $this->capturar('/Fecha de inicio de Traslado\s*:\s*(\d{2}\/\d{2}\/\d{4})/u', $texto),
+            // En la GRE Remitente, «Punto de Partida» comparte fila con la
+            // columna izquierda (fechas, motivo de traslado): esas etiquetas
+            // también cuentan como corte para no arrastrarlas al origen.
+            'origen' => $this->capturarBloque(
+                'Punto de Partida',
+                $esRemitente
+                    ? ['Fecha de inicio de Traslado', 'Motivo de Traslado', 'Punto de llegada']
+                    : 'Punto de llegada',
+                $texto,
+            ),
+            'destino' => $this->capturarBloque(
+                'Punto de llegada',
+                $esRemitente ? 'Datos del Destinatario' : 'Datos del remitente',
+                $texto,
+            ),
+            ...($esRemitente
+                ? $this->extraerEmisor($texto)
+                : $this->extraerEmpresa('cliente', 'Datos del remitente:', $texto)),
             ...$this->extraerEmpresa('destinatario', 'Datos del destinatario:', $texto),
             // Cuando el flete lo paga un subcontratador, el vínculo comercial
             // real de Paty es con él, no con el remitente que figura en la
@@ -129,7 +151,7 @@ class LectorGuiaRemision
         // después (visto cuando remitente y destinatario son la misma
         // empresa): el espacio entre «CONTRIBUYENTES» y «N°» tiene que admitir
         // un salto de línea, no solo un espacio literal.
-        $patron = '/'.preg_quote($etiqueta, '/').'\s*(.*?)\s*-\s*REGISTRO ÚNICO DE CONTRIBUYENTES\s*N°\s*(\d+)/us';
+        $patron = '/'.$this->etiquetaTolerante($etiqueta).'\s*(.*?)\s*-\s*REGISTRO ÚNICO DE CONTRIBUYENTES\s*N°\s*(\d+)/uis';
 
         if (! preg_match($patron, $texto, $coincidencias)) {
             return [$clave => null, "{$clave}_ruc" => null];
@@ -138,6 +160,26 @@ class LectorGuiaRemision
         return [
             $clave => trim($coincidencias[1]),
             "{$clave}_ruc" => $coincidencias[2],
+        ];
+    }
+
+    /**
+     * En una GRE Remitente el cliente real de Paty es quien emite el
+     * documento: su razón social encabeza el PDF junto a su RUC, antes de
+     * «GUÍA DE REMISIÓN ELECTRÓNICA». No hay sección «Datos del remitente:»
+     * como en la GRE Transportista porque ese rol lo cumple el propio emisor.
+     *
+     * @return array{cliente: string|null, cliente_ruc: string|null}
+     */
+    private function extraerEmisor(string $texto): array
+    {
+        if (! preg_match('/^(.*?)\s+RUC\s*N°\s*(\d+)/u', $texto, $coincidencias)) {
+            return ['cliente' => null, 'cliente_ruc' => null];
+        }
+
+        return [
+            'cliente' => trim($coincidencias[1]),
+            'cliente_ruc' => $coincidencias[2],
         ];
     }
 
@@ -203,18 +245,39 @@ class LectorGuiaRemision
     }
 
     /**
-     * Texto entre dos etiquetas, con los saltos de línea de las direcciones
-     * envueltas colapsados a un solo espacio.
+     * Texto entre una etiqueta de inicio y la primera etiqueta de corte que
+     * aparezca, con los saltos de línea de las direcciones envueltas
+     * colapsados a un solo espacio. `$hasta` admite varias etiquetas
+     * alternativas para layouts a dos columnas, donde otras etiquetas de la
+     * columna vecina pueden caer antes que la de cierre «natural».
+     *
+     * @param  string|list<string>  $hasta
      */
-    private function capturarBloque(string $desde, string $hasta, string $texto): ?string
+    private function capturarBloque(string $desde, string|array $hasta, string $texto): ?string
     {
-        $patron = '/'.preg_quote($desde, '/').'\s*(.*?)\s*'.preg_quote($hasta, '/').'/us';
+        $alternativas = implode('|', array_map(
+            fn (string $etiqueta): string => $this->etiquetaTolerante($etiqueta),
+            is_array($hasta) ? $hasta : [$hasta],
+        ));
+
+        $patron = '/'.$this->etiquetaTolerante($desde).'\s*(.*?)\s*(?:'.$alternativas.')/us';
 
         if (! preg_match($patron, $texto, $coincidencias)) {
             return null;
         }
 
         return trim(preg_replace('/\s+/u', ' ', $coincidencias[1]));
+    }
+
+    /**
+     * La GRE Transportista pone «:» pegado a la etiqueta; la GRE Remitente a
+     * veces lo separa con un espacio («Fecha ... : valor») y a veces no lo
+     * trae («Punto de Partida valor», sin «:»). Se admite cualquiera de las
+     * tres variantes en vez de mantener un juego de etiquetas por formato.
+     */
+    private function etiquetaTolerante(string $etiqueta): string
+    {
+        return preg_quote(rtrim($etiqueta, ':'), '/').'\s*:?';
     }
 
     /**
