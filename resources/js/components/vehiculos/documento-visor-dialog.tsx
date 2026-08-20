@@ -42,7 +42,7 @@ export function DocumentoVisorDialog({
             <DialogTrigger asChild>{trigger}</DialogTrigger>
             <DialogContent
                 showCloseButton={false}
-                className="flex h-[85vh] max-h-[820px] w-[92vw] flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:max-w-2xl"
+                className="flex h-[90vh] max-h-[920px] w-[92vw] flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:max-w-3xl"
             >
                 <div className="flex h-11 shrink-0 items-center gap-3 border-b bg-background px-3">
                     <DialogTitle className="truncate text-sm font-medium">
