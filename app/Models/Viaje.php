@@ -4,9 +4,11 @@ namespace App\Models;
 
 use App\Enums\TipoCarga;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -68,6 +70,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 ])]
 class Viaje extends Model implements HasMedia
 {
+    use HasFactory;
     use InteractsWithMedia;
 
     /**
@@ -133,6 +136,24 @@ class Viaje extends Model implements HasMedia
     }
 
     /**
+     * Tracto + carreta + conductor, sin la fecha — identifica la unidad que
+     * hizo el viaje. Separado de `claveGrupoViaje()` para poder agrupar
+     * tolerando que el mismo viaje cruce a un segundo día (ver
+     * `contarViajesReales()`), sin duplicar la lógica de fallback a
+     * placa/DNI crudos cuando no matchean contra el padrón.
+     */
+    public function identidadUnidad(): string
+    {
+        return implode('|', [
+            $this->tracto_id !== null ? "id:{$this->tracto_id}" : "placa:{$this->placa_tracto}",
+            $this->carreta_id !== null
+                ? "id:{$this->carreta_id}"
+                : ($this->placa_carreta !== null ? "placa:{$this->placa_carreta}" : 'sin-carreta'),
+            $this->conductor_id !== null ? "id:{$this->conductor_id}" : "dni:{$this->conductor_dni}",
+        ]);
+    }
+
+    /**
      * Cada fila acá es una GR, pero un solo viaje físico puede traer más de
      * una (ej. el mismo camión sale una vez y lleva carga de dos clientes
      * distintos, cada una con su propia GR) — la GR no tiene un campo que
@@ -145,17 +166,51 @@ class Viaje extends Model implements HasMedia
      * aunque sean viajes distintos. Se acepta el riesgo porque es el caso
      * raro; si tracto/carreta no matchearon contra el padrón (id null), cae
      * a la placa cruda para que igual agrupe.
+     *
+     * Solo agrupa por día EXACTO — para un conteo que tolera que el mismo
+     * viaje cruce a un segundo día consecutivo, usar `contarViajesReales()`.
      */
     public function claveGrupoViaje(): string
     {
-        return implode('|', [
-            $this->fecha_traslado->toDateString(),
-            $this->tracto_id !== null ? "id:{$this->tracto_id}" : "placa:{$this->placa_tracto}",
-            $this->carreta_id !== null
-                ? "id:{$this->carreta_id}"
-                : ($this->placa_carreta !== null ? "placa:{$this->placa_carreta}" : 'sin-carreta'),
-            $this->conductor_id !== null ? "id:{$this->conductor_id}" : "dni:{$this->conductor_dni}",
-        ]);
+        return $this->fecha_traslado->toDateString().'|'.$this->identidadUnidad();
+    }
+
+    /**
+     * Cuántos viajes reales hay en una colección de GR — no cuántas filas.
+     * A diferencia de `claveGrupoViaje()` (día exacto, usada para agrupar
+     * visualmente la tabla de `/viajes`), acá se tolera que el mismo viaje
+     * cruce a un segundo día consecutivo: se vio en casos reales (ej. Mur-Wy)
+     * donde la misma unidad+conductor trae GR de dos días seguidos por una
+     * sola salida. Agrupa por unidad y, dentro de cada una, funde fechas que
+     * quedan a lo sumo 1 día de diferencia entre sí.
+     *
+     * Mismo trade-off que `claveGrupoViaje()`: puede fundir dos viajes reales
+     * distintos si la misma unidad+conductor salió dos días seguidos por
+     * separado — se acepta porque el caso que sí queríamos resolver (un
+     * viaje partido en dos fechas) es más común que ese falso positivo.
+     *
+     * @param  Collection<int, self>  $viajes
+     */
+    public static function contarViajesReales(Collection $viajes): int
+    {
+        return $viajes
+            ->groupBy(fn (self $viaje): string => $viaje->identidadUnidad())
+            ->sum(function (Collection $porUnidad): int {
+                $fechas = $porUnidad->pluck('fecha_traslado')->unique()->sort()->values();
+
+                $grupos = 0;
+                $anterior = null;
+
+                foreach ($fechas as $fecha) {
+                    if ($anterior === null || $anterior->diffInDays($fecha) > 1) {
+                        $grupos++;
+                    }
+
+                    $anterior = $fecha;
+                }
+
+                return $grupos;
+            });
     }
 
     public function registerMediaCollections(): void

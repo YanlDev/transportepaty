@@ -35,20 +35,45 @@ const PUNTO_PALETA = [
     'bg-lime-500',
 ] as const;
 
+/** Mismos colores que `PUNTO_PALETA`, como variable CSS para recharts. */
+const CHART_PALETA = [
+    'var(--color-blue-500)',
+    'var(--color-amber-500)',
+    'var(--color-teal-500)',
+    'var(--color-rose-500)',
+    'var(--color-fuchsia-500)',
+    'var(--color-orange-500)',
+    'var(--color-cyan-500)',
+    'var(--color-lime-500)',
+] as const;
+
 /**
  * `coincide` recibe el nombre del cliente ya en mayúsculas. Promart aparece
  * en algunas GR como «HOME CENTERS PERUANOS» (la razón social detrás de la
  * marca) en vez de «PROMART», así que matchea ambos.
+ *
+ * `chart` es el mismo color que `punto`/`pill`, pero como variable CSS de la
+ * paleta de Tailwind (`--color-{nombre}-{tono}`, generada automáticamente
+ * porque esa clase se usa arriba) — recharts pinta con `fill`, que no
+ * entiende clases de Tailwind, así que necesita el valor crudo.
+ *
+ * Colores sacados del logo real de cada empresa (no inventados): Minsur y
+ * Promart ya estaban así por decisión previa; Crisar, Porcelatino y San
+ * Lorenzo se verificaron contra su logo público (2026-08-25) — las tres son
+ * de la familia roja en la vida real, así que se separan con un tono
+ * distinto cada una para que sigan siendo distinguibles en un gráfico.
  */
 const ESPECIALES: {
     coincide: (cliente: string) => boolean;
     pill: string;
     punto: string;
+    chart: string;
 }[] = [
     {
         coincide: (cliente) => cliente.includes('MINSUR'),
         pill: 'bg-blue-600 text-white dark:bg-blue-500',
         punto: 'bg-white',
+        chart: 'var(--color-blue-600)',
     },
     {
         // «HOMECENTERS PERUANOS S.A.» es la razón social detrás de la marca
@@ -60,6 +85,31 @@ const ESPECIALES: {
             cliente.replace(/\s+/g, '').includes('HOMECENTERS'),
         pill: 'bg-orange-500 text-black dark:bg-orange-400',
         punto: 'bg-black',
+        chart: 'var(--color-orange-500)',
+    },
+    {
+        // Detrás de Crisar está Ajeper (Kola Real / Big Cola): el remitente
+        // real de la carga, aunque quien contrata a Paty y aparece como
+        // cliente es Crisar (ver `ImportadorViaje::clienteReal()`).
+        coincide: (cliente) => cliente.includes('CRISAR'),
+        pill: 'bg-rose-600 text-white dark:bg-rose-500',
+        punto: 'bg-white',
+        chart: 'var(--color-rose-600)',
+    },
+    {
+        // Llega como «PORCELANATO LATINO» (razón social) en la GR, aunque la
+        // carpeta y el trato diario le dicen «Porcelatino».
+        coincide: (cliente) =>
+            cliente.includes('PORCELANATO') || cliente.includes('PORCELATINO'),
+        pill: 'bg-red-600 text-white dark:bg-red-500',
+        punto: 'bg-white',
+        chart: 'var(--color-red-600)',
+    },
+    {
+        coincide: (cliente) => cliente.includes('SAN LORENZO'),
+        pill: 'bg-amber-800 text-white dark:bg-amber-700',
+        punto: 'bg-white',
+        chart: 'var(--color-amber-800)',
     },
 ];
 
@@ -75,19 +125,32 @@ function hash(texto: string): number {
 
 /**
  * @returns clases del pill (fondo + texto) y del punto de color, listas para
- * usar en un `className`.
+ * usar en un `className`, más `chart` (el mismo color en `var(--color-*)`)
+ * para pintar barras o sectores de un gráfico con recharts.
  */
-export function clienteColor(cliente: string): { pill: string; punto: string } {
+export function clienteColor(cliente: string): {
+    pill: string;
+    punto: string;
+    chart: string;
+} {
     const clienteEnMayusculas = cliente.toUpperCase();
     const especial = ESPECIALES.find(({ coincide }) =>
         coincide(clienteEnMayusculas),
     );
 
     if (especial) {
-        return { pill: especial.pill, punto: especial.punto };
+        return {
+            pill: especial.pill,
+            punto: especial.punto,
+            chart: especial.chart,
+        };
     }
 
     const indice = hash(cliente) % PALETA.length;
 
-    return { pill: PALETA[indice], punto: PUNTO_PALETA[indice] };
+    return {
+        pill: PALETA[indice],
+        punto: PUNTO_PALETA[indice],
+        chart: CHART_PALETA[indice],
+    };
 }

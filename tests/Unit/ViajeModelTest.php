@@ -53,3 +53,31 @@ it('marca "sin-carreta" cuando el viaje no trae carreta', function (): void {
 
     expect($sinCarreta->claveGrupoViaje())->toContain('sin-carreta');
 });
+
+it('contarViajesReales funde GR de la misma unidad en días consecutivos (caso Mur-Wy)', function (): void {
+    $viajes = collect([
+        viajeParaAgrupar(['fecha_traslado' => '2026-08-03']),
+        viajeParaAgrupar(['fecha_traslado' => '2026-08-03']),
+        viajeParaAgrupar(['fecha_traslado' => '2026-08-04']),
+    ]);
+
+    expect(Viaje::contarViajesReales($viajes))->toBe(1);
+});
+
+it('contarViajesReales no funde días que quedan a más de 1 día de diferencia', function (): void {
+    $viajes = collect([
+        viajeParaAgrupar(['fecha_traslado' => '2026-08-03']),
+        viajeParaAgrupar(['fecha_traslado' => '2026-08-05']),
+    ]);
+
+    expect(Viaje::contarViajesReales($viajes))->toBe(2);
+});
+
+it('contarViajesReales cuenta por separado unidades distintas aunque compartan fecha', function (): void {
+    $viajes = collect([
+        viajeParaAgrupar(['tracto_id' => 10]),
+        viajeParaAgrupar(['tracto_id' => 99]),
+    ]);
+
+    expect(Viaje::contarViajesReales($viajes))->toBe(2);
+});

@@ -1,20 +1,23 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { AlertTriangle, FileWarning, Truck, Users } from 'lucide-react';
+import { Head, router } from '@inertiajs/react';
+import {
+    AlertTriangle,
+    Container,
+    FileWarning,
+    Truck,
+    Users,
+} from 'lucide-react';
 import {
     Bar,
     BarChart,
     CartesianGrid,
+    Cell,
     LabelList,
     XAxis,
     YAxis,
 } from 'recharts';
-import { show as showConductor } from '@/actions/App/Http/Controllers/ConductorController';
-import { show } from '@/actions/App/Http/Controllers/VehiculoController';
 import type { ChartConfig } from '@/components/ui/chart';
 import {
     ChartContainer,
-    ChartLegend,
-    ChartLegendContent,
     ChartTooltip,
     ChartTooltipContent,
 } from '@/components/ui/chart';
@@ -25,42 +28,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { StatusBadge } from '@/components/ui/status-badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { clienteColor } from '@/lib/cliente-color';
 import { dashboard } from '@/routes';
 
-/** Horizontes del filtro de vencimientos; deben calzar con el backend. */
-const horizontes = [
-    { value: '15', label: 'Próximos 15 días' },
-    { value: '30', label: 'Próximos 30 días' },
-];
-
-type DocumentoPorVencer = {
-    clave: string;
-    /** Placa del vehículo o nombre del conductor, según a quién pertenezca. */
-    titular: string;
-    vehiculo_id: number | null;
-    conductor_id: number | null;
-    tipo_label: string;
-    fecha_vencimiento: string | null;
-    vencido: boolean;
-};
-
 type ConteoCategoria = { label: string; valor: number };
-type SaludDocumental = {
-    entidad: string;
-    label: string;
-    verde: number;
-    ambar: number;
-    rojo: number;
-};
+type ConteoCarga = { tipo: string; label: string; valor: number };
+type ConteoCliente = { cliente: string; valor: number };
 
 type Props = {
     resumen: {
@@ -71,46 +44,73 @@ type Props = {
         novedadesActivas: number;
         documentosVencidos: number;
     };
-    filtros: { dias: number };
-    documentosPorVencer: DocumentoPorVencer[];
-    estadoFlota: ConteoCategoria[];
     novedadesPorTipo: ConteoCategoria[];
-    saludDocumental: SaludDocumental[];
+    filtroMes: string | null;
+    mesesDisponibles: string[];
+    cargaMinsur: ConteoCarga[];
+    viajesPorCliente: ConteoCliente[];
+    clientesParticulares: ConteoCliente[];
 };
-
-const estadoFlotaConfig = {
-    valor: { label: 'Unidades', color: 'var(--chart-2)' },
-} satisfies ChartConfig;
 
 const novedadesConfig = {
     valor: { label: 'Unidades', color: '#f59e0b' },
 } satisfies ChartConfig;
 
-const saludDocumentalConfig = {
-    verde: { label: 'Al día', color: '#10b981' },
-    ambar: { label: 'Por vencer', color: '#f59e0b' },
-    rojo: { label: 'Con problemas', color: '#ef4444' },
+/**
+ * No son marcas —son categorías de mineral— así que van con una paleta
+ * neutra propia en vez de `clienteColor()`. Concentrado en el mismo azul del
+ * chip de Minsur porque es su carga insignia; el resto, tonos que evocan lo
+ * que es cada uno (plata para metálico, tierra para escoria).
+ */
+const cargaMinsurConfig = {
+    concentrado: { label: 'Concentrado', color: 'var(--color-blue-600)' },
+    metalico: { label: 'Metálico', color: 'var(--color-slate-400)' },
+    escoria: { label: 'Escoria', color: 'var(--color-stone-600)' },
+    materiales: { label: 'Materiales', color: 'var(--color-amber-500)' },
+    particular: { label: 'Particular', color: 'var(--color-zinc-400)' },
 } satisfies ChartConfig;
+
+const viajesPorClienteConfig = {
+    valor: { label: 'Viajes' },
+} satisfies ChartConfig;
+
+/** `2026-08` → «agosto 2026», para el selector de mes. */
+function etiquetaMes(mes: string): string {
+    const [anio, mesNumero] = mes.split('-');
+    const fecha = new Date(Number(anio), Number(mesNumero) - 1, 1);
+
+    return fecha.toLocaleDateString('es-PE', {
+        month: 'long',
+        year: 'numeric',
+    });
+}
 
 export default function Dashboard({
     resumen,
-    filtros,
-    documentosPorVencer,
-    estadoFlota,
     novedadesPorTipo,
-    saludDocumental,
+    filtroMes,
+    mesesDisponibles,
+    cargaMinsur,
+    viajesPorCliente,
+    clientesParticulares,
 }: Props) {
-    const cambiarHorizonte = (dias: string) => {
+    const cambiarMes = (mes: string) => {
         router.get(
             dashboard().url,
-            { dias },
+            { mes },
             { preserveState: true, preserveScroll: true, replace: true },
         );
     };
 
-    const totalFlota = resumen.tractos + resumen.carretas;
-    const hayFlota = totalFlota > 0;
     const hayNovedades = novedadesPorTipo.some((novedad) => novedad.valor > 0);
+    const hayCargaMinsur = cargaMinsur.some((carga) => carga.valor > 0);
+    const hayViajesPorCliente = viajesPorCliente.length > 0;
+    const hayClientesParticulares = clientesParticulares.length > 0;
+    const alturaViajesPorCliente = Math.max(192, viajesPorCliente.length * 32);
+    const alturaClientesParticulares = Math.max(
+        128,
+        clientesParticulares.length * 32,
+    );
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -118,17 +118,20 @@ export default function Dashboard({
 
             <div>
                 <p className="text-sm text-muted-foreground">
-                    Estado general de las unidades, su documentación y la
-                    operación del día.
+                    Estado general de las unidades y la operación del día.
                 </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
                 <Tarjeta
-                    label="Flota operativa"
-                    valor={resumen.operativos}
-                    detalle={`de ${totalFlota} unidades`}
+                    label="Tractos"
+                    valor={resumen.tractos}
                     icon={<Truck className="size-5" />}
+                />
+                <Tarjeta
+                    label="Carretas"
+                    valor={resumen.carretas}
+                    icon={<Container className="size-5" />}
                 />
                 <Tarjeta
                     label="Conductores activos"
@@ -152,61 +155,40 @@ export default function Dashboard({
             </div>
 
             <div className="grid gap-4 lg:grid-cols-2">
-                <Panel titulo="Estado de la flota">
-                    {hayFlota ? (
+                <Panel
+                    titulo="Clasificación de carga — Minsur"
+                    extra={
+                        mesesDisponibles.length > 0 && (
+                            <Select
+                                value={filtroMes ?? undefined}
+                                onValueChange={cambiarMes}
+                            >
+                                <SelectTrigger
+                                    size="sm"
+                                    aria-label="Mes de los viajes de Minsur"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {mesesDisponibles.map((mes) => (
+                                        <SelectItem key={mes} value={mes}>
+                                            {etiquetaMes(mes)}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        )
+                    }
+                >
+                    {hayCargaMinsur ? (
                         <ChartContainer
-                            config={estadoFlotaConfig}
+                            config={cargaMinsurConfig}
                             className="h-64 w-full"
                         >
                             <BarChart
-                                data={estadoFlota}
+                                data={cargaMinsur}
                                 layout="vertical"
                                 margin={{ left: 4, right: 28 }}
-                            >
-                                <CartesianGrid horizontal={false} />
-                                <XAxis type="number" hide />
-                                <YAxis
-                                    dataKey="label"
-                                    type="category"
-                                    tickLine={false}
-                                    axisLine={false}
-                                    width={110}
-                                    tick={{ fontSize: 12 }}
-                                />
-                                <ChartTooltip
-                                    cursor={{ fill: 'var(--muted)' }}
-                                    content={<ChartTooltipContent hideLabel />}
-                                />
-                                <Bar
-                                    dataKey="valor"
-                                    fill="var(--color-valor)"
-                                    radius={0}
-                                    barSize={22}
-                                >
-                                    <LabelList
-                                        dataKey="valor"
-                                        position="right"
-                                        className="fill-foreground"
-                                        fontSize={12}
-                                    />
-                                </Bar>
-                            </BarChart>
-                        </ChartContainer>
-                    ) : (
-                        <EstadoVacio texto="Aún no hay vehículos registrados." />
-                    )}
-                </Panel>
-
-                <Panel titulo="Salud documental">
-                    {hayFlota ? (
-                        <ChartContainer
-                            config={saludDocumentalConfig}
-                            className="h-64 w-full"
-                        >
-                            <BarChart
-                                data={saludDocumental}
-                                layout="vertical"
-                                margin={{ left: 4, right: 12 }}
                             >
                                 <CartesianGrid horizontal={false} />
                                 <XAxis type="number" hide />
@@ -220,40 +202,26 @@ export default function Dashboard({
                                 />
                                 <ChartTooltip
                                     cursor={{ fill: 'var(--muted)' }}
-                                    content={<ChartTooltipContent />}
+                                    content={<ChartTooltipContent hideLabel />}
                                 />
-                                <ChartLegend content={<ChartLegendContent />} />
-                                <Bar
-                                    dataKey="verde"
-                                    stackId="salud"
-                                    fill="var(--color-verde)"
-                                    stroke="var(--card)"
-                                    strokeWidth={2}
-                                    radius={0}
-                                    barSize={28}
-                                />
-                                <Bar
-                                    dataKey="ambar"
-                                    stackId="salud"
-                                    fill="var(--color-ambar)"
-                                    stroke="var(--card)"
-                                    strokeWidth={2}
-                                    radius={0}
-                                    barSize={28}
-                                />
-                                <Bar
-                                    dataKey="rojo"
-                                    stackId="salud"
-                                    fill="var(--color-rojo)"
-                                    stroke="var(--card)"
-                                    strokeWidth={2}
-                                    radius={0}
-                                    barSize={28}
-                                />
+                                <Bar dataKey="valor" radius={0} barSize={22}>
+                                    {cargaMinsur.map((carga) => (
+                                        <Cell
+                                            key={carga.tipo}
+                                            fill={`var(--color-${carga.tipo})`}
+                                        />
+                                    ))}
+                                    <LabelList
+                                        dataKey="valor"
+                                        position="right"
+                                        className="fill-foreground"
+                                        fontSize={12}
+                                    />
+                                </Bar>
                             </BarChart>
                         </ChartContainer>
                     ) : (
-                        <EstadoVacio texto="Aún no hay vehículos registrados." />
+                        <EstadoVacio texto="Sin viajes de Minsur en este mes." />
                     )}
                 </Panel>
 
@@ -303,100 +271,99 @@ export default function Dashboard({
                 </Panel>
             </div>
 
-            <section className="rounded-xl border border-border bg-card">
-                <div className="flex flex-wrap items-center gap-2 border-b p-5">
-                    <AlertTriangle className="size-4 text-amber-500" />
-                    <h2 className="text-sm font-semibold">
-                        Documentos vencidos o por vencer
-                    </h2>
-
-                    <div className="ml-auto">
-                        <Select
-                            value={String(filtros.dias)}
-                            onValueChange={cambiarHorizonte}
+            <Panel titulo="Viajes por cliente (fuera de Minsur)">
+                {hayViajesPorCliente ? (
+                    <ChartContainer
+                        config={viajesPorClienteConfig}
+                        className="w-full"
+                        style={{ height: alturaViajesPorCliente }}
+                    >
+                        <BarChart
+                            data={viajesPorCliente}
+                            layout="vertical"
+                            margin={{ left: 4, right: 28 }}
                         >
-                            <SelectTrigger
-                                size="sm"
-                                aria-label="Horizonte de vencimientos"
-                            >
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {horizontes.map((horizonte) => (
-                                    <SelectItem
-                                        key={horizonte.value}
-                                        value={horizonte.value}
-                                    >
-                                        {horizonte.label}
-                                    </SelectItem>
+                            <CartesianGrid horizontal={false} />
+                            <XAxis type="number" hide />
+                            <YAxis
+                                dataKey="cliente"
+                                type="category"
+                                tickLine={false}
+                                axisLine={false}
+                                width={260}
+                                tick={{ fontSize: 11 }}
+                            />
+                            <ChartTooltip
+                                cursor={{ fill: 'var(--muted)' }}
+                                content={<ChartTooltipContent hideLabel />}
+                            />
+                            <Bar dataKey="valor" radius={0} barSize={18}>
+                                {viajesPorCliente.map((item) => (
+                                    <Cell
+                                        key={item.cliente}
+                                        fill={clienteColor(item.cliente).chart}
+                                    />
                                 ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-                </div>
-
-                {documentosPorVencer.length === 0 ? (
-                    <p className="p-5 text-sm text-muted-foreground">
-                        No hay documentos vencidos ni que venzan en los próximos{' '}
-                        {filtros.dias} días.
-                    </p>
+                                <LabelList
+                                    dataKey="valor"
+                                    position="right"
+                                    className="fill-foreground"
+                                    fontSize={12}
+                                />
+                            </Bar>
+                        </BarChart>
+                    </ChartContainer>
                 ) : (
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                                <TableHead>Unidad / Conductor</TableHead>
-                                <TableHead>Documento</TableHead>
-                                <TableHead>Vence</TableHead>
-                                <TableHead>Estado</TableHead>
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {documentosPorVencer.map((documento) => (
-                                <TableRow key={documento.clave}>
-                                    <TableCell className="font-medium">
-                                        <Link
-                                            href={
-                                                documento.vehiculo_id !== null
-                                                    ? show(
-                                                          documento.vehiculo_id,
-                                                      )
-                                                    : showConductor(
-                                                          documento.conductor_id ??
-                                                              0,
-                                                      )
-                                            }
-                                            className="hover:underline"
-                                        >
-                                            {documento.titular}
-                                        </Link>
-                                    </TableCell>
-                                    <TableCell>
-                                        {documento.tipo_label}
-                                    </TableCell>
-                                    <TableCell className="tabular-nums">
-                                        {documento.fecha_vencimiento ?? '—'}
-                                    </TableCell>
-                                    <TableCell>
-                                        <StatusBadge
-                                            label={
-                                                documento.vencido
-                                                    ? 'Vencido'
-                                                    : 'Por vencer'
-                                            }
-                                            tone={
-                                                documento.vencido
-                                                    ? 'danger'
-                                                    : 'warning'
-                                            }
-                                            dot={false}
-                                        />
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
+                    <EstadoVacio texto="Aún no hay viajes de otros clientes registrados." />
                 )}
-            </section>
+            </Panel>
+
+            <Panel titulo="Clientes particulares">
+                {hayClientesParticulares ? (
+                    <ChartContainer
+                        config={viajesPorClienteConfig}
+                        className="w-full"
+                        style={{ height: alturaClientesParticulares }}
+                    >
+                        <BarChart
+                            data={clientesParticulares}
+                            layout="vertical"
+                            margin={{ left: 4, right: 28 }}
+                        >
+                            <CartesianGrid horizontal={false} />
+                            <XAxis type="number" hide />
+                            <YAxis
+                                dataKey="cliente"
+                                type="category"
+                                tickLine={false}
+                                axisLine={false}
+                                width={260}
+                                tick={{ fontSize: 11 }}
+                            />
+                            <ChartTooltip
+                                cursor={{ fill: 'var(--muted)' }}
+                                content={<ChartTooltipContent hideLabel />}
+                            />
+                            <Bar dataKey="valor" radius={0} barSize={18}>
+                                {clientesParticulares.map((item) => (
+                                    <Cell
+                                        key={item.cliente}
+                                        fill={clienteColor(item.cliente).chart}
+                                    />
+                                ))}
+                                <LabelList
+                                    dataKey="valor"
+                                    position="right"
+                                    className="fill-foreground"
+                                    fontSize={12}
+                                />
+                            </Bar>
+                        </BarChart>
+                    </ChartContainer>
+                ) : (
+                    <EstadoVacio texto="Sin clientes particulares (persona natural) registrados." />
+                )}
+            </Panel>
         </div>
     );
 }
@@ -440,15 +407,18 @@ function Tarjeta({
 
 function Panel({
     titulo,
+    extra,
     children,
 }: {
     titulo: string;
+    extra?: React.ReactNode;
     children: React.ReactNode;
 }) {
     return (
         <section className="rounded-xl border border-border bg-card">
-            <div className="border-b p-5">
+            <div className="flex items-center justify-between gap-2 border-b p-5">
                 <h2 className="text-sm font-semibold">{titulo}</h2>
+                {extra}
             </div>
             <div className="p-5">{children}</div>
         </section>

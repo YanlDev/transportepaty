@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\EstadoVehiculo;
+use App\Enums\TipoCarga;
 use App\Enums\TipoDocumento;
 use App\Enums\TipoDocumentoConductor;
 use App\Enums\TipoNovedad;
@@ -9,6 +10,7 @@ use App\Models\ConductorDocumento;
 use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
+use App\Models\Viaje;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -24,7 +26,7 @@ it('redirects guests to login', function (): void {
     $this->get(route('dashboard'))->assertRedirect(route('login'));
 });
 
-it('summarises the fleet by type and status', function (): void {
+it('summarises the fleet by type and status in the resumen tiles', function (): void {
     Vehiculo::factory()->count(2)->create(['estado' => EstadoVehiculo::Activo]);
     Vehiculo::factory()->create(['estado' => EstadoVehiculo::EnMantenimiento]);
     Vehiculo::factory()->carreta()->create();
@@ -39,10 +41,6 @@ it('summarises the fleet by type and status', function (): void {
             ->where('resumen.carretas', 1)
             ->where('resumen.operativos', 3)
             ->where('resumen.conductores', 3)
-            ->has('documentosPorVencer')
-            ->where('estadoFlota', fn ($estados) => collect($estados)
-                ->firstWhere('estado', EstadoVehiculo::Activo->value)['valor'] === 3
-                && collect($estados)->firstWhere('estado', EstadoVehiculo::EnMantenimiento->value)['valor'] === 1)
         );
 });
 
@@ -90,213 +88,126 @@ it('counts active novedades for the not-schedulable tile and grouped by tipo', f
         );
 });
 
-it('breaks down documentation health by semáforo for vehicles and drivers', function (): void {
-    $alDia = Vehiculo::factory()->create();
-    $conProblemas = Vehiculo::factory()->create();
+it('breaks down Minsur cargo by tipo for the selected month, counting one per real trip not per GR', function (): void {
+    // Dos GR del mismo camión, mismo conductor, mismo día: es una sola
+    // salida (ver `Viaje::claveGrupoViaje()`) y debe contar una sola vez.
+    $primeraGr = Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-08-10']);
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->delMismoViajeQue($primeraGr)->create(['fecha_traslado' => '2026-08-10']);
 
-    foreach ($alDia->tipo->documentosObligatorios() as $tipo) {
-        VehiculoDocumento::create([
-            'vehiculo_id' => $alDia->id,
-            'tipo' => $tipo,
-            'fecha_vencimiento' => null,
-        ]);
-    }
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-15']);
 
-    VehiculoDocumento::create([
-        'vehiculo_id' => $conProblemas->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->subDay()->toDateString(),
-    ]);
+    // No es Minsur: no debe entrar en el desglose.
+    Viaje::factory()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-08-15']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['mes' => '2026-08']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('cargaMinsur', fn ($tipos) => collect($tipos)
+                ->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 1
+                && collect($tipos)->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 1
+                && collect($tipos)->firstWhere('tipo', TipoCarga::Escoria->value)['valor'] === 0)
+        );
+});
+
+it('matches Minsur regardless of the spacing variant in the razón social', function (): void {
+    Viaje::factory()->create(['cliente' => 'MINSUR S. A.', 'fecha_traslado' => '2026-08-10']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['mes' => '2026-08']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('cargaMinsur', fn ($tipos) => collect($tipos)
+                ->firstWhere('tipo', TipoCarga::Particular->value)['valor'] === 1)
+        );
+});
+
+it('filters cargaMinsur to the requested month and offers the available months', function (): void {
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-07-05']);
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['mes' => '2026-07']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filtroMes', '2026-07')
+            ->where('mesesDisponibles', ['2026-08', '2026-07'])
+            ->where('cargaMinsur', fn ($tipos) => collect($tipos)
+                ->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 1
+                && collect($tipos)->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 0)
+        );
+});
+
+it('defaults cargaMinsur to the most recent month when none is requested', function (): void {
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-07-05']);
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('saludDocumental', function ($salud) {
-                $vehiculos = collect($salud)->firstWhere('entidad', 'vehiculos');
+            ->where('filtroMes', '2026-08')
+            ->where('cargaMinsur', fn ($tipos) => collect($tipos)
+                ->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 1
+                && collect($tipos)->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 0)
+        );
+});
 
-                return $vehiculos['rojo'] === 1 && $vehiculos['verde'] === 1;
+it('counts one trip for the same unit across two consecutive days (Mur-Wy case)', function (): void {
+    $primeraGr = Viaje::factory()->create(['cliente' => 'MUR - WY S.A.C.', 'fecha_traslado' => '2026-08-03']);
+    Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'MUR - WY S.A.C.', 'fecha_traslado' => '2026-08-03']);
+    Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'MUR - WY S.A.C.', 'fecha_traslado' => '2026-08-04']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('viajesPorCliente', fn ($clientes) => collect($clientes)
+                ->firstWhere('cliente', 'MUR - WY S.A.C.')['valor'] === 1)
+        );
+});
+
+it('counts trips per other client, one per real trip not per GR, excluding Minsur', function (): void {
+    $primeraGr = Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);
+    Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);
+
+    Viaje::factory()->create(['cliente' => 'HOMECENTERS PERUANOS S.A.']);
+
+    Viaje::factory()->deMinsur()->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('viajesPorCliente', function ($clientes) {
+                $clientes = collect($clientes);
+
+                return $clientes->firstWhere('cliente', 'CRISAR LOGISTICA S.A.C.')['valor'] === 1
+                    && $clientes->firstWhere('cliente', 'HOMECENTERS PERUANOS S.A.')['valor'] === 1
+                    && $clientes->firstWhere('cliente', 'MINSUR S.A.') === null;
             })
         );
 });
 
-it('surfaces a document about to expire', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->addDays(10)->toDateString(),
-    ]);
+it('separates clientes particulares (persona natural) from empresas in their own list', function (): void {
+    Viaje::factory()->create(['cliente' => 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN']);
+    Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->has('documentosPorVencer', 1)
-            ->where('documentosPorVencer.0.tipo_label', 'SOAT')
-            ->where('documentosPorVencer.0.vencido', false)
+            ->where('clientesParticulares', fn ($clientes) => collect($clientes)
+                ->firstWhere('cliente', 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN')['valor'] === 1
+                && collect($clientes)->firstWhere('cliente', 'CRISAR LOGISTICA S.A.C.') === null)
+            ->where('viajesPorCliente', fn ($clientes) => collect($clientes)
+                ->firstWhere('cliente', 'CRISAR LOGISTICA S.A.C.')['valor'] === 1
+                && collect($clientes)->firstWhere('cliente', 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN') === null)
         );
 });
 
-it('flags an already expired document', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Matpel,
-        'fecha_vencimiento' => now()->subDay()->toDateString(),
-    ]);
+it('treats a company with an English legal suffix as empresa, not persona natural', function (): void {
+    Viaje::factory()->create(['cliente' => 'KEDA PERU BUILDING MATERIALS COMPANY']);
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->has('documentosPorVencer', 1)
-            ->where('documentosPorVencer.0.vencido', true)
-        );
-});
-
-it('ignores documents that expire far in the future', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->addMonths(6)->toDateString(),
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page->has('documentosPorVencer', 0));
-});
-
-it('leaves out documents of vehicles that were deleted', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->subDay()->toDateString(),
-    ]);
-
-    $vehiculo->delete();
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page->has('documentosPorVencer', 0));
-});
-
-it('surfaces an expiring conductor licencia next to vehicle documents', function (): void {
-    $conductor = Conductor::factory()->create();
-
-    ConductorDocumento::create([
-        'conductor_id' => $conductor->id,
-        'tipo' => TipoDocumentoConductor::LicenciaConducir,
-        'fecha_vencimiento' => now()->addDays(5)->toDateString(),
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('documentosPorVencer', 1)
-            ->where('documentosPorVencer.0.titular', $conductor->nombre_completo)
-            ->where('documentosPorVencer.0.conductor_id', $conductor->id)
-            ->where('documentosPorVencer.0.vencido', false)
-        );
-});
-
-it('treats a document expiring today as por vencer, matching the semáforo', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->toDateString(),
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('documentosPorVencer', 1)
-            ->where('documentosPorVencer.0.vencido', false)
-        );
-});
-
-it('orders mixed vencimientos by urgency', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-    $conductor = Conductor::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->addDays(20)->toDateString(),
-    ]);
-    ConductorDocumento::create([
-        'conductor_id' => $conductor->id,
-        'tipo' => TipoDocumentoConductor::LicenciaConducir,
-        'fecha_vencimiento' => now()->addDays(3)->toDateString(),
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('documentosPorVencer', 2)
-            ->where('documentosPorVencer.0.titular', $conductor->nombre_completo)
-            ->where('documentosPorVencer.1.tipo_label', 'SOAT')
-        );
-});
-
-it('narrows the vencimientos window to 15 days', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->addDays(10)->toDateString(),
-    ]);
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Matpel,
-        'fecha_vencimiento' => now()->addDays(25)->toDateString(),
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['dias' => 15]))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('filtros.dias', 15)
-            ->has('documentosPorVencer', 1)
-            ->where('documentosPorVencer.0.tipo_label', 'SOAT')
-        );
-});
-
-it('keeps already expired documents visible on the shorter window', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->subMonths(3)->toDateString(),
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['dias' => 15]))
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('documentosPorVencer', 1)
-            ->where('documentosPorVencer.0.vencido', true)
-        );
-});
-
-it('falls back to 30 days when the filter value is not offered', function (): void {
-    $vehiculo = Vehiculo::factory()->create();
-
-    VehiculoDocumento::create([
-        'vehiculo_id' => $vehiculo->id,
-        'tipo' => TipoDocumento::Soat,
-        'fecha_vencimiento' => now()->addDays(25)->toDateString(),
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['dias' => 999]))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('filtros.dias', 30)
-            ->has('documentosPorVencer', 1)
+            ->where('viajesPorCliente', fn ($clientes) => collect($clientes)
+                ->firstWhere('cliente', 'KEDA PERU BUILDING MATERIALS COMPANY')['valor'] === 1)
+            ->where('clientesParticulares', fn ($clientes) => collect($clientes)
+                ->firstWhere('cliente', 'KEDA PERU BUILDING MATERIALS COMPANY') === null)
         );
 });

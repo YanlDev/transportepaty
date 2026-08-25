@@ -2,15 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\EstadoDocumento;
 use App\Enums\EstadoVehiculo;
+use App\Enums\TipoCarga;
 use App\Enums\TipoNovedad;
 use App\Enums\TipoVehiculo;
 use App\Models\Conductor;
-use App\Models\ConductorDocumento;
 use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
+use App\Models\Viaje;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -19,25 +20,21 @@ use Inertia\Response;
 class DashboardController extends Controller
 {
     /**
-     * Filas máximas del panel de vencimientos. Lo que no entra se encuentra por
-     * los semáforos de los listados; el panel solo señala lo más urgente.
+     * El nombre de razón social de Minsur trae variantes de espaciado en las
+     * GR reales («MINSUR S.A.» y «MINSUR S. A.»), así que se identifica por
+     * prefijo en vez de comparar el texto exacto.
      */
-    private const MAXIMO_VENCIMIENTOS = 15;
+    private const CLIENTE_MINSUR_PREFIJO = 'MINSUR';
 
     /**
-     * Horizontes que ofrece el filtro del panel de vencimientos, en días.
+     * Sufijos de razón social peruana. Un cliente cuyo nombre no trae
+     * ninguno de estos es, en la práctica, una persona natural («cliente
+     * particular») y no una empresa — ver `esPersonaNatural()`.
      */
-    private const HORIZONTES = [15, 30];
+    private const SUFIJOS_EMPRESA = '/S\.?A\.?C?\.?\b|S\.?R\.?L\.?\b|E\.?I\.?R\.?L\.?\b|SOCIEDAD|EMPRESA|LTDA|COMPANY|CORP|GROUP|SAC\b/i';
 
     public function index(Request $request): Response
     {
-        // Cualquier valor fuera del filtro cae al plazo estándar del semáforo.
-        $dias = $request->integer('dias');
-
-        if (! in_array($dias, self::HORIZONTES, true)) {
-            $dias = VehiculoDocumento::DIAS_AVISO_VENCIMIENTO;
-        }
-
         return Inertia::render('dashboard', [
             'resumen' => [
                 'tractos' => Vehiculo::where('tipo', TipoVehiculo::Tracto)->count(),
@@ -47,77 +44,18 @@ class DashboardController extends Controller
                 'novedadesActivas' => Novedad::vigentes()->count(),
                 'documentosVencidos' => $this->documentosVencidos(),
             ],
-            'filtros' => ['dias' => $dias],
-            'documentosPorVencer' => $this->documentosPorVencer($dias),
-            'estadoFlota' => $this->estadoFlota(),
             'novedadesPorTipo' => $this->novedadesPorTipo(),
-            'saludDocumental' => $this->saludDocumental(),
+            'filtroMes' => $this->filtroMes($request),
+            'mesesDisponibles' => $this->mesesDisponibles(),
+            'cargaMinsur' => $this->cargaMinsur($request),
+            'viajesPorCliente' => $this->viajesPorClienteOtros(),
+            'clientesParticulares' => $this->clientesParticulares(),
         ]);
     }
 
     /**
-     * Documentos vencidos o por vencer dentro del horizonte elegido —papeles de
-     * los fierros y licencias de los conductores— ordenados por urgencia, para
-     * renovarlos antes de que la unidad o la persona queden inhabilitadas. Los
-     * ya vencidos aparecen siempre, sea cual sea el horizonte.
-     *
-     * El criterio de «vencido» es el mismo `estado()` del semáforo, de modo que
-     * un documento que vence hoy se lea igual en todas las pantallas.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function documentosPorVencer(int $dias): array
-    {
-        $limite = now()->addDays($dias)->toDateString();
-
-        $deVehiculos = VehiculoDocumento::query()
-            ->with('vehiculo:id,placa')
-            // whereHas descarta los documentos de vehículos dados de baja, que
-            // ya no obligan a renovar nada.
-            ->whereHas('vehiculo')
-            ->whereNotNull('fecha_vencimiento')
-            ->where('fecha_vencimiento', '<=', $limite)
-            ->orderBy('fecha_vencimiento')
-            ->take(self::MAXIMO_VENCIMIENTOS)
-            ->get()
-            ->map(fn (VehiculoDocumento $documento): array => [
-                'clave' => "vehiculo-{$documento->id}",
-                'titular' => $documento->vehiculo->placa,
-                'vehiculo_id' => $documento->vehiculo_id,
-                'conductor_id' => null,
-                'tipo_label' => $documento->tipo->label(),
-                'fecha_vencimiento' => $documento->fecha_vencimiento?->toDateString(),
-                'vencido' => $documento->estado() === EstadoDocumento::Vencido,
-            ]);
-
-        $deConductores = ConductorDocumento::query()
-            ->with('conductor:id,nombres,apellidos')
-            ->whereNotNull('fecha_vencimiento')
-            ->where('fecha_vencimiento', '<=', $limite)
-            ->orderBy('fecha_vencimiento')
-            ->take(self::MAXIMO_VENCIMIENTOS)
-            ->get()
-            ->map(fn (ConductorDocumento $documento): array => [
-                'clave' => "conductor-{$documento->id}",
-                'titular' => $documento->conductor->nombre_completo,
-                'vehiculo_id' => null,
-                'conductor_id' => $documento->conductor_id,
-                'tipo_label' => $documento->tipo->label(),
-                'fecha_vencimiento' => $documento->fecha_vencimiento?->toDateString(),
-                'vencido' => $documento->estado() === EstadoDocumento::Vencido,
-            ]);
-
-        return $deVehiculos
-            ->concat($deConductores)
-            ->sortBy('fecha_vencimiento')
-            ->take(self::MAXIMO_VENCIMIENTOS)
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Total de papeles ya vencidos, de fierros y de conductores, sin el tope de
-     * filas que aplica al panel: es el número que va en la tarjeta de alerta.
+     * Total de papeles ya vencidos, de fierros y de conductores: el número de
+     * la tarjeta de alerta. El detalle vive en Vehículos/Conductores, no acá.
      */
     private function documentosVencidos(): int
     {
@@ -129,36 +67,13 @@ class DashboardController extends Controller
             ->where('fecha_vencimiento', '<', $hoy)
             ->count();
 
-        $deConductores = ConductorDocumento::query()
-            ->whereNotNull('fecha_vencimiento')
-            ->where('fecha_vencimiento', '<', $hoy)
+        $deConductores = Conductor::query()
+            ->whereHas('documentos', function (Builder $query) use ($hoy): void {
+                $query->whereNotNull('fecha_vencimiento')->where('fecha_vencimiento', '<', $hoy);
+            })
             ->count();
 
         return $deVehiculos + $deConductores;
-    }
-
-    /**
-     * Cuántas unidades hay en cada estado operativo, en el orden fijo del enum.
-     * Incluye los estados en cero para que la composición de la flota se lea
-     * completa de un vistazo, no solo lo que tiene unidades.
-     *
-     * @return list<array{estado: string, label: string, valor: int}>
-     */
-    private function estadoFlota(): array
-    {
-        $conteos = Vehiculo::query()
-            ->selectRaw('estado, count(*) as total')
-            ->groupBy('estado')
-            ->pluck('total', 'estado');
-
-        return array_map(
-            fn (EstadoVehiculo $estado): array => [
-                'estado' => $estado->value,
-                'label' => $estado->label(),
-                'valor' => (int) ($conteos[$estado->value] ?? 0),
-            ],
-            EstadoVehiculo::cases(),
-        );
     }
 
     /**
@@ -188,45 +103,155 @@ class DashboardController extends Controller
     }
 
     /**
-     * Semáforo documental de la flota y de los conductores, contado por color.
-     * Se apoya en `estadoDocumental()` de cada modelo —la misma regla que pinta
-     * los listados— así que el resumen nunca se puede desalinear del semáforo
-     * que ve cada unidad o conductor por separado.
+     * Todos los viajes de Minsur, cargados una sola vez por request —
+     * `filtroMes()`, `mesesDisponibles()` y `cargaMinsur()` la comparten en
+     * vez de repetir la consulta. El formato de mes se calcula en PHP con
+     * Carbon en vez de una función de fecha en SQL (`to_char`, `strftime`...)
+     * porque esas no son portables entre Postgres (producción) y SQLite
+     * (tests).
      *
-     * @return list<array{entidad: string, label: string, verde: int, ambar: int, rojo: int}>
+     * @return Collection<int, Viaje>
      */
-    private function saludDocumental(): array
+    private function viajesMinsur(): Collection
     {
-        $semaforosVehiculos = Vehiculo::query()
-            ->with('documentos:id,vehiculo_id,tipo,fecha_vencimiento')
-            ->get()
-            ->map(fn (Vehiculo $vehiculo): string => $vehiculo->estadoDocumental()['semaforo']);
-
-        $semaforosConductores = Conductor::query()
-            ->with('documentos:id,conductor_id,tipo,fecha_vencimiento')
-            ->get()
-            ->map(fn (Conductor $conductor): string => $conductor->estadoDocumental()['semaforo']);
-
-        return [
-            $this->contarSemaforos('vehiculos', 'Vehículos', $semaforosVehiculos),
-            $this->contarSemaforos('conductores', 'Conductores', $semaforosConductores),
-        ];
+        return once(fn (): Collection => Viaje::query()
+            ->where('cliente', 'like', self::CLIENTE_MINSUR_PREFIJO.'%')
+            ->get(['fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni', 'tipo_carga']));
     }
 
     /**
-     * @param  Collection<int, string>  $semaforos
-     * @return array{entidad: string, label: string, verde: int, ambar: int, rojo: int}
+     * El mes elegido en el filtro (`YYYY-MM`), o el mes más reciente con
+     * viajes de Minsur si no se pidió ninguno o el pedido no es válido —así
+     * el gráfico nunca abre vacío por default.
      */
-    private function contarSemaforos(string $entidad, string $label, Collection $semaforos): array
+    private function filtroMes(Request $request): ?string
     {
-        $conteos = $semaforos->countBy();
+        $mes = $request->string('mes')->value();
 
-        return [
-            'entidad' => $entidad,
-            'label' => $label,
-            'verde' => (int) ($conteos['verde'] ?? 0),
-            'ambar' => (int) ($conteos['ambar'] ?? 0),
-            'rojo' => (int) ($conteos['rojo'] ?? 0),
-        ];
+        if ($mes !== '' && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mes) === 1) {
+            return $mes;
+        }
+
+        return $this->mesesDisponibles()[0] ?? null;
+    }
+
+    /**
+     * Meses (`YYYY-MM`) que tienen al menos un viaje de Minsur, del más
+     * reciente al más antiguo — opciones del selector del filtro.
+     *
+     * @return list<string>
+     */
+    private function mesesDisponibles(): array
+    {
+        return $this->viajesMinsur()
+            ->map(fn (Viaje $viaje): string => $viaje->fecha_traslado->format('Y-m'))
+            ->unique()
+            ->sortDesc()
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Qué llevaron las unidades de Minsur en el mes elegido, contado por
+     * viaje real —no por GR—: un mismo camión puede salir una vez con dos
+     * GR, incluso cruzando a un segundo día (ver `Viaje::contarViajesReales()`),
+     * y ahí solo debe contar una carga. Se agrupa por tipo de carga primero
+     * para que el conteo tolerante no funda viajes de tipos distintos entre
+     * sí. En el orden fijo del enum, incluidos los tipos en cero, para que la
+     * mezcla se lea completa de un vistazo.
+     *
+     * @return list<array{tipo: string, label: string, valor: int}>
+     */
+    private function cargaMinsur(Request $request): array
+    {
+        $mes = $this->filtroMes($request);
+
+        $porTipo = $this->viajesMinsur()
+            ->when($mes !== null, fn (Collection $viajes) => $viajes->filter(
+                fn (Viaje $viaje): bool => $viaje->fecha_traslado->format('Y-m') === $mes,
+            ))
+            ->groupBy(fn (Viaje $viaje): string => $viaje->tipo_carga->value);
+
+        $excluidos = TipoCarga::excluidosDeViaje();
+
+        $tipos = array_values(array_filter(
+            TipoCarga::cases(),
+            fn (TipoCarga $tipo): bool => ! in_array($tipo, $excluidos, true),
+        ));
+
+        return array_map(
+            fn (TipoCarga $tipo): array => [
+                'tipo' => $tipo->value,
+                'label' => $tipo->label(),
+                'valor' => Viaje::contarViajesReales($porTipo->get($tipo->value, collect())),
+            ],
+            $tipos,
+        );
+    }
+
+    /**
+     * Cuántos viajes reales —no GR— tiene cada cliente empresa que no sea
+     * Minsur. Los clientes persona natural van aparte, en
+     * `clientesParticulares()`, para no perderlos en una lista dominada por
+     * empresas. Mismo criterio de agrupación que `cargaMinsur()`.
+     *
+     * @return list<array{cliente: string, valor: int}>
+     */
+    private function viajesPorClienteOtros(): array
+    {
+        return $this->viajesAgrupadosPorCliente()
+            ->reject(fn (Collection $viajes, string $cliente): bool => $this->esPersonaNatural($cliente))
+            ->map(fn (Collection $viajes, string $cliente): array => [
+                'cliente' => $cliente,
+                'valor' => Viaje::contarViajesReales($viajes),
+            ])
+            ->sortByDesc('valor')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Clientes que son una persona natural, no una empresa —ej. «Guzmán
+     * Revilla Christopher Christian»—, que hoy quedaban mezclados y perdidos
+     * en la lista de razones sociales. Mismo criterio de conteo que
+     * `viajesPorClienteOtros()`, solo que separados en vez de descartados.
+     *
+     * @return list<array{cliente: string, valor: int}>
+     */
+    private function clientesParticulares(): array
+    {
+        return $this->viajesAgrupadosPorCliente()
+            ->filter(fn (Collection $viajes, string $cliente): bool => $this->esPersonaNatural($cliente))
+            ->map(fn (Collection $viajes, string $cliente): array => [
+                'cliente' => $cliente,
+                'valor' => Viaje::contarViajesReales($viajes),
+            ])
+            ->sortByDesc('valor')
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Base compartida por `viajesPorClienteOtros()` y `clientesParticulares()`:
+     * todos los viajes que no son de Minsur, agrupados por cliente.
+     *
+     * @return Collection<string, Collection<int, Viaje>>
+     */
+    private function viajesAgrupadosPorCliente(): Collection
+    {
+        return once(fn (): Collection => Viaje::query()
+            ->where('cliente', 'not like', self::CLIENTE_MINSUR_PREFIJO.'%')
+            ->get(['cliente', 'fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni'])
+            ->groupBy('cliente'));
+    }
+
+    /**
+     * Sin razón social detrás —ninguno de los sufijos legales peruanos
+     * (S.A.C., S.R.L., E.I.R.L., etc.)— es, en la práctica, una persona
+     * natural contratando directo, no una empresa.
+     */
+    private function esPersonaNatural(string $cliente): bool
+    {
+        return preg_match(self::SUFIJOS_EMPRESA, $cliente) !== 1;
     }
 }
