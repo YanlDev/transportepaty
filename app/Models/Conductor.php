@@ -8,13 +8,11 @@ use App\Enums\TipoDocumentoConductor;
 use Database\Factories\ConductorFactory;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -69,37 +67,6 @@ class Conductor extends Model
     public function documentos(): HasMany
     {
         return $this->hasMany(ConductorDocumento::class);
-    }
-
-    /**
-     * Historial completo de unidades que ha manejado, de la más reciente a la
-     * más antigua.
-     *
-     * @return HasMany<Asignacion, $this>
-     */
-    public function asignaciones(): HasMany
-    {
-        return $this->hasMany(Asignacion::class)->latest('desde');
-    }
-
-    /**
-     * La unidad que maneja hoy, si tiene una asignada.
-     *
-     * @return HasOne<Asignacion, $this>
-     */
-    public function asignacionVigente(): HasOne
-    {
-        return $this->hasOne(Asignacion::class)->whereNull('hasta');
-    }
-
-    /**
-     * Conductores activos que hoy no manejan ninguna unidad.
-     *
-     * @param  Builder<$this>  $query
-     */
-    public function scopeSinAsignar(Builder $query): void
-    {
-        $query->where('activo', true)->doesntHave('asignacionVigente');
     }
 
     /**

@@ -17,24 +17,37 @@ use Inertia\Response;
 class VehiculoController extends Controller
 {
     /**
-     * Valor del filtro de caja para las unidades sin transmisión. La carreta es
-     * remolcada, así que su columna `caja` queda nula y no la cubre ningún caso
-     * de TipoCaja.
+     * Los tractos son la unidad motriz y lo que más se consulta: listado
+     * aparte para encontrarlos sin tener que filtrar entre las carretas.
      */
-    private const SIN_CAJA = 'sin_caja';
+    public function tractos(Request $request): Response
+    {
+        return $this->listar($request, TipoVehiculo::Tracto);
+    }
 
     /**
-     * Display a listing of the resource.
+     * Las carretas se buscan por separado de los tractos por el mismo motivo:
+     * son unidades distintas y mezclarlas en un solo listado obliga a filtrar
+     * por tipo cada vez.
      */
-    public function index(Request $request): Response
+    public function carretas(Request $request): Response
+    {
+        return $this->listar($request, TipoVehiculo::Carreta);
+    }
+
+    private function listar(Request $request, TipoVehiculo $tipo): Response
     {
         $this->authorize('viewAny', Vehiculo::class);
+
+        // La caja solo tiene sentido para tractos: la carreta no tiene motor
+        // y su columna `caja` siempre es nula (ver `Vehiculo::booted()`).
+        $esTracto = $tipo === TipoVehiculo::Tracto;
 
         $filtros = [
             'buscar' => $request->string('buscar')->trim()->value(),
             'estado' => $request->string('estado')->value(),
-            'tipo' => $request->string('tipo')->value(),
-            'caja' => $request->string('caja')->value(),
+            'marca' => $request->string('marca')->value(),
+            'caja' => $esTracto ? $request->string('caja')->value() : '',
         ];
 
         $vehiculos = Vehiculo::query()
@@ -42,6 +55,7 @@ class VehiculoController extends Controller
                 'id', 'placa', 'marca', 'modelo', 'anio', 'tipo',
                 'estado', 'caja', 'color', 'ejes',
             ])
+            ->where('tipo', $tipo->value)
             // El semáforo documental de cada fila se calcula sobre esta única
             // carga de documentos, sin una consulta por vehículo.
             ->with(['documentos:id,vehiculo_id,tipo,numero,fecha_vencimiento'])
@@ -53,14 +67,8 @@ class VehiculoController extends Controller
                 });
             })
             ->when($filtros['estado'], fn ($query, string $estado) => $query->where('estado', $estado))
-            ->when($filtros['tipo'], fn ($query, string $tipo) => $query->where('tipo', $tipo))
-            ->when($filtros['caja'], fn ($query, string $caja) => $caja === self::SIN_CAJA
-                ? $query->whereNull('caja')
-                : $query->where('caja', $caja))
-            // Los tractos primero: son la unidad motriz y lo que se busca al
-            // entrar. Un orderBy plano pondría antes a las carretas, porque
-            // ordena alfabéticamente y «carreta» precede a «tracto».
-            ->orderByRaw('CASE WHEN tipo = ? THEN 0 ELSE 1 END', [TipoVehiculo::Tracto->value])
+            ->when($filtros['marca'], fn ($query, string $marca) => $query->where('marca', $marca))
+            ->when($filtros['caja'], fn ($query, string $caja) => $query->where('caja', $caja))
             ->orderBy('placa')
             ->paginate(25)
             ->withQueryString()
@@ -83,34 +91,47 @@ class VehiculoController extends Controller
         return Inertia::render('vehiculos/index', [
             'vehiculos' => $vehiculos,
             'filtros' => $filtros,
+            'seccion' => $tipo->value,
             'estados' => EstadoVehiculo::options(),
-            'tipos' => TipoVehiculo::options(),
-            'cajas' => $this->opcionesCaja(),
+            'marcas' => $this->opcionesMarca($tipo),
+            'cajas' => $esTracto ? TipoCaja::options() : [],
         ]);
     }
 
     /**
-     * Opciones del filtro de caja: los tipos de transmisión más la pseudo-opción
-     * para las unidades sin motor, que no existe como caso del enum.
+     * Marcas realmente en uso para el tipo dado: no hay catálogo fijo de
+     * marcas, así que el filtro se arma con lo que ya existe en la flota.
      *
      * @return array<int, array{value: string, label: string}>
      */
-    private function opcionesCaja(): array
+    private function opcionesMarca(TipoVehiculo $tipo): array
     {
-        return [
-            ...TipoCaja::options(),
-            ['value' => self::SIN_CAJA, 'label' => 'Sin caja (sin motor)'],
-        ];
+        return Vehiculo::query()
+            ->where('tipo', $tipo->value)
+            ->whereNotNull('marca')
+            ->distinct()
+            ->orderBy('marca')
+            ->pluck('marca')
+            ->map(fn (string $marca): array => ['value' => $marca, 'label' => $marca])
+            ->all();
     }
 
     /**
      * Show the form for creating a new resource.
      */
-    public function create(): Response
+    public function create(Request $request): Response
     {
         $this->authorize('create', Vehiculo::class);
 
-        return Inertia::render('vehiculos/create', $this->datosFormulario());
+        // Llega de "Nuevo tracto"/"Nueva carreta" en el listado correspondiente,
+        // para que el formulario arranque con el tipo correcto preseleccionado.
+        $tipoInicial = TipoVehiculo::tryFrom($request->string('tipo')->value())
+            ?? TipoVehiculo::Tracto;
+
+        return Inertia::render('vehiculos/create', [
+            'tipoInicial' => $tipoInicial->value,
+            ...$this->datosFormulario(),
+        ]);
     }
 
     /**
@@ -176,22 +197,12 @@ class VehiculoController extends Controller
     {
         $this->authorize('delete', $vehiculo);
 
-        // Un fierro en una unidad vigente no se puede eliminar: la asignación
-        // quedaría apuntando a un vehículo inexistente y el conductor seguiría
-        // ocupado por una unidad fantasma.
-        $enUso = $vehiculo->asignacionVigenteComoTracto()->exists()
-            || $vehiculo->asignacionVigenteComoCarreta()->exists();
-
-        if ($enUso) {
-            return back()->with('toast', [
-                'type' => 'error',
-                'message' => "El vehículo {$vehiculo->placa} está en una unidad asignada. Libera la unidad antes de eliminarlo.",
-            ]);
-        }
+        // Sin listado combinado al que volver: cada tipo vuelve al suyo.
+        $ruta = $vehiculo->tipo === TipoVehiculo::Tracto ? 'tractos.index' : 'carretas.index';
 
         $vehiculo->delete();
 
-        return to_route('vehiculos.index')
+        return to_route($ruta)
             ->with('toast', ['type' => 'success', 'message' => 'Vehículo eliminado correctamente.']);
     }
 

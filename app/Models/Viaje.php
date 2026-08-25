@@ -99,18 +99,63 @@ class Viaje extends Model implements HasMedia
     }
 
     /**
-     * El departamento/región de destino, para mostrar en los listados sin
-     * ocupar el espacio de la dirección completa. En el texto de la GR
-     * siempre viene al final de la dirección, después del último guion
-     * (`... - distrito - provincia - departamento`) — no hay catálogo de
-     * ubicaciones detrás, así que se deriva del texto en vez de resolverse
-     * contra algo.
+     * La ciudad (distrito) de origen/destino, para mostrar en los listados
+     * sin ocupar el espacio de la dirección completa. El texto de la GR
+     * siempre trae el patrón `... - distrito - provincia - departamento` —
+     * no hay catálogo de ubicaciones detrás, así que se deriva del texto en
+     * vez de resolverse contra algo. Con menos segmentos de los esperados
+     * (dirección corta o atípica) cae al último disponible en vez de fallar.
      */
-    public function regionDestino(): string
+    /**
+     * Estática (no lee `$this`) para poder usarla también fuera de una
+     * instancia real — ej. armar la lista de ciudades para el filtro del
+     * listado, sin tener que instanciar un `Viaje` por cada dirección.
+     */
+    public static function ciudadDesde(string $direccion): string
     {
-        $partes = explode(' - ', $this->destino);
+        $partes = array_map('trim', explode(' - ', $direccion));
 
-        return trim((string) end($partes));
+        if (count($partes) >= 4) {
+            return $partes[count($partes) - 3];
+        }
+
+        return (string) end($partes);
+    }
+
+    public function ciudadOrigen(): string
+    {
+        return self::ciudadDesde($this->origen);
+    }
+
+    public function ciudadDestino(): string
+    {
+        return self::ciudadDesde($this->destino);
+    }
+
+    /**
+     * Cada fila acá es una GR, pero un solo viaje físico puede traer más de
+     * una (ej. el mismo camión sale una vez y lleva carga de dos clientes
+     * distintos, cada una con su propia GR) — la GR no tiene un campo que
+     * diga «este es el mismo viaje que aquella otra», así que se infiere:
+     * mismo tracto + carreta + conductor + día de traslado es, en la
+     * práctica, la misma salida del camión.
+     *
+     * Es una heurística, no una clave real: dos salidas distintas del mismo
+     * camión con el mismo conductor el mismo día caerían en el mismo grupo
+     * aunque sean viajes distintos. Se acepta el riesgo porque es el caso
+     * raro; si tracto/carreta no matchearon contra el padrón (id null), cae
+     * a la placa cruda para que igual agrupe.
+     */
+    public function claveGrupoViaje(): string
+    {
+        return implode('|', [
+            $this->fecha_traslado->toDateString(),
+            $this->tracto_id !== null ? "id:{$this->tracto_id}" : "placa:{$this->placa_tracto}",
+            $this->carreta_id !== null
+                ? "id:{$this->carreta_id}"
+                : ($this->placa_carreta !== null ? "placa:{$this->placa_carreta}" : 'sin-carreta'),
+            $this->conductor_id !== null ? "id:{$this->conductor_id}" : "dni:{$this->conductor_dni}",
+        ]);
     }
 
     public function registerMediaCollections(): void

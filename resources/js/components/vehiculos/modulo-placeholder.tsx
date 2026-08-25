@@ -31,7 +31,7 @@ export function ModuloPlaceholder({
                     {[45, 70, 55, 85, 60, 75].map((alto, i) => (
                         <div
                             key={i}
-                            className="flex-1 rounded-t bg-navy-300"
+                            className="flex-1 rounded-t bg-indigo-300"
                             style={{ height: `${alto}%` }}
                         />
                     ))}

@@ -214,9 +214,9 @@ export function AppHeader({ breadcrumbs = [] }: Props) {
                             <DropdownMenuTrigger asChild>
                                 <Button
                                     variant="ghost"
-                                    className="size-10 rounded-none p-1"
+                                    className="size-10 rounded-full p-1"
                                 >
-                                    <Avatar className="size-8 overflow-hidden rounded-none">
+                                    <Avatar className="size-8 overflow-hidden rounded-full">
                                         <AvatarImage
                                             src={auth.user?.avatar}
                                             alt={auth.user?.name}

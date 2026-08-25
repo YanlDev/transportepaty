@@ -15,6 +15,7 @@ type VehiculoResumen = {
     placa: string;
     marca: string | null;
     modelo: string | null;
+    tipo: string;
     tipo_label: string;
 };
 
@@ -31,10 +32,15 @@ export default function VehiculoDocumentos({
 }: Props) {
     const { auth } = usePage().props;
     const puedeGestionar = auth.roles.includes('admin');
+    const esTracto = vehiculo.tipo === 'tracto';
 
     setLayoutProps({
         breadcrumbs: [
-            { title: 'Vehículos', href: vehiculos.index().url },
+            {
+                title: esTracto ? 'Tractos' : 'Carretas',
+                href: (esTracto ? vehiculos.tractos() : vehiculos.carretas())
+                    .url,
+            },
             {
                 title: formatearPlaca(vehiculo.placa),
                 href: show(vehiculo.id).url,
@@ -60,9 +66,6 @@ export default function VehiculoDocumentos({
                             Volver al vehículo
                         </Link>
                     </Button>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Documentación
-                    </h1>
                     <p className="text-sm text-muted-foreground">
                         {vehiculo.tipo_label} · {formatearPlaca(vehiculo.placa)}
                         {vehiculo.marca && ` · ${vehiculo.marca}`}

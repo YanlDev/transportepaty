@@ -19,7 +19,7 @@ export default function AuthLayout({ title, children }: AuthLayoutProps) {
     }, []);
 
     return (
-        <div className="relative flex min-h-svh flex-col bg-navy-900">
+        <div className="relative flex min-h-svh flex-col bg-indigo-900">
             <div className="relative z-10 flex flex-1 items-center justify-center p-6 md:p-10">
                 <div className="w-full max-w-sm border-t-4 border-t-primary bg-white px-8 py-12 shadow-2xl">
                     <div className="mb-8 flex flex-col items-center gap-2 text-center">

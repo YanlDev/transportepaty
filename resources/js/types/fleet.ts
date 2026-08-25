@@ -1,3 +1,5 @@
+import type { StatusTone } from '@/components/ui/status-badge';
+
 export type EnumOption = {
     value: string;
     label: string;
@@ -157,42 +159,6 @@ export type RanuraDocumental = {
     documento: VehiculoDocumentoItem | null;
 };
 
-/** Una unidad armada: conductor + tracto + carreta, tal como se lista. */
-export type AsignacionListItem = {
-    id: number;
-    conductor: {
-        id: number;
-        nombre_completo: string;
-        telefono: string | null;
-    };
-    tracto: {
-        id: number;
-        placa: string;
-        marca: string | null;
-        tuc_numero: string | null;
-    };
-    /** Null cuando el tracto está asignado sin carreta. */
-    carreta: { id: number; placa: string; tuc_numero: string | null } | null;
-    desde: string;
-    /** Null mientras la asignación sigue vigente. */
-    hasta: string | null;
-    observaciones: string | null;
-    vigente: boolean;
-    /** Peor semáforo entre el tracto y la carreta de la unidad. */
-    documentacion: ResumenDocumental;
-};
-
-/** La asignación tal como la carga el formulario de edición. */
-export type Asignacion = {
-    id: number;
-    conductor_id: number;
-    tracto_id: number;
-    tracto_placa: string;
-    carreta_id: number | null;
-    desde: string;
-    observaciones: string | null;
-};
-
 export type ConductorOption = {
     id: number;
     nombre_completo: string;
@@ -203,36 +169,6 @@ export type VehiculoOption = {
     id: number;
     placa: string;
     descripcion: string;
-};
-
-/** Un tracto parado, sin conductor asignado. */
-export type TractoLibre = {
-    id: number;
-    placa: string;
-    marca: string | null;
-    tuc_numero: string | null;
-    estado: string;
-    caja_label: string | null;
-    documentacion: EstadoDocumental;
-};
-
-/** Una carreta sin enganchar a ninguna unidad. */
-export type CarretaLibre = {
-    id: number;
-    placa: string;
-    marca: string | null;
-    estado: string;
-    documentacion: EstadoDocumental;
-};
-
-/** Un conductor activo que hoy no maneja ninguna unidad. */
-export type ConductorLibre = {
-    id: number;
-    nombre_completo: string;
-    telefono: string | null;
-    licencia: string | null;
-    categoria_licencia: string | null;
-    documentacion: EstadoDocumental;
 };
 
 export type PaginationLink = {
@@ -254,33 +190,28 @@ export type Paginator<T> = {
 
 type EstadoConfig = {
     label: string;
-    badge: string;
-    dot: string;
+    tone: StatusTone;
 };
 
 /**
- * Visual config per vehicle status (label, badge classes, indicator dot).
+ * Visual config per vehicle status (label, status tone).
  */
 export const estadoConfig: Record<string, EstadoConfig> = {
     activo: {
         label: 'Operativo',
-        badge: 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20',
-        dot: 'bg-emerald-500',
+        tone: 'success',
     },
     en_mantenimiento: {
         label: 'En mantenimiento',
-        badge: 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20',
-        dot: 'bg-amber-500',
+        tone: 'warning',
     },
     inactivo: {
         label: 'Inactivo',
-        badge: 'bg-zinc-100 text-zinc-600 ring-1 ring-zinc-500/20',
-        dot: 'bg-zinc-400',
+        tone: 'neutral',
     },
     dado_de_baja: {
         label: 'Dado de baja',
-        badge: 'bg-red-50 text-red-700 ring-1 ring-red-600/20',
-        dot: 'bg-red-500',
+        tone: 'danger',
     },
 };
 
@@ -302,6 +233,8 @@ export const cajaLabels: Record<string, string> = {
 export type ViajeListItem = {
     id: number;
     numero_gr: string;
+    /** Misma clave → misma salida física del camión (heurística: fecha + tracto + carreta + conductor). */
+    grupo_viaje: string;
     fecha_traslado: string;
     placa_tracto: string;
     placa_carreta: string | null;
@@ -313,11 +246,14 @@ export type ViajeListItem = {
     conductor_id: number | null;
     cliente: string;
     destinatario: string;
+    /** Dirección completa; para la tabla usa `origen_ciudad`. */
     origen: string;
-    /** Dirección completa; para la tabla usa `destino_region`. */
+    /** Ciudad (distrito) de origen, ej. «ANTAUTA» — no el departamento. */
+    origen_ciudad: string;
+    /** Dirección completa; para la tabla usa `destino_ciudad`. */
     destino: string;
-    /** Departamento/región, el final de la dirección (ej. «PUNO»). */
-    destino_region: string;
+    /** Ciudad (distrito) de destino, ej. «PARACAS» — no el departamento. */
+    destino_ciudad: string;
     tipo_carga: string;
     tipo_carga_label: string;
     peso: number;
@@ -356,40 +292,24 @@ export type AsistenciaFila = {
     marcas: Record<string, AsistenciaMarca>;
 };
 
-/** Lo que un aviso de WhatsApp reportó para un tracto: carga o libre. */
-export type EstadoProgramacion =
-    | 'metalico'
-    | 'concentrado'
-    | 'escoria'
-    | 'ransa'
-    | 'polytex'
-    | 'particular'
-    | 'salida'
-    | 'libre';
-
-/** La marca de un tracto para un día. Sin marca = sin aviso todavía. */
-export type ProgramacionMarca = {
-    programacion_id: number;
-    estado: EstadoProgramacion;
-    estado_label: string;
-    /** Vistazo rápido: cuál era el estado justo antes de este cambio. */
-    estado_anterior_label: string | null;
-    /** Hora (H:i) del último cambio de estado, o null si nunca cambió hoy. */
-    estado_cambiado_en: string | null;
-    /** Hacia dónde va la unidad (Callao, Pisco, mina...). */
-    destino: string | null;
-    /** El cliente final del viaje, solo cuando `estado` es "particular". */
-    cliente: string | null;
-    observaciones: string | null;
+/** Un día de la grilla del calendario individual: puede ser relleno del mes vecino. */
+export type AsistenciaCalendarioDia = AsistenciaDia & {
+    es_relleno: boolean;
 };
 
-/** Una fila del tablero de programación: un tracto y su marca del día. */
-export type ProgramacionFila = {
-    vehiculo_id: number;
-    placa: string;
-    caja_label: string | null;
-    conductor_nombre: string | null;
-    marca: ProgramacionMarca | null;
+/** El conductor dueño del calendario individual de asistencia. */
+export type AsistenciaConductor = {
+    id: number;
+    nombre_completo: string;
+};
+
+/** Un mes completo del calendario individual, con su propia grilla y marcas. */
+export type AsistenciaCalendarioMes = {
+    mes: string;
+    dias: AsistenciaCalendarioDia[];
+    marcas: Record<string, AsistenciaMarca>;
+    /** Días de descanso que se le deben al conductor ese mes: lo escribe el admin a mano. */
+    dias_debidos: number;
 };
 
 export type NovedadItem = {

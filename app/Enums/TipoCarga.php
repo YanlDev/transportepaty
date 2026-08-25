@@ -60,4 +60,44 @@ enum TipoCarga: string
             fn (array $opcion): bool => ! in_array($opcion['value'], $excluidos, true),
         ));
     }
+
+    /**
+     * RUC de Minsur S.A. — el único cliente donde el prefijo de serie de su
+     * guía remitente identifica la carga de forma consistente (verificado
+     * contra el histórico completo de guías remitente descargadas de SUNAT,
+     * agosto 2026). Otros clientes no numeran así, así que esta regla no
+     * aplica fuera de este RUC.
+     */
+    public const RUC_MINSUR = '20100136741';
+
+    /**
+     * T007 = concentrado de estaño (mina → fundición). T004 = metálico /
+     * estaño refinado (fundición → puerto Callao, para exportar vía Impala
+     * Terminals). T005 = escoria (subproducto de la fundición). T012 y T008
+     * = materiales — insumos y repuestos de mina, no el mineral en sí (el
+     * fixture de prueba `gr-minsur-ransa-peso-sin-decimales.pdf` es de esta
+     * serie).
+     *
+     * @var array<string, self>
+     */
+    private const SERIES_MINSUR = [
+        'T007' => self::Concentrado,
+        'T004' => self::Metalico,
+        'T005' => self::Escoria,
+        'T012' => self::Materiales,
+        'T008' => self::Materiales,
+    ];
+
+    /**
+     * Deriva el tipo de carga a partir de la serie de una guía remitente de
+     * Minsur (ej. «T007 - 9609» → Concentrado). Devuelve null si la serie no
+     * es una de las reconocidas — quien llame decide qué hacer con eso (no
+     * clasificar, dejar en Particular, etc.), esto no asume un default.
+     */
+    public static function desdeGuiaRemitenteMinsur(string $numeroGuiaRemitente): ?self
+    {
+        $serie = strtoupper(trim(explode('-', $numeroGuiaRemitente)[0]));
+
+        return self::SERIES_MINSUR[$serie] ?? null;
+    }
 }

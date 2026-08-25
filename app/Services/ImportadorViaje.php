@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\TipoCarga;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -71,29 +72,42 @@ class ImportadorViaje
         $conductor = $this->buscarConductor($campos['conductor_dni']);
         [$cliente, $clienteRuc] = $this->clienteReal($campos);
 
-        $viaje = Viaje::query()->updateOrCreate(
-            ['numero_gr' => $campos['numero_gr']],
-            [
-                'fecha_emision' => $fechaEmision,
-                'fecha_traslado' => $fechaTraslado,
-                'origen' => $campos['origen'],
-                'destino' => $campos['destino'],
-                'cliente' => $cliente,
-                'cliente_ruc' => $clienteRuc,
-                'destinatario' => $campos['destinatario'],
-                'destinatario_ruc' => $campos['destinatario_ruc'],
-                'guias_remitente' => $campos['guias_remitente'],
-                'peso' => $this->normalizarPeso($campos['peso']),
-                'unidad_peso' => $campos['unidad_peso'],
-                'placa_tracto' => $campos['placa_tracto'],
-                'placa_carreta' => $campos['placa_carreta'],
-                'tracto_id' => $tracto?->id,
-                'carreta_id' => $carreta?->id,
-                'conductor_nombre' => $campos['conductor_nombre'],
-                'conductor_dni' => $campos['conductor_dni'],
-                'conductor_id' => $conductor?->id,
-            ],
-        );
+        // La clasificación automática (ver `clasificarCarga`) solo se aplica
+        // al crear: un viaje que ya existe pudo haber sido corregido a mano
+        // (`TipoCarga` no se puede leer del PDF de transportista, alguien lo
+        // clasifica), y resubir la misma GR no debe pisar esa corrección.
+        $yaExiste = Viaje::query()->where('numero_gr', $campos['numero_gr'])->exists();
+
+        $atributos = [
+            'fecha_emision' => $fechaEmision,
+            'fecha_traslado' => $fechaTraslado,
+            'origen' => $campos['origen'],
+            'destino' => $campos['destino'],
+            'cliente' => $cliente,
+            'cliente_ruc' => $clienteRuc,
+            'destinatario' => $campos['destinatario'],
+            'destinatario_ruc' => $campos['destinatario_ruc'],
+            'guias_remitente' => $campos['guias_remitente'],
+            'peso' => $this->normalizarPeso($campos['peso']),
+            'unidad_peso' => $campos['unidad_peso'],
+            'placa_tracto' => $campos['placa_tracto'],
+            'placa_carreta' => $campos['placa_carreta'],
+            'tracto_id' => $tracto?->id,
+            'carreta_id' => $carreta?->id,
+            'conductor_nombre' => $campos['conductor_nombre'],
+            'conductor_dni' => $campos['conductor_dni'],
+            'conductor_id' => $conductor?->id,
+        ];
+
+        if (! $yaExiste) {
+            $tipoCarga = $this->clasificarCarga($campos['guias_remitente']);
+
+            if ($tipoCarga !== null) {
+                $atributos['tipo_carga'] = $tipoCarga->value;
+            }
+        }
+
+        $viaje = Viaje::query()->updateOrCreate(['numero_gr' => $campos['numero_gr']], $atributos);
 
         // El origen no debe borrarse: es el archivo subido por HTTP, no algo
         // desechable que MediaLibrary pueda consumir.
@@ -169,6 +183,28 @@ class ImportadorViaje
         }
 
         return [Str::upper($campos['cliente']), $campos['cliente_ruc']];
+    }
+
+    /**
+     * @see TipoCarga::desdeGuiaRemitenteMinsur() para la regla en sí. Solo
+     * mira la primera guía remitente referenciada: en el histórico revisado,
+     * cuando un viaje trae más de una siempre son de la misma serie.
+     *
+     * Pública porque también la usa el comando de reclasificación masiva
+     * (`transpaty:clasificar-carga-minsur`), que corrige viajes que ya
+     * existían antes de que esta regla se agregara.
+     *
+     * @param  list<array{numero: string, ruc: string}>  $guiasRemitente
+     */
+    public function clasificarCarga(array $guiasRemitente): ?TipoCarga
+    {
+        $primera = $guiasRemitente[0] ?? null;
+
+        if ($primera === null || $primera['ruc'] !== TipoCarga::RUC_MINSUR) {
+            return null;
+        }
+
+        return TipoCarga::desdeGuiaRemitenteMinsur($primera['numero']);
     }
 
     private function buscarVehiculo(?string $placa): ?Vehiculo

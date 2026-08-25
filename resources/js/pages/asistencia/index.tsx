@@ -1,15 +1,14 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import asistencia, {
     destroy,
     marcar,
+    show,
 } from '@/actions/App/Http/Controllers/AsistenciaController';
+import { EstadoAsistenciaOpciones } from '@/components/asistencia/estado-asistencia-opciones';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -20,6 +19,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { estadoConfig } from '@/lib/asistencia';
 import { cn } from '@/lib/utils';
 import type {
     AsistenciaDia,
@@ -31,32 +31,6 @@ type Props = {
     inicioCiclo: string;
     dias: AsistenciaDia[];
     filas: AsistenciaFila[];
-};
-
-const estadoConfig: Record<
-    EstadoAsistencia,
-    { label: string; letra: string; badge: string }
-> = {
-    asistencia: {
-        label: 'Asistencia',
-        letra: 'A',
-        badge: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300',
-    },
-    falta: {
-        label: 'Falta',
-        letra: 'F',
-        badge: 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300',
-    },
-    vacaciones: {
-        label: 'Vacaciones',
-        letra: 'V',
-        badge: 'bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300',
-    },
-    descanso: {
-        label: 'Descanso',
-        letra: 'D',
-        badge: 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300',
-    },
 };
 
 /**
@@ -94,9 +68,6 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Asistencia
-                    </h1>
                     <p className="text-sm text-muted-foreground">
                         Rooster del ciclo de planilla (del 28 al 27 del mes
                         siguiente): quién trabajó, faltó, o está de vacaciones o
@@ -191,7 +162,12 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
                                         'sticky left-0 z-10 w-36 max-w-36 truncate bg-background font-medium tracking-wide uppercase',
                                     )}
                                 >
-                                    {fila.nombre_completo}
+                                    <Link
+                                        href={show(fila.conductor_id).url}
+                                        className="hover:underline"
+                                    >
+                                        {fila.nombre_completo}
+                                    </Link>
                                 </TableCell>
                                 {dias.map((dia) => (
                                     <TableCell
@@ -265,37 +241,12 @@ function Celda({
             >
                 {info ? info.letra : '·'}
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="center">
-                {(Object.keys(estadoConfig) as EstadoAsistencia[]).map(
-                    (estado) => (
-                        <DropdownMenuItem
-                            key={estado}
-                            onSelect={() => marcarComo(estado)}
-                        >
-                            <span
-                                className={cn(
-                                    'grid size-4 place-items-center rounded-none text-[10px] font-bold',
-                                    estadoConfig[estado].badge,
-                                )}
-                            >
-                                {estadoConfig[estado].letra}
-                            </span>
-                            {estadoConfig[estado].label}
-                        </DropdownMenuItem>
-                    ),
-                )}
-                {marca && (
-                    <>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem
-                            onSelect={quitarMarca}
-                            className="text-muted-foreground"
-                        >
-                            Quitar marca
-                        </DropdownMenuItem>
-                    </>
-                )}
-            </DropdownMenuContent>
+            <EstadoAsistenciaOpciones
+                align="center"
+                marca={marca}
+                onSeleccionar={marcarComo}
+                onQuitar={quitarMarca}
+            />
         </DropdownMenu>
     );
 }

@@ -23,6 +23,8 @@ import type { EnumOption, Vehiculo } from '@/types/fleet';
 type Props = {
     mode: 'create' | 'edit';
     vehiculo?: Vehiculo;
+    /** Solo en `create`: preselecciona el tipo según desde qué listado se entró. */
+    tipoInicial?: string;
     tipos: EnumOption[];
     cajas: EnumOption[];
     estados: EnumOption[];
@@ -47,13 +49,20 @@ type FormData = {
     observaciones: string;
 };
 
-export function VehiculoForm({ mode, vehiculo, tipos, cajas, estados }: Props) {
+export function VehiculoForm({
+    mode,
+    vehiculo,
+    tipoInicial,
+    tipos,
+    cajas,
+    estados,
+}: Props) {
     const { data, setData, post, put, processing, errors } = useForm<FormData>({
         placa: vehiculo?.placa ?? '',
         marca: vehiculo?.marca ?? '',
         modelo: vehiculo?.modelo ?? '',
         anio: vehiculo?.anio ?? '',
-        tipo: vehiculo?.tipo ?? 'tracto',
+        tipo: vehiculo?.tipo ?? tipoInicial ?? 'tracto',
         estado: vehiculo?.estado ?? 'activo',
         caja: vehiculo?.caja ?? '',
         vin: vehiculo?.vin ?? '',
@@ -80,7 +89,11 @@ export function VehiculoForm({ mode, vehiculo, tipos, cajas, estados }: Props) {
         }
     };
 
-    const volver = vehiculo ? show(vehiculo.id) : vehiculos.index();
+    const volver = vehiculo
+        ? show(vehiculo.id)
+        : data.tipo === 'carreta'
+          ? vehiculos.carretas()
+          : vehiculos.tractos();
 
     return (
         <form onSubmit={submit} className="flex flex-col gap-6">

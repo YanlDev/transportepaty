@@ -14,7 +14,6 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
@@ -89,43 +88,6 @@ class Vehiculo extends Model
     public function documentos(): HasMany
     {
         return $this->hasMany(VehiculoDocumento::class)->latest();
-    }
-
-    /**
-     * Asignación en curso cuando el vehículo es la unidad motriz. Se usa sobre
-     * todo con `doesntHave` para listar los tractos que están sin conductor.
-     *
-     * @return HasOne<Asignacion, $this>
-     */
-    public function asignacionVigenteComoTracto(): HasOne
-    {
-        return $this->hasOne(Asignacion::class, 'tracto_id')->whereNull('hasta');
-    }
-
-    /**
-     * Asignación en curso cuando el vehículo es la unidad remolcada.
-     *
-     * @return HasOne<Asignacion, $this>
-     */
-    public function asignacionVigenteComoCarreta(): HasOne
-    {
-        return $this->hasOne(Asignacion::class, 'carreta_id')->whereNull('hasta');
-    }
-
-    /**
-     * Vehículos del tipo indicado que hoy no están en ninguna unidad y que
-     * todavía pueden recibir una: los tractos sin conductor y las carretas sin
-     * enganchar. Los dados de baja quedan fuera porque ya salieron de la flota.
-     *
-     * @param  Builder<$this>  $query
-     */
-    public function scopeSinAsignar(Builder $query, TipoVehiculo $tipo): void
-    {
-        $query->where('tipo', $tipo->value)
-            ->whereIn('estado', EstadoVehiculo::asignables())
-            ->doesntHave($tipo === TipoVehiculo::Tracto
-                ? 'asignacionVigenteComoTracto'
-                : 'asignacionVigenteComoCarreta');
     }
 
     /**

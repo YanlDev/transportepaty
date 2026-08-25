@@ -6,21 +6,22 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 /**
- * Solo el departamento/región en la celda, que es lo que se necesita de un
+ * Solo la ciudad (distrito) en la celda, que es lo que se necesita de un
  * vistazo; la dirección completa —larga, y la mayoría de las veces no hace
- * falta— vive en el desplegable.
+ * falta— vive en el desplegable. Genérico a propósito: sirve igual para
+ * origen que para destino, son la misma forma de dato.
  */
-export function DestinoCelda({
-    region,
+export function DireccionCelda({
+    ciudad,
     direccion,
 }: {
-    region: string;
+    ciudad: string;
     direccion: string;
 }) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap hover:underline">
-                {region}
+                {ciudad}
                 <ChevronDown className="size-3.5 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-w-xs">

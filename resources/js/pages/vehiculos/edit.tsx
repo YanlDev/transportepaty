@@ -15,9 +15,15 @@ type Props = {
 };
 
 export default function VehiculoEdit({ vehiculo, ...props }: Props) {
+    const esCarreta = vehiculo.tipo === 'carreta';
+
     setLayoutProps({
         breadcrumbs: [
-            { title: 'Vehículos', href: vehiculos.index().url },
+            {
+                title: esCarreta ? 'Carretas' : 'Tractos',
+                href: (esCarreta ? vehiculos.carretas() : vehiculos.tractos())
+                    .url,
+            },
             {
                 title: formatearPlaca(vehiculo.placa),
                 href: show(vehiculo.id).url,
@@ -31,9 +37,6 @@ export default function VehiculoEdit({ vehiculo, ...props }: Props) {
             <Head title={`Editar ${formatearPlaca(vehiculo.placa)}`} />
 
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                    Editar vehículo
-                </h1>
                 <p className="text-sm text-muted-foreground">
                     {vehiculo.marca} {vehiculo.modelo} ·{' '}
                     {formatearPlaca(vehiculo.placa)}

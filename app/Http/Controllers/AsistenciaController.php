@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Enums\EstadoAsistencia;
+use App\Http\Requests\ActualizarDiasDebidosRequest;
 use App\Http\Requests\MarcarAsistenciaRequest;
 use App\Models\Asistencia;
 use App\Models\Conductor;
+use App\Models\DescansoDebido;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,6 +38,15 @@ class AsistenciaController extends Controller
      * @var list<string>
      */
     private const DIAS_SEMANA = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+    /**
+     * Cuántos meses se ven a la vez en el calendario individual por
+     * defecto, y el máximo que se puede pedir (más que eso y las tarjetas
+     * quedan demasiado chicas para marcar cómodo).
+     */
+    private const CANTIDAD_MESES_DEFECTO = 2;
+
+    private const CANTIDAD_MESES_MAXIMA = 4;
 
     public function index(Request $request): Response
     {
@@ -72,6 +83,55 @@ class AsistenciaController extends Controller
         ]);
     }
 
+    /**
+     * Calendario de mes normal de un conductor —a diferencia del rooster,
+     * que sigue el ciclo de planilla 28-27—, para marcar su asistencia sin
+     * tener que ubicarlo en la fila que le toca en la grilla grande.
+     */
+    public function show(Request $request, Conductor $conductor): Response
+    {
+        $this->authorize('viewAny', Asistencia::class);
+
+        $mesInicio = $this->mesPedido($request);
+        $cantidadMeses = $this->cantidadMesesPedida($request);
+        $mesFin = $mesInicio->addMonthsNoOverflow($cantidadMeses - 1);
+
+        $diasDebidos = DescansoDebido::query()
+            ->where('conductor_id', $conductor->id)
+            ->whereBetween('mes', [$mesInicio->toDateString(), $mesFin->toDateString()])
+            ->get()
+            ->keyBy(fn (DescansoDebido $descansoDebido): string => $descansoDebido->mes->toDateString());
+
+        $calendarios = [];
+
+        for ($i = 0; $i < $cantidadMeses; $i++) {
+            $mes = $mesInicio->addMonthsNoOverflow($i);
+            $finMes = $mes->endOfMonth();
+
+            $asistencias = Asistencia::query()
+                ->where('conductor_id', $conductor->id)
+                ->whereBetween('fecha', [$mes->toDateString(), $finMes->toDateString()])
+                ->get();
+
+            $calendarios[] = [
+                'mes' => $mes->toDateString(),
+                'dias' => $this->diasDelMes($mes),
+                'marcas' => $this->comoMarcas($asistencias),
+                'dias_debidos' => $diasDebidos->get($mes->toDateString())->dias_debidos ?? 0,
+            ];
+        }
+
+        return Inertia::render('asistencia/show', [
+            'conductor' => [
+                'id' => $conductor->id,
+                'nombre_completo' => "{$conductor->apellidos} {$conductor->nombres}",
+            ],
+            'mes' => $mesInicio->toDateString(),
+            'cantidadMeses' => $cantidadMeses,
+            'calendarios' => $calendarios,
+        ]);
+    }
+
     public function marcar(MarcarAsistenciaRequest $request, Conductor $conductor): RedirectResponse
     {
         $this->authorize('create', Asistencia::class);
@@ -90,6 +150,27 @@ class AsistenciaController extends Controller
         }
 
         $asistencia->save();
+
+        return back();
+    }
+
+    /**
+     * Cuántos días de descanso se le deben a un conductor ese mes —un
+     * número que el admin escribe a mano, independiente de mes a mes (no
+     * arrastra saldo), porque la deuda real incluye meses de antes de este
+     * sistema y no hay forma de reconstruirla desde las marcas.
+     */
+    public function actualizarDiasDebidos(ActualizarDiasDebidosRequest $request, Conductor $conductor): RedirectResponse
+    {
+        $this->authorize('update', DescansoDebido::class);
+
+        DescansoDebido::query()->updateOrCreate(
+            [
+                'conductor_id' => $conductor->id,
+                'mes' => CarbonImmutable::parse($request->string('mes')->value())->startOfMonth()->toDateString(),
+            ],
+            ['dias_debidos' => $request->integer('dias_debidos')],
+        );
 
         return back();
     }
@@ -149,6 +230,63 @@ class AsistenciaController extends Controller
                 'fecha' => $dia->toDateString(),
                 'dia_semana' => self::DIAS_SEMANA[$dia->dayOfWeekIso - 1],
                 'es_domingo' => $dia->dayOfWeekIso === 7,
+            ];
+        }
+
+        return $dias;
+    }
+
+    /**
+     * El mes pedido para el calendario individual, o el mes en curso si no
+     * se pidió uno válido. A diferencia del ciclo de planilla, este sí es el
+     * mes calendario normal (1 al 30/31).
+     */
+    private function mesPedido(Request $request): CarbonImmutable
+    {
+        $mes = $request->string('mes')->value();
+
+        try {
+            return $mes === '' ? CarbonImmutable::now()->startOfMonth() : CarbonImmutable::parse($mes)->startOfMonth();
+        } catch (\Exception) {
+            return CarbonImmutable::now()->startOfMonth();
+        }
+    }
+
+    /**
+     * Cuántos meses pidió ver a la vez, limitado a un rango razonable —el
+     * frontend igual clampea la selección, pero esto cubre a quien arme la
+     * URL a mano.
+     */
+    private function cantidadMesesPedida(Request $request): int
+    {
+        $cantidad = $request->integer('meses', self::CANTIDAD_MESES_DEFECTO);
+
+        return max(1, min(self::CANTIDAD_MESES_MAXIMA, $cantidad));
+    }
+
+    /**
+     * La grilla del calendario individual: semanas completas de lunes a
+     * domingo, así que los primeros y últimos días pueden pertenecer al mes
+     * anterior o siguiente —se marcan con `es_relleno` para que el frontend
+     * los pinte apagados y no editables.
+     *
+     * @return list<array{numero: int, fecha: string, dia_semana: string, es_domingo: bool, es_relleno: bool}>
+     */
+    private function diasDelMes(CarbonImmutable $mes): array
+    {
+        $inicioGrilla = $mes->subDays($mes->dayOfWeekIso - 1);
+        $finMes = $mes->endOfMonth();
+        $finGrilla = $finMes->addDays(7 - $finMes->dayOfWeekIso);
+
+        $dias = [];
+
+        for ($dia = $inicioGrilla; $dia->lte($finGrilla); $dia = $dia->addDay()) {
+            $dias[] = [
+                'numero' => $dia->day,
+                'fecha' => $dia->toDateString(),
+                'dia_semana' => self::DIAS_SEMANA[$dia->dayOfWeekIso - 1],
+                'es_domingo' => $dia->dayOfWeekIso === 7,
+                'es_relleno' => ! $dia->isSameMonth($mes),
             ];
         }
 

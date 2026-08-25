@@ -10,6 +10,7 @@ import { ConductorTarjetaMovil } from '@/components/conductores/conductor-tarjet
 import { DeleteConductorDialog } from '@/components/conductores/delete-conductor-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { StatusBadge } from '@/components/ui/status-badge';
 import {
     Table,
     TableBody,
@@ -58,9 +59,6 @@ export default function ConductoresIndex({
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Conductores
-                    </h1>
                     <p className="text-sm text-muted-foreground">
                         {paginador.total}{' '}
                         {paginador.total === 1
@@ -88,7 +86,7 @@ export default function ConductoresIndex({
 
             {paginador.data.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-none bg-muted text-muted-foreground">
+                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
                         <User className="size-7" />
                     </div>
                     <p className="font-medium">No se encontraron conductores</p>
@@ -171,17 +169,19 @@ export default function ConductoresIndex({
                                             {conductor.procedencia ?? '—'}
                                         </TableCell>
                                         <TableCell>
-                                            <span
-                                                className={
+                                            <StatusBadge
+                                                label={
                                                     conductor.activo
-                                                        ? 'inline-flex items-center rounded-none bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-600/20'
-                                                        : 'inline-flex items-center rounded-none bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 ring-1 ring-zinc-500/20'
+                                                        ? 'Activo'
+                                                        : 'Inactivo'
                                                 }
-                                            >
-                                                {conductor.activo
-                                                    ? 'Activo'
-                                                    : 'Inactivo'}
-                                            </span>
+                                                tone={
+                                                    conductor.activo
+                                                        ? 'success'
+                                                        : 'neutral'
+                                                }
+                                                dot={false}
+                                            />
                                         </TableCell>
                                         {puedeGestionar && (
                                             <TableCell className="text-right">

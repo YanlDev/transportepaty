@@ -63,7 +63,34 @@ it('creates a viaje from a real GR and resolves the tracto, carreta and conducto
         ->and($viaje->tracto_id)->toBe($tracto->id)
         ->and($viaje->carreta_id)->toBe($carreta->id)
         ->and($viaje->conductor_id)->toBe($conductor->id)
-        ->and($viaje->getFirstMedia('archivo'))->not->toBeNull();
+        ->and($viaje->getFirstMedia('archivo'))->not->toBeNull()
+        // La guía remitente referenciada es T007-9590: serie de concentrado.
+        ->and($viaje->tipo_carga)->toBe(TipoCarga::Concentrado);
+});
+
+it('clasifica un viaje de Minsur como Materiales cuando la guía remitente es serie T012', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-minsur-ransa-peso-sin-decimales.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    expect(Viaje::query()->sole()->tipo_carga)->toBe(TipoCarga::Materiales);
+});
+
+it('no reclasifica un viaje de Minsur que se resube si ya tenía un tipo de carga distinto de Particular', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-minsur-concentrado.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    $viaje = Viaje::query()->sole();
+    $viaje->update(['tipo_carga' => TipoCarga::Particular]);
+
+    // Resubir la misma GR (mismo numero_gr) actualiza el viaje, no lo crea de
+    // nuevo — la clasificación automática solo corre en la creación.
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-minsur-concentrado.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    expect($viaje->refresh()->tipo_carga)->toBe(TipoCarga::Particular);
 });
 
 it('records the subcontratador as the cliente, not the remitente printed on the GR', function (): void {
@@ -90,18 +117,21 @@ it('uppercases the cliente so the same company does not look like two different 
     expect(Viaje::query()->sole()->cliente)->toBe('CERAMICA SAN LORENZO S.A.C.');
 });
 
-it('derives the destination region from the tail of the address', function (): void {
+it('derives the destination city from the address (distrito, not departamento)', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('viajes.store'), ['archivos' => [gr()]])
         ->assertSessionHasNoErrors();
 
     $viaje = Viaje::query()->sole();
 
-    expect($viaje->regionDestino())->toBe('ICA');
+    expect($viaje->ciudadOrigen())->toBe('ANTAUTA')
+        ->and($viaje->ciudadDestino())->toBe('PARACAS');
 
     actingAs(actorConRol('admin'))
         ->get(route('viajes.index'))
-        ->assertInertia(fn ($page) => $page->where('viajes.data.0.destino_region', 'ICA'));
+        ->assertInertia(fn ($page) => $page
+            ->where('viajes.data.0.origen_ciudad', 'ANTAUTA')
+            ->where('viajes.data.0.destino_ciudad', 'PARACAS'));
 });
 
 it('keeps the raw plate and driver text even when nothing matches the padrón', function (): void {
@@ -215,8 +245,11 @@ it('counts pending viajes for the index and forbids a visor from resolving', fun
 });
 
 it('defaults a new viaje to Particular and lets an admin reclassify it', function (): void {
+    // No usa el fixture default (gr-minsur-concentrado.pdf): ese sí se
+    // autoclasifica ahora (ver ImportadorViajeTest / ClasificarCargaMinsur),
+    // así que no sirve para probar el default "sin clasificar".
     actingAs(actorConRol('admin'))
-        ->post(route('viajes.store'), ['archivos' => [gr()]])
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-combustible-destinatario-partido.pdf')]])
         ->assertSessionHasNoErrors();
 
     $viaje = Viaje::query()->sole();
@@ -309,7 +342,7 @@ it('lets an admin register a viaje manually when the remitente already emitted t
         ->and($viaje->conductor_nombre)->toBe(strtoupper("{$conductor->apellidos} {$conductor->nombres}"))
         ->and($viaje->tipo_carga)->toBe(TipoCarga::Concentrado)
         ->and($viaje->destino)->toBe('JR. PIURA 123 - ILO - ILO - MOQUEGUA')
-        ->and($viaje->regionDestino())->toBe('MOQUEGUA')
+        ->and($viaje->ciudadDestino())->toBe('ILO')
         ->and($viaje->getFirstMedia('archivo'))->toBeNull();
 });
 
@@ -383,5 +416,36 @@ it('finds a viaje by destino', function (): void {
 
     actingAs(actorConRol('admin'))
         ->get(route('viajes.index', ['buscar' => $fragmento]))
+        ->assertInertia(fn ($page) => $page->has('viajes.data', 1));
+});
+
+it('filters the list by cliente, tipo_carga and destino_ciudad', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr(), gr('gr-san-lorenzo-multi-guia.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    $minsur = Viaje::query()->where('cliente', 'MINSUR S.A.')->sole();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.index', ['cliente' => 'MINSUR S.A.']))
+        ->assertInertia(fn ($page) => $page->has('viajes.data', 1)
+            ->where('viajes.data.0.cliente', 'MINSUR S.A.'));
+
+    // La GR de Minsur se autoclasificó como Concentrado (serie T007); la de
+    // San Lorenzo se queda en el default Particular — filtrar por
+    // Concentrado debe traer solo la primera.
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.index', ['tipo_carga' => TipoCarga::Concentrado->value]))
+        ->assertInertia(fn ($page) => $page->has('viajes.data', 1)
+            ->where('viajes.data.0.tipo_carga', TipoCarga::Concentrado->value));
+
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.index', ['destino_ciudad' => $minsur->ciudadDestino()]))
+        ->assertInertia(fn ($page) => $page->has('viajes.data', 1)
+            ->where('viajes.data.0.destino_ciudad', $minsur->ciudadDestino()));
+
+    // Combinar filtros con la búsqueda de texto también debe funcionar.
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.index', ['cliente' => 'MINSUR S.A.', 'buscar' => 'CAM703']))
         ->assertInertia(fn ($page) => $page->has('viajes.data', 1));
 });

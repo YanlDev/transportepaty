@@ -25,6 +25,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { StatusBadge } from '@/components/ui/status-badge';
 import {
     Table,
     TableBody,
@@ -116,9 +117,6 @@ export default function Dashboard({
             <Head title="Dashboard" />
 
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                    Resumen de flota
-                </h1>
                 <p className="text-sm text-muted-foreground">
                     Estado general de las unidades, su documentación y la
                     operación del día.
@@ -379,17 +377,19 @@ export default function Dashboard({
                                         {documento.fecha_vencimiento ?? '—'}
                                     </TableCell>
                                     <TableCell>
-                                        <span
-                                            className={
+                                        <StatusBadge
+                                            label={
                                                 documento.vencido
-                                                    ? 'inline-flex items-center rounded-none bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700 ring-1 ring-red-600/20'
-                                                    : 'inline-flex items-center rounded-none bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-amber-600/20'
+                                                    ? 'Vencido'
+                                                    : 'Por vencer'
                                             }
-                                        >
-                                            {documento.vencido
-                                                ? 'Vencido'
-                                                : 'Por vencer'}
-                                        </span>
+                                            tone={
+                                                documento.vencido
+                                                    ? 'danger'
+                                                    : 'warning'
+                                            }
+                                            dot={false}
+                                        />
                                     </TableCell>
                                 </TableRow>
                             ))}

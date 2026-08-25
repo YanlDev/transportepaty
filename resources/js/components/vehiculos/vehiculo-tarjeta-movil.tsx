@@ -39,8 +39,7 @@ export function VehiculoTarjetaMovil({
             </div>
 
             <p className="text-xs text-muted-foreground">
-                {vehiculo.tipo_label}
-                {vehiculo.marca && ` · ${vehiculo.marca}`}
+                {vehiculo.marca ?? '—'}
                 {vehiculo.caja_label && ` · ${vehiculo.caja_label}`}
             </p>
 

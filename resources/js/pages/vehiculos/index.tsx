@@ -1,5 +1,5 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import { Plus, Truck } from 'lucide-react';
+import { Head, Link, router, setLayoutProps, usePage } from '@inertiajs/react';
+import { Container, Plus, Truck } from 'lucide-react';
 import vehiculos, {
     create,
     show,
@@ -26,46 +26,78 @@ import type { FiltrosVehiculo } from '@/hooks/use-vehiculo-filtros';
 import { formatearPlaca } from '@/lib/format';
 import type { EnumOption, Paginator, VehiculoListItem } from '@/types/fleet';
 
+type Seccion = 'tracto' | 'carreta';
+
 type Props = {
     vehiculos: Paginator<VehiculoListItem>;
     filtros: FiltrosVehiculo;
+    seccion: Seccion;
     estados: EnumOption[];
-    tipos: EnumOption[];
+    marcas: EnumOption[];
     cajas: EnumOption[];
+};
+
+const TEXTOS: Record<
+    Seccion,
+    {
+        titulo: string;
+        singular: string;
+        plural: string;
+        nuevo: string;
+        icono: typeof Truck;
+    }
+> = {
+    tracto: {
+        titulo: 'Tractos',
+        singular: 'tracto registrado',
+        plural: 'tractos registrados',
+        nuevo: 'Nuevo tracto',
+        icono: Truck,
+    },
+    carreta: {
+        titulo: 'Carretas',
+        singular: 'carreta registrada',
+        plural: 'carretas registradas',
+        nuevo: 'Nueva carreta',
+        icono: Container,
+    },
 };
 
 export default function VehiculosIndex({
     vehiculos: paginador,
     filtros,
+    seccion,
     estados,
-    tipos,
+    marcas,
     cajas,
 }: Props) {
     const { auth } = usePage().props;
     const puedeGestionar = auth.roles.includes('admin');
+    const textos = TEXTOS[seccion];
+    const url = (seccion === 'tracto' ? vehiculos.tractos() : vehiculos.carretas()).url;
+    const IconoVacio = textos.icono;
+
+    setLayoutProps({
+        breadcrumbs: [{ title: textos.titulo, href: url }],
+    });
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
-            <Head title="Vehículos" />
+            <Head title={textos.titulo} />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Vehículos
-                    </h1>
                     <p className="text-sm text-muted-foreground">
                         {paginador.total}{' '}
-                        {paginador.total === 1
-                            ? 'vehículo registrado'
-                            : 'vehículos registrados'}
+                        {paginador.total === 1 ? textos.singular : textos.plural}
                     </p>
                 </div>
 
                 {puedeGestionar && (
                     <Button asChild>
-                        <Link href={create()}>
+                        <Link href={create({ query: { tipo: seccion } })}>
                             <Plus className="size-4" />
-                            Nuevo vehículo
+                            {textos.nuevo}
                         </Link>
                     </Button>
                 )}
@@ -73,26 +105,30 @@ export default function VehiculosIndex({
 
             <VehiculoFiltros
                 filtros={filtros}
-                tipos={tipos}
+                url={url}
                 estados={estados}
+                marcas={marcas}
                 cajas={cajas}
             />
 
             {paginador.data.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-none bg-muted text-muted-foreground">
-                        <Truck className="size-7" />
+                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
+                        <IconoVacio className="size-7" />
                     </div>
-                    <p className="font-medium">No se encontraron vehículos</p>
+                    <p className="font-medium">
+                        No se encontraron {textos.plural}
+                    </p>
                     <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                         Ajusta los filtros de búsqueda
-                        {puedeGestionar && ' o registra tu primer vehículo'}.
+                        {puedeGestionar && ` o registra tu primer${seccion === 'carreta' ? 'a' : ''} ${seccion}`}
+                        .
                     </p>
                     {puedeGestionar && (
                         <Button asChild variant="outline" className="mt-6">
-                            <Link href={create()}>
+                            <Link href={create({ query: { tipo: seccion } })}>
                                 <Plus className="size-4" />
-                                Nuevo vehículo
+                                {textos.nuevo}
                             </Link>
                         </Button>
                     )}
@@ -110,18 +146,19 @@ export default function VehiculosIndex({
                         ))}
                     </div>
 
-                    <div className="hidden overflow-x-auto border sm:block">
+                    <div className="hidden overflow-x-auto rounded-xl border shadow-sm sm:block">
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead>Placa</TableHead>
                                     <TableHead>TUC</TableHead>
                                     <TableHead>Marca</TableHead>
-                                    <TableHead>Tipo</TableHead>
                                     <TableHead className="text-right">
                                         Año
                                     </TableHead>
-                                    <TableHead>Caja</TableHead>
+                                    {seccion === 'tracto' && (
+                                        <TableHead>Caja</TableHead>
+                                    )}
                                     <TableHead>Color</TableHead>
                                     <TableHead>Documentación</TableHead>
                                     <TableHead>Estado</TableHead>
@@ -166,15 +203,14 @@ export default function VehiculosIndex({
                                         <TableCell>
                                             {vehiculo.marca ?? '—'}
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {vehiculo.tipo_label}
-                                        </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {vehiculo.anio ?? '—'}
                                         </TableCell>
-                                        <TableCell className="text-muted-foreground">
-                                            {vehiculo.caja_label ?? '—'}
-                                        </TableCell>
+                                        {seccion === 'tracto' && (
+                                            <TableCell className="text-muted-foreground">
+                                                {vehiculo.caja_label ?? '—'}
+                                            </TableCell>
+                                        )}
                                         <TableCell className="text-muted-foreground">
                                             {vehiculo.color ?? '—'}
                                         </TableCell>
@@ -263,7 +299,3 @@ function Paginacion({ paginador }: { paginador: Paginator<VehiculoListItem> }) {
         </div>
     );
 }
-
-VehiculosIndex.layout = {
-    breadcrumbs: [{ title: 'Vehículos', href: vehiculos.index().url }],
-};

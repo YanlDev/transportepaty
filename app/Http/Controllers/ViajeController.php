@@ -28,6 +28,9 @@ class ViajeController extends Controller
 
         $filtros = [
             'buscar' => $request->string('buscar')->trim()->value(),
+            'cliente' => $request->string('cliente')->trim()->value(),
+            'destino_ciudad' => $request->string('destino_ciudad')->trim()->value(),
+            'tipo_carga' => $request->string('tipo_carga')->trim()->value(),
         ];
 
         $viajes = Viaje::query()
@@ -44,6 +47,18 @@ class ViajeController extends Controller
                         ->orWhereLike('destino', "%{$buscar}%", caseSensitive: false);
                 });
             })
+            ->when($filtros['cliente'], fn ($query, string $cliente) => $query->where('cliente', $cliente))
+            ->when($filtros['tipo_carga'], fn ($query, string $tipoCarga) => $query->where('tipo_carga', $tipoCarga))
+            ->when($filtros['destino_ciudad'], function ($query, string $ciudad): void {
+                // `destino_ciudad` no es una columna —se deriva de `destino`
+                // en el modelo (ver `Viaje::ciudadDesde`)—, así que acá se
+                // busca por el patrón de texto que ese método asume: la
+                // ciudad entre guiones, o al final si la dirección es corta.
+                $query->where(function ($query) use ($ciudad): void {
+                    $query->whereLike('destino', "%- {$ciudad} -%")
+                        ->orWhereLike('destino', "%- {$ciudad}");
+                });
+            })
             ->orderByDesc('fecha_traslado')
             ->orderByDesc('id')
             ->paginate(25)
@@ -51,6 +66,7 @@ class ViajeController extends Controller
             ->through(fn (Viaje $viaje): array => [
                 'id' => $viaje->id,
                 'numero_gr' => $viaje->numero_gr,
+                'grupo_viaje' => $viaje->claveGrupoViaje(),
                 'fecha_traslado' => $viaje->fecha_traslado->toDateString(),
                 'placa_tracto' => $viaje->placa_tracto,
                 'placa_carreta' => $viaje->placa_carreta,
@@ -61,8 +77,9 @@ class ViajeController extends Controller
                 'cliente' => $viaje->cliente,
                 'destinatario' => $viaje->destinatario,
                 'origen' => $viaje->origen,
+                'origen_ciudad' => $viaje->ciudadOrigen(),
                 'destino' => $viaje->destino,
-                'destino_region' => $viaje->regionDestino(),
+                'destino_ciudad' => $viaje->ciudadDestino(),
                 'tipo_carga' => $viaje->tipo_carga->value,
                 'tipo_carga_label' => $viaje->tipo_carga->label(),
                 'peso' => (float) $viaje->peso,
@@ -75,7 +92,46 @@ class ViajeController extends Controller
             'filtros' => $filtros,
             'pendientes' => $this->pendientes()->count(),
             'tiposCarga' => TipoCarga::opcionesDeViaje(),
+            'clientes' => $this->opcionesClientes(),
+            'ciudadesDestino' => $this->opcionesCiudadesDestino(),
         ]);
+    }
+
+    /**
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function opcionesClientes(): array
+    {
+        return Viaje::query()
+            ->select('cliente')
+            ->distinct()
+            ->orderBy('cliente')
+            ->pluck('cliente')
+            ->map(fn (string $cliente): array => ['value' => $cliente, 'label' => $cliente])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Igual que las ciudades no son una columna (ver `Viaje::ciudadDesde`),
+     * la lista de opciones sale de derivar cada `destino` distinto y
+     * deduplicar — varias direcciones exactas caen en la misma ciudad.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function opcionesCiudadesDestino(): array
+    {
+        return Viaje::query()
+            ->select('destino')
+            ->distinct()
+            ->pluck('destino')
+            ->map(fn (string $destino): string => Viaje::ciudadDesde($destino))
+            ->unique()
+            ->sort()
+            ->values()
+            ->map(fn (string $ciudad): array => ['value' => $ciudad, 'label' => $ciudad])
+            ->values()
+            ->all();
     }
 
     /**
@@ -231,9 +287,8 @@ class ViajeController extends Controller
 
     /**
      * Opciones del formulario manual: toda la flota que todavía no salió de
-     * la operación y los conductores activos. A diferencia de Asignaciones,
-     * no se filtra por «libre»: un viaje puede registrarse para una unidad
-     * que ya está armada, no solo para las que están paradas.
+     * la operación y los conductores activos, sin filtrar por si la unidad ya
+     * está en uso — un viaje puede registrarse para cualquiera de ellas.
      *
      * @return array<string, mixed>
      */

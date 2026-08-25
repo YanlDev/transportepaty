@@ -121,16 +121,6 @@ class ConductorController extends Controller
     {
         $this->authorize('delete', $conductor);
 
-        // Borrar al conductor arrastraría sus asignaciones (cascade) y con
-        // ellas el historial de quién manejó qué unidad. Al que ya trabajó se
-        // le marca inactivo; borrar queda solo para registros equivocados.
-        if ($conductor->asignaciones()->exists()) {
-            return back()->with('toast', [
-                'type' => 'error',
-                'message' => "{$conductor->nombre_completo} tiene historial de asignaciones. Márcalo como inactivo en lugar de eliminarlo.",
-            ]);
-        }
-
         $conductor->delete();
 
         return to_route('conductores.index', $request->query())

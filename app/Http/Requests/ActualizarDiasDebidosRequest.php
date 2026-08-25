@@ -2,12 +2,10 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\EstadoProgramacion;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
-class MarcarProgramacionRequest extends FormRequest
+class ActualizarDiasDebidosRequest extends FormRequest
 {
     /**
      * Determine if the user is authorized to make this request.
@@ -25,11 +23,10 @@ class MarcarProgramacionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'fecha' => ['required', 'date'],
-            'estado' => ['required', Rule::enum(EstadoProgramacion::class)],
-            'destino' => ['nullable', 'string'],
-            'cliente' => ['nullable', 'string'],
-            'observaciones' => ['nullable', 'string'],
+            'mes' => ['required', 'date'],
+            // Puede ser negativo: significa que el conductor descansó de
+            // más ese mes y le debe un día de trabajo a la empresa.
+            'dias_debidos' => ['required', 'integer', 'min:-31', 'max:31'],
         ];
     }
 }

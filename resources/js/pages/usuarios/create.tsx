@@ -16,9 +16,6 @@ export default function UsuarioCreate({ roles, conductores }: Props) {
             <Head title="Nuevo usuario" />
 
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                    Nuevo usuario
-                </h1>
                 <p className="text-sm text-muted-foreground">
                     Crea una cuenta con su contraseña y rol de acceso.
                 </p>

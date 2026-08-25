@@ -1,15 +1,13 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
-    ChevronDown,
     FilePenLine,
-    FileText,
     RefreshCw,
     Route as RouteIcon,
     Trash2,
     Upload,
 } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
 import { show as mostrarVehiculo } from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes, {
@@ -18,7 +16,8 @@ import viajes, {
     resolver,
     store,
 } from '@/actions/App/Http/Controllers/ViajeController';
-import { DestinoCelda } from '@/components/destino-celda';
+import { DireccionCelda } from '@/components/direccion-celda';
+import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
 import { Button } from '@/components/ui/button';
 import {
@@ -41,17 +40,71 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
+import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
+import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';
+import { ViajeDetalleDialog } from '@/components/viajes/viaje-detalle-dialog';
 import { useViajeFiltros } from '@/hooks/use-viaje-filtros';
 import type { FiltrosViaje } from '@/hooks/use-viaje-filtros';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption, Paginator, ViajeListItem } from '@/types/fleet';
 
-/** Celdas compactas con borde propio: misma grilla que la tabla de disponibilidad. */
-const CABECERA = 'h-7 border px-2 py-1';
-const CELDA = 'border px-2 py-1 text-xs';
+type FilaViaje = {
+    viaje: ViajeListItem;
+    agrupado: boolean;
+    colorGrupo: string | null;
+};
+
+/**
+ * Colores del borde de grupo, alternados entre grupos consecutivos — no por
+ * significado (a diferencia del color de cliente), solo para que dos grupos
+ * distintos que caen uno pegado al otro en la tabla (ej. dos placas
+ * distintas, mismo día) no se lean como un borde continuo de un solo grupo.
+ * Con 2 alcanza: grupos consecutivos nunca repiten color entre sí.
+ */
+const COLORES_GRUPO = [
+    'border-l-primary',
+    'border-l-slate-400 dark:border-l-slate-500',
+] as const;
+
+/**
+ * Una GR no es un viaje: el mismo camión puede salir una vez y llevar carga
+ * de dos clientes, cada una con su propia GR (ver `Viaje::claveGrupoViaje`
+ * en el backend). Acá solo se cuenta cuántas filas comparten esa clave —
+ * si hay más de una, se marcan como agrupadas para que la tabla les ponga
+ * un borde compartido en vez de tratarlas como viajes independientes.
+ */
+function agruparViajes(datos: ViajeListItem[]): FilaViaje[] {
+    const conteos = new Map<string, number>();
+
+    for (const viaje of datos) {
+        conteos.set(
+            viaje.grupo_viaje,
+            (conteos.get(viaje.grupo_viaje) ?? 0) + 1,
+        );
+    }
+
+    let indiceGrupo = -1;
+    let claveAnterior: string | null = null;
+
+    return datos.map((viaje) => {
+        const agrupado = (conteos.get(viaje.grupo_viaje) ?? 0) > 1;
+
+        if (viaje.grupo_viaje !== claveAnterior) {
+            indiceGrupo++;
+            claveAnterior = viaje.grupo_viaje;
+        }
+
+        return {
+            viaje,
+            agrupado,
+            colorGrupo: agrupado
+                ? COLORES_GRUPO[indiceGrupo % COLORES_GRUPO.length]
+                : null,
+        };
+    });
+}
 
 type Props = {
     viajes: Paginator<ViajeListItem>;
@@ -59,6 +112,8 @@ type Props = {
     /** Viajes sin tracto, conductor, o carreta resueltos contra el padrón. */
     pendientes: number;
     tiposCarga: EnumOption[];
+    clientes: EnumOption[];
+    ciudadesDestino: EnumOption[];
 };
 
 export default function ViajesIndex({
@@ -66,10 +121,23 @@ export default function ViajesIndex({
     filtros,
     pendientes,
     tiposCarga,
+    clientes,
+    ciudadesDestino,
 }: Props) {
     const { auth } = usePage().props;
     const puedeGestionar = auth.roles.includes('admin');
-    const { buscar, setBuscar } = useViajeFiltros(filtros);
+    const { buscar, setBuscar, aplicar } = useViajeFiltros(filtros);
+    const filtrosActivos = [
+        filtros.cliente,
+        filtros.destino_ciudad,
+        filtros.tipo_carga,
+    ].filter(Boolean).length;
+    const [viajeSeleccionado, setViajeSeleccionado] =
+        useState<ViajeListItem | null>(null);
+    const filas = useMemo(
+        () => agruparViajes(paginador.data),
+        [paginador.data],
+    );
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -77,9 +145,6 @@ export default function ViajesIndex({
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Viajes
-                    </h1>
                     <p className="text-sm text-muted-foreground">
                         {paginador.total}{' '}
                         {paginador.total === 1
@@ -109,15 +174,41 @@ export default function ViajesIndex({
                 onBuscar={setBuscar}
                 placeholder="Buscar por placa, cliente, conductor, destino o N° de GR..."
                 etiquetaBusqueda="Buscar viajes"
-                activos={0}
-                onLimpiar={() => {}}
+                activos={filtrosActivos}
+                onLimpiar={() =>
+                    aplicar({
+                        cliente: null,
+                        destino_ciudad: null,
+                        tipo_carga: null,
+                    })
+                }
             >
-                {null}
+                <FiltroSelect
+                    valor={filtros.cliente}
+                    onCambio={(cliente) => aplicar({ cliente })}
+                    todos="Todos los clientes"
+                    etiqueta="Cliente"
+                    opciones={clientes}
+                />
+                <FiltroSelect
+                    valor={filtros.destino_ciudad}
+                    onCambio={(destino_ciudad) => aplicar({ destino_ciudad })}
+                    todos="Todos los destinos"
+                    etiqueta="Destino"
+                    opciones={ciudadesDestino}
+                />
+                <FiltroSelect
+                    valor={filtros.tipo_carga}
+                    onCambio={(tipo_carga) => aplicar({ tipo_carga })}
+                    todos="Todos los tipos de carga"
+                    etiqueta="Carga"
+                    opciones={tiposCarga}
+                />
             </FiltrosBarra>
 
             {paginador.data.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-none bg-muted text-muted-foreground">
+                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
                         <RouteIcon className="size-7" />
                     </div>
                     <p className="font-medium">No se encontraron viajes</p>
@@ -131,82 +222,60 @@ export default function ViajesIndex({
                 </div>
             ) : (
                 <>
-                    <div className="overflow-x-auto border">
-                        <Table className="border-collapse">
+                    <div className="overflow-x-auto rounded-xl border shadow-sm">
+                        <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
-                                    <TableHead className={CABECERA}>
-                                        Fecha
-                                    </TableHead>
-                                    <TableHead className={CABECERA}>
-                                        N° GR
-                                    </TableHead>
-                                    <TableHead className={CABECERA}>
-                                        Tracto
-                                    </TableHead>
-                                    <TableHead className={CABECERA}>
-                                        Carreta
-                                    </TableHead>
-                                    <TableHead className={CABECERA}>
-                                        Conductor
-                                    </TableHead>
-                                    <TableHead className={CABECERA}>
-                                        Cliente
-                                    </TableHead>
-                                    <TableHead className={CABECERA}>
-                                        Destino
-                                    </TableHead>
-                                    <TableHead className={CABECERA}>
-                                        Tipo de carga
-                                    </TableHead>
-                                    <TableHead
-                                        className={cn(CABECERA, 'text-right')}
-                                    >
+                                    <TableHead>Fecha</TableHead>
+                                    <TableHead>Tracto</TableHead>
+                                    <TableHead>Carreta</TableHead>
+                                    <TableHead>Conductor</TableHead>
+                                    <TableHead>Cliente</TableHead>
+                                    <TableHead>Origen</TableHead>
+                                    <TableHead>Destino</TableHead>
+                                    <TableHead>Tipo de carga</TableHead>
+                                    <TableHead className="text-right">
                                         Peso
                                     </TableHead>
-                                    <TableHead
-                                        className={cn(CABECERA, 'w-0')}
-                                    />
+                                    <TableHead className="w-0" />
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {paginador.data.map((viaje) => (
-                                    <TableRow key={viaje.id}>
-                                        <TableCell
-                                            className={cn(
-                                                CELDA,
-                                                'whitespace-nowrap text-muted-foreground tabular-nums',
-                                            )}
-                                        >
+                                {filas.map(({ viaje, colorGrupo }) => (
+                                    <TableRow
+                                        key={viaje.id}
+                                        className={cn(
+                                            'cursor-pointer',
+                                            colorGrupo &&
+                                                cn('border-l-2', colorGrupo),
+                                        )}
+                                        onClick={(evento) => {
+                                            const objetivo =
+                                                evento.target as HTMLElement;
+
+                                            if (
+                                                objetivo.closest(
+                                                    'a, button, [role="menuitem"]',
+                                                )
+                                            ) {
+                                                return;
+                                            }
+
+                                            setViajeSeleccionado(viaje);
+                                        }}
+                                    >
+                                        <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
                                             {formatearFecha(
                                                 viaje.fecha_traslado,
                                             )}
                                         </TableCell>
-                                        <TableCell
-                                            className={cn(
-                                                CELDA,
-                                                'font-medium whitespace-nowrap tabular-nums',
-                                            )}
-                                        >
-                                            {viaje.numero_gr}
-                                        </TableCell>
-                                        <TableCell
-                                            className={cn(
-                                                CELDA,
-                                                'whitespace-nowrap',
-                                            )}
-                                        >
+                                        <TableCell className="whitespace-nowrap">
                                             <PlacaCelda
                                                 placa={viaje.placa_tracto}
                                                 vehiculoId={viaje.tracto_id}
                                             />
                                         </TableCell>
-                                        <TableCell
-                                            className={cn(
-                                                CELDA,
-                                                'whitespace-nowrap',
-                                            )}
-                                        >
+                                        <TableCell className="whitespace-nowrap">
                                             {viaje.placa_carreta ? (
                                                 <PlacaCelda
                                                     placa={viaje.placa_carreta}
@@ -218,34 +287,33 @@ export default function ViajesIndex({
                                                 '—'
                                             )}
                                         </TableCell>
-                                        <TableCell
-                                            className={cn(
-                                                CELDA,
-                                                'whitespace-nowrap',
-                                            )}
-                                        >
+                                        <TableCell className="whitespace-nowrap">
                                             <NombreCelda
                                                 nombre={viaje.conductor_nombre}
                                                 conductorId={viaje.conductor_id}
                                             />
                                         </TableCell>
-                                        <TableCell
-                                            className={cn(
-                                                CELDA,
-                                                'max-w-[160px]',
-                                            )}
-                                        >
-                                            <ClienteCelda
+                                        <TableCell className="max-w-[200px]">
+                                            <ClienteChip
                                                 cliente={viaje.cliente}
                                             />
+                                            <div className="mt-1 pl-2 font-mono text-[11px] text-muted-foreground tabular-nums">
+                                                {viaje.numero_gr}
+                                            </div>
                                         </TableCell>
-                                        <TableCell className={CELDA}>
-                                            <DestinoCelda
-                                                region={viaje.destino_region}
+                                        <TableCell>
+                                            <DireccionCelda
+                                                ciudad={viaje.origen_ciudad}
+                                                direccion={viaje.origen}
+                                            />
+                                        </TableCell>
+                                        <TableCell>
+                                            <DireccionCelda
+                                                ciudad={viaje.destino_ciudad}
                                                 direccion={viaje.destino}
                                             />
                                         </TableCell>
-                                        <TableCell className={CELDA}>
+                                        <TableCell>
                                             <TipoCargaCelda
                                                 viajeId={viaje.id}
                                                 valor={viaje.tipo_carga}
@@ -254,35 +322,12 @@ export default function ViajesIndex({
                                                 editable={puedeGestionar}
                                             />
                                         </TableCell>
-                                        <TableCell
-                                            className={cn(
-                                                CELDA,
-                                                'text-right whitespace-nowrap tabular-nums',
-                                            )}
-                                        >
+                                        <TableCell className="text-right whitespace-nowrap tabular-nums">
                                             {viaje.peso.toLocaleString('es-PE')}{' '}
                                             {viaje.unidad_peso}
                                         </TableCell>
-                                        <TableCell className={CELDA}>
+                                        <TableCell>
                                             <div className="flex items-center justify-end gap-1">
-                                                {viaje.archivo_url && (
-                                                    <DocumentoVisorDialog
-                                                        url={viaje.archivo_url}
-                                                        esPdf
-                                                        titulo={`GR ${viaje.numero_gr}`}
-                                                        detalle={`${viaje.cliente} · ${formatearFecha(viaje.fecha_traslado)}`}
-                                                        trigger={
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="size-8"
-                                                                aria-label="Ver GR"
-                                                            >
-                                                                <FileText className="size-4" />
-                                                            </Button>
-                                                        }
-                                                    />
-                                                )}
                                                 {puedeGestionar && (
                                                     <DeleteViajeDialog
                                                         viaje={viaje}
@@ -309,6 +354,15 @@ export default function ViajesIndex({
                     <Paginacion paginador={paginador} />
                 </>
             )}
+
+            <ViajeDetalleDialog
+                viaje={viajeSeleccionado}
+                onOpenChange={(abierto) => {
+                    if (!abierto) {
+                        setViajeSeleccionado(null);
+                    }
+                }}
+            />
         </div>
     );
 }
@@ -385,26 +439,11 @@ function NombreCelda({
 }
 
 /**
- * Truncado para no comerse el ancho de la tabla con razones sociales largas;
- * el nombre completo aparece al pasar el mouse.
- */
-function ClienteCelda({ cliente }: { cliente: string }) {
-    return (
-        <TooltipProvider>
-            <Tooltip>
-                <TooltipTrigger className="block max-w-full cursor-help truncate text-left">
-                    {cliente}
-                </TooltipTrigger>
-                <TooltipContent>{cliente}</TooltipContent>
-            </Tooltip>
-        </TooltipProvider>
-    );
-}
-
-/**
  * La GR no trae qué tipo de carga es —eso solo lo sabe quien clasifica el
  * archivo a mano—, así que se corrige acá mismo con un desplegable en vez de
- * mandar a un formulario aparte.
+ * mandar a un formulario aparte. El badge queda neutro (no el color del
+ * cliente) para no competir con el chip de `ClienteChip`, que es la señal
+ * principal de la fila.
  */
 function TipoCargaCelda({
     viajeId,
@@ -422,7 +461,7 @@ function TipoCargaCelda({
     const [guardando, setGuardando] = useState(false);
 
     if (!editable) {
-        return <span className="whitespace-nowrap">{label}</span>;
+        return <TipoCargaBadge valor={valor} label={label} />;
     }
 
     const seleccionar = (nuevoValor: string) => {
@@ -443,10 +482,13 @@ function TipoCargaCelda({
         <DropdownMenu>
             <DropdownMenuTrigger
                 disabled={guardando}
-                className="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap hover:underline disabled:cursor-wait disabled:opacity-60"
+                className="cursor-pointer rounded-md disabled:cursor-wait disabled:opacity-60"
             >
-                {label}
-                <ChevronDown className="size-3.5 text-muted-foreground" />
+                <TipoCargaBadge
+                    valor={valor}
+                    label={label}
+                    className="hover:bg-accent hover:text-accent-foreground"
+                />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
                 {opciones.map((opcion) => (
@@ -490,7 +532,7 @@ function ReintentarCoincidencias({ pendientes }: { pendientes: number }) {
                 className={`size-4 ${procesando ? 'animate-spin' : ''}`}
             />
             Reintentar coincidencias
-            <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-none bg-amber-500 px-1.5 text-xs font-semibold text-white">
+            <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white">
                 {pendientes}
             </span>
         </Button>

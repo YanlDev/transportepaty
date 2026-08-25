@@ -69,7 +69,7 @@ function TableRow({
                 onClick?.(evento);
             }}
             className={cn(
-                'border-b outline-none transition-colors hover:bg-muted/50 focus:bg-navy-100 data-[state=selected]:bg-muted dark:focus:bg-navy-900/50',
+                'border-b outline-none transition-colors hover:bg-muted/50 focus:bg-indigo-100 data-[state=selected]:bg-muted dark:focus:bg-indigo-900/50',
                 className,
             )}
             {...props}

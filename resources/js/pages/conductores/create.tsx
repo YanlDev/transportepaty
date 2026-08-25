@@ -15,9 +15,6 @@ export default function ConductorCreate({ usuarios }: Props) {
             <Head title="Nuevo conductor" />
 
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                    Nuevo conductor
-                </h1>
                 <p className="text-sm text-muted-foreground">
                     Registra un conductor en el padrón.
                 </p>

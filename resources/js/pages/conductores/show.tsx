@@ -58,7 +58,7 @@ export default function ConductorShow({
                     <span
                         className={
                             conductor.activo
-                                ? 'bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-700 ring-1 ring-navy-600/20'
+                                ? 'bg-indigo-50 px-2 py-0.5 text-[11px] font-medium text-indigo-700 ring-1 ring-indigo-600/20'
                                 : 'bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 ring-1 ring-zinc-500/20'
                         }
                     >

@@ -24,9 +24,6 @@ export default function ConductorEdit({ conductor, usuarios }: Props) {
             <Head title={`Editar ${conductor.nombre_completo}`} />
 
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                    Editar conductor
-                </h1>
                 <p className="text-sm text-muted-foreground">
                     {conductor.nombre_completo} · {conductor.documento}
                 </p>

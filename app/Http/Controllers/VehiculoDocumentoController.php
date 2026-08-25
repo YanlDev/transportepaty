@@ -27,6 +27,7 @@ class VehiculoDocumentoController extends Controller
                 'placa' => $vehiculo->placa,
                 'marca' => $vehiculo->marca,
                 'modelo' => $vehiculo->modelo,
+                'tipo' => $vehiculo->tipo->value,
                 'tipo_label' => $vehiculo->tipo->label(),
             ],
             'ranuras' => $vehiculo->ranurasDocumentales(),

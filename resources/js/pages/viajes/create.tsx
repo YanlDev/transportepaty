@@ -25,9 +25,6 @@ export default function ViajeCreate({
             <Head title="Registrar viaje manualmente" />
 
             <div>
-                <h1 className="text-2xl font-semibold tracking-tight">
-                    Registrar viaje manualmente
-                </h1>
                 <p className="text-sm text-muted-foreground">
                     Para viajes cuya GRE-Remitente ya trae vehículo y conductor,
                     así que SUNAT no exige una GRE-Transportista aparte y no hay

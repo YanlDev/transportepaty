@@ -1,20 +1,16 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
     CalendarCheck,
-    Clock,
     IconContext,
     IdentificationCard,
-    Link as LinkIcon,
-    LinkBreak,
     Path,
     SquaresFour,
     Truck,
+    TruckTrailer,
     UsersThree,
 } from '@phosphor-icons/react';
-import asignaciones from '@/actions/App/Http/Controllers/AsignacionController';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
-import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
@@ -33,7 +29,11 @@ import {
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
-/** Destinos visibles para cualquier usuario autenticado. */
+/**
+ * Destinos visibles para cualquier usuario autenticado. Tractos y carretas van
+ * separados —con su propio ícono— para encontrar cada uno directo, en vez de
+ * filtrar por tipo dentro de un listado combinado de vehículos.
+ */
 const navItems: NavItem[] = [
     {
         title: 'Dashboard',
@@ -41,42 +41,28 @@ const navItems: NavItem[] = [
         icon: SquaresFour,
     },
     {
-        title: 'Vehículos',
-        href: vehiculos.index(),
+        title: 'Tractos',
+        href: vehiculos.tractos(),
         icon: Truck,
+    },
+    {
+        title: 'Carretas',
+        href: vehiculos.carretas(),
+        icon: TruckTrailer,
     },
 ];
 
-/**
- * Requiere rol admin o visor. «Sin asignar» va aparte de «Asignaciones» a
- * propósito: una responde qué unidades están armadas y la otra qué queda
- * parado, y mezclarlas obliga a leer dos cosas a la vez.
- */
+/** Requiere rol admin o visor. */
 const gestionNavItems: NavItem[] = [
     {
         title: 'Viajes',
         href: viajes.index(),
         icon: Path,
     },
-    {
-        title: 'Asignaciones',
-        href: asignaciones.index(),
-        icon: LinkIcon,
-    },
-    {
-        title: 'Sin asignar',
-        href: asignaciones.disponibles(),
-        icon: LinkBreak,
-    },
 ];
 
 /** Solo para admin: gestión de personas y control interno, no lectura de flota. */
 const adminNavItems: NavItem[] = [
-    {
-        title: 'Programación',
-        href: programacion.index(),
-        icon: Clock,
-    },
     {
         title: 'Asistencia',
         href: asistencia.index(),
@@ -90,7 +76,7 @@ const adminNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const { auth, sinAsignar } = usePage().props;
+    const { auth } = usePage().props;
     const esAdmin = auth.roles.includes('admin');
     const puedeGestionar = esAdmin || auth.roles.includes('visor');
 
@@ -105,11 +91,6 @@ export function AppSidebar() {
               },
           ]
         : navItems;
-
-    // El aviso de lo que está parado se pinta sobre la entrada correspondiente.
-    const gestion = gestionNavItems.map((item) =>
-        item.title === 'Sin asignar' ? { ...item, badge: sinAsignar } : item,
-    );
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -132,7 +113,7 @@ export function AppSidebar() {
             <SidebarContent>
                 <IconContext.Provider value={{ weight: 'duotone' }}>
                     <NavMain items={principales} />
-                    {puedeGestionar && <NavMain items={gestion} />}
+                    {puedeGestionar && <NavMain items={gestionNavItems} />}
                     {esAdmin && <NavMain items={adminNavItems} />}
                 </IconContext.Provider>
             </SidebarContent>

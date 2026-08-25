@@ -18,7 +18,7 @@ type Props = {
 const ROLE_BADGES: Record<string, { label: string; className: string }> = {
     admin: {
         label: 'Administrador',
-        className: 'bg-navy-50 text-navy-700 ring-1 ring-navy-600/20',
+        className: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20',
     },
     conductor: {
         label: 'Conductor',
@@ -57,9 +57,6 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">
-                        Usuarios
-                    </h1>
                     <p className="text-sm text-muted-foreground">
                         {paginador.total}{' '}
                         {paginador.total === 1
@@ -85,7 +82,7 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
 
             {paginador.data.length === 0 ? (
                 <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-none bg-muted text-muted-foreground">
+                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
                         <Users className="size-7" />
                     </div>
                     <p className="font-medium">No se encontraron usuarios</p>
@@ -168,7 +165,7 @@ function UsuarioCard({
         <article className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-navy-50 text-navy-800">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-800">
                         <ShieldCheck className="size-4.5" />
                     </span>
                     <div>
@@ -188,7 +185,7 @@ function UsuarioCard({
                 </div>
                 {badge && (
                     <span
-                        className={`inline-flex items-center rounded-none px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
+                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
                     >
                         {badge.label}
                     </span>

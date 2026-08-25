@@ -1,12 +1,10 @@
 <?php
 
-use App\Http\Controllers\AsignacionController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NovedadController;
-use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
@@ -30,20 +28,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('conductores.documentos.destroy');
     });
 
-    // Antes del resource para que «disponibles» no se lea como un parámetro.
-    Route::get('asignaciones/disponibles', [AsignacionController::class, 'disponibles'])
-        ->name('asignaciones.disponibles');
-
-    Route::resource('asignaciones', AsignacionController::class)
-        ->parameters(['asignaciones' => 'asignacion'])
-        ->except(['show']);
-    Route::post('asignaciones/{asignacion}/liberar', [AsignacionController::class, 'liberar'])
-        ->name('asignaciones.liberar');
-    Route::get('asignaciones/{asignacion}/reasignar', [AsignacionController::class, 'formularioReasignar'])
-        ->name('asignaciones.reasignar.form');
-    Route::patch('asignaciones/{asignacion}/reasignar', [AsignacionController::class, 'reasignar'])
-        ->name('asignaciones.reasignar');
-
     Route::post('novedades', [NovedadController::class, 'store'])->name('novedades.store');
     Route::post('novedades/{novedad}/levantar', [NovedadController::class, 'levantar'])
         ->name('novedades.levantar');
@@ -58,12 +42,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])->name('viajes.destroy');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
+    Route::get('asistencia/{conductor}', [AsistenciaController::class, 'show'])->name('asistencia.show');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');
+    Route::patch('asistencia/{conductor}/dias-debidos', [AsistenciaController::class, 'actualizarDiasDebidos'])
+        ->name('asistencia.diasDebidos');
     Route::delete('asistencia/{asistencia}', [AsistenciaController::class, 'destroy'])->name('asistencia.destroy');
-
-    Route::get('programacion', [ProgramacionController::class, 'index'])->name('programacion.index');
-    Route::patch('programacion/{vehiculo}', [ProgramacionController::class, 'marcar'])->name('programacion.marcar');
-    Route::delete('programacion/{programacion}', [ProgramacionController::class, 'destroy'])->name('programacion.destroy');
 
     Route::resource('usuarios', UserController::class)
         ->parameters(['usuarios' => 'user'])
@@ -71,7 +54,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::put('usuarios/{user}/password', [UserController::class, 'updatePassword'])
         ->name('usuarios.password.update');
 
-    Route::resource('vehiculos', VehiculoController::class);
+    Route::get('tractos', [VehiculoController::class, 'tractos'])->name('tractos.index');
+    Route::get('carretas', [VehiculoController::class, 'carretas'])->name('carretas.index');
+
+    Route::resource('vehiculos', VehiculoController::class)->except(['index']);
 
     Route::scopeBindings()->group(function () {
         Route::get('vehiculos/{vehiculo}/documentos', [VehiculoDocumentoController::class, 'index'])

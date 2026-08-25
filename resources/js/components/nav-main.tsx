@@ -54,7 +54,7 @@ export function NavMain({
                                     <span>{item.title}</span>
                                     {item.badge !== undefined &&
                                         item.badge > 0 && (
-                                            <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-none bg-amber-500 px-1.5 text-xs font-semibold text-white">
+                                            <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white">
                                                 {item.badge}
                                             </span>
                                         )}

@@ -1,20 +1,20 @@
 import { router } from '@inertiajs/react';
 import { useEffect, useState } from 'react';
-import { index } from '@/actions/App/Http/Controllers/VehiculoController';
 
 export type FiltrosVehiculo = {
     buscar: string | null;
     estado: string | null;
-    tipo: string | null;
+    marca: string | null;
     caja: string | null;
 };
 
 /**
- * Manages the vehicle list filters: keeps the search text local (debounced)
- * while type/status changes apply immediately. Navigation always uses the
- * current local search value, never the value echoed back by the server.
+ * Manages the tracto/carreta list filters: keeps the search text local
+ * (debounced) while marca/caja/status changes apply immediately. `url` is the
+ * index route of whichever section is active (tractos or carretas), porque
+ * ambas comparten este mismo hook.
  */
-export function useVehiculoFiltros(filtros: FiltrosVehiculo) {
+export function useVehiculoFiltros(filtros: FiltrosVehiculo, url: string) {
     const [buscar, setBuscar] = useState(filtros.buscar ?? '');
     const buscarActual = filtros.buscar ?? '';
 
@@ -22,7 +22,7 @@ export function useVehiculoFiltros(filtros: FiltrosVehiculo) {
         const merged: FiltrosVehiculo = {
             buscar,
             estado: filtros.estado,
-            tipo: filtros.tipo,
+            marca: filtros.marca,
             caja: filtros.caja,
             ...cambios,
         };
@@ -37,22 +37,22 @@ export function useVehiculoFiltros(filtros: FiltrosVehiculo) {
             params.estado = merged.estado;
         }
 
-        if (merged.tipo) {
-            params.tipo = merged.tipo;
+        if (merged.marca) {
+            params.marca = merged.marca;
         }
 
         if (merged.caja) {
             params.caja = merged.caja;
         }
 
-        router.get(index().url, params, {
+        router.get(url, params, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
         });
     };
 
-    // Debounce the free-text search; type/status call `aplicar` directly.
+    // Debounce the free-text search; marca/caja/status call `aplicar` directly.
     // Only navigate when the user actually changed the text relative to what
     // the server already has. This prevents pagination (which re-renders this
     // component without touching `buscar`) from resetting back to page 1.

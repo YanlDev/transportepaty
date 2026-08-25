@@ -4,7 +4,6 @@ use App\Enums\EstadoVehiculo;
 use App\Enums\TipoCaja;
 use App\Enums\TipoDocumento;
 use App\Enums\TipoVehiculo;
-use App\Models\Asignacion;
 use App\Models\User;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
@@ -48,18 +47,53 @@ function datosVehiculo(array $overrides = []): array
 }
 
 it('redirects guests to login', function (): void {
-    $this->get(route('vehiculos.index'))->assertRedirect(route('login'));
+    $this->get(route('tractos.index'))->assertRedirect(route('login'));
 });
 
-it('lets authenticated users see the list', function (): void {
+it('lets authenticated users see the tractos list', function (): void {
     Vehiculo::factory()->count(3)->create();
 
     actingAs(usuarioCon('visor'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('vehiculos/index')
+            ->where('seccion', 'tracto')
             ->has('vehiculos.data', 3)
+        );
+});
+
+it('lets authenticated users see the carretas list', function (): void {
+    Vehiculo::factory()->carreta()->count(2)->create();
+
+    actingAs(usuarioCon('visor'))
+        ->get(route('carretas.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('vehiculos/index')
+            ->where('seccion', 'carreta')
+            ->has('vehiculos.data', 2)
+        );
+});
+
+it('keeps tractos and carretas apart in their own listing', function (): void {
+    Vehiculo::factory()->create();
+    Vehiculo::factory()->carreta()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('tractos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('vehiculos.data', 1)
+            ->where('vehiculos.data.0.tipo', TipoVehiculo::Tracto->value)
+        );
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('carretas.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('vehiculos.data', 1)
+            ->where('vehiculos.data.0.tipo', TipoVehiculo::Carreta->value)
         );
 });
 
@@ -68,19 +102,35 @@ it('filters the list by search term', function (): void {
     Vehiculo::factory()->create(['placa' => 'ABC-111', 'marca' => 'SCANIA']);
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index', ['buscar' => 'XYZ']))
+        ->get(route('tractos.index', ['buscar' => 'XYZ']))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
 });
 
-it('filters the list by tipo', function (): void {
-    Vehiculo::factory()->create();
-    Vehiculo::factory()->carreta()->create();
+it('filters tractos by marca', function (): void {
+    Vehiculo::factory()->create(['marca' => 'VOLVO']);
+    Vehiculo::factory()->create(['marca' => 'SCANIA']);
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index', ['tipo' => TipoVehiculo::Carreta->value]))
+        ->get(route('tractos.index', ['marca' => 'VOLVO']))
         ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('vehiculos.data', 1)
+            ->where('vehiculos.data.0.marca', 'VOLVO')
+        );
+});
+
+it('offers only the marcas actually in use for that tipo', function (): void {
+    Vehiculo::factory()->create(['marca' => 'VOLVO']);
+    Vehiculo::factory()->carreta()->create(['marca' => 'RANDON']);
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('tractos.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('marcas', 1)
+            ->where('marcas.0.value', 'VOLVO')
+        );
 });
 
 it('filters the list by caja', function (): void {
@@ -89,7 +139,7 @@ it('filters the list by caja', function (): void {
     Vehiculo::factory()->carreta()->create();
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index', ['caja' => TipoCaja::Mecanica->value]))
+        ->get(route('tractos.index', ['caja' => TipoCaja::Mecanica->value]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->has('vehiculos.data', 1)
@@ -97,42 +147,32 @@ it('filters the list by caja', function (): void {
         );
 });
 
-it('filters the list by units without a gearbox', function (): void {
-    Vehiculo::factory()->create(['caja' => TipoCaja::Mecanica]);
-    Vehiculo::factory()->create(['caja' => TipoCaja::Automatica]);
-    Vehiculo::factory()->carreta()->count(2)->create();
+it('combines the marca and caja filters', function (): void {
+    Vehiculo::factory()->create(['marca' => 'VOLVO', 'caja' => TipoCaja::Automatica]);
+    Vehiculo::factory()->create(['marca' => 'VOLVO', 'caja' => TipoCaja::Mecanica]);
+    Vehiculo::factory()->carreta()->create(['marca' => 'VOLVO']);
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index', ['caja' => 'sin_caja']))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('vehiculos.data', 2)
-            ->where('vehiculos.data.0.caja', null)
-        );
-});
-
-it('combines the tipo and caja filters', function (): void {
-    Vehiculo::factory()->create(['caja' => TipoCaja::Automatica]);
-    Vehiculo::factory()->create(['caja' => TipoCaja::Mecanica]);
-    Vehiculo::factory()->carreta()->create();
-
-    actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index', [
-            'tipo' => TipoVehiculo::Tracto->value,
+        ->get(route('tractos.index', [
+            'marca' => 'VOLVO',
             'caja' => TipoCaja::Automatica->value,
         ]))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
 });
 
-it('offers every gearbox option plus the one for units without a motor', function (): void {
+it('offers every gearbox option for tractos', function (): void {
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->has('cajas', 3)
-            ->where('cajas.2.value', 'sin_caja')
-        );
+        ->assertInertia(fn (Assert $page) => $page->has('cajas', 2));
+});
+
+it('does not offer a caja filter for carretas', function (): void {
+    actingAs(usuarioCon('admin'))
+        ->get(route('carretas.index'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->has('cajas', 0));
 });
 
 it('gives every row in the list its own semáforo', function (): void {
@@ -148,7 +188,7 @@ it('gives every row in the list its own semáforo', function (): void {
     }
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('vehiculos.data.0.documentacion.semaforo', 'verde')
@@ -176,7 +216,7 @@ it('leaves loose documents out of the semáforo', function (): void {
     ]);
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('vehiculos.data.0.documentacion.semaforo', 'verde')
@@ -199,7 +239,7 @@ it('loads the documents without an N+1 query', function (): void {
     DB::enableQueryLog();
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful();
 
     $consultasDocumentos = collect(DB::getQueryLog())
@@ -274,12 +314,22 @@ it('allows an admin to update a vehicle', function (): void {
         ->estado->toBe(EstadoVehiculo::EnMantenimiento);
 });
 
-it('soft deletes a vehicle as admin', function (): void {
+it('soft deletes a tracto and redirects to the tractos list', function (): void {
     $vehiculo = Vehiculo::factory()->create();
 
     actingAs(usuarioCon('admin'))
         ->delete(route('vehiculos.destroy', $vehiculo))
-        ->assertRedirect(route('vehiculos.index'));
+        ->assertRedirect(route('tractos.index'));
+
+    $this->assertSoftDeleted($vehiculo);
+});
+
+it('soft deletes a carreta and redirects to the carretas list', function (): void {
+    $vehiculo = Vehiculo::factory()->carreta()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->delete(route('vehiculos.destroy', $vehiculo))
+        ->assertRedirect(route('carretas.index'));
 
     $this->assertSoftDeleted($vehiculo);
 });
@@ -319,7 +369,7 @@ it('muestra el semáforo documental en el listado', function (): void {
     ]);
 
     actingAs(actorConRol('visor'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('vehiculos.data.0.documentacion.semaforo', 'rojo')
@@ -328,17 +378,16 @@ it('muestra el semáforo documental en el listado', function (): void {
         );
 });
 
-it('lists tractos before carretas', function (): void {
-    Vehiculo::factory()->carreta()->create(['placa' => 'AAA-111']);
+it('orders the list by placa', function (): void {
     Vehiculo::factory()->create(['placa' => 'ZZZ-999']);
+    Vehiculo::factory()->create(['placa' => 'AAA-111']);
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('vehiculos.data.0.placa', 'ZZZ-999')
-            ->where('vehiculos.data.0.tipo', TipoVehiculo::Tracto->value)
-            ->where('vehiculos.data.1.placa', 'AAA-111')
+            ->where('vehiculos.data.0.placa', 'AAA-111')
+            ->where('vehiculos.data.1.placa', 'ZZZ-999')
         );
 });
 
@@ -429,7 +478,7 @@ it('exposes the TUC number so the list can copy it', function (): void {
     ]);
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('vehiculos.data.0.tuc_numero', '21M22000405E')
@@ -448,7 +497,7 @@ it('does not mistake another document for the TUC number', function (): void {
     ]);
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->where('vehiculos.data.0.tuc_numero', null)
@@ -470,7 +519,7 @@ it('reads the TUC number without extra queries', function (): void {
     DB::enableQueryLog();
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index'))
+        ->get(route('tractos.index'))
         ->assertSuccessful();
 
     $consultas = collect(DB::getQueryLog())
@@ -482,46 +531,13 @@ it('reads the TUC number without extra queries', function (): void {
     expect($consultas)->toBe(1);
 });
 
-it('refuses to delete a tracto that is in a current assignment', function (): void {
-    $asignacion = Asignacion::factory()->create();
-
-    actingAs(usuarioCon('admin'))
-        ->from(route('vehiculos.index'))
-        ->delete(route('vehiculos.destroy', $asignacion->tracto))
-        ->assertRedirect(route('vehiculos.index'));
-
-    expect(Vehiculo::find($asignacion->tracto_id))->not->toBeNull()
-        ->and($asignacion->refresh()->estaVigente())->toBeTrue();
-});
-
-it('refuses to delete a carreta that is in a current assignment', function (): void {
-    $asignacion = Asignacion::factory()->create();
-
-    actingAs(usuarioCon('admin'))
-        ->from(route('vehiculos.index'))
-        ->delete(route('vehiculos.destroy', $asignacion->carreta))
-        ->assertRedirect(route('vehiculos.index'));
-
-    expect(Vehiculo::find($asignacion->carreta_id))->not->toBeNull();
-});
-
-it('deletes a vehicle once its assignment was closed', function (): void {
-    $cerrada = Asignacion::factory()->finalizada()->create();
-
-    actingAs(usuarioCon('admin'))
-        ->delete(route('vehiculos.destroy', $cerrada->tracto))
-        ->assertRedirect(route('vehiculos.index'));
-
-    expect(Vehiculo::find($cerrada->tracto_id))->toBeNull();
-});
-
 it('finds a placa searched without its hyphen', function (): void {
     Vehiculo::factory()->create(['placa' => 'BJF-934']);
     Vehiculo::factory()->create(['placa' => 'ZZZ-999']);
 
     // Lo que el usuario copia de la tabla viene sin guion.
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index', ['buscar' => 'BJF934']))
+        ->get(route('tractos.index', ['buscar' => 'BJF934']))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->has('vehiculos.data', 1)
@@ -534,7 +550,7 @@ it('still finds a placa searched with its hyphen', function (): void {
     Vehiculo::factory()->create(['placa' => 'ZZZ-999']);
 
     actingAs(usuarioCon('admin'))
-        ->get(route('vehiculos.index', ['buscar' => 'BJF-934']))
+        ->get(route('tractos.index', ['buscar' => 'BJF-934']))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
 });
