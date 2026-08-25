@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoCarga;
-use App\Enums\TipoNovedad;
 use App\Enums\TipoVehiculo;
 use App\Models\Conductor;
 use App\Models\Novedad;
@@ -26,13 +25,6 @@ class DashboardController extends Controller
      */
     private const CLIENTE_MINSUR_PREFIJO = 'MINSUR';
 
-    /**
-     * Sufijos de razón social peruana. Un cliente cuyo nombre no trae
-     * ninguno de estos es, en la práctica, una persona natural («cliente
-     * particular») y no una empresa — ver `esPersonaNatural()`.
-     */
-    private const SUFIJOS_EMPRESA = '/S\.?A\.?C?\.?\b|S\.?R\.?L\.?\b|E\.?I\.?R\.?L\.?\b|SOCIEDAD|EMPRESA|LTDA|COMPANY|CORP|GROUP|SAC\b/i';
-
     public function index(Request $request): Response
     {
         return Inertia::render('dashboard', [
@@ -44,12 +36,10 @@ class DashboardController extends Controller
                 'novedadesActivas' => Novedad::vigentes()->count(),
                 'documentosVencidos' => $this->documentosVencidos(),
             ],
-            'novedadesPorTipo' => $this->novedadesPorTipo(),
             'filtroMes' => $this->filtroMes($request),
             'mesesDisponibles' => $this->mesesDisponibles(),
             'cargaMinsur' => $this->cargaMinsur($request),
             'viajesPorCliente' => $this->viajesPorClienteOtros(),
-            'clientesParticulares' => $this->clientesParticulares(),
         ]);
     }
 
@@ -74,32 +64,6 @@ class DashboardController extends Controller
             ->count();
 
         return $deVehiculos + $deConductores;
-    }
-
-    /**
-     * Novedades vigentes agrupadas por tipo: lo que hoy está sacando unidades de
-     * la programación, y por qué motivo. En el orden fijo del enum para que el
-     * mismo tipo caiga siempre en la misma posición entre una visita y la
-     * siguiente.
-     *
-     * @return list<array{tipo: string, label: string, valor: int}>
-     */
-    private function novedadesPorTipo(): array
-    {
-        $conteos = Novedad::query()
-            ->vigentes()
-            ->selectRaw('tipo, count(*) as total')
-            ->groupBy('tipo')
-            ->pluck('total', 'tipo');
-
-        return array_map(
-            fn (TipoNovedad $tipo): array => [
-                'tipo' => $tipo->value,
-                'label' => $tipo->label(),
-                'valor' => (int) ($conteos[$tipo->value] ?? 0),
-            ],
-            TipoNovedad::cases(),
-        );
     }
 
     /**
@@ -190,68 +154,23 @@ class DashboardController extends Controller
     }
 
     /**
-     * Cuántos viajes reales —no GR— tiene cada cliente empresa que no sea
-     * Minsur. Los clientes persona natural van aparte, en
-     * `clientesParticulares()`, para no perderlos en una lista dominada por
-     * empresas. Mismo criterio de agrupación que `cargaMinsur()`.
+     * Cuántos viajes reales —no GR— tiene cada cliente que no sea Minsur.
+     * Mismo criterio de agrupación que `cargaMinsur()`.
      *
      * @return list<array{cliente: string, valor: int}>
      */
     private function viajesPorClienteOtros(): array
     {
-        return $this->viajesAgrupadosPorCliente()
-            ->reject(fn (Collection $viajes, string $cliente): bool => $this->esPersonaNatural($cliente))
-            ->map(fn (Collection $viajes, string $cliente): array => [
-                'cliente' => $cliente,
-                'valor' => Viaje::contarViajesReales($viajes),
-            ])
-            ->sortByDesc('valor')
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Clientes que son una persona natural, no una empresa —ej. «Guzmán
-     * Revilla Christopher Christian»—, que hoy quedaban mezclados y perdidos
-     * en la lista de razones sociales. Mismo criterio de conteo que
-     * `viajesPorClienteOtros()`, solo que separados en vez de descartados.
-     *
-     * @return list<array{cliente: string, valor: int}>
-     */
-    private function clientesParticulares(): array
-    {
-        return $this->viajesAgrupadosPorCliente()
-            ->filter(fn (Collection $viajes, string $cliente): bool => $this->esPersonaNatural($cliente))
-            ->map(fn (Collection $viajes, string $cliente): array => [
-                'cliente' => $cliente,
-                'valor' => Viaje::contarViajesReales($viajes),
-            ])
-            ->sortByDesc('valor')
-            ->values()
-            ->all();
-    }
-
-    /**
-     * Base compartida por `viajesPorClienteOtros()` y `clientesParticulares()`:
-     * todos los viajes que no son de Minsur, agrupados por cliente.
-     *
-     * @return Collection<string, Collection<int, Viaje>>
-     */
-    private function viajesAgrupadosPorCliente(): Collection
-    {
-        return once(fn (): Collection => Viaje::query()
+        return Viaje::query()
             ->where('cliente', 'not like', self::CLIENTE_MINSUR_PREFIJO.'%')
             ->get(['cliente', 'fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni'])
-            ->groupBy('cliente'));
-    }
-
-    /**
-     * Sin razón social detrás —ninguno de los sufijos legales peruanos
-     * (S.A.C., S.R.L., E.I.R.L., etc.)— es, en la práctica, una persona
-     * natural contratando directo, no una empresa.
-     */
-    private function esPersonaNatural(string $cliente): bool
-    {
-        return preg_match(self::SUFIJOS_EMPRESA, $cliente) !== 1;
+            ->groupBy('cliente')
+            ->map(fn (Collection $viajes, string $cliente): array => [
+                'cliente' => $cliente,
+                'valor' => Viaje::contarViajesReales($viajes),
+            ])
+            ->sortByDesc('valor')
+            ->values()
+            ->all();
     }
 }

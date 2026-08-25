@@ -31,7 +31,6 @@ import {
 import { clienteColor } from '@/lib/cliente-color';
 import { dashboard } from '@/routes';
 
-type ConteoCategoria = { label: string; valor: number };
 type ConteoCarga = { tipo: string; label: string; valor: number };
 type ConteoCliente = { cliente: string; valor: number };
 
@@ -44,17 +43,11 @@ type Props = {
         novedadesActivas: number;
         documentosVencidos: number;
     };
-    novedadesPorTipo: ConteoCategoria[];
     filtroMes: string | null;
     mesesDisponibles: string[];
     cargaMinsur: ConteoCarga[];
     viajesPorCliente: ConteoCliente[];
-    clientesParticulares: ConteoCliente[];
 };
-
-const novedadesConfig = {
-    valor: { label: 'Unidades', color: '#f59e0b' },
-} satisfies ChartConfig;
 
 /**
  * No son marcas —son categorías de mineral— así que van con una paleta
@@ -87,12 +80,10 @@ function etiquetaMes(mes: string): string {
 
 export default function Dashboard({
     resumen,
-    novedadesPorTipo,
     filtroMes,
     mesesDisponibles,
     cargaMinsur,
     viajesPorCliente,
-    clientesParticulares,
 }: Props) {
     const cambiarMes = (mes: string) => {
         router.get(
@@ -102,15 +93,9 @@ export default function Dashboard({
         );
     };
 
-    const hayNovedades = novedadesPorTipo.some((novedad) => novedad.valor > 0);
     const hayCargaMinsur = cargaMinsur.some((carga) => carga.valor > 0);
     const hayViajesPorCliente = viajesPorCliente.length > 0;
-    const hayClientesParticulares = clientesParticulares.length > 0;
     const alturaViajesPorCliente = Math.max(192, viajesPorCliente.length * 32);
-    const alturaClientesParticulares = Math.max(
-        128,
-        clientesParticulares.length * 32,
-    );
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -154,122 +139,75 @@ export default function Dashboard({
                 />
             </div>
 
-            <div className="grid gap-4 lg:grid-cols-2">
-                <Panel
-                    titulo="Clasificación de carga — Minsur"
-                    extra={
-                        mesesDisponibles.length > 0 && (
-                            <Select
-                                value={filtroMes ?? undefined}
-                                onValueChange={cambiarMes}
-                            >
-                                <SelectTrigger
-                                    size="sm"
-                                    aria-label="Mes de los viajes de Minsur"
-                                >
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {mesesDisponibles.map((mes) => (
-                                        <SelectItem key={mes} value={mes}>
-                                            {etiquetaMes(mes)}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        )
-                    }
-                >
-                    {hayCargaMinsur ? (
-                        <ChartContainer
-                            config={cargaMinsurConfig}
-                            className="h-64 w-full"
+            <Panel
+                titulo="Clasificación de carga — Minsur"
+                extra={
+                    mesesDisponibles.length > 0 && (
+                        <Select
+                            value={filtroMes ?? undefined}
+                            onValueChange={cambiarMes}
                         >
-                            <BarChart
-                                data={cargaMinsur}
-                                layout="vertical"
-                                margin={{ left: 4, right: 28 }}
+                            <SelectTrigger
+                                size="sm"
+                                aria-label="Mes de los viajes de Minsur"
                             >
-                                <CartesianGrid horizontal={false} />
-                                <XAxis type="number" hide />
-                                <YAxis
-                                    dataKey="label"
-                                    type="category"
-                                    tickLine={false}
-                                    axisLine={false}
-                                    width={90}
-                                    tick={{ fontSize: 12 }}
-                                />
-                                <ChartTooltip
-                                    cursor={{ fill: 'var(--muted)' }}
-                                    content={<ChartTooltipContent hideLabel />}
-                                />
-                                <Bar dataKey="valor" radius={0} barSize={22}>
-                                    {cargaMinsur.map((carga) => (
-                                        <Cell
-                                            key={carga.tipo}
-                                            fill={`var(--color-${carga.tipo})`}
-                                        />
-                                    ))}
-                                    <LabelList
-                                        dataKey="valor"
-                                        position="right"
-                                        className="fill-foreground"
-                                        fontSize={12}
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {mesesDisponibles.map((mes) => (
+                                    <SelectItem key={mes} value={mes}>
+                                        {etiquetaMes(mes)}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )
+                }
+            >
+                {hayCargaMinsur ? (
+                    <ChartContainer
+                        config={cargaMinsurConfig}
+                        className="h-64 w-full"
+                    >
+                        <BarChart
+                            data={cargaMinsur}
+                            layout="vertical"
+                            margin={{ left: 4, right: 28 }}
+                        >
+                            <CartesianGrid horizontal={false} />
+                            <XAxis type="number" hide />
+                            <YAxis
+                                dataKey="label"
+                                type="category"
+                                tickLine={false}
+                                axisLine={false}
+                                width={90}
+                                tick={{ fontSize: 12 }}
+                            />
+                            <ChartTooltip
+                                cursor={{ fill: 'var(--muted)' }}
+                                content={<ChartTooltipContent hideLabel />}
+                            />
+                            <Bar dataKey="valor" radius={0} barSize={22}>
+                                {cargaMinsur.map((carga) => (
+                                    <Cell
+                                        key={carga.tipo}
+                                        fill={`var(--color-${carga.tipo})`}
                                     />
-                                </Bar>
-                            </BarChart>
-                        </ChartContainer>
-                    ) : (
-                        <EstadoVacio texto="Sin viajes de Minsur en este mes." />
-                    )}
-                </Panel>
-
-                <Panel titulo="Novedades activas por tipo">
-                    {hayNovedades ? (
-                        <ChartContainer
-                            config={novedadesConfig}
-                            className="h-64 w-full"
-                        >
-                            <BarChart
-                                data={novedadesPorTipo}
-                                layout="vertical"
-                                margin={{ left: 4, right: 28 }}
-                            >
-                                <CartesianGrid horizontal={false} />
-                                <XAxis type="number" hide />
-                                <YAxis
-                                    dataKey="label"
-                                    type="category"
-                                    tickLine={false}
-                                    axisLine={false}
-                                    width={150}
-                                    tick={{ fontSize: 12 }}
-                                />
-                                <ChartTooltip
-                                    cursor={{ fill: 'var(--muted)' }}
-                                    content={<ChartTooltipContent hideLabel />}
-                                />
-                                <Bar
+                                ))}
+                                <LabelList
                                     dataKey="valor"
-                                    fill="var(--color-valor)"
-                                    radius={0}
-                                    barSize={18}
-                                >
-                                    <LabelList
-                                        dataKey="valor"
-                                        position="right"
-                                        className="fill-foreground"
-                                        fontSize={12}
-                                    />
-                                </Bar>
-                            </BarChart>
-                        </ChartContainer>
-                    ) : (
-                        <EstadoVacio texto="Sin novedades: toda la flota está programable." />
-                    )}
-                </Panel>
-            </div>
+                                    position="right"
+                                    className="fill-foreground"
+                                    fontSize={12}
+                                />
+                            </Bar>
+                        </BarChart>
+                    </ChartContainer>
+                ) : (
+                    <EstadoVacio texto="Sin viajes de Minsur en este mes." />
+                )}
+            </Panel>
 
             <Panel titulo="Viajes por cliente (fuera de Minsur)">
                 {hayViajesPorCliente ? (
@@ -315,53 +253,6 @@ export default function Dashboard({
                     </ChartContainer>
                 ) : (
                     <EstadoVacio texto="Aún no hay viajes de otros clientes registrados." />
-                )}
-            </Panel>
-
-            <Panel titulo="Clientes particulares">
-                {hayClientesParticulares ? (
-                    <ChartContainer
-                        config={viajesPorClienteConfig}
-                        className="w-full"
-                        style={{ height: alturaClientesParticulares }}
-                    >
-                        <BarChart
-                            data={clientesParticulares}
-                            layout="vertical"
-                            margin={{ left: 4, right: 28 }}
-                        >
-                            <CartesianGrid horizontal={false} />
-                            <XAxis type="number" hide />
-                            <YAxis
-                                dataKey="cliente"
-                                type="category"
-                                tickLine={false}
-                                axisLine={false}
-                                width={260}
-                                tick={{ fontSize: 11 }}
-                            />
-                            <ChartTooltip
-                                cursor={{ fill: 'var(--muted)' }}
-                                content={<ChartTooltipContent hideLabel />}
-                            />
-                            <Bar dataKey="valor" radius={0} barSize={18}>
-                                {clientesParticulares.map((item) => (
-                                    <Cell
-                                        key={item.cliente}
-                                        fill={clienteColor(item.cliente).chart}
-                                    />
-                                ))}
-                                <LabelList
-                                    dataKey="valor"
-                                    position="right"
-                                    className="fill-foreground"
-                                    fontSize={12}
-                                />
-                            </Bar>
-                        </BarChart>
-                    </ChartContainer>
-                ) : (
-                    <EstadoVacio texto="Sin clientes particulares (persona natural) registrados." />
                 )}
             </Panel>
         </div>

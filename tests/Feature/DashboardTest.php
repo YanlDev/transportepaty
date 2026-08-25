@@ -71,7 +71,7 @@ it('counts expired documents across vehicles and drivers for the alert tile', fu
         );
 });
 
-it('counts active novedades for the not-schedulable tile and grouped by tipo', function (): void {
+it('counts active novedades for the not-schedulable tile', function (): void {
     Novedad::factory()->de(TipoNovedad::NoHabido)->create();
     Novedad::factory()->de(TipoNovedad::Taller)->create();
     // Ya levantada: no debe contar como vigente.
@@ -81,10 +81,6 @@ it('counts active novedades for the not-schedulable tile and grouped by tipo', f
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('resumen.novedadesActivas', 2)
-            ->where('novedadesPorTipo', fn ($tipos) => collect($tipos)
-                ->firstWhere('tipo', TipoNovedad::NoHabido->value)['valor'] === 1
-                && collect($tipos)->firstWhere('tipo', TipoNovedad::Taller->value)['valor'] === 1
-                && collect($tipos)->firstWhere('tipo', TipoNovedad::EnMina->value)['valor'] === 0)
         );
 });
 
@@ -183,31 +179,15 @@ it('counts trips per other client, one per real trip not per GR, excluding Minsu
         );
 });
 
-it('separates clientes particulares (persona natural) from empresas in their own list', function (): void {
+it('keeps persona natural clients in the same viajesPorCliente list as empresas', function (): void {
     Viaje::factory()->create(['cliente' => 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN']);
     Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('clientesParticulares', fn ($clientes) => collect($clientes)
+            ->where('viajesPorCliente', fn ($clientes) => collect($clientes)
                 ->firstWhere('cliente', 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN')['valor'] === 1
-                && collect($clientes)->firstWhere('cliente', 'CRISAR LOGISTICA S.A.C.') === null)
-            ->where('viajesPorCliente', fn ($clientes) => collect($clientes)
-                ->firstWhere('cliente', 'CRISAR LOGISTICA S.A.C.')['valor'] === 1
-                && collect($clientes)->firstWhere('cliente', 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN') === null)
-        );
-});
-
-it('treats a company with an English legal suffix as empresa, not persona natural', function (): void {
-    Viaje::factory()->create(['cliente' => 'KEDA PERU BUILDING MATERIALS COMPANY']);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard'))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('viajesPorCliente', fn ($clientes) => collect($clientes)
-                ->firstWhere('cliente', 'KEDA PERU BUILDING MATERIALS COMPANY')['valor'] === 1)
-            ->where('clientesParticulares', fn ($clientes) => collect($clientes)
-                ->firstWhere('cliente', 'KEDA PERU BUILDING MATERIALS COMPANY') === null)
+                && collect($clientes)->firstWhere('cliente', 'CRISAR LOGISTICA S.A.C.')['valor'] === 1)
         );
 });
