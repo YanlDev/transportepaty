@@ -233,6 +233,8 @@ export const cajaLabels: Record<string, string> = {
 export type ViajeListItem = {
     id: number;
     numero_gr: string;
+    /** GR(s) del remitente (cliente) referidas en la GR-transportista. Vacío si el PDF no traía ninguna. */
+    guias_remitente: { numero: string; ruc: string }[] | null;
     /** Misma clave → misma salida física del camión (heurística: fecha + tracto + carreta + conductor). */
     grupo_viaje: string;
     fecha_traslado: string;

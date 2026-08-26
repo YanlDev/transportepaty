@@ -57,3 +57,16 @@ export function formatearFechaHora(fecha: string): string {
 export function formatearPlaca(placa: string): string {
     return placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 }
+
+/**
+ * El peso de la GR viene en KGM o TNE (los dos únicos códigos SUNAT que se
+ * usan acá). Para listados se muestra siempre en toneladas —un tracto carga
+ * como máximo ~30 TNE, así que en KGM son 5-6 dígitos que no caben bien en
+ * una columna angosta—, sin tocar el dato original, que sigue guardado tal
+ * cual vino en el PDF.
+ */
+export function formatearPeso(peso: number, unidadPeso: string): string {
+    const toneladas = unidadPeso === 'KGM' ? peso / 1000 : peso;
+
+    return `${toneladas.toLocaleString(LOCALE, { maximumFractionDigits: 2 })} TNE`;
+}

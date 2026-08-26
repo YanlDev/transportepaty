@@ -66,6 +66,7 @@ class ViajeController extends Controller
             ->through(fn (Viaje $viaje): array => [
                 'id' => $viaje->id,
                 'numero_gr' => $viaje->numero_gr,
+                'guias_remitente' => $viaje->guias_remitente,
                 'grupo_viaje' => $viaje->claveGrupoViaje(),
                 'fecha_traslado' => $viaje->fecha_traslado->toDateString(),
                 'placa_tracto' => $viaje->placa_tracto,

@@ -117,6 +117,19 @@ it('uppercases the cliente so the same company does not look like two different 
     expect(Viaje::query()->sole()->cliente)->toBe('CERAMICA SAN LORENZO S.A.C.');
 });
 
+it('exposes every guía remitente referenced by the GR-transportista', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-san-lorenzo-multi-guia.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.index'))
+        ->assertInertia(fn ($page) => $page->where('viajes.data.0.guias_remitente', [
+            ['numero' => 'T003 - 164953', 'ruc' => '20307146798'],
+            ['numero' => 'T001 - 243466', 'ruc' => '20307146798'],
+        ]));
+});
+
 it('derives the destination city from the address (distrito, not departamento)', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('viajes.store'), ['archivos' => [gr()]])

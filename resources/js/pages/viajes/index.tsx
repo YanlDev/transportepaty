@@ -41,6 +41,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Copiable } from '@/components/copiable';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
@@ -48,7 +49,7 @@ import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';
 import { ViajeDetalleDialog } from '@/components/viajes/viaje-detalle-dialog';
 import { useViajeFiltros } from '@/hooks/use-viaje-filtros';
 import type { FiltrosViaje } from '@/hooks/use-viaje-filtros';
-import { formatearFecha, formatearPlaca } from '@/lib/format';
+import { formatearFecha, formatearPeso, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption, Paginator, ViajeListItem } from '@/types/fleet';
 
@@ -230,6 +231,7 @@ export default function ViajesIndex({
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead>Fecha</TableHead>
                                     <TableHead>N° GR</TableHead>
+                                    <TableHead>GR Remitente</TableHead>
                                     <TableHead>Tracto</TableHead>
                                     <TableHead>Carreta</TableHead>
                                     <TableHead>Conductor</TableHead>
@@ -248,7 +250,7 @@ export default function ViajesIndex({
                                     <TableRow
                                         key={viaje.id}
                                         className={cn(
-                                            'cursor-pointer',
+                                            'group/fila cursor-pointer',
                                             colorGrupo &&
                                                 cn('border-l-2', colorGrupo),
                                         )}
@@ -272,16 +274,24 @@ export default function ViajesIndex({
                                                 viaje.fecha_traslado,
                                             )}
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums">
-                                            {viaje.numero_gr}
+                                        <TableCell className="whitespace-nowrap font-mono text-[11px] tabular-nums text-blue-950 dark:text-blue-300">
+                                            <Copiable
+                                                valor={viaje.numero_gr}
+                                                etiqueta="N° GR"
+                                            />
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap">
+                                        <TableCell className="whitespace-nowrap font-mono text-[11px] tabular-nums text-indigo-600 dark:text-indigo-400">
+                                            <GuiasRemitenteCelda
+                                                guias={viaje.guias_remitente}
+                                            />
+                                        </TableCell>
+                                        <TableCell className="whitespace-nowrap text-[11px]">
                                             <PlacaCelda
                                                 placa={viaje.placa_tracto}
                                                 vehiculoId={viaje.tracto_id}
                                             />
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap">
+                                        <TableCell className="whitespace-nowrap text-[11px]">
                                             {viaje.placa_carreta ? (
                                                 <PlacaCelda
                                                     placa={viaje.placa_carreta}
@@ -293,13 +303,13 @@ export default function ViajesIndex({
                                                 '—'
                                             )}
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap">
+                                        <TableCell className="whitespace-nowrap text-[11px]">
                                             <NombreCelda
                                                 nombre={viaje.conductor_nombre}
                                                 conductorId={viaje.conductor_id}
                                             />
                                         </TableCell>
-                                        <TableCell className="max-w-[200px]">
+                                        <TableCell className="max-w-[160px] overflow-hidden">
                                             <ClienteChip
                                                 cliente={viaje.cliente}
                                             />
@@ -326,8 +336,10 @@ export default function ViajesIndex({
                                             />
                                         </TableCell>
                                         <TableCell className="text-right whitespace-nowrap tabular-nums">
-                                            {viaje.peso.toLocaleString('es-PE')}{' '}
-                                            {viaje.unidad_peso}
+                                            {formatearPeso(
+                                                viaje.peso,
+                                                viaje.unidad_peso,
+                                            )}
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center justify-end gap-1">
@@ -426,6 +438,38 @@ function PlacaCelda({
                 </TooltipContent>
             </Tooltip>
         </TooltipProvider>
+    );
+}
+
+/**
+ * La GR-transportista puede referir más de una GR-remitente (varias cargas
+ * de un mismo cliente en un solo viaje). Cada una va en su propia línea con
+ * guion —no todas juntas en una sola cadena— porque cada número ya trae su
+ * propio guion interno (ej. «T954 - 273462») y concatenarlas sin separar por
+ * línea las vuelve ilegibles. Cada línea usa `Copiable`, igual que placa/TUC
+ * en el listado de vehículos, para copiarla y conciliar contra SUNAT.
+ */
+function GuiasRemitenteCelda({
+    guias,
+}: {
+    guias: { numero: string; ruc: string }[] | null;
+}) {
+    if (!guias || guias.length === 0) {
+        return <span className="text-muted-foreground">—</span>;
+    }
+
+    return (
+        <div className="flex flex-col gap-0.5">
+            {guias.map((guia, indice) => (
+                <Copiable
+                    key={indice}
+                    valor={guia.numero}
+                    etiqueta="GR remitente"
+                >
+                    - {guia.numero}
+                </Copiable>
+            ))}
+        </div>
     );
 }
 
