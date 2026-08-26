@@ -1,6 +1,7 @@
 import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     AlertTriangle,
+    Eye,
     FilePenLine,
     RefreshCw,
     Route as RouteIcon,
@@ -40,6 +41,7 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
 import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';
@@ -227,6 +229,7 @@ export default function ViajesIndex({
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
                                     <TableHead>Fecha</TableHead>
+                                    <TableHead>N° GR</TableHead>
                                     <TableHead>Tracto</TableHead>
                                     <TableHead>Carreta</TableHead>
                                     <TableHead>Conductor</TableHead>
@@ -269,6 +272,9 @@ export default function ViajesIndex({
                                                 viaje.fecha_traslado,
                                             )}
                                         </TableCell>
+                                        <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums">
+                                            {viaje.numero_gr}
+                                        </TableCell>
                                         <TableCell className="whitespace-nowrap">
                                             <PlacaCelda
                                                 placa={viaje.placa_tracto}
@@ -297,9 +303,6 @@ export default function ViajesIndex({
                                             <ClienteChip
                                                 cliente={viaje.cliente}
                                             />
-                                            <div className="mt-1 pl-2 font-mono text-[11px] text-muted-foreground tabular-nums">
-                                                {viaje.numero_gr}
-                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             <DireccionCelda
@@ -328,6 +331,27 @@ export default function ViajesIndex({
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center justify-end gap-1">
+                                                <DocumentoVisorDialog
+                                                    url={
+                                                        viaje.archivo_url ?? ''
+                                                    }
+                                                    esPdf
+                                                    titulo={`GR ${viaje.numero_gr}`}
+                                                    detalle={`${viaje.cliente} · ${formatearFecha(viaje.fecha_traslado)}`}
+                                                    trigger={
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            disabled={
+                                                                !viaje.archivo_url
+                                                            }
+                                                            className="size-8 text-muted-foreground"
+                                                            aria-label="Vista rápida de la GR"
+                                                        >
+                                                            <Eye className="size-4" />
+                                                        </Button>
+                                                    }
+                                                />
                                                 {puedeGestionar && (
                                                     <DeleteViajeDialog
                                                         viaje={viaje}
