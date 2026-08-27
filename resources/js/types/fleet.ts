@@ -312,6 +312,8 @@ export type AsistenciaCalendarioMes = {
     marcas: Record<string, AsistenciaMarca>;
     /** Días de descanso que se le deben al conductor ese mes: lo escribe el admin a mano. */
     dias_debidos: number;
+    /** Notas libres del mes —incidencias, acuerdos verbales, etc.—, también a mano. */
+    notas: string | null;
 };
 
 export type NovedadItem = {

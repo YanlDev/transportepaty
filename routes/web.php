@@ -46,6 +46,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');
     Route::patch('asistencia/{conductor}/dias-debidos', [AsistenciaController::class, 'actualizarDiasDebidos'])
         ->name('asistencia.diasDebidos');
+    Route::patch('asistencia/{conductor}/notas', [AsistenciaController::class, 'actualizarNotas'])
+        ->name('asistencia.notas');
     Route::delete('asistencia/{asistencia}', [AsistenciaController::class, 'destroy'])->name('asistencia.destroy');
 
     Route::resource('usuarios', UserController::class)

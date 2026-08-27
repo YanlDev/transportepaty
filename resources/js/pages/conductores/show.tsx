@@ -1,5 +1,6 @@
 import { Head, Link, setLayoutProps, usePage } from '@inertiajs/react';
-import { Pencil } from 'lucide-react';
+import { CalendarCheck, Pencil } from 'lucide-react';
+import { show as mostrarAsistencia } from '@/actions/App/Http/Controllers/AsistenciaController';
 import conductores, {
     edit,
     show,
@@ -67,12 +68,20 @@ export default function ConductorShow({
                 </div>
 
                 {puedeGestionar && (
-                    <Button asChild variant="ghost" size="sm">
-                        <Link href={edit(conductor.id)}>
-                            <Pencil className="size-4" />
-                            Editar
-                        </Link>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button asChild variant="outline" size="sm">
+                            <Link href={mostrarAsistencia(conductor.id)}>
+                                <CalendarCheck className="size-4" />
+                                Ver asistencia
+                            </Link>
+                        </Button>
+                        <Button asChild variant="ghost" size="sm">
+                            <Link href={edit(conductor.id)}>
+                                <Pencil className="size-4" />
+                                Editar
+                            </Link>
+                        </Button>
+                    </div>
                 )}
             </div>
 

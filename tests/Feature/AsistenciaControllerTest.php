@@ -393,3 +393,85 @@ it('lets an admin record a negative saldo when the conductor rested more than ex
         ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
         ->assertInertia(fn (Assert $page) => $page->where('calendarios.0.dias_debidos', -1));
 });
+
+it('lets an admin set notas for a conductor in a given month', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.notas', $conductor), [
+            'mes' => '2026-08-15',
+            'notas' => 'Acordó reponer el 30/08 el día que faltó por trámite.',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $descansoDebido = DescansoDebido::query()->sole();
+    expect($descansoDebido->conductor_id)->toBe($conductor->id)
+        ->and($descansoDebido->mes->toDateString())->toBe('2026-08-01')
+        ->and($descansoDebido->notas)->toBe('Acordó reponer el 30/08 el día que faltó por trámite.');
+
+    actingAs(actorConRol('admin'))
+        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
+        ->assertInertia(fn (Assert $page) => $page->where(
+            'calendarios.0.notas',
+            'Acordó reponer el 30/08 el día que faltó por trámite.',
+        ));
+});
+
+it('clears notas when saved empty without touching días debidos', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.diasDebidos', $conductor), [
+            'mes' => '2026-08-01',
+            'dias_debidos' => 2,
+        ])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.notas', $conductor), [
+            'mes' => '2026-08-01',
+            'notas' => 'Nota provisional',
+        ])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.notas', $conductor), [
+            'mes' => '2026-08-01',
+            'notas' => '',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $descansoDebido = DescansoDebido::query()->sole();
+    expect($descansoDebido->notas)->toBeNull()
+        ->and($descansoDebido->dias_debidos)->toBe(2);
+});
+
+it('defaults notas to null for a month that was never set', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
+        ->assertInertia(fn (Assert $page) => $page->where('calendarios.0.notas', null));
+});
+
+it('forbids a visor from setting notas', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('visor'))
+        ->patch(route('asistencia.notas', $conductor), [
+            'mes' => '2026-08-01',
+            'notas' => 'Intento no autorizado',
+        ])
+        ->assertForbidden();
+});
+
+it('rejects notas over the length limit', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.notas', $conductor), [
+            'mes' => '2026-08-01',
+            'notas' => str_repeat('a', 2001),
+        ])
+        ->assertSessionHasErrors('notas');
+});

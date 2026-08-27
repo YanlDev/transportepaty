@@ -17,12 +17,14 @@ use Illuminate\Support\Carbon;
  * @property int $conductor_id
  * @property Carbon $mes
  * @property int $dias_debidos
+ * @property string|null $notas
  * @property-read Conductor $conductor
  */
 #[Fillable([
     'conductor_id',
     'mes',
     'dias_debidos',
+    'notas',
 ])]
 class DescansoDebido extends Model
 {

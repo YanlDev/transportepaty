@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoAsistencia;
 use App\Http\Requests\ActualizarDiasDebidosRequest;
+use App\Http\Requests\ActualizarNotasMesRequest;
 use App\Http\Requests\MarcarAsistenciaRequest;
 use App\Models\Asistencia;
 use App\Models\Conductor;
@@ -118,6 +119,7 @@ class AsistenciaController extends Controller
                 'dias' => $this->diasDelMes($mes),
                 'marcas' => $this->comoMarcas($asistencias),
                 'dias_debidos' => $diasDebidos->get($mes->toDateString())->dias_debidos ?? 0,
+                'notas' => $diasDebidos->get($mes->toDateString())->notas ?? null,
             ];
         }
 
@@ -170,6 +172,27 @@ class AsistenciaController extends Controller
                 'mes' => CarbonImmutable::parse($request->string('mes')->value())->startOfMonth()->toDateString(),
             ],
             ['dias_debidos' => $request->integer('dias_debidos')],
+        );
+
+        return back();
+    }
+
+    /**
+     * Notas libres del mes —incidencias, acuerdos verbales, lo que no encaja
+     * en una marca diaria ni es un número de días— sobre el mismo registro
+     * que ya guarda los días debidos, porque ambos son datos del par
+     * conductor+mes, no del día.
+     */
+    public function actualizarNotas(ActualizarNotasMesRequest $request, Conductor $conductor): RedirectResponse
+    {
+        $this->authorize('update', DescansoDebido::class);
+
+        DescansoDebido::query()->updateOrCreate(
+            [
+                'conductor_id' => $conductor->id,
+                'mes' => CarbonImmutable::parse($request->string('mes')->value())->startOfMonth()->toDateString(),
+            ],
+            ['notas' => $request->string('notas')->value() ?: null],
         );
 
         return back();

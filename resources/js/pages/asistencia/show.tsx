@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import asistencia, {
     actualizarDiasDebidos,
+    actualizarNotas,
     destroy,
     marcar,
     show,
@@ -14,6 +15,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { estadoConfig } from '@/lib/asistencia';
 import { cn } from '@/lib/utils';
@@ -219,7 +221,53 @@ function MesCalendario({
                     </div>
                 ))}
             </div>
+
+            <NotasMesInput
+                conductorId={conductorId}
+                mes={calendario.mes}
+                notas={calendario.notas}
+            />
         </div>
+    );
+}
+
+/**
+ * Notas libres del mes, aparte de las marcas diarias y del balance de días:
+ * incidencias, acuerdos verbales, lo que no encaja en ninguno de los dos.
+ * Se guarda al salir del campo, igual que el balance de días de al lado.
+ */
+function NotasMesInput({
+    conductorId,
+    mes,
+    notas,
+}: {
+    conductorId: number;
+    mes: string;
+    notas: string | null;
+}) {
+    const [valor, setValor] = useState(notas ?? '');
+
+    const guardar = () => {
+        if (valor === (notas ?? '')) {
+            return;
+        }
+
+        router.patch(
+            actualizarNotas(conductorId).url,
+            { mes, notas: valor },
+            { preserveScroll: true },
+        );
+    };
+
+    return (
+        <Textarea
+            value={valor}
+            onChange={(evento) => setValor(evento.target.value)}
+            onBlur={guardar}
+            placeholder="Notas del mes..."
+            rows={2}
+            className="mt-2 resize-none text-xs"
+        />
     );
 }
 
