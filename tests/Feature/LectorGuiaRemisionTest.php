@@ -134,6 +134,36 @@ it('extracts every field from a GRE Remitente, not just the GRE Transportista th
     expect($campos['destino'])->toBe('JR. MARIANO MELGAR NRO. 706 TUPAC AMARU - JULIACA - SAN ROMAN - PUNO');
 });
 
+it('extracts every field from a GRE de Bienes Fiscalizados, a format entirely different from the standard GRE', function (): void {
+    // Sin sección de peso ni de destinatario, y con una tabla de vehículos
+    // en vez de tracto+carreta sueltos: `ImportadorViaje` decide qué hacer
+    // con la falta de peso (queda en 0) y con el destinatario ausente
+    // (se asume igual al remitente).
+    $campos = (new LectorGuiaRemision)->extraerDesdeArchivo(
+        base_path('tests/Fixtures/guias/gr-bienes-fiscalizados.pdf'),
+    );
+
+    expect($campos)->toMatchArray([
+        'numero_gr' => 'G010-00000142',
+        'fecha_emision' => '19/08/2026',
+        'fecha_traslado' => '19/08/2026',
+        'cliente' => 'SGS DEL PERU S.A.C.',
+        'cliente_ruc' => '20100114349',
+        'destinatario' => 'SGS DEL PERU S.A.C.',
+        'destinatario_ruc' => '20100114349',
+        'peso' => '0',
+        'unidad_peso' => 'KGM',
+        'placa_tracto' => 'TCK922',
+        'placa_carreta' => 'VDI980',
+        'conductor_nombre' => 'VILCA CHOQUEHUANCA DAVID',
+        'conductor_dni' => '02439078',
+    ]);
+
+    expect($campos['guias_remitente'])->toBe([]);
+    expect($campos['origen'])->toContain('BOCANEGRA');
+    expect($campos['destino'])->toContain('PALCA');
+});
+
 it('throws when the file is not a parseable PDF', function (): void {
     // El lector no atrapa esto a propósito: es `ImportadorViaje` quien decide
     // qué hacer con un archivo que no se puede leer (saltarlo sin tumbar el

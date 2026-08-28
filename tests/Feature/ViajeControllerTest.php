@@ -68,6 +68,28 @@ it('creates a viaje from a real GR and resolves the tracto, carreta and conducto
         ->and($viaje->tipo_carga)->toBe(TipoCarga::Concentrado);
 });
 
+it('creates a viaje from a GRE de Bienes Fiscalizados even though it has no peso', function (): void {
+    $tracto = Vehiculo::factory()->create(['placa' => 'TCK-922']);
+    $carreta = Vehiculo::factory()->carreta()->create(['placa' => 'VDI-980']);
+    $conductor = Conductor::factory()->create(['documento' => '02439078']);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-bienes-fiscalizados.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    $viaje = Viaje::query()->sole();
+
+    expect($viaje->numero_gr)->toBe('G010-00000142')
+        ->and($viaje->fecha_traslado->toDateString())->toBe('2026-08-19')
+        ->and($viaje->cliente)->toBe('SGS DEL PERU S.A.C.')
+        ->and($viaje->destinatario)->toBe('SGS DEL PERU S.A.C.')
+        ->and((float) $viaje->peso)->toBe(0.0)
+        ->and($viaje->tracto_id)->toBe($tracto->id)
+        ->and($viaje->carreta_id)->toBe($carreta->id)
+        ->and($viaje->conductor_id)->toBe($conductor->id)
+        ->and($viaje->getFirstMedia('archivo'))->not->toBeNull();
+});
+
 it('clasifica un viaje de Minsur como Materiales cuando la guía remitente es serie T012', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('viajes.store'), ['archivos' => [gr('gr-minsur-ransa-peso-sin-decimales.pdf')]])

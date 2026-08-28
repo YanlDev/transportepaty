@@ -20,6 +20,16 @@ echo "→ Trayendo últimos cambios de origin/main"
 git fetch --all --prune
 git reset --hard origin/main
 
+# El build de Vite corre el plugin de Wayfinder, que genera los actions/routes
+# de TypeScript a partir de las rutas que Laravel tiene cargadas en ESE
+# momento. Si queda el caché de rutas del deploy anterior (route:cache, más
+# abajo), un commit que agregue una ruta nueva genera un actions/*.ts sin esa
+# ruta —aunque el código fuente sí la importe— y el build revienta dejando la
+# app en mantenimiento. Por eso se limpia acá, antes del build, no solo al
+# final.
+echo "→ Limpiando cachés antes de compilar (Wayfinder necesita ver las rutas del commit actual)"
+php artisan optimize:clear
+
 echo "→ Dependencias PHP (producción)"
 composer install --no-interaction --prefer-dist --optimize-autoloader --no-dev
 

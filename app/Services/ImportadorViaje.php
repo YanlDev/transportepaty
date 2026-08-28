@@ -230,7 +230,13 @@ class ImportadorViaje
         try {
             return Carbon::createFromFormat('d/m/Y h:i A', $texto);
         } catch (\Exception) {
-            return null;
+            // La GRE de Bienes Fiscalizados solo trae fecha de emisión, sin
+            // hora (ver `LectorGuiaRemision::extraerCamposBienesFiscalizados`).
+            try {
+                return Carbon::createFromFormat('d/m/Y', $texto)->startOfDay();
+            } catch (\Exception) {
+                return null;
+            }
         }
     }
 

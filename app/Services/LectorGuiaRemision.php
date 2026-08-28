@@ -98,6 +98,10 @@ class LectorGuiaRemision
      */
     private function extraerCampos(string $texto): array
     {
+        if ($this->esBienesFiscalizados($texto)) {
+            return $this->extraerCamposBienesFiscalizados($texto);
+        }
+
         // La GRE Remitente (la emite el propio dueño de la carga, no Paty) no
         // trae sección «Datos del remitente:» —el remitente es quien genera
         // el documento— así que el cliente real se saca de la razón social
@@ -139,6 +143,100 @@ class LectorGuiaRemision
             'placa_tracto' => $this->capturar('/Principal:\s*Número de placa:\s*([A-Z0-9]+)/u', $texto),
             'placa_carreta' => $this->capturar('/Secundario 1:\s*Número de placa:\s*([A-Z0-9]+)/u', $texto),
             ...$this->extraerConductor($texto),
+        ];
+    }
+
+    /**
+     * La GRE de Bienes Fiscalizados (hidrocarburos, explosivos y similares,
+     * bajo control de SUCAMEC/DGH) es un formato de SUNAT del todo distinto
+     * al de la GRE Transportista/Remitente estándar: encabezados propios,
+     * sin peso —viaja por unidades reguladas, no por KG/TN— y una tabla de
+     * vehículos («DATOS DEL TRANSPORTE») en vez de tracto+carreta sueltos.
+     */
+    private function esBienesFiscalizados(string $texto): bool
+    {
+        return (bool) preg_match('/ELECTR[ÓO]NICA BF/u', $texto);
+    }
+
+    /**
+     * Verificado contra el único documento de este tipo visto en el corpus
+     * real (Pucamarca, RUC 20100114349 SGS DEL PERU S.A.C.): no trae sección
+     * de destinatario, así que se asume igual al remitente —lo habitual acá
+     * es que la misma empresa se abastezca a sí misma en otra sede—, y el
+     * peso queda fijo en 0 porque el dato simplemente no existe en el PDF.
+     *
+     * @return array<string, mixed>
+     */
+    private function extraerCamposBienesFiscalizados(string $texto): array
+    {
+        $encabezado = $this->capturarBloque('RUC:', 'DATOS DEL INICIO DE TRASLADO', $texto) ?? '';
+        $numeroGr = $this->normalizarNumero($this->capturar('/([A-Z]\d{3}\s*-\s*\d+)/u', $encabezado));
+
+        $remitente = $this->capturarBloque(
+            'Apellidos, Nombres, Denominación o Razón Social',
+            'Tipo y Nro. de documento de identidad',
+            $texto,
+        );
+        $remitenteRuc = $this->capturar('/Tipo y Nro\. de documento de identidad:\s*RUC\s*(\d+)/u', $texto);
+
+        $vehiculos = $this->extraerPlacasBienesFiscalizados($texto);
+
+        return [
+            'numero_gr' => $numeroGr,
+            'fecha_emision' => $this->capturar('/Fecha de Emisión:\s*(\d{2}\/\d{2}\/\d{4})/u', $texto),
+            'fecha_traslado' => $this->capturar('/Fecha y hora de inicio del traslado:\s*(\d{2}\/\d{2}\/\d{4})/u', $texto),
+            'origen' => $this->capturarBloque('Dirección del punto de partida', 'Dirección del punto de llegada', $texto),
+            'destino' => $this->capturarBloque('Dirección del punto de llegada', 'DATOS DEL REMITENTE', $texto),
+            'cliente' => $remitente,
+            'cliente_ruc' => $remitenteRuc,
+            'destinatario' => $remitente,
+            'destinatario_ruc' => $remitenteRuc,
+            'subcontratador' => null,
+            'subcontratador_ruc' => null,
+            'guias_remitente' => [],
+            'peso' => '0',
+            'unidad_peso' => 'KGM',
+            'placa_tracto' => $vehiculos[0] ?? null,
+            'placa_carreta' => $vehiculos[1] ?? null,
+            ...$this->extraerConductorBienesFiscalizados($texto),
+        ];
+    }
+
+    /**
+     * La tabla «DATOS DEL TRANSPORTE» lista un vehículo por fila (tipo, marca,
+     * placa, MTC); acá no hay tracto/carreta como campos separados. Se asume
+     * la primera fila como tracto y la segunda como carreta, igual que en el
+     * resto de la app.
+     *
+     * @return list<string>
+     */
+    private function extraerPlacasBienesFiscalizados(string $texto): array
+    {
+        $seccion = $this->capturarBloque('DATOS DEL TRANSPORTE', 'DATOS DE(LOS) CONDUCTOR(ES)', $texto) ?? '';
+
+        preg_match_all('/CARRETERA\/TERRESTRE\s+.*?\b([A-Z]{3}\d{3})\b/u', $seccion, $coincidencias);
+
+        return $coincidencias[1];
+    }
+
+    /**
+     * @return array{conductor_nombre: string|null, conductor_dni: string|null}
+     */
+    private function extraerConductorBienesFiscalizados(string $texto): array
+    {
+        $seccion = $this->capturarBloque(
+            'DATOS DE(LOS) CONDUCTOR(ES)',
+            'Código de verificación',
+            $texto,
+        ) ?? '';
+
+        if (! preg_match('/DNI\s+(\d+)\s+(.+?)\s+\d+\s+\S+$/u', $seccion, $coincidencias)) {
+            return ['conductor_nombre' => null, 'conductor_dni' => null];
+        }
+
+        return [
+            'conductor_nombre' => trim($coincidencias[2]),
+            'conductor_dni' => $coincidencias[1],
         ];
     }
 
