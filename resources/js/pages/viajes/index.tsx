@@ -314,13 +314,13 @@ export default function ViajesIndex({
                                                 cliente={viaje.cliente}
                                             />
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="max-w-[160px] overflow-hidden">
                                             <DireccionCelda
                                                 ciudad={viaje.origen_ciudad}
                                                 direccion={viaje.origen}
                                             />
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="max-w-[160px] overflow-hidden">
                                             <DireccionCelda
                                                 ciudad={viaje.destino_ciudad}
                                                 direccion={viaje.destino}

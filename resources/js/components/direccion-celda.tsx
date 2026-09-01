@@ -20,9 +20,9 @@ export function DireccionCelda({
 }) {
     return (
         <DropdownMenu>
-            <DropdownMenuTrigger className="inline-flex cursor-pointer items-center gap-1 whitespace-nowrap hover:underline">
-                {ciudad}
-                <ChevronDown className="size-3.5 text-muted-foreground" />
+            <DropdownMenuTrigger className="inline-flex max-w-[160px] cursor-pointer items-center gap-1 hover:underline">
+                <span className="truncate">{ciudad}</span>
+                <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="max-w-xs">
                 <p className="px-2 py-1.5 text-sm text-muted-foreground">
