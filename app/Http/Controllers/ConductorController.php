@@ -57,6 +57,8 @@ class ConductorController extends Controller
                 'email' => $conductor->email,
                 'procedencia' => $conductor->procedencia,
                 'activo' => $conductor->activo,
+                'fecha_baja' => $conductor->fecha_baja?->toDateString(),
+                'motivo_baja' => $conductor->motivo_baja,
                 'documentacion' => $conductor->estadoDocumental(),
             ]);
 

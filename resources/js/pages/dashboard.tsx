@@ -34,6 +34,15 @@ import { dashboard } from '@/routes';
 type ConteoCarga = { tipo: string; label: string; valor: number };
 type ConteoCliente = { cliente: string; valor: number };
 
+type MetaConcentrado = {
+    meta: number;
+    realizados: number;
+    faltantes: number;
+    diasRestantes: number;
+    proyeccion: number;
+    ritmoNecesario: number | null;
+};
+
 type Props = {
     resumen: {
         tractos: number;
@@ -43,6 +52,7 @@ type Props = {
         novedadesActivas: number;
         documentosVencidos: number;
     };
+    metaConcentrado: MetaConcentrado;
     filtroMes: string | null;
     mesesDisponibles: string[];
     cargaMinsur: ConteoCarga[];
@@ -80,6 +90,7 @@ function etiquetaMes(mes: string): string {
 
 export default function Dashboard({
     resumen,
+    metaConcentrado,
     filtroMes,
     mesesDisponibles,
     cargaMinsur,
@@ -138,6 +149,8 @@ export default function Dashboard({
                     tono={resumen.documentosVencidos > 0 ? 'rojo' : 'normal'}
                 />
             </div>
+
+            <MetaConcentradoPanel meta={metaConcentrado} />
 
             <Panel
                 titulo="Clasificación de carga — Minsur"
@@ -293,6 +306,69 @@ function Tarjeta({
                 <p className="mt-1 text-xs text-muted-foreground">{detalle}</p>
             )}
         </div>
+    );
+}
+
+/**
+ * El indicador principal del área: cuánto lleva el mes en curso de
+ * concentrado contra la meta de 120, y a qué ritmo hay que cerrar los días
+ * que quedan. Independiente del selector de mes de abajo —siempre es el mes
+ * en curso, no el que se esté mirando en el gráfico histórico.
+ */
+function MetaConcentradoPanel({ meta }: { meta: MetaConcentrado }) {
+    const porcentaje = Math.min(
+        100,
+        Math.round((meta.realizados / meta.meta) * 100),
+    );
+    const vaBienEncaminado = meta.proyeccion >= meta.meta;
+    const vaAjustado = !vaBienEncaminado && meta.proyeccion >= meta.meta * 0.9;
+
+    const tono = vaBienEncaminado
+        ? 'text-emerald-700 dark:text-emerald-500'
+        : vaAjustado
+          ? 'text-amber-700 dark:text-amber-500'
+          : 'text-red-700 dark:text-red-500';
+
+    const colorBarra = vaBienEncaminado
+        ? 'bg-emerald-500'
+        : vaAjustado
+          ? 'bg-amber-500'
+          : 'bg-red-500';
+
+    return (
+        <section className="rounded-xl border border-border bg-card p-5">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-sm font-semibold">
+                    Meta de concentrado — mes en curso
+                </h2>
+                <p className={`text-xs font-medium ${tono}`}>
+                    Proyección: {meta.proyeccion} viajes
+                </p>
+            </div>
+
+            <div className="mt-3 flex items-baseline gap-2">
+                <span className="text-3xl font-semibold tabular-nums">
+                    {meta.realizados}
+                </span>
+                <span className="text-sm text-muted-foreground">
+                    / {meta.meta} viajes
+                </span>
+            </div>
+
+            <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                    className={`h-full rounded-full ${colorBarra}`}
+                    style={{ width: `${porcentaje}%` }}
+                />
+            </div>
+
+            <p className="mt-3 text-xs text-muted-foreground">
+                Faltan {meta.faltantes} viajes · {meta.diasRestantes} días
+                restantes
+                {meta.ritmoNecesario !== null &&
+                    ` · ritmo necesario: ${meta.ritmoNecesario}/día`}
+            </p>
+        </section>
     );
 }
 

@@ -122,6 +122,22 @@ export default function ConductorShow({
                                 : '—'
                         }
                     />
+                    {!conductor.activo && (
+                        <>
+                            <Dato
+                                label="Fecha de baja"
+                                value={
+                                    conductor.fecha_baja
+                                        ? formatearFecha(conductor.fecha_baja)
+                                        : '—'
+                                }
+                            />
+                            <Dato
+                                label="Motivo de baja"
+                                value={conductor.motivo_baja ?? '—'}
+                            />
+                        </>
+                    )}
                 </dl>
             </section>
 

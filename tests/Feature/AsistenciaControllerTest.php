@@ -161,7 +161,7 @@ it('forbids a visor from seeing the individual calendar', function (): void {
         ->assertForbidden();
 });
 
-it('defaults the individual calendar to the current month and 2 months at a time', function (): void {
+it('defaults the individual calendar to the full current year, from January to December', function (): void {
     $conductor = Conductor::factory()->create();
 
     $this->travelTo(CarbonImmutable::parse('2026-08-15'));
@@ -170,11 +170,11 @@ it('defaults the individual calendar to the current month and 2 months at a time
         ->get(route('asistencia.show', $conductor))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->where('mes', '2026-08-01')
-            ->where('cantidadMeses', 2)
-            ->has('calendarios', 2)
-            ->where('calendarios.0.mes', '2026-08-01')
-            ->where('calendarios.1.mes', '2026-09-01')
+            ->where('mes', '2026-01-01')
+            ->where('cantidadMeses', 12)
+            ->has('calendarios', 12)
+            ->where('calendarios.0.mes', '2026-01-01')
+            ->where('calendarios.11.mes', '2026-12-01')
         );
 });
 
@@ -203,12 +203,12 @@ it('builds a full-week grid for the requested month, padding with neighboring da
         );
 });
 
-it('clamps the requested amount of months between 1 and 4', function (): void {
+it('clamps the requested amount of months between 1 and 12', function (): void {
     $conductor = Conductor::factory()->create();
 
     actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'meses' => 10]))
-        ->assertInertia(fn (Assert $page) => $page->where('cantidadMeses', 4));
+        ->get(route('asistencia.show', [$conductor, 'meses' => 20]))
+        ->assertInertia(fn (Assert $page) => $page->where('cantidadMeses', 12));
 
     actingAs(actorConRol('admin'))
         ->get(route('asistencia.show', [$conductor, 'meses' => 0]))

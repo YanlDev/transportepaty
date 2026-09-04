@@ -169,19 +169,32 @@ export default function ConductoresIndex({
                                             {conductor.procedencia ?? '—'}
                                         </TableCell>
                                         <TableCell>
-                                            <StatusBadge
-                                                label={
-                                                    conductor.activo
-                                                        ? 'Activo'
-                                                        : 'Inactivo'
+                                            <span
+                                                title={
+                                                    !conductor.activo
+                                                        ? [
+                                                              conductor.fecha_baja,
+                                                              conductor.motivo_baja,
+                                                          ]
+                                                              .filter(Boolean)
+                                                              .join(' · ')
+                                                        : undefined
                                                 }
-                                                tone={
-                                                    conductor.activo
-                                                        ? 'success'
-                                                        : 'neutral'
-                                                }
-                                                dot={false}
-                                            />
+                                            >
+                                                <StatusBadge
+                                                    label={
+                                                        conductor.activo
+                                                            ? 'Activo'
+                                                            : 'Inactivo'
+                                                    }
+                                                    tone={
+                                                        conductor.activo
+                                                            ? 'success'
+                                                            : 'neutral'
+                                                    }
+                                                    dot={false}
+                                                />
+                                            </span>
                                         </TableCell>
                                         {puedeGestionar && (
                                             <TableCell className="text-right">

@@ -25,6 +25,13 @@ class DashboardController extends Controller
      */
     private const CLIENTE_MINSUR_PREFIJO = 'MINSUR';
 
+    /**
+     * El indicador principal del área: viajes reales de concentrado que debe
+     * cerrar el mes en curso, sin importar qué mes esté mirando el selector
+     * del gráfico de abajo.
+     */
+    private const META_MENSUAL_CONCENTRADO = 120;
+
     public function index(Request $request): Response
     {
         return Inertia::render('dashboard', [
@@ -36,11 +43,53 @@ class DashboardController extends Controller
                 'novedadesActivas' => Novedad::vigentes()->count(),
                 'documentosVencidos' => $this->documentosVencidos(),
             ],
+            'metaConcentrado' => $this->metaConcentrado(),
             'filtroMes' => $this->filtroMes($request),
             'mesesDisponibles' => $this->mesesDisponibles(),
             'cargaMinsur' => $this->cargaMinsur($request),
             'viajesPorCliente' => $this->viajesPorClienteOtros(),
         ]);
+    }
+
+    /**
+     * Avance del mes en curso contra la meta mensual de concentrado: cuántos
+     * viajes reales van, cuántos faltan, y a qué ritmo diario hay que cerrar
+     * los días que quedan para llegar. La proyección asume que el ritmo de lo
+     * que va del mes se mantiene igual hasta el cierre —una estimación, no
+     * una promesa— para poder reaccionar a tiempo si el mes viene flojo.
+     *
+     * @return array{
+     *     meta: int,
+     *     realizados: int,
+     *     faltantes: int,
+     *     diasRestantes: int,
+     *     proyeccion: int,
+     *     ritmoNecesario: float|null,
+     * }
+     */
+    private function metaConcentrado(): array
+    {
+        $hoy = now();
+        $mesActual = $hoy->format('Y-m');
+
+        $viajesDelMes = $this->viajesMinsur()->filter(
+            fn (Viaje $viaje): bool => $viaje->tipo_carga === TipoCarga::Concentrado
+                && $viaje->fecha_traslado->format('Y-m') === $mesActual,
+        );
+
+        $realizados = Viaje::contarViajesReales($viajesDelMes);
+        $faltantes = max(0, self::META_MENSUAL_CONCENTRADO - $realizados);
+        $diasTranscurridos = $hoy->day;
+        $diasRestantes = $hoy->daysInMonth - $diasTranscurridos;
+
+        return [
+            'meta' => self::META_MENSUAL_CONCENTRADO,
+            'realizados' => $realizados,
+            'faltantes' => $faltantes,
+            'diasRestantes' => $diasRestantes,
+            'proyeccion' => (int) round($realizados / $diasTranscurridos * $hoy->daysInMonth),
+            'ritmoNecesario' => $diasRestantes > 0 ? round($faltantes / $diasRestantes, 1) : null,
+        ];
     }
 
     /**

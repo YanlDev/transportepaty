@@ -16,6 +16,8 @@ class NovedadController extends Controller
     {
         $novedad = Novedad::query()->create($request->validated());
 
+        $novedad->load('tracto');
+
         return back()->with('toast', [
             'type' => 'success',
             'message' => "{$novedad->tracto->placa}: {$novedad->tipo->label()}.",
@@ -31,6 +33,8 @@ class NovedadController extends Controller
         $this->authorize('update', $novedad);
 
         $novedad->levantar(now()->toDateString());
+
+        $novedad->load('tracto');
 
         return back()->with('toast', [
             'type' => 'success',

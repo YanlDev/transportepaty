@@ -168,3 +168,55 @@ it('forbids a viewer from deleting a conductor', function (): void {
 
     $this->assertDatabaseHas('conductores', ['id' => $conductor->id]);
 });
+
+it('requires a motivo when deactivating a conductor', function (): void {
+    $conductor = Conductor::factory()->create(['activo' => true]);
+
+    actingAs(actorConRol('admin'))
+        ->put(route('conductores.update', $conductor), datosConductor([
+            'activo' => false,
+            'motivo_baja' => '',
+        ]))
+        ->assertSessionHasErrors('motivo_baja');
+
+    expect($conductor->fresh()->activo)->toBeTrue();
+});
+
+it('defaults fecha_baja to today when deactivating without one', function (): void {
+    $conductor = Conductor::factory()->create(['activo' => true]);
+
+    $this->travelTo('2026-09-04');
+
+    actingAs(actorConRol('admin'))
+        ->put(route('conductores.update', $conductor), datosConductor([
+            'activo' => false,
+            'motivo_baja' => 'Renuncia voluntaria',
+        ]))
+        ->assertSessionHasNoErrors();
+
+    $conductor->refresh();
+
+    expect($conductor->activo)->toBeFalse()
+        ->and($conductor->fecha_baja->toDateString())->toBe('2026-09-04')
+        ->and($conductor->motivo_baja)->toBe('Renuncia voluntaria');
+});
+
+it('clears fecha_baja and motivo_baja when reactivating a conductor', function (): void {
+    $conductor = Conductor::factory()->create([
+        'activo' => false,
+        'fecha_baja' => '2026-08-01',
+        'motivo_baja' => 'Renuncia voluntaria',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->put(route('conductores.update', $conductor), datosConductor([
+            'activo' => true,
+        ]))
+        ->assertSessionHasNoErrors();
+
+    $conductor->refresh();
+
+    expect($conductor->activo)->toBeTrue()
+        ->and($conductor->fecha_baja)->toBeNull()
+        ->and($conductor->motivo_baja)->toBeNull();
+});

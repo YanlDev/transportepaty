@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { estadoConfig } from '@/lib/asistencia';
 import { cn } from '@/lib/utils';
 import type {
@@ -30,19 +29,13 @@ import type {
 type Props = {
     conductor: AsistenciaConductor;
     mes: string;
-    cantidadMeses: number;
     calendarios: AsistenciaCalendarioMes[];
 };
 
 /** Borde estilo Excel, igual criterio que el rooster general. */
 const CELDA_CON_BORDE = 'border-r border-b border-border';
 
-export default function AsistenciaShow({
-    conductor,
-    mes,
-    cantidadMeses,
-    calendarios,
-}: Props) {
+export default function AsistenciaShow({ conductor, mes, calendarios }: Props) {
     setLayoutProps({
         breadcrumbs: [
             { title: 'Asistencia', href: asistencia.index().url },
@@ -50,33 +43,18 @@ export default function AsistenciaShow({
         ],
     });
 
-    const irA = (nuevoMes: string, nuevaCantidad: number) => {
+    const anio = Number(mes.split('-')[0]);
+
+    const cambiarAnio = (direccion: number) => {
         router.get(
             show(conductor.id).url,
-            { mes: nuevoMes, meses: nuevaCantidad },
+            { mes: `${anio + direccion}-01-01` },
             { preserveScroll: true },
         );
     };
 
-    const sumarMeses = (cantidad: number) => {
-        const [anio, mesNum] = mes.split('-').map(Number);
-        const siguiente = new Date(anio, mesNum - 1 + cantidad, 1);
-        irA(
-            `${siguiente.getFullYear()}-${String(siguiente.getMonth() + 1).padStart(2, '0')}-01`,
-            cantidadMeses,
-        );
-    };
-
-    const cambiarCantidad = (valor: string) => {
-        if (!valor) {
-            return;
-        }
-
-        irA(mes, Number(valor));
-    };
-
     return (
-        <div className="mx-auto flex h-full w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-6">
+        <div className="mx-auto flex h-full w-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title={`Asistencia · ${conductor.nombre_completo}`} />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -84,43 +62,26 @@ export default function AsistenciaShow({
                     {conductor.nombre_completo}
                 </h1>
 
-                <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => sumarMeses(-1)}
-                            aria-label="Mes anterior"
-                        >
-                            <ChevronLeft className="size-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => sumarMeses(1)}
-                            aria-label="Mes siguiente"
-                        >
-                            <ChevronRight className="size-4" />
-                        </Button>
-                    </div>
-
-                    <ToggleGroup
-                        type="single"
+                <div className="flex items-center gap-2">
+                    <Button
                         variant="outline"
-                        value={String(cantidadMeses)}
-                        onValueChange={cambiarCantidad}
-                        aria-label="Cantidad de meses a mostrar"
+                        size="icon"
+                        onClick={() => cambiarAnio(-1)}
+                        aria-label="Año anterior"
                     >
-                        {[2, 3, 4].map((cantidad) => (
-                            <ToggleGroupItem
-                                key={cantidad}
-                                value={String(cantidad)}
-                                className="w-8 text-xs"
-                            >
-                                {cantidad}
-                            </ToggleGroupItem>
-                        ))}
-                    </ToggleGroup>
+                        <ChevronLeft className="size-4" />
+                    </Button>
+                    <span className="w-12 text-center text-sm font-medium tabular-nums">
+                        {anio}
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => cambiarAnio(1)}
+                        aria-label="Año siguiente"
+                    >
+                        <ChevronRight className="size-4" />
+                    </Button>
                 </div>
             </div>
 
@@ -145,7 +106,7 @@ export default function AsistenciaShow({
                 )}
             </div>
 
-            <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
                 {calendarios.map((calendario) => (
                     <MesCalendario
                         key={calendario.mes}

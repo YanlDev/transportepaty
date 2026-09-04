@@ -17,6 +17,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import type { User } from '@/types/auth';
 import type { Conductor } from '@/types/fleet';
 
@@ -43,6 +44,8 @@ type FormData = {
     fecha_nacimiento: string;
     procedencia: string;
     activo: boolean;
+    fecha_baja: string;
+    motivo_baja: string;
 };
 
 export function ConductorForm({ mode, conductor, usuarios }: Props) {
@@ -59,6 +62,8 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
         fecha_nacimiento: conductor?.fecha_nacimiento ?? '',
         procedencia: conductor?.procedencia ?? '',
         activo: conductor?.activo ?? true,
+        fecha_baja: conductor?.fecha_baja ?? '',
+        motivo_baja: conductor?.motivo_baja ?? '',
     });
 
     const activoId = useId();
@@ -274,6 +279,50 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                         </Label>
                     </div>
                     <InputError message={errors.activo} />
+
+                    {!data.activo && (
+                        <>
+                            <Field
+                                label="Fecha de baja"
+                                error={errors.fecha_baja}
+                            >
+                                {(id) => (
+                                    <Input
+                                        id={id}
+                                        type="date"
+                                        value={data.fecha_baja}
+                                        onChange={(e) =>
+                                            setData(
+                                                'fecha_baja',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder="Hoy, si se deja vacío"
+                                    />
+                                )}
+                            </Field>
+                            <Field
+                                label="Motivo de baja"
+                                error={errors.motivo_baja}
+                                required
+                            >
+                                {(id) => (
+                                    <Textarea
+                                        id={id}
+                                        value={data.motivo_baja}
+                                        onChange={(e) =>
+                                            setData(
+                                                'motivo_baja',
+                                                e.target.value,
+                                            )
+                                        }
+                                        placeholder="Renuncia, término de contrato, etc."
+                                        rows={2}
+                                    />
+                                )}
+                            </Field>
+                        </>
+                    )}
                 </div>
             </section>
 

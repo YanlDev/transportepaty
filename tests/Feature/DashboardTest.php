@@ -179,6 +179,42 @@ it('counts trips per other client, one per real trip not per GR, excluding Minsu
         );
 });
 
+it('tracks progress toward the monthly concentrado goal for the current month, counting real trips not GR rows', function (): void {
+    $this->travelTo('2026-08-10');
+
+    // Dos GR de la misma salida: un solo viaje real.
+    $primeraGr = Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-08-01']);
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->delMismoViajeQue($primeraGr)->create(['fecha_traslado' => '2026-08-01']);
+
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-08-05']);
+
+    // Fuera del mes en curso o de otro tipo de carga: no debe contar.
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-07-20']);
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-06']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('metaConcentrado.meta', 120)
+            ->where('metaConcentrado.realizados', 2)
+            ->where('metaConcentrado.faltantes', 118)
+            ->where('metaConcentrado.diasRestantes', 21)
+            ->where('metaConcentrado.proyeccion', 6)
+            ->where('metaConcentrado.ritmoNecesario', 5.6)
+        );
+});
+
+it('leaves ritmoNecesario null on the last day of the month', function (): void {
+    $this->travelTo('2026-08-31');
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('metaConcentrado.diasRestantes', 0)
+            ->where('metaConcentrado.ritmoNecesario', null)
+        );
+});
+
 it('keeps persona natural clients in the same viajesPorCliente list as empresas', function (): void {
     Viaje::factory()->create(['cliente' => 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN']);
     Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);

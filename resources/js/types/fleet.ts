@@ -19,6 +19,8 @@ export type Conductor = {
     fecha_nacimiento: string | null;
     procedencia: string | null;
     activo: boolean;
+    fecha_baja: string | null;
+    motivo_baja: string | null;
     nombre_completo: string;
 };
 
@@ -35,6 +37,8 @@ export type ConductorListItem = {
     email: string | null;
     procedencia: string | null;
     activo: boolean;
+    fecha_baja: string | null;
+    motivo_baja: string | null;
     documentacion: EstadoDocumental;
 };
 

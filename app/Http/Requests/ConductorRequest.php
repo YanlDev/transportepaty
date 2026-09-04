@@ -31,6 +31,8 @@ abstract class ConductorRequest extends FormRequest
             'fecha_nacimiento' => ['nullable', 'date'],
             'procedencia' => ['nullable', 'string', 'max:100'],
             'activo' => ['required', 'boolean'],
+            'fecha_baja' => ['nullable', 'date'],
+            'motivo_baja' => ['nullable', 'string', 'max:255', 'required_if:activo,false'],
         ];
     }
 

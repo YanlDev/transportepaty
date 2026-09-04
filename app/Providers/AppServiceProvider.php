@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\ServiceProvider;
@@ -36,6 +37,10 @@ class AppServiceProvider extends ServiceProvider
         DB::prohibitDestructiveCommands(
             app()->isProduction(),
         );
+
+        // Cualquier N+1 que se cuele revienta acá en vez de aparecer como
+        // lentitud silenciosa en producción.
+        Model::preventLazyLoading(! app()->isProduction());
 
         Password::defaults(fn (): Password => Password::min(8));
     }

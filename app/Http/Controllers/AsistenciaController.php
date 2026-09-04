@@ -41,13 +41,13 @@ class AsistenciaController extends Controller
     private const DIAS_SEMANA = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
     /**
-     * Cuántos meses se ven a la vez en el calendario individual por
-     * defecto, y el máximo que se puede pedir (más que eso y las tarjetas
-     * quedan demasiado chicas para marcar cómodo).
+     * Cuántos meses se ven a la vez en el calendario individual: siempre el
+     * año completo, de enero a diciembre —ya no hay vista parcial de 1, 2 o
+     * 3 meses.
      */
-    private const CANTIDAD_MESES_DEFECTO = 2;
+    private const CANTIDAD_MESES_DEFECTO = 12;
 
-    private const CANTIDAD_MESES_MAXIMA = 4;
+    private const CANTIDAD_MESES_MAXIMA = 12;
 
     public function index(Request $request): Response
     {
@@ -260,18 +260,19 @@ class AsistenciaController extends Controller
     }
 
     /**
-     * El mes pedido para el calendario individual, o el mes en curso si no
-     * se pidió uno válido. A diferencia del ciclo de planilla, este sí es el
-     * mes calendario normal (1 al 30/31).
+     * El mes pedido para el calendario individual, o enero del año en curso
+     * si no se pidió uno válido —la vista por defecto es el año completo, así
+     * que arranca alineada a enero. A diferencia del ciclo de planilla, este
+     * sí es el mes calendario normal (1 al 30/31).
      */
     private function mesPedido(Request $request): CarbonImmutable
     {
         $mes = $request->string('mes')->value();
 
         try {
-            return $mes === '' ? CarbonImmutable::now()->startOfMonth() : CarbonImmutable::parse($mes)->startOfMonth();
+            return $mes === '' ? CarbonImmutable::now()->startOfYear() : CarbonImmutable::parse($mes)->startOfMonth();
         } catch (\Exception) {
-            return CarbonImmutable::now()->startOfMonth();
+            return CarbonImmutable::now()->startOfYear();
         }
     }
 

@@ -29,6 +29,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $fecha_nacimiento
  * @property string|null $procedencia
  * @property bool $activo
+ * @property Carbon|null $fecha_baja
+ * @property string|null $motivo_baja
  * @property-read string $nombre_completo
  */
 #[Fillable([
@@ -44,6 +46,8 @@ use Illuminate\Support\Carbon;
     'fecha_nacimiento',
     'procedencia',
     'activo',
+    'fecha_baja',
+    'motivo_baja',
 ])]
 #[Appends(['nombre_completo'])]
 class Conductor extends Model
@@ -52,6 +56,25 @@ class Conductor extends Model
     use HasFactory;
 
     protected $table = 'conductores';
+
+    /**
+     * La baja es un hecho puntual (cuándo y por qué se fue), no dos campos
+     * sueltos que alguien puede dejar desalineados: al reactivar se limpian
+     * juntos, y al dar de baja sin fecha explícita se asume hoy —así ningún
+     * conductor inactivo queda sin fecha de baja para los reportes que
+     * comparan headcount mes a mes.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Conductor $conductor): void {
+            if ($conductor->activo) {
+                $conductor->fecha_baja = null;
+                $conductor->motivo_baja = null;
+            } elseif ($conductor->isDirty('activo') && $conductor->fecha_baja === null) {
+                $conductor->fecha_baja = now()->toDateString();
+            }
+        });
+    }
 
     /**
      * @return BelongsTo<User, $this>
@@ -192,6 +215,7 @@ class Conductor extends Model
         return [
             'licencia_vence' => 'date:Y-m-d',
             'fecha_nacimiento' => 'date:Y-m-d',
+            'fecha_baja' => 'date:Y-m-d',
             'activo' => 'boolean',
         ];
     }
