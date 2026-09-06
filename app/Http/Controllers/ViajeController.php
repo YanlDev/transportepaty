@@ -36,7 +36,7 @@ class ViajeController extends Controller
         $viajes = Viaje::query()
             // `media` va acá también: sin precargarla, `getFirstMediaUrl()` de
             // más abajo dispara una consulta por viaje de la página (N+1).
-            ->with(['tracto:id,placa', 'carreta:id,placa', 'conductor:id,nombres,apellidos', 'media'])
+            ->with(['tracto:id,placa', 'carreta:id,placa', 'conductor:id,nombres,apellidos', 'clienteDelPadron:id,alias', 'media'])
             ->when($filtros['buscar'], function ($query, string $buscar): void {
                 $query->where(function ($query) use ($buscar): void {
                     $query->whereLike('placa_tracto', "%{$buscar}%", caseSensitive: false)
@@ -77,7 +77,7 @@ class ViajeController extends Controller
                 'carreta_id' => $viaje->carreta_id,
                 'conductor_nombre' => $viaje->conductor_nombre,
                 'conductor_id' => $viaje->conductor_id,
-                'cliente' => $viaje->cliente,
+                'cliente' => $viaje->nombreCliente(),
                 'destinatario' => $viaje->destinatario,
                 'origen' => $viaje->origen,
                 'origen_ciudad' => $viaje->ciudadOrigen(),

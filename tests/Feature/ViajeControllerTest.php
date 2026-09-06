@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\TipoCarga;
+use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
+use App\Services\ImportadorViaje;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
@@ -137,6 +139,56 @@ it('uppercases the cliente so the same company does not look like two different 
     // mezcladas; sin normalizar, la misma empresa aparecería como dos
     // clientes distintos según cómo la haya tipeado quien emitió la GR.
     expect(Viaje::query()->sole()->cliente)->toBe('CERAMICA SAN LORENZO S.A.C.');
+});
+
+it('links an imported GR to the client padrón by RUC', function (): void {
+    $cliente = Cliente::factory()->create(['ruc' => '20100136741']);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-minsur-concentrado.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    $viaje = Viaje::query()->sole();
+
+    // El texto de la GR se conserva: el padrón solo agrega el enlace.
+    expect($viaje->cliente_id)->toBe($cliente->id)
+        ->and($viaje->cliente)->toBe('MINSUR S.A.');
+});
+
+it('leaves cliente_id null when the RUC is not in the padrón, and fills it on reintentar', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-minsur-concentrado.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    expect(Viaje::query()->sole()->cliente_id)->toBeNull();
+
+    // Se da de alta después, como pasa siempre: reintentar cierra el hueco.
+    $cliente = Cliente::factory()->create(['ruc' => '20100136741']);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.resolver'))
+        ->assertSessionHasNoErrors();
+
+    expect(Viaje::query()->sole()->cliente_id)->toBe($cliente->id);
+});
+
+it('collapses the spacing of the forma societaria so «MINSUR S. A.» is the same client as «MINSUR S.A.»', function (): void {
+    // Las GR reales de Minsur llegan con las dos grafías: sin emparejarlas,
+    // el mismo cliente se parte en dos barras del tablero y en dos opciones
+    // del filtro de viajes.
+    expect(ImportadorViaje::normalizarRazonSocial('MINSUR S. A.'))->toBe('MINSUR S.A.')
+        ->and(ImportadorViaje::normalizarRazonSocial('Minsur S.A.'))->toBe('MINSUR S.A.')
+        ->and(ImportadorViaje::normalizarRazonSocial('CRISAR LOGISTICA S. A. C.'))->toBe('CRISAR LOGISTICA S.A.C.')
+        ->and(ImportadorViaje::normalizarRazonSocial('TRANSPORTES E. I. R. L.'))->toBe('TRANSPORTES E.I.R.L.');
+});
+
+it('leaves the branch suffix of a client alone when normalising', function (): void {
+    // El paréntesis distingue sedes reales, no es ruido de tipeo: quitarlo
+    // fundiría clientes que sí son distintos puntos.
+    expect(ImportadorViaje::normalizarRazonSocial('COMERCIALIZADORA CODISAL S.A.C. (JULIACA)'))
+        ->toBe('COMERCIALIZADORA CODISAL S.A.C. (JULIACA)')
+        ->and(ImportadorViaje::normalizarRazonSocial('GUZMAN REVILLA CHRISTOPHER CHRISTIAN'))
+        ->toBe('GUZMAN REVILLA CHRISTOPHER CHRISTIAN');
 });
 
 it('exposes every guía remitente referenced by the GR-transportista', function (): void {

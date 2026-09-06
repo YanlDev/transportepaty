@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\DashboardController;
@@ -28,6 +29,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('conductores.documentos.destroy');
     });
 
+    Route::resource('clientes', ClienteController::class)
+        ->parameters(['clientes' => 'cliente']);
+
     Route::post('novedades', [NovedadController::class, 'store'])->name('novedades.store');
     Route::post('novedades/{novedad}/levantar', [NovedadController::class, 'levantar'])
         ->name('novedades.levantar');
@@ -42,7 +46,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])->name('viajes.destroy');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
-    Route::get('asistencia/{conductor}', [AsistenciaController::class, 'show'])->name('asistencia.show');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');
     Route::patch('asistencia/{conductor}/dias-debidos', [AsistenciaController::class, 'actualizarDiasDebidos'])
         ->name('asistencia.diasDebidos');

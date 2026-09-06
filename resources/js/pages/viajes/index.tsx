@@ -12,21 +12,15 @@ import { useMemo, useRef, useState } from 'react';
 import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
 import { show as mostrarVehiculo } from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes, {
-    actualizarTipoCarga,
     create,
     resolver,
     store,
 } from '@/actions/App/Http/Controllers/ViajeController';
+import { Copiable } from '@/components/copiable';
 import { DireccionCelda } from '@/components/direccion-celda';
 import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
 import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
     Table,
     TableBody,
@@ -41,12 +35,12 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Copiable } from '@/components/copiable';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
-import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';
+import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
 import { ViajeDetalleDialog } from '@/components/viajes/viaje-detalle-dialog';
+import { ViajeTarjetaMovil } from '@/components/viajes/viaje-tarjeta-movil';
 import { useViajeFiltros } from '@/hooks/use-viaje-filtros';
 import type { FiltrosViaje } from '@/hooks/use-viaje-filtros';
 import { formatearFecha, formatearPeso, formatearPlaca } from '@/lib/format';
@@ -225,7 +219,20 @@ export default function ViajesIndex({
                 </div>
             ) : (
                 <>
-                    <div className="overflow-x-auto rounded-xl border shadow-sm">
+                    <div className="flex flex-col gap-2 sm:hidden">
+                        {filas.map(({ viaje, colorGrupo }) => (
+                            <ViajeTarjetaMovil
+                                key={viaje.id}
+                                viaje={viaje}
+                                tiposCarga={tiposCarga}
+                                puedeGestionar={puedeGestionar}
+                                colorGrupo={colorGrupo}
+                                onVerDetalle={() => setViajeSeleccionado(viaje)}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="hidden overflow-x-auto rounded-xl border shadow-sm sm:block">
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
@@ -274,24 +281,24 @@ export default function ViajesIndex({
                                                 viaje.fecha_traslado,
                                             )}
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap font-mono text-[11px] tabular-nums text-blue-950 dark:text-blue-300">
+                                        <TableCell className="font-mono text-[11px] whitespace-nowrap text-blue-950 tabular-nums dark:text-blue-300">
                                             <Copiable
                                                 valor={viaje.numero_gr}
                                                 etiqueta="N° GR"
                                             />
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap font-mono text-[11px] tabular-nums text-indigo-600 dark:text-indigo-400">
+                                        <TableCell className="font-mono text-[11px] whitespace-nowrap text-indigo-600 tabular-nums dark:text-indigo-400">
                                             <GuiasRemitenteCelda
                                                 guias={viaje.guias_remitente}
                                             />
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap text-[11px]">
+                                        <TableCell className="text-[11px] whitespace-nowrap">
                                             <PlacaCelda
                                                 placa={viaje.placa_tracto}
                                                 vehiculoId={viaje.tracto_id}
                                             />
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap text-[11px]">
+                                        <TableCell className="text-[11px] whitespace-nowrap">
                                             {viaje.placa_carreta ? (
                                                 <PlacaCelda
                                                     placa={viaje.placa_carreta}
@@ -303,7 +310,7 @@ export default function ViajesIndex({
                                                 '—'
                                             )}
                                         </TableCell>
-                                        <TableCell className="whitespace-nowrap text-[11px]">
+                                        <TableCell className="text-[11px] whitespace-nowrap">
                                             <NombreCelda
                                                 nombre={viaje.conductor_nombre}
                                                 conductorId={viaje.conductor_id}
@@ -513,65 +520,6 @@ function NombreCelda({
  * cliente) para no competir con el chip de `ClienteChip`, que es la señal
  * principal de la fila.
  */
-function TipoCargaCelda({
-    viajeId,
-    valor,
-    label,
-    opciones,
-    editable,
-}: {
-    viajeId: number;
-    valor: string;
-    label: string;
-    opciones: EnumOption[];
-    editable: boolean;
-}) {
-    const [guardando, setGuardando] = useState(false);
-
-    if (!editable) {
-        return <TipoCargaBadge valor={valor} label={label} />;
-    }
-
-    const seleccionar = (nuevoValor: string) => {
-        if (nuevoValor === valor) {
-            return;
-        }
-
-        setGuardando(true);
-
-        router.patch(
-            actualizarTipoCarga(viajeId).url,
-            { tipo_carga: nuevoValor },
-            { preserveScroll: true, onFinish: () => setGuardando(false) },
-        );
-    };
-
-    return (
-        <DropdownMenu>
-            <DropdownMenuTrigger
-                disabled={guardando}
-                className="cursor-pointer rounded-md disabled:cursor-wait disabled:opacity-60"
-            >
-                <TipoCargaBadge
-                    valor={valor}
-                    label={label}
-                    className="hover:bg-accent hover:text-accent-foreground"
-                />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start">
-                {opciones.map((opcion) => (
-                    <DropdownMenuItem
-                        key={opcion.value}
-                        onSelect={() => seleccionar(opcion.value)}
-                    >
-                        {opcion.label}
-                    </DropdownMenuItem>
-                ))}
-            </DropdownMenuContent>
-        </DropdownMenu>
-    );
-}
-
 /**
  * Vuelve a intentar resolver tracto/carreta/conductor contra el padrón de
  * hoy. Existe porque la GR suele subirse antes de que la unidad o el

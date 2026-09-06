@@ -2,14 +2,17 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\EstadoDocumento;
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Models\Conductor;
+use App\Models\ConductorDocumento;
 use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
 use App\Models\Viaje;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -27,28 +30,91 @@ class DashboardController extends Controller
 
     /**
      * El indicador principal del área: viajes reales de concentrado que debe
-     * cerrar el mes en curso, sin importar qué mes esté mirando el selector
-     * del gráfico de abajo.
+     * cerrar el mes en curso, sin importar qué rango esté mirando el resto
+     * del tablero.
      */
     private const META_MENSUAL_CONCENTRADO = 120;
 
+    /**
+     * Cuántos clientes se listan uno por uno en el gráfico de viajes; el
+     * resto se agrupa en «otros» para que la barra más larga siga siendo
+     * legible en vez de aplastarse contra una lista interminable.
+     */
+    private const CLIENTES_EN_GRAFICO = 10;
+
     public function index(Request $request): Response
     {
+        $rango = $this->rangoPedido($request);
+        $viajes = $this->viajesDelRango($rango['desde'], $rango['hasta']);
+
         return Inertia::render('dashboard', [
+            'rango' => $rango,
             'resumen' => [
                 'tractos' => Vehiculo::where('tipo', TipoVehiculo::Tracto)->count(),
                 'carretas' => Vehiculo::where('tipo', TipoVehiculo::Carreta)->count(),
                 'operativos' => Vehiculo::where('estado', EstadoVehiculo::Activo)->count(),
                 'conductores' => Conductor::where('activo', true)->count(),
+                'conductoresRegistrados' => Conductor::count(),
                 'novedadesActivas' => Novedad::vigentes()->count(),
-                'documentosVencidos' => $this->documentosVencidos(),
+                'documentosVencidos' => $this->documentosPorEstado()['vencidos'],
             ],
             'metaConcentrado' => $this->metaConcentrado(),
-            'filtroMes' => $this->filtroMes($request),
-            'mesesDisponibles' => $this->mesesDisponibles(),
-            'cargaMinsur' => $this->cargaMinsur($request),
-            'viajesPorCliente' => $this->viajesPorClienteOtros(),
+            'documentos' => $this->documentosPorEstado(),
+            'unidades' => $this->unidades(),
+            'viajesPorCliente' => $this->viajesPorCliente($viajes),
+            'cargaMinsur' => $this->cargaMinsur($viajes),
+            'viajesPorTipoCliente' => $this->viajesPorTipoCliente($viajes),
+            'topCargas' => $this->topCargas($viajes),
+            'ultimosViajes' => $this->ultimosViajes(),
         ]);
+    }
+
+    /**
+     * El rango que se está mirando. Se pide por preset («este mes», «últimos
+     * 3 meses», «este año») y no por fechas sueltas porque es como se habla
+     * del período en la operación; `desde`/`hasta` viajan igual al frontend
+     * para mostrarlos y para poder afinarlos a mano más adelante.
+     *
+     * @return array{periodo: string, desde: string, hasta: string}
+     */
+    private function rangoPedido(Request $request): array
+    {
+        $hoy = CarbonImmutable::now();
+        $periodo = $request->string('periodo')->value();
+
+        [$desde, $hasta] = match ($periodo) {
+            'trimestre' => [$hoy->subMonths(2)->startOfMonth(), $hoy->endOfMonth()],
+            'anio' => [$hoy->startOfYear(), $hoy->endOfYear()],
+            default => [$hoy->startOfMonth(), $hoy->endOfMonth()],
+        };
+
+        return [
+            'periodo' => in_array($periodo, ['trimestre', 'anio'], true) ? $periodo : 'mes',
+            'desde' => $desde->toDateString(),
+            'hasta' => $hasta->toDateString(),
+        ];
+    }
+
+    /**
+     * Los viajes del rango, cargados una sola vez: todos los recuentos de
+     * abajo salen de esta misma colección en vez de repetir la consulta por
+     * cada gráfico.
+     *
+     * @return Collection<int, Viaje>
+     */
+    private function viajesDelRango(string $desde, string $hasta): Collection
+    {
+        return Viaje::query()
+            // El alias del padrón es lo que se muestra; sin precargarlo,
+            // `nombreCliente()` dispara una consulta por viaje.
+            ->with('clienteDelPadron:id,alias')
+            ->whereBetween('fecha_traslado', [$desde, $hasta])
+            ->get(['cliente', 'cliente_id', 'fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni', 'tipo_carga']);
+    }
+
+    private function esDeMinsur(Viaje $viaje): bool
+    {
+        return str_starts_with($viaje->cliente, self::CLIENTE_MINSUR_PREFIJO);
     }
 
     /**
@@ -57,6 +123,9 @@ class DashboardController extends Controller
      * los días que quedan para llegar. La proyección asume que el ritmo de lo
      * que va del mes se mantiene igual hasta el cierre —una estimación, no
      * una promesa— para poder reaccionar a tiempo si el mes viene flojo.
+     *
+     * Siempre es el mes en curso, sin importar el rango elegido arriba: es un
+     * compromiso mensual, no una lectura del período que se esté mirando.
      *
      * @return array{
      *     meta: int,
@@ -70,12 +139,15 @@ class DashboardController extends Controller
     private function metaConcentrado(): array
     {
         $hoy = now();
-        $mesActual = $hoy->format('Y-m');
 
-        $viajesDelMes = $this->viajesMinsur()->filter(
-            fn (Viaje $viaje): bool => $viaje->tipo_carga === TipoCarga::Concentrado
-                && $viaje->fecha_traslado->format('Y-m') === $mesActual,
-        );
+        $viajesDelMes = Viaje::query()
+            ->where('cliente', 'like', self::CLIENTE_MINSUR_PREFIJO.'%')
+            ->where('tipo_carga', TipoCarga::Concentrado)
+            ->whereBetween('fecha_traslado', [
+                $hoy->copy()->startOfMonth()->toDateString(),
+                $hoy->copy()->endOfMonth()->toDateString(),
+            ])
+            ->get(['fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni']);
 
         $realizados = Viaje::contarViajesReales($viajesDelMes);
         $faltantes = max(0, self::META_MENSUAL_CONCENTRADO - $realizados);
@@ -93,133 +165,250 @@ class DashboardController extends Controller
     }
 
     /**
-     * Total de papeles ya vencidos, de fierros y de conductores: el número de
-     * la tarjeta de alerta. El detalle vive en Vehículos/Conductores, no acá.
+     * Cómo está el papeleo de toda la flota, fierros y conductores juntos,
+     * contado por documento. El estado de cada uno sale del mismo criterio
+     * que usan las fichas (`TieneVencimiento::estado()`), así que un «por
+     * vencer» de acá es el mismo ámbar que se ve en la ficha del vehículo.
+     *
+     * @return array{vigentes: int, vencidos: int, por_vencer: int, sin_fecha: int, total: int}
      */
-    private function documentosVencidos(): int
+    private function documentosPorEstado(): array
+    {
+        return once(function (): array {
+            $documentos = VehiculoDocumento::query()
+                ->whereHas('vehiculo')
+                ->get(['fecha_vencimiento'])
+                ->concat(
+                    ConductorDocumento::query()
+                        ->whereHas('conductor')
+                        ->get(['fecha_vencimiento'])
+                );
+
+            $porEstado = $documentos->countBy(
+                fn (VehiculoDocumento|ConductorDocumento $documento): string => $documento->estado()->value
+            );
+
+            // Un documento sin fecha cuenta como vigente en las fichas —basta
+            // con tenerlo cargado—, pero acá se separa: no es lo mismo un
+            // papel con vigencia comprobada que uno del que no se sabe.
+            $sinFecha = $documentos
+                ->filter(fn (VehiculoDocumento|ConductorDocumento $documento): bool => $documento->fecha_vencimiento === null)
+                ->count();
+
+            return [
+                'vigentes' => $porEstado->get(EstadoDocumento::Vigente->value, 0) - $sinFecha,
+                'vencidos' => $porEstado->get(EstadoDocumento::Vencido->value, 0),
+                'por_vencer' => $porEstado->get(EstadoDocumento::PorVencer->value, 0),
+                'sin_fecha' => $sinFecha,
+                'total' => $documentos->count(),
+            ];
+        });
+    }
+
+    /**
+     * Cuántas unidades hay realmente disponibles hoy: las operativas, las que
+     * una novedad vigente saca de la programación, y las que tienen algún
+     * papel vencido —esas tres cosas se miran juntas antes de programar.
+     *
+     * @return array{operativas: int, no_programables: int, con_documentos_vencidos: int, total: int}
+     */
+    private function unidades(): array
     {
         $hoy = now()->toDateString();
 
-        $deVehiculos = VehiculoDocumento::query()
-            ->whereHas('vehiculo')
-            ->whereNotNull('fecha_vencimiento')
-            ->where('fecha_vencimiento', '<', $hoy)
-            ->count();
-
-        $deConductores = Conductor::query()
-            ->whereHas('documentos', function (Builder $query) use ($hoy): void {
-                $query->whereNotNull('fecha_vencimiento')->where('fecha_vencimiento', '<', $hoy);
-            })
-            ->count();
-
-        return $deVehiculos + $deConductores;
+        return [
+            'operativas' => Vehiculo::where('estado', EstadoVehiculo::Activo)->count(),
+            'no_programables' => Novedad::vigentes()->distinct()->count('tracto_id'),
+            'con_documentos_vencidos' => Vehiculo::query()
+                ->whereHas('documentos', function (Builder $query) use ($hoy): void {
+                    $query->whereNotNull('fecha_vencimiento')->where('fecha_vencimiento', '<', $hoy);
+                })
+                ->count(),
+            'total' => Vehiculo::count(),
+        ];
     }
 
     /**
-     * Todos los viajes de Minsur, cargados una sola vez por request —
-     * `filtroMes()`, `mesesDisponibles()` y `cargaMinsur()` la comparten en
-     * vez de repetir la consulta. El formato de mes se calcula en PHP con
-     * Carbon en vez de una función de fecha en SQL (`to_char`, `strftime`...)
-     * porque esas no son portables entre Postgres (producción) y SQLite
-     * (tests).
+     * Cuántos viajes reales —no GR— tiene cada cliente en el rango, con el
+     * porcentaje que representa. Se listan los más grandes uno por uno y el
+     * resto se junta en una sola barra de «otros».
      *
-     * @return Collection<int, Viaje>
+     * @param  Collection<int, Viaje>  $viajes
+     * @return list<array{cliente: string, valor: int, porcentaje: float, es_minsur: bool, es_otros: bool}>
      */
-    private function viajesMinsur(): Collection
+    private function viajesPorCliente(Collection $viajes): array
     {
-        return once(fn (): Collection => Viaje::query()
-            ->where('cliente', 'like', self::CLIENTE_MINSUR_PREFIJO.'%')
-            ->get(['fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni', 'tipo_carga']));
-    }
+        $porCliente = $viajes
+            ->groupBy(fn (Viaje $viaje): string => $viaje->nombreCliente())
+            ->map(fn (Collection $delCliente): int => Viaje::contarViajesReales($delCliente))
+            ->sortDesc();
 
-    /**
-     * El mes elegido en el filtro (`YYYY-MM`), o el mes más reciente con
-     * viajes de Minsur si no se pidió ninguno o el pedido no es válido —así
-     * el gráfico nunca abre vacío por default.
-     */
-    private function filtroMes(Request $request): ?string
-    {
-        $mes = $request->string('mes')->value();
+        $total = $porCliente->sum();
 
-        if ($mes !== '' && preg_match('/^\d{4}-(0[1-9]|1[0-2])$/', $mes) === 1) {
-            return $mes;
+        if ($total === 0) {
+            return [];
         }
 
-        return $this->mesesDisponibles()[0] ?? null;
-    }
+        $principales = $porCliente->take(self::CLIENTES_EN_GRAFICO);
+        $resto = $porCliente->slice(self::CLIENTES_EN_GRAFICO);
 
-    /**
-     * Meses (`YYYY-MM`) que tienen al menos un viaje de Minsur, del más
-     * reciente al más antiguo — opciones del selector del filtro.
-     *
-     * @return list<string>
-     */
-    private function mesesDisponibles(): array
-    {
-        return $this->viajesMinsur()
-            ->map(fn (Viaje $viaje): string => $viaje->fecha_traslado->format('Y-m'))
-            ->unique()
-            ->sortDesc()
+        $filas = $principales
+            ->map(fn (int $valor, string $cliente): array => [
+                'cliente' => $cliente,
+                'valor' => $valor,
+                'porcentaje' => round($valor / $total * 100, 1),
+                'es_minsur' => str_starts_with($cliente, self::CLIENTE_MINSUR_PREFIJO),
+                'es_otros' => false,
+            ])
             ->values()
             ->all();
+
+        if ($resto->isNotEmpty()) {
+            $valorResto = $resto->sum();
+
+            $filas[] = [
+                'cliente' => sprintf('Otros (%d clientes)', $resto->count()),
+                'valor' => $valorResto,
+                'porcentaje' => round($valorResto / $total * 100, 1),
+                'es_minsur' => false,
+                'es_otros' => true,
+            ];
+        }
+
+        return $filas;
     }
 
     /**
-     * Qué llevaron las unidades de Minsur en el mes elegido, contado por
-     * viaje real —no por GR—: un mismo camión puede salir una vez con dos
-     * GR, incluso cruzando a un segundo día (ver `Viaje::contarViajesReales()`),
-     * y ahí solo debe contar una carga. Se agrupa por tipo de carga primero
-     * para que el conteo tolerante no funda viajes de tipos distintos entre
-     * sí. En el orden fijo del enum, incluidos los tipos en cero, para que la
-     * mezcla se lea completa de un vistazo.
+     * Qué llevaron las unidades de Minsur en el rango, contado por viaje real
+     * —no por GR—: un mismo camión puede salir una vez con dos GR, incluso
+     * cruzando a un segundo día (ver `Viaje::contarViajesReales()`), y ahí
+     * solo debe contar una carga. Se agrupa por tipo primero para que el
+     * conteo tolerante no funda viajes de tipos distintos entre sí. En el
+     * orden fijo del enum, incluidos los tipos en cero, para que la mezcla se
+     * lea completa de un vistazo.
      *
-     * @return list<array{tipo: string, label: string, valor: int}>
+     * @param  Collection<int, Viaje>  $viajes
+     * @return list<array{tipo: string, label: string, valor: int, porcentaje: float}>
      */
-    private function cargaMinsur(Request $request): array
+    private function cargaMinsur(Collection $viajes): array
     {
-        $mes = $this->filtroMes($request);
-
-        $porTipo = $this->viajesMinsur()
-            ->when($mes !== null, fn (Collection $viajes) => $viajes->filter(
-                fn (Viaje $viaje): bool => $viaje->fecha_traslado->format('Y-m') === $mes,
-            ))
+        $porTipo = $viajes
+            ->filter(fn (Viaje $viaje): bool => $this->esDeMinsur($viaje))
             ->groupBy(fn (Viaje $viaje): string => $viaje->tipo_carga->value);
 
-        $excluidos = TipoCarga::excluidosDeViaje();
-
-        $tipos = array_values(array_filter(
-            TipoCarga::cases(),
-            fn (TipoCarga $tipo): bool => ! in_array($tipo, $excluidos, true),
-        ));
-
-        return array_map(
+        $conteos = array_map(
             fn (TipoCarga $tipo): array => [
                 'tipo' => $tipo->value,
                 'label' => $tipo->label(),
                 'valor' => Viaje::contarViajesReales($porTipo->get($tipo->value, collect())),
             ],
-            $tipos,
+            $this->tiposDeCarga(),
+        );
+
+        $total = array_sum(array_column($conteos, 'valor'));
+
+        return array_map(
+            fn (array $conteo): array => [
+                ...$conteo,
+                'porcentaje' => $total > 0 ? round($conteo['valor'] / $total * 100, 1) : 0.0,
+            ],
+            $conteos,
         );
     }
 
     /**
-     * Cuántos viajes reales —no GR— tiene cada cliente que no sea Minsur.
-     * Mismo criterio de agrupación que `cargaMinsur()`.
+     * Minsur contra el resto: es el corte que define la operación —el
+     * concentrado es el contrato principal y todo lo demás es relleno de
+     * retorno.
      *
-     * @return list<array{cliente: string, valor: int}>
+     * @param  Collection<int, Viaje>  $viajes
+     * @return array{minsur: int, particulares: int, total: int}
      */
-    private function viajesPorClienteOtros(): array
+    private function viajesPorTipoCliente(Collection $viajes): array
+    {
+        [$deMinsur, $particulares] = $viajes->partition(
+            fn (Viaje $viaje): bool => $this->esDeMinsur($viaje)
+        );
+
+        $minsur = Viaje::contarViajesReales($deMinsur);
+        $otros = Viaje::contarViajesReales($particulares);
+
+        return [
+            'minsur' => $minsur,
+            'particulares' => $otros,
+            'total' => $minsur + $otros,
+        ];
+    }
+
+    /**
+     * Los tipos de carga más movidos del rango, de todos los clientes —no
+     * solo Minsur—, para ver la mezcla completa del período.
+     *
+     * @param  Collection<int, Viaje>  $viajes
+     * @return list<array{tipo: string, label: string, valor: int}>
+     */
+    private function topCargas(Collection $viajes): array
+    {
+        $porTipo = $viajes->groupBy(fn (Viaje $viaje): string => $viaje->tipo_carga->value);
+
+        $conteos = array_map(
+            fn (TipoCarga $tipo): array => [
+                'tipo' => $tipo->value,
+                'label' => $tipo->label(),
+                'valor' => Viaje::contarViajesReales($porTipo->get($tipo->value, collect())),
+            ],
+            $this->tiposDeCarga(),
+        );
+
+        usort($conteos, fn (array $a, array $b): int => $b['valor'] <=> $a['valor']);
+
+        return array_values(array_filter(
+            array_slice($conteos, 0, 5),
+            fn (array $conteo): bool => $conteo['valor'] > 0,
+        ));
+    }
+
+    /**
+     * Los tipos de carga que puede tener un viaje cerrado, en el orden del
+     * enum.
+     *
+     * @return list<TipoCarga>
+     */
+    private function tiposDeCarga(): array
+    {
+        $excluidos = TipoCarga::excluidosDeViaje();
+
+        return array_values(array_filter(
+            TipoCarga::cases(),
+            fn (TipoCarga $tipo): bool => ! in_array($tipo, $excluidos, true),
+        ));
+    }
+
+    /**
+     * Las últimas GR que entraron, sin filtrar por rango: es el pulso de lo
+     * que se está registrando ahora mismo, no una lectura del período.
+     *
+     * @return list<array{id: int, numero_gr: string, fecha_traslado: string, placa_tracto: string, placa_carreta: string|null, cliente: string, tipo_carga: string, tipo_carga_label: string, archivo_url: string|null}>
+     */
+    private function ultimosViajes(): array
     {
         return Viaje::query()
-            ->where('cliente', 'not like', self::CLIENTE_MINSUR_PREFIJO.'%')
-            ->get(['cliente', 'fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni'])
-            ->groupBy('cliente')
-            ->map(fn (Collection $viajes, string $cliente): array => [
-                'cliente' => $cliente,
-                'valor' => Viaje::contarViajesReales($viajes),
+            ->with(['media', 'clienteDelPadron:id,alias'])
+            ->orderByDesc('fecha_traslado')
+            ->orderByDesc('id')
+            ->limit(5)
+            ->get()
+            ->map(fn (Viaje $viaje): array => [
+                'id' => $viaje->id,
+                'numero_gr' => $viaje->numero_gr,
+                'fecha_traslado' => $viaje->fecha_traslado->toDateString(),
+                'placa_tracto' => $viaje->placa_tracto,
+                'placa_carreta' => $viaje->placa_carreta,
+                'cliente' => $viaje->nombreCliente(),
+                'tipo_carga' => $viaje->tipo_carga->value,
+                'tipo_carga_label' => $viaje->tipo_carga->label(),
+                'archivo_url' => $viaje->getFirstMediaUrl('archivo') ?: null,
             ])
-            ->sortByDesc('valor')
-            ->values()
             ->all();
     }
 }

@@ -127,6 +127,7 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                         {(id) => (
                             <Input
                                 id={id}
+                                inputMode="numeric"
                                 value={data.documento}
                                 onChange={(e) =>
                                     setData('documento', e.target.value)
@@ -166,6 +167,8 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                         {(id) => (
                             <Input
                                 id={id}
+                                type="tel"
+                                inputMode="tel"
                                 value={data.telefono}
                                 onChange={(e) =>
                                     setData('telefono', e.target.value)
@@ -281,47 +284,23 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                     <InputError message={errors.activo} />
 
                     {!data.activo && (
-                        <>
-                            <Field
-                                label="Fecha de baja"
-                                error={errors.fecha_baja}
-                            >
-                                {(id) => (
-                                    <Input
-                                        id={id}
-                                        type="date"
-                                        value={data.fecha_baja}
-                                        onChange={(e) =>
-                                            setData(
-                                                'fecha_baja',
-                                                e.target.value,
-                                            )
-                                        }
-                                        placeholder="Hoy, si se deja vacío"
-                                    />
-                                )}
-                            </Field>
-                            <Field
-                                label="Motivo de baja"
-                                error={errors.motivo_baja}
-                                required
-                            >
-                                {(id) => (
-                                    <Textarea
-                                        id={id}
-                                        value={data.motivo_baja}
-                                        onChange={(e) =>
-                                            setData(
-                                                'motivo_baja',
-                                                e.target.value,
-                                            )
-                                        }
-                                        placeholder="Renuncia, término de contrato, etc."
-                                        rows={2}
-                                    />
-                                )}
-                            </Field>
-                        </>
+                        <Field
+                            label="Motivo de baja"
+                            error={errors.motivo_baja}
+                            required
+                        >
+                            {(id) => (
+                                <Textarea
+                                    id={id}
+                                    value={data.motivo_baja}
+                                    onChange={(e) =>
+                                        setData('motivo_baja', e.target.value)
+                                    }
+                                    placeholder="Renuncia, término de contrato, etc."
+                                    rows={2}
+                                />
+                            )}
+                        </Field>
                     )}
                 </div>
             </section>

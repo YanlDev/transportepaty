@@ -28,6 +28,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property TipoCarga $tipo_carga
  * @property string $cliente
  * @property string|null $cliente_ruc
+ * @property int|null $cliente_id
  * @property string $destinatario
  * @property string|null $destinatario_ruc
  * @property array<int, array{numero: string, ruc: string}>|null $guias_remitente
@@ -44,6 +45,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
+ * @property-read Cliente|null $clienteDelPadron
  */
 #[Fillable([
     'numero_gr',
@@ -54,6 +56,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'tipo_carga',
     'cliente',
     'cliente_ruc',
+    'cliente_id',
     'destinatario',
     'destinatario_ruc',
     'guias_remitente',
@@ -99,6 +102,32 @@ class Viaje extends Model implements HasMedia
     public function conductor(): BelongsTo
     {
         return $this->belongsTo(Conductor::class);
+    }
+
+    /**
+     * El cliente del padrón, cuando el RUC de la GR matcheó contra uno dado
+     * de alta. Se llama distinto que la columna `cliente` —que es el texto
+     * crudo de la GR— para no pisarla.
+     *
+     * @return BelongsTo<Cliente, $this>
+     */
+    public function clienteDelPadron(): BelongsTo
+    {
+        return $this->belongsTo(Cliente::class, 'cliente_id');
+    }
+
+    /**
+     * Cómo se muestra el cliente: el alias del padrón si el RUC matcheó, y si
+     * no el texto tal cual vino en la GR. Así las tablas y los gráficos usan
+     * «Porcelanato Latino» en vez de «PORCELANATO LATINO SOCIEDAD ANONIMA
+     * CERRADA», sin perder de vista al cliente que todavía no está dado de
+     * alta.
+     *
+     * Requiere `clienteDelPadron` precargada para no caer en N+1.
+     */
+    public function nombreCliente(): string
+    {
+        return $this->clienteDelPadron?->alias ?? $this->cliente;
     }
 
     /**

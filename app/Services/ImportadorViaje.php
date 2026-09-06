@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TipoCarga;
+use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -71,6 +72,7 @@ class ImportadorViaje
         $carreta = $this->buscarVehiculo($campos['placa_carreta']);
         $conductor = $this->buscarConductor($campos['conductor_dni']);
         [$cliente, $clienteRuc] = $this->clienteReal($campos);
+        $clienteDelPadron = Cliente::porRuc($clienteRuc);
 
         // La clasificación automática (ver `clasificarCarga`) solo se aplica
         // al crear: un viaje que ya existe pudo haber sido corregido a mano
@@ -85,6 +87,7 @@ class ImportadorViaje
             'destino' => $campos['destino'],
             'cliente' => $cliente,
             'cliente_ruc' => $clienteRuc,
+            'cliente_id' => $clienteDelPadron?->id,
             'destinatario' => $campos['destinatario'],
             'destinatario_ruc' => $campos['destinatario_ruc'],
             'guias_remitente' => $campos['guias_remitente'],
@@ -117,11 +120,11 @@ class ImportadorViaje
     }
 
     /**
-     * Vuelve a buscar tracto, carreta y conductor de un viaje ya guardado
-     * contra el padrón actual, sin tocar el PDF. Sirve para el caso típico de
-     * que la GR se suba antes de que el vehículo o el conductor estén
-     * cargados: la primera vez no matchea, y acá se cierra ese hueco sin tener
-     * que volver a subir el archivo.
+     * Vuelve a buscar tracto, carreta, conductor y cliente de un viaje ya
+     * guardado contra el padrón actual, sin tocar el PDF. Sirve para el caso
+     * típico de que la GR se suba antes de que el vehículo, el conductor o el
+     * cliente estén cargados: la primera vez no matchea, y acá se cierra ese
+     * hueco sin tener que volver a subir el archivo.
      *
      * Nunca pisa una coincidencia que ya existía.
      */
@@ -153,6 +156,14 @@ class ImportadorViaje
             }
         }
 
+        if ($viaje->cliente_id === null) {
+            $cliente = Cliente::porRuc($viaje->cliente_ruc);
+
+            if ($cliente !== null) {
+                $cambios['cliente_id'] = $cliente->id;
+            }
+        }
+
         if ($cambios === []) {
             return false;
         }
@@ -169,20 +180,44 @@ class ImportadorViaje
      * remitente siempre dice «AJEPER S.A.», pero quien contrata y paga a
      * Paty es «CRISAR LOGISTICA S.A.C.» en todas, sin excepción.
      *
-     * También pareja mayúsculas: la misma empresa llega de la GR como
-     * «Minsur S.A.» en unos documentos y «MINSUR S.A.» en otros, y sin
-     * normalizar quedan como si fueran dos clientes distintos.
-     *
      * @param  array<string, mixed>  $campos
      * @return array{0: string, 1: string|null}
      */
     private function clienteReal(array $campos): array
     {
         if ($campos['subcontratador'] !== null) {
-            return [Str::upper($campos['subcontratador']), $campos['subcontratador_ruc']];
+            return [self::normalizarRazonSocial($campos['subcontratador']), $campos['subcontratador_ruc']];
         }
 
-        return [Str::upper($campos['cliente']), $campos['cliente_ruc']];
+        return [self::normalizarRazonSocial($campos['cliente']), $campos['cliente_ruc']];
+    }
+
+    /**
+     * La misma empresa llega escrita distinto según quién emitió la GR, y sin
+     * normalizar el nombre queda como si fueran clientes distintos —se parten
+     * en dos barras del tablero y en dos opciones del filtro. Se empareja lo
+     * que es puro formato:
+     *
+     * - mayúsculas («Minsur S.A.» y «MINSUR S.A.»);
+     * - espacios de más entre palabras;
+     * - espacios dentro de la forma societaria («MINSUR S. A.» → «MINSUR
+     *   S.A.», «CRISAR LOGISTICA S. A. C.» → «S.A.C.»), que es la variante
+     *   que traen las GR reales de Minsur.
+     *
+     * Solo aplica al cliente. El destinatario NO se normaliza: ahí los
+     * sufijos distinguen puntos de entrega reales («MP11 - San Rafael»,
+     * «CODISAL (JULIACA)») y fusionarlos perdería el dato.
+     *
+     * Estática porque también la usa la migración que emparejó los viajes ya
+     * importados antes de esta regla.
+     */
+    public static function normalizarRazonSocial(string $nombre): string
+    {
+        $normalizado = Str::squish(Str::upper($nombre));
+
+        // Quita el espacio que separa las iniciales punteadas de la forma
+        // societaria, sin tocar «S.A.C. (JULIACA)» ni nombres corrientes.
+        return preg_replace('/(?<=\b\p{Lu}\.)\s+(?=\p{Lu}\.)/u', '', $normalizado) ?? $normalizado;
     }
 
     /**

@@ -41,6 +41,7 @@ it('summarises the fleet by type and status in the resumen tiles', function (): 
             ->where('resumen.carretas', 1)
             ->where('resumen.operativos', 3)
             ->where('resumen.conductores', 3)
+            ->where('resumen.conductoresRegistrados', 3)
         );
 });
 
@@ -84,7 +85,9 @@ it('counts active novedades for the not-schedulable tile', function (): void {
         );
 });
 
-it('breaks down Minsur cargo by tipo for the selected month, counting one per real trip not per GR', function (): void {
+it('breaks down Minsur cargo by tipo for the range, counting one per real trip not per GR', function (): void {
+    $this->travelTo('2026-08-20');
+
     // Dos GR del mismo camión, mismo conductor, mismo día: es una sola
     // salida (ver `Viaje::claveGrupoViaje()`) y debe contar una sola vez.
     $primeraGr = Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-08-10']);
@@ -96,7 +99,7 @@ it('breaks down Minsur cargo by tipo for the selected month, counting one per re
     Viaje::factory()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-08-15']);
 
     actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['mes' => '2026-08']))
+        ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('cargaMinsur', fn ($tipos) => collect($tipos)
                 ->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 1
@@ -106,46 +109,69 @@ it('breaks down Minsur cargo by tipo for the selected month, counting one per re
 });
 
 it('matches Minsur regardless of the spacing variant in the razón social', function (): void {
+    $this->travelTo('2026-08-20');
+
     Viaje::factory()->create(['cliente' => 'MINSUR S. A.', 'fecha_traslado' => '2026-08-10']);
 
     actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['mes' => '2026-08']))
+        ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('cargaMinsur', fn ($tipos) => collect($tipos)
                 ->firstWhere('tipo', TipoCarga::Particular->value)['valor'] === 1)
         );
 });
 
-it('filters cargaMinsur to the requested month and offers the available months', function (): void {
-    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-07-05']);
-    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
+it('defaults the range to the current month', function (): void {
+    $this->travelTo('2026-08-20');
 
-    actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['mes' => '2026-07']))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('filtroMes', '2026-07')
-            ->where('mesesDisponibles', ['2026-08', '2026-07'])
-            ->where('cargaMinsur', fn ($tipos) => collect($tipos)
-                ->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 1
-                && collect($tipos)->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 0)
-        );
-});
-
-it('defaults cargaMinsur to the most recent month when none is requested', function (): void {
     Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-07-05']);
     Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('filtroMes', '2026-08')
+            ->where('rango.periodo', 'mes')
+            ->where('rango.desde', '2026-08-01')
+            ->where('rango.hasta', '2026-08-31')
+            // Julio queda fuera del rango: solo cuenta el viaje de agosto.
             ->where('cargaMinsur', fn ($tipos) => collect($tipos)
                 ->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 1
                 && collect($tipos)->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 0)
         );
 });
 
+it('widens the range to the last three months when asked', function (): void {
+    $this->travelTo('2026-08-20');
+
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-06-05']);
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['periodo' => 'trimestre']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rango.periodo', 'trimestre')
+            ->where('rango.desde', '2026-06-01')
+            ->where('rango.hasta', '2026-08-31')
+            ->where('cargaMinsur', fn ($tipos) => collect($tipos)
+                ->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 1
+                && collect($tipos)->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 1)
+        );
+});
+
+it('falls back to the current month when the periodo is not one of the presets', function (): void {
+    $this->travelTo('2026-08-20');
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['periodo' => 'inventado']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rango.periodo', 'mes')
+            ->where('rango.desde', '2026-08-01')
+        );
+});
+
 it('counts one trip for the same unit across two consecutive days (Mur-Wy case)', function (): void {
+    $this->travelTo('2026-08-20');
+
     $primeraGr = Viaje::factory()->create(['cliente' => 'MUR - WY S.A.C.', 'fecha_traslado' => '2026-08-03']);
     Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'MUR - WY S.A.C.', 'fecha_traslado' => '2026-08-03']);
     Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'MUR - WY S.A.C.', 'fecha_traslado' => '2026-08-04']);
@@ -158,24 +184,121 @@ it('counts one trip for the same unit across two consecutive days (Mur-Wy case)'
         );
 });
 
-it('counts trips per other client, one per real trip not per GR, excluding Minsur', function (): void {
-    $primeraGr = Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);
-    Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);
+it('counts trips per client with its share, Minsur included', function (): void {
+    $this->travelTo('2026-08-20');
 
-    Viaje::factory()->create(['cliente' => 'HOMECENTERS PERUANOS S.A.']);
+    $primeraGr = Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-08-05']);
+    Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-08-05']);
 
-    Viaje::factory()->deMinsur()->create();
+    Viaje::factory()->create(['cliente' => 'HOMECENTERS PERUANOS S.A.', 'fecha_traslado' => '2026-08-06']);
+    Viaje::factory()->deMinsur()->create(['fecha_traslado' => '2026-08-07']);
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('viajesPorCliente', function ($clientes) {
                 $clientes = collect($clientes);
+                $minsur = $clientes->firstWhere('cliente', 'MINSUR S.A.');
 
+                // Tres viajes reales en total: cada uno es un tercio.
                 return $clientes->firstWhere('cliente', 'CRISAR LOGISTICA S.A.C.')['valor'] === 1
                     && $clientes->firstWhere('cliente', 'HOMECENTERS PERUANOS S.A.')['valor'] === 1
-                    && $clientes->firstWhere('cliente', 'MINSUR S.A.') === null;
+                    && $minsur['valor'] === 1
+                    && $minsur['es_minsur'] === true
+                    && $minsur['porcentaje'] === 33.3;
             })
+        );
+});
+
+it('splits trips between Minsur and everyone else', function (): void {
+    $this->travelTo('2026-08-20');
+
+    Viaje::factory()->deMinsur()->create(['fecha_traslado' => '2026-08-05']);
+    Viaje::factory()->deMinsur()->create(['fecha_traslado' => '2026-08-06']);
+    Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-08-07']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('viajesPorTipoCliente.minsur', 2)
+            ->where('viajesPorTipoCliente.particulares', 1)
+            ->where('viajesPorTipoCliente.total', 3)
+        );
+});
+
+it('buckets every document of the fleet by its expiry state', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+    $conductor = Conductor::factory()->create();
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->addYear()->toDateString(),
+    ]);
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::Matpel,
+        'fecha_vencimiento' => now()->addDays(10)->toDateString(),
+    ]);
+    // Sin fecha: se cuenta aparte de los vigentes con vigencia comprobada.
+    VehiculoDocumento::create([
+        'vehiculo_id' => $vehiculo->id,
+        'tipo' => TipoDocumento::TarjetaPropiedad,
+        'fecha_vencimiento' => null,
+    ]);
+    ConductorDocumento::create([
+        'conductor_id' => $conductor->id,
+        'tipo' => TipoDocumentoConductor::LicenciaConducir,
+        'fecha_vencimiento' => now()->subDay()->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('documentos.vigentes', 1)
+            ->where('documentos.por_vencer', 1)
+            ->where('documentos.vencidos', 1)
+            ->where('documentos.sin_fecha', 1)
+            ->where('documentos.total', 4)
+        );
+});
+
+it('summarises how many units are available today', function (): void {
+    $operativo = Vehiculo::factory()->create(['estado' => EstadoVehiculo::Activo]);
+    Vehiculo::factory()->create(['estado' => EstadoVehiculo::EnMantenimiento]);
+
+    VehiculoDocumento::create([
+        'vehiculo_id' => $operativo->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => now()->subDay()->toDateString(),
+    ]);
+
+    Novedad::factory()->de(TipoNovedad::Taller)->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            // La novedad trae su propio tracto (activo), así que son tres
+            // unidades y dos operativas.
+            ->where('unidades.operativas', 2)
+            ->where('unidades.no_programables', 1)
+            ->where('unidades.con_documentos_vencidos', 1)
+            ->where('unidades.total', 3)
+        );
+});
+
+it('lists the last registered trips regardless of the range', function (): void {
+    $this->travelTo('2026-09-10');
+
+    $viejo = Viaje::factory()->create(['fecha_traslado' => '2026-05-01']);
+    $nuevo = Viaje::factory()->create(['fecha_traslado' => '2026-09-08']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('ultimosViajes', 2)
+            ->where('ultimosViajes.0.id', $nuevo->id)
+            ->where('ultimosViajes.1.id', $viejo->id)
         );
 });
 
@@ -216,8 +339,10 @@ it('leaves ritmoNecesario null on the last day of the month', function (): void 
 });
 
 it('keeps persona natural clients in the same viajesPorCliente list as empresas', function (): void {
-    Viaje::factory()->create(['cliente' => 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN']);
-    Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);
+    $this->travelTo('2026-08-20');
+
+    Viaje::factory()->create(['cliente' => 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN', 'fecha_traslado' => '2026-08-05']);
+    Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-08-06']);
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))

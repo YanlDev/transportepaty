@@ -93,6 +93,27 @@ class Conductor extends Model
     }
 
     /**
+     * @return HasMany<Asistencia, $this>
+     */
+    public function asistencias(): HasMany
+    {
+        return $this->hasMany(Asistencia::class);
+    }
+
+    /**
+     * Solo los viajes que matchearon contra este conductor en el padrón
+     * (`conductor_id` no nulo): los que llegaron con un DNI que no matcheó
+     * quedan como texto crudo en la GR y no pertenecen a nadie en este
+     * historial.
+     *
+     * @return HasMany<Viaje, $this>
+     */
+    public function viajes(): HasMany
+    {
+        return $this->hasMany(Viaje::class);
+    }
+
+    /**
      * El documento del tipo indicado, o null si no lo tiene. Cada conductor
      * guarda como máximo uno de cada tipo (índice único), así que basta con
      * buscarlo en la relación `documentos` ya precargada.

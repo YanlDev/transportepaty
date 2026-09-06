@@ -1,43 +1,15 @@
-import { Eye, Trash2, Upload } from 'lucide-react';
+import { Eye, FileText, MoreVertical, Trash2, Upload } from 'lucide-react';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
+import { estiloDocumento } from '@/lib/documentos';
 import { formatearFecha } from '@/lib/format';
-import type { EstadoDocumento, RanuraDocumental } from '@/types/fleet';
-
-/**
- * Los problemas gritan y lo que está en regla se calla: un documento vigente no
- * necesita mirarse, así que va en neutro; lo que falta o venció tiñe la tarjeta
- * entera. La elevación es igual para todos —lo que cambia es el color— para que
- * la lista se lea como una pila de fichas y no como una tabla.
- */
-const estilo: Record<
-    EstadoDocumento,
-    { tarjeta: string; barra: string; chip: string }
-> = {
-    vigente: {
-        tarjeta:
-            'border-border bg-card hover:border-zinc-300 dark:hover:border-zinc-700',
-        barra: 'bg-emerald-500',
-        chip: 'bg-muted text-muted-foreground',
-    },
-    por_vencer: {
-        tarjeta:
-            'border-amber-300 bg-amber-50/60 hover:border-amber-400 dark:border-amber-900 dark:bg-amber-950/25',
-        barra: 'bg-amber-500',
-        chip: 'bg-amber-500 text-amber-950',
-    },
-    vencido: {
-        tarjeta:
-            'border-red-300 bg-red-50/70 hover:border-red-400 dark:border-red-900 dark:bg-red-950/30',
-        barra: 'bg-red-500',
-        chip: 'bg-red-600 text-white',
-    },
-    faltante: {
-        tarjeta:
-            'border-dashed border-zinc-300 bg-transparent hover:border-red-400 dark:border-zinc-700',
-        barra: 'bg-zinc-300 dark:bg-zinc-700',
-        chip: 'bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400',
-    },
-};
+import { cn } from '@/lib/utils';
+import type { RanuraDocumental } from '@/types/fleet';
 
 type Props = {
     ranura: RanuraDocumental;
@@ -64,7 +36,7 @@ export function DocumentoTarjeta({
     renderCargar,
 }: Props) {
     const { documento, estado } = ranura;
-    const tema = estilo[estado];
+    const tema = estiloDocumento[estado];
 
     const fecha = documento?.fecha_vencimiento
         ? `${estado === 'vencido' ? 'Venció' : 'Vence'} ${formatearFecha(documento.fecha_vencimiento)}`
@@ -74,86 +46,108 @@ export function DocumentoTarjeta({
 
     return (
         <div
-            className={`group/doc flex items-stretch gap-0 border shadow-sm transition-all hover:shadow-md ${tema.tarjeta}`}
+            className={cn(
+                'flex items-center gap-3 rounded-lg border p-2.5 shadow-sm transition-all hover:shadow-md',
+                tema.tarjeta,
+            )}
         >
-            <span className={`w-1.5 shrink-0 ${tema.barra}`} />
+            <span
+                className={cn(
+                    'grid size-9 shrink-0 place-items-center rounded-md',
+                    tema.icono,
+                )}
+                aria-hidden
+            >
+                <FileText className="size-4.5" />
+            </span>
 
-            <div className="flex min-w-0 flex-1 items-center gap-3 py-3 pr-2 pl-3.5">
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm leading-tight font-semibold text-foreground">
-                        {ranura.label}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-muted-foreground">
-                        {documento?.numero && (
-                            <span className="font-mono">
-                                {documento.numero} ·{' '}
-                            </span>
-                        )}
-                        <span className="tabular-nums">{fecha}</span>
-                    </p>
-                </div>
+            <div className="min-w-0 flex-1">
+                <p className="truncate text-sm leading-tight font-medium text-foreground">
+                    {ranura.label}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                    {documento?.numero && (
+                        <span className="font-mono">{documento.numero} · </span>
+                    )}
+                    <span className="tabular-nums">{fecha}</span>
+                </p>
+            </div>
 
-                <span
-                    className={`shrink-0 px-2 py-1 text-[10px] font-bold tracking-wider uppercase ${tema.chip}`}
-                >
-                    {ranura.estado_label}
-                </span>
+            <span
+                className={cn(
+                    'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                    tema.chip,
+                )}
+            >
+                {ranura.estado_label}
+            </span>
 
-                <div className="flex shrink-0 items-center gap-0.5">
-                    {documento === null
-                        ? puedeGestionar &&
-                          renderCargar(
-                              <button
-                                  type="button"
-                                  title={`Cargar ${ranura.label}`}
-                                  aria-label={`Cargar ${ranura.label}`}
-                                  className="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-                              >
-                                  <Upload className="size-4" />
-                              </button>,
-                          )
-                        : null}
+            <div className="flex shrink-0 items-center gap-0.5">
+                {documento === null
+                    ? puedeGestionar &&
+                      renderCargar(
+                          <button
+                              type="button"
+                              title={`Cargar ${ranura.label}`}
+                              aria-label={`Cargar ${ranura.label}`}
+                              className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+                          >
+                              <Upload className="size-4" />
+                          </button>,
+                      )
+                    : null}
 
-                    {documento !== null && (
-                        <>
-                            <DocumentoVisorDialog
-                                url={documento.url}
-                                esPdf={documento.es_pdf}
-                                titulo={ranura.label}
-                                detalle={[
-                                    documento.numero,
-                                    documento.fecha_vencimiento
-                                        ? `Vence ${formatearFecha(documento.fecha_vencimiento)}`
-                                        : null,
-                                ]
-                                    .filter(Boolean)
-                                    .join(' · ')}
-                                trigger={
-                                    <button
-                                        type="button"
-                                        title={`Ver ${ranura.label}`}
-                                        aria-label={`Ver ${ranura.label}`}
-                                        className="grid size-8 place-items-center text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-                                    >
-                                        <Eye className="size-4" />
-                                    </button>
-                                }
-                            />
-
-                            {puedeGestionar && (
+                {documento !== null && (
+                    <>
+                        <DocumentoVisorDialog
+                            url={documento.url}
+                            esPdf={documento.es_pdf}
+                            titulo={ranura.label}
+                            detalle={[
+                                documento.numero,
+                                documento.fecha_vencimiento
+                                    ? `Vence ${formatearFecha(documento.fecha_vencimiento)}`
+                                    : null,
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')}
+                            trigger={
                                 <button
                                     type="button"
-                                    onClick={onEliminar}
-                                    title={`Eliminar ${ranura.label}`}
-                                    aria-label={`Eliminar ${ranura.label}`}
-                                    className="grid size-8 place-items-center text-muted-foreground opacity-0 transition-all group-hover/doc:opacity-100 hover:bg-destructive hover:text-white focus-visible:opacity-100"
+                                    title={`Ver ${ranura.label}`}
+                                    aria-label={`Ver ${ranura.label}`}
+                                    className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                                 >
-                                    <Trash2 className="size-4" />
+                                    <Eye className="size-4" />
                                 </button>
-                            )}
-                        </>
-                    )}
-                </div>
+                            }
+                        />
+
+                        {/* Eliminar vive en el menú y no como un botón suelto:
+                            es destructivo y no hace falta tenerlo a un toque de
+                            distancia mientras se revisa el expediente. */}
+                        {puedeGestionar && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger
+                                    title={`Acciones de ${ranura.label}`}
+                                    aria-label={`Acciones de ${ranura.label}`}
+                                    className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                                >
+                                    <MoreVertical className="size-4" />
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        variant="destructive"
+                                        onSelect={onEliminar}
+                                    >
+                                        <Trash2 className="size-4" />
+                                        Eliminar
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+                    </>
+                )}
             </div>
         </div>
     );

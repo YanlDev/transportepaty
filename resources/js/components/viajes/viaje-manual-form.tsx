@@ -375,6 +375,7 @@ export function ViajeManualForm({
                                 <Input
                                     id={id}
                                     type="number"
+                                    inputMode="decimal"
                                     step="0.001"
                                     min="0"
                                     value={data.peso}

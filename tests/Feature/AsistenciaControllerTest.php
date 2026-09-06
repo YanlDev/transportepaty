@@ -88,6 +88,39 @@ it('defaults to the cycle in progress today when no cycle is requested', functio
         ->assertInertia(fn (Assert $page) => $page->where('inicioCiclo', '2026-02-28'));
 });
 
+it('keeps an inactive conductor in the roster for a cycle where they have marks, gone from later cycles', function (): void {
+    $renunciado = Conductor::factory()->inactivo()->create(['nombres' => 'Ana', 'apellidos' => 'Alarcon']);
+
+    Asistencia::create([
+        'conductor_id' => $renunciado->id,
+        'fecha' => '2026-02-10',
+        'estado' => EstadoAsistencia::Asistencia,
+    ]);
+
+    // El ciclo del 28 ene al 27 feb incluye esa marca: debe aparecer.
+    actingAs(actorConRol('admin'))
+        ->get(route('asistencia.index', ['inicio' => '2026-01-28']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('filas', 1)
+            ->where('filas.0.conductor_id', $renunciado->id)
+            ->where('filas.0.activo', false)
+        );
+
+    // El ciclo siguiente (28 feb - 27 mar) no tiene ninguna marca suya: no
+    // debe aparecer, ya se fue.
+    actingAs(actorConRol('admin'))
+        ->get(route('asistencia.index', ['inicio' => '2026-02-28']))
+        ->assertInertia(fn (Assert $page) => $page->has('filas', 0));
+});
+
+it('marks active conductores as such in the roster', function (): void {
+    Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('asistencia.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('filas.0.activo', true));
+});
+
 it('orders conductores alphabetically by apellidos, matching the paper rooster', function (): void {
     Conductor::factory()->create(['nombres' => 'Carlos', 'apellidos' => 'Zapata']);
     Conductor::factory()->create(['nombres' => 'Ana', 'apellidos' => 'Alarcon']);
@@ -153,135 +186,6 @@ it('rejects an invalid estado', function (): void {
         ->assertSessionHasErrors('estado');
 });
 
-it('forbids a visor from seeing the individual calendar', function (): void {
-    $conductor = Conductor::factory()->create();
-
-    actingAs(actorConRol('visor'))
-        ->get(route('asistencia.show', $conductor))
-        ->assertForbidden();
-});
-
-it('defaults the individual calendar to the full current year, from January to December', function (): void {
-    $conductor = Conductor::factory()->create();
-
-    $this->travelTo(CarbonImmutable::parse('2026-08-15'));
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', $conductor))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('mes', '2026-01-01')
-            ->where('cantidadMeses', 12)
-            ->has('calendarios', 12)
-            ->where('calendarios.0.mes', '2026-01-01')
-            ->where('calendarios.11.mes', '2026-12-01')
-        );
-});
-
-it('builds a full-week grid for the requested month, padding with neighboring days', function (): void {
-    $conductor = Conductor::factory()->create();
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('conductor.id', $conductor->id)
-            ->where('conductor.nombre_completo', "{$conductor->apellidos} {$conductor->nombres}")
-            ->has('calendarios.0.dias', 42)
-            // Agosto 2026 empieza en sábado: la grilla arranca el lunes
-            // anterior (27 de julio) para completar la semana.
-            ->where('calendarios.0.dias.0.fecha', '2026-07-27')
-            ->where('calendarios.0.dias.0.es_relleno', true)
-            ->where('calendarios.0.dias.5.fecha', '2026-08-01')
-            ->where('calendarios.0.dias.5.es_relleno', false)
-            ->where('calendarios.0.dias.35.fecha', '2026-08-31')
-            ->where('calendarios.0.dias.35.es_relleno', false)
-            // Agosto termina en lunes: la grilla sigue hasta el domingo
-            // siguiente (6 de setiembre) para cerrar esa semana.
-            ->where('calendarios.0.dias.41.fecha', '2026-09-06')
-            ->where('calendarios.0.dias.41.es_relleno', true)
-        );
-});
-
-it('clamps the requested amount of months between 1 and 12', function (): void {
-    $conductor = Conductor::factory()->create();
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'meses' => 20]))
-        ->assertInertia(fn (Assert $page) => $page->where('cantidadMeses', 12));
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'meses' => 0]))
-        ->assertInertia(fn (Assert $page) => $page->where('cantidadMeses', 1));
-});
-
-it('only brings marks for the requested conductor within each month of the calendar', function (): void {
-    $conductor = Conductor::factory()->create();
-    $otro = Conductor::factory()->create();
-
-    $asistencia = Asistencia::create([
-        'conductor_id' => $conductor->id,
-        'fecha' => '2026-08-10',
-        'estado' => EstadoAsistencia::Vacaciones,
-    ]);
-
-    // Fuera del mes pedido y de otro conductor: ninguna debe aparecer.
-    Asistencia::create([
-        'conductor_id' => $conductor->id,
-        'fecha' => '2026-07-30',
-        'estado' => EstadoAsistencia::Falta,
-    ]);
-    Asistencia::create([
-        'conductor_id' => $otro->id,
-        'fecha' => '2026-08-10',
-        'estado' => EstadoAsistencia::Falta,
-    ]);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertSuccessful()
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('calendarios.0.marcas.2026-08-10.estado', 'vacaciones')
-            ->where('calendarios.0.marcas.2026-08-10.asistencia_id', $asistencia->id)
-            ->missing('calendarios.0.marcas.2026-07-30')
-            ->has('calendarios.0.marcas', 1)
-        );
-});
-
-it('reflects a mark and a removal made from the individual calendar in the roster data', function (): void {
-    $conductor = Conductor::factory()->create();
-
-    actingAs(actorConRol('admin'))
-        ->patch(route('asistencia.marcar', $conductor), [
-            'fecha' => '2026-08-10',
-            'estado' => EstadoAsistencia::Asistencia->value,
-        ])
-        ->assertSessionHasNoErrors();
-
-    $asistencia = Asistencia::query()->sole();
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('calendarios.0.marcas.2026-08-10.asistencia_id', $asistencia->id)
-            ->where('calendarios.0.marcas.2026-08-10.estado', 'asistencia')
-        );
-
-    actingAs(actorConRol('admin'))
-        ->delete(route('asistencia.destroy', $asistencia))
-        ->assertSessionHasNoErrors();
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertInertia(fn (Assert $page) => $page->missing('calendarios.0.marcas.2026-08-10'));
-});
-
-it('returns a 404 for a conductor that does not exist', function (): void {
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', ['conductor' => 999999]))
-        ->assertNotFound();
-});
-
 it('lets an admin set the días debidos for a conductor in a given month', function (): void {
     $conductor = Conductor::factory()->create();
 
@@ -298,10 +202,6 @@ it('lets an admin set the días debidos for a conductor in a given month', funct
     expect($descansoDebido->conductor_id)->toBe($conductor->id)
         ->and($descansoDebido->mes->toDateString())->toBe('2026-08-01')
         ->and($descansoDebido->dias_debidos)->toBe(3);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertInertia(fn (Assert $page) => $page->where('calendarios.0.dias_debidos', 3));
 });
 
 it('lets an admin change the días debidos for a month without touching other months', function (): void {
@@ -329,21 +229,6 @@ it('lets an admin change the días debidos for a month without touching other mo
         ->assertSessionHasNoErrors();
 
     expect(DescansoDebido::query()->count())->toBe(2);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 2]))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('calendarios.0.dias_debidos', 2)
-            ->where('calendarios.1.dias_debidos', 6)
-        );
-});
-
-it('defaults días debidos to 0 for a month that was never set', function (): void {
-    $conductor = Conductor::factory()->create();
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertInertia(fn (Assert $page) => $page->where('calendarios.0.dias_debidos', 0));
 });
 
 it('forbids a visor from setting días debidos', function (): void {
@@ -388,10 +273,6 @@ it('lets an admin record a negative saldo when the conductor rested more than ex
     // Negativo: descansó de más ese mes, así que le debe un día de trabajo
     // a la empresa en vez de que la empresa le deba un descanso a él.
     expect(DescansoDebido::query()->sole()->dias_debidos)->toBe(-1);
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertInertia(fn (Assert $page) => $page->where('calendarios.0.dias_debidos', -1));
 });
 
 it('lets an admin set notas for a conductor in a given month', function (): void {
@@ -408,13 +289,6 @@ it('lets an admin set notas for a conductor in a given month', function (): void
     expect($descansoDebido->conductor_id)->toBe($conductor->id)
         ->and($descansoDebido->mes->toDateString())->toBe('2026-08-01')
         ->and($descansoDebido->notas)->toBe('Acordó reponer el 30/08 el día que faltó por trámite.');
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertInertia(fn (Assert $page) => $page->where(
-            'calendarios.0.notas',
-            'Acordó reponer el 30/08 el día que faltó por trámite.',
-        ));
 });
 
 it('clears notas when saved empty without touching días debidos', function (): void {
@@ -444,14 +318,6 @@ it('clears notas when saved empty without touching días debidos', function (): 
     $descansoDebido = DescansoDebido::query()->sole();
     expect($descansoDebido->notas)->toBeNull()
         ->and($descansoDebido->dias_debidos)->toBe(2);
-});
-
-it('defaults notas to null for a month that was never set', function (): void {
-    $conductor = Conductor::factory()->create();
-
-    actingAs(actorConRol('admin'))
-        ->get(route('asistencia.show', [$conductor, 'mes' => '2026-08-01', 'meses' => 1]))
-        ->assertInertia(fn (Assert $page) => $page->where('calendarios.0.notas', null));
 });
 
 it('forbids a visor from setting notas', function (): void {

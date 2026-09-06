@@ -1,24 +1,18 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import asistencia, {
     destroy,
     marcar,
-    show,
 } from '@/actions/App/Http/Controllers/AsistenciaController';
+import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
 import { EstadoAsistenciaOpciones } from '@/components/asistencia/estado-asistencia-opciones';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { Input } from '@/components/ui/input';
 import { estadoConfig } from '@/lib/asistencia';
 import { cn } from '@/lib/utils';
 import type {
@@ -33,16 +27,9 @@ type Props = {
     filas: AsistenciaFila[];
 };
 
-/**
- * Celda estilo Excel: borde derecho e inferior. Solo esos dos lados —el
- * contorno completo lo cierra el borde del contenedor— porque con
- * `border-collapse` el `sticky` de las celdas deja de funcionar en varios
- * navegadores; con `border-separate` cada celda pinta su propio borde y
- * bordear los cuatro lados duplicaría la línea entre celda y celda.
- */
-const CELDA_CON_BORDE = 'border-r border-b border-border';
-
 export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
+    const [buscar, setBuscar] = useState('');
+
     const irAlCiclo = (nuevoInicio: string) => {
         router.get(
             asistencia.index().url,
@@ -62,40 +49,64 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
     const ultimoDia = dias[dias.length - 1];
     const rangoCiclo = `${formatearCorto(dias[0].fecha)} – ${formatearCorto(ultimoDia.fecha)}`;
 
+    const filasFiltradas = useMemo(() => {
+        const termino = buscar.trim().toLowerCase();
+
+        if (!termino) {
+            return filas;
+        }
+
+        return filas.filter((fila) =>
+            fila.nombre_completo.toLowerCase().includes(termino),
+        );
+    }, [filas, buscar]);
+
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Asistencia" />
 
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                    <p className="text-sm text-muted-foreground">
-                        Rooster del ciclo de planilla (del 28 al 27 del mes
-                        siguiente): quién trabajó, faltó, o está de vacaciones o
-                        descanso. Click en una celda para marcarla.
-                    </p>
-                </div>
+            <p className="text-sm text-muted-foreground">
+                Rooster del ciclo de planilla (del 28 al 27 del mes siguiente):
+                quién trabajó, faltó, o está de vacaciones o descanso. Toca un
+                día para marcarlo.
+            </p>
 
-                <div className="flex items-center gap-2">
+            {/*
+             * En el celular esta barra queda pegada arriba: el ciclo y el
+             * buscador son lo que se toca todo el rato mientras se marca la
+             * asistencia, y así no hay que volver al inicio de la lista.
+             */}
+            <div className="sticky top-0 z-20 -mx-4 flex flex-col gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:static md:mx-0 md:flex-row md:items-center md:justify-between md:border-0 md:bg-transparent md:px-0 md:py-0 md:backdrop-blur-none">
+                <div className="flex items-center justify-between gap-2 md:justify-start">
                     <Button
                         variant="outline"
                         size="icon"
+                        className="size-11 md:size-9"
                         onClick={() => sumarCiclos(-1)}
                         aria-label="Ciclo anterior"
                     >
-                        <ChevronLeft className="size-4" />
+                        <ChevronLeft className="size-5 md:size-4" />
                     </Button>
-                    <span className="min-w-[9rem] text-center text-sm font-medium tabular-nums">
+                    <span className="text-center text-sm font-medium tabular-nums md:min-w-[9rem]">
                         {rangoCiclo}
                     </span>
                     <Button
                         variant="outline"
                         size="icon"
+                        className="size-11 md:size-9"
                         onClick={() => sumarCiclos(1)}
                         aria-label="Ciclo siguiente"
                     >
-                        <ChevronRight className="size-4" />
+                        <ChevronRight className="size-5 md:size-4" />
                     </Button>
                 </div>
+
+                <Input
+                    value={buscar}
+                    onChange={(e) => setBuscar(e.target.value)}
+                    placeholder="Buscar conductor..."
+                    className="h-11 md:h-9 md:max-w-xs"
+                />
             </div>
 
             <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
@@ -119,77 +130,21 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
                 )}
             </div>
 
-            <div className="overflow-x-auto border border-border">
-                <Table className="border-separate border-spacing-0">
-                    <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                            <TableHead
-                                className={cn(
-                                    CELDA_CON_BORDE,
-                                    'sticky top-0 left-0 z-30 w-36 bg-background',
-                                )}
-                            >
-                                Conductor
-                            </TableHead>
-                            {dias.map((dia) => (
-                                <TableHead
-                                    key={dia.fecha}
-                                    className={cn(
-                                        CELDA_CON_BORDE,
-                                        'sticky top-0 z-20 w-9 min-w-9 bg-background p-0 text-center',
-                                        dia.es_domingo && 'bg-muted/60',
-                                    )}
-                                >
-                                    <div className="flex flex-col items-center leading-tight">
-                                        <span className="text-[10px] text-muted-foreground">
-                                            {dia.dia_semana}
-                                        </span>
-                                        <span className="tabular-nums">
-                                            {dia.numero}
-                                        </span>
-                                    </div>
-                                </TableHead>
-                            ))}
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {filas.map((fila) => (
-                            <TableRow key={fila.conductor_id}>
-                                <TableCell
-                                    title={fila.nombre_completo}
-                                    className={cn(
-                                        CELDA_CON_BORDE,
-                                        'sticky left-0 z-10 w-36 max-w-36 truncate bg-background font-medium tracking-wide uppercase',
-                                    )}
-                                >
-                                    <Link
-                                        href={show(fila.conductor_id).url}
-                                        className="hover:underline"
-                                    >
-                                        {fila.nombre_completo}
-                                    </Link>
-                                </TableCell>
-                                {dias.map((dia) => (
-                                    <TableCell
-                                        key={dia.fecha}
-                                        className={cn(
-                                            CELDA_CON_BORDE,
-                                            'p-0.5 text-center',
-                                            dia.es_domingo && 'bg-muted/40',
-                                        )}
-                                    >
-                                        <Celda
-                                            conductorId={fila.conductor_id}
-                                            fecha={dia.fecha}
-                                            marca={fila.marcas[dia.fecha]}
-                                        />
-                                    </TableCell>
-                                ))}
-                            </TableRow>
-                        ))}
-                    </TableBody>
-                </Table>
-            </div>
+            {filasFiltradas.length === 0 ? (
+                <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed py-20 text-center text-sm text-muted-foreground">
+                    No se encontraron conductores.
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                    {filasFiltradas.map((fila) => (
+                        <ConductorCicloTarjeta
+                            key={fila.conductor_id}
+                            fila={fila}
+                            dias={dias}
+                        />
+                    ))}
+                </div>
+            )}
         </div>
     );
 }
@@ -201,13 +156,61 @@ function formatearCorto(fecha: string): string {
     return d.toLocaleDateString('es-PE', { day: '2-digit', month: 'short' });
 }
 
-function Celda({
+/**
+ * Un conductor y su ciclo en formato mini-calendario: reemplaza la fila de
+ * la tabla gigante por una tarjeta que se lee de un vistazo, sin scroll
+ * horizontal.
+ */
+function ConductorCicloTarjeta({
+    fila,
+    dias,
+}: {
+    fila: AsistenciaFila;
+    dias: AsistenciaDia[];
+}) {
+    return (
+        <div
+            className={cn(
+                'rounded-lg border border-border bg-card p-3',
+                !fila.activo && 'opacity-60 grayscale',
+            )}
+        >
+            <Link
+                href={mostrarConductor(fila.conductor_id, {
+                    query: { tab: 'asistencia' },
+                })}
+                className="mb-2 flex items-center gap-1.5 truncate text-sm font-medium tracking-wide uppercase hover:underline"
+                title={fila.nombre_completo}
+            >
+                <span className="truncate">{fila.nombre_completo}</span>
+                {!fila.activo && (
+                    <span className="shrink-0 rounded-sm bg-muted px-1 py-0.5 text-[9px] font-bold tracking-normal text-muted-foreground normal-case">
+                        Inactivo
+                    </span>
+                )}
+            </Link>
+
+            <div className="grid grid-cols-7 gap-1">
+                {dias.map((dia) => (
+                    <DiaCiclo
+                        key={dia.fecha}
+                        conductorId={fila.conductor_id}
+                        dia={dia}
+                        marca={fila.marcas[dia.fecha]}
+                    />
+                ))}
+            </div>
+        </div>
+    );
+}
+
+function DiaCiclo({
     conductorId,
-    fecha,
+    dia,
     marca,
 }: {
     conductorId: number;
-    fecha: string;
+    dia: AsistenciaDia;
     marca: AsistenciaFila['marcas'][string] | undefined;
 }) {
     const info = marca ? estadoConfig[marca.estado] : null;
@@ -215,7 +218,7 @@ function Celda({
     const marcarComo = (estado: EstadoAsistencia) => {
         router.patch(
             marcar(conductorId).url,
-            { fecha, estado },
+            { fecha: dia.fecha, estado },
             { preserveScroll: true },
         );
     };
@@ -233,13 +236,20 @@ function Celda({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger
+                // En móvil la celda es de 40px: se marca con el pulgar sin
+                // errarle al día de al lado. En escritorio se compacta.
                 className={cn(
-                    'mx-auto grid size-7 cursor-pointer place-items-center text-xs font-bold hover:ring-1 hover:ring-foreground/30 hover:ring-inset',
-                    info ? info.badge : 'text-transparent',
+                    'grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-xs font-bold tabular-nums hover:ring-1 hover:ring-foreground/30 hover:ring-inset sm:size-7 sm:text-[10px]',
+                    info
+                        ? info.badge
+                        : cn(
+                              'text-muted-foreground/70',
+                              dia.es_domingo ? 'bg-muted/50' : 'bg-muted/20',
+                          ),
                 )}
-                title={info ? info.label : 'Sin marcar'}
+                title={`${dia.numero} — ${info ? info.label : 'Sin marcar'}`}
             >
-                {info ? info.letra : '·'}
+                {dia.numero}
             </DropdownMenuTrigger>
             <EstadoAsistenciaOpciones
                 align="center"

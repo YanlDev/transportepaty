@@ -4,12 +4,14 @@ import {
     IconContext,
     IdentificationCard,
     Path,
+    Buildings,
     SquaresFour,
     Truck,
     TruckTrailer,
     UsersThree,
 } from '@phosphor-icons/react';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
+import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
@@ -58,6 +60,11 @@ const gestionNavItems: NavItem[] = [
         title: 'Viajes',
         href: viajes.index(),
         icon: Path,
+    },
+    {
+        title: 'Clientes',
+        href: clientes.index(),
+        icon: Buildings,
     },
 ];
 

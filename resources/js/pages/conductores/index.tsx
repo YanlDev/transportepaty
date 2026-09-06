@@ -19,6 +19,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import type { ConductorListItem, Paginator } from '@/types/fleet';
 
 type Props = {
@@ -137,7 +138,13 @@ export default function ConductoresIndex({
                             </TableHeader>
                             <TableBody>
                                 {paginador.data.map((conductor, indice) => (
-                                    <TableRow key={conductor.id}>
+                                    <TableRow
+                                        key={conductor.id}
+                                        className={cn(
+                                            !conductor.activo &&
+                                                'opacity-60 grayscale',
+                                        )}
+                                    >
                                         <TableCell className="text-muted-foreground tabular-nums">
                                             {(paginador.from ?? 1) + indice}
                                         </TableCell>

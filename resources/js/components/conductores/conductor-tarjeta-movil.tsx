@@ -4,6 +4,7 @@ import { edit, show } from '@/actions/App/Http/Controllers/ConductorController';
 import { DeleteConductorDialog } from '@/components/conductores/delete-conductor-dialog';
 import { Copiable } from '@/components/copiable';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import type { ConductorListItem } from '@/types/fleet';
 
 type Props = {
@@ -18,7 +19,12 @@ type Props = {
  */
 export function ConductorTarjetaMovil({ conductor, puedeGestionar }: Props) {
     return (
-        <div className="group/fila flex flex-col gap-2 border bg-card p-3">
+        <div
+            className={cn(
+                'group/fila flex flex-col gap-2 border bg-card p-3',
+                !conductor.activo && 'opacity-60 grayscale',
+            )}
+        >
             <div className="flex items-start justify-between gap-2">
                 <Link
                     href={show(conductor.id)}

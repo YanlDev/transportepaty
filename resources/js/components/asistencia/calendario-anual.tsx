@@ -1,12 +1,11 @@
-import { Head, router, setLayoutProps } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
-import asistencia, {
+import {
     actualizarDiasDebidos,
     actualizarNotas,
     destroy,
     marcar,
-    show,
 } from '@/actions/App/Http/Controllers/AsistenciaController';
 import { EstadoAsistenciaOpciones } from '@/components/asistencia/estado-asistencia-opciones';
 import { Button } from '@/components/ui/button';
@@ -21,46 +20,62 @@ import { cn } from '@/lib/utils';
 import type {
     AsistenciaCalendarioDia,
     AsistenciaCalendarioMes,
-    AsistenciaConductor,
     AsistenciaMarca,
     EstadoAsistencia,
 } from '@/types/fleet';
 
 type Props = {
-    conductor: AsistenciaConductor;
-    mes: string;
+    conductorId: number;
+    anio: number;
     calendarios: AsistenciaCalendarioMes[];
+    urlPagina: string;
 };
 
 /** Borde estilo Excel, igual criterio que el rooster general. */
 const CELDA_CON_BORDE = 'border-r border-b border-border';
 
-export default function AsistenciaShow({ conductor, mes, calendarios }: Props) {
-    setLayoutProps({
-        breadcrumbs: [
-            { title: 'Asistencia', href: asistencia.index().url },
-            { title: conductor.nombre_completo, href: show(conductor.id).url },
-        ],
-    });
-
-    const anio = Number(mes.split('-')[0]);
-
+/**
+ * El calendario de asistencia de un conductor: los doce meses del año
+ * elegido, navegable año por año. Vive en la pestaña de Asistencia de la
+ * ficha del conductor (`conductores/show`) — antes era su propia página.
+ */
+export function CalendarioAsistenciaAnual({
+    conductorId,
+    anio,
+    calendarios,
+    urlPagina,
+}: Props) {
     const cambiarAnio = (direccion: number) => {
         router.get(
-            show(conductor.id).url,
-            { mes: `${anio + direccion}-01-01` },
-            { preserveScroll: true },
+            urlPagina,
+            { anio: anio + direccion },
+            { preserveScroll: true, preserveState: true },
         );
     };
 
     return (
-        <div className="mx-auto flex h-full w-full max-w-7xl flex-1 flex-col gap-6 p-4 md:p-6">
-            <Head title={`Asistencia · ${conductor.nombre_completo}`} />
-
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <h1 className="text-xl font-semibold tracking-tight">
-                    {conductor.nombre_completo}
-                </h1>
+        <div className="flex flex-col gap-6">
+            <div className="flex items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                    {(Object.keys(estadoConfig) as EstadoAsistencia[]).map(
+                        (estado) => (
+                            <span
+                                key={estado}
+                                className="inline-flex items-center gap-1.5"
+                            >
+                                <span
+                                    className={cn(
+                                        'grid size-4 place-items-center rounded-none text-[10px] font-bold',
+                                        estadoConfig[estado].badge,
+                                    )}
+                                >
+                                    {estadoConfig[estado].letra}
+                                </span>
+                                {estadoConfig[estado].label}
+                            </span>
+                        ),
+                    )}
+                </div>
 
                 <div className="flex items-center gap-2">
                     <Button
@@ -85,32 +100,11 @@ export default function AsistenciaShow({ conductor, mes, calendarios }: Props) {
                 </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                {(Object.keys(estadoConfig) as EstadoAsistencia[]).map(
-                    (estado) => (
-                        <span
-                            key={estado}
-                            className="inline-flex items-center gap-1.5"
-                        >
-                            <span
-                                className={cn(
-                                    'grid size-4 place-items-center rounded-none text-[10px] font-bold',
-                                    estadoConfig[estado].badge,
-                                )}
-                            >
-                                {estadoConfig[estado].letra}
-                            </span>
-                            {estadoConfig[estado].label}
-                        </span>
-                    ),
-                )}
-            </div>
-
             <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3">
                 {calendarios.map((calendario) => (
                     <MesCalendario
                         key={calendario.mes}
-                        conductorId={conductor.id}
+                        conductorId={conductorId}
                         calendario={calendario}
                     />
                 ))}
@@ -361,6 +355,7 @@ function DiasDebidosInput({
             <span className={colorEtiqueta}>{quienDebe}</span>
             <Input
                 type="number"
+                inputMode="numeric"
                 min={-31}
                 max={31}
                 value={valor}
@@ -371,7 +366,9 @@ function DiasDebidosInput({
                         evento.currentTarget.blur();
                     }
                 }}
-                className="h-7 w-14 px-2 text-center text-xs"
+                // 16px en móvil (`text-base`) para que iOS no haga zoom al
+                // enfocar el campo; a partir de `sm` vuelve a ser compacto.
+                className="h-9 w-16 px-2 text-center text-base sm:h-7 sm:w-14 sm:text-xs"
             />
             <span className="text-muted-foreground">días</span>
         </label>

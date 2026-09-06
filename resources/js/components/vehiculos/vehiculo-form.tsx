@@ -158,6 +158,7 @@ export function VehiculoForm({
                         <Input
                             id={id}
                             type="number"
+                            inputMode="numeric"
                             value={data.anio}
                             onChange={(e) =>
                                 setData(
@@ -244,6 +245,7 @@ export function VehiculoForm({
                         <Input
                             id={id}
                             type="number"
+                            inputMode="numeric"
                             value={data.ejes}
                             onChange={(e) =>
                                 setData(
@@ -269,6 +271,7 @@ export function VehiculoForm({
                         <Input
                             id={id}
                             type="number"
+                            inputMode="numeric"
                             value={data.peso_neto}
                             onChange={(e) =>
                                 setData(
@@ -287,6 +290,7 @@ export function VehiculoForm({
                         <Input
                             id={id}
                             type="number"
+                            inputMode="numeric"
                             value={data.peso_bruto}
                             onChange={(e) =>
                                 setData(
@@ -305,6 +309,7 @@ export function VehiculoForm({
                         <Input
                             id={id}
                             type="number"
+                            inputMode="numeric"
                             value={data.carga_util}
                             onChange={(e) =>
                                 setData(

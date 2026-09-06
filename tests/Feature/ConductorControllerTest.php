@@ -1,6 +1,10 @@
 <?php
 
+use App\Enums\EstadoAsistencia;
+use App\Models\Asistencia;
 use App\Models\Conductor;
+use App\Models\Viaje;
+use Carbon\CarbonImmutable;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -81,6 +85,285 @@ it('exposes the edit form with a date-only license expiry', function (): void {
             ->component('conductores/edit')
             ->where('conductor.nombre_completo', $conductor->nombre_completo)
             ->where('conductor.licencia_vence', '2030-05-15')
+        );
+});
+
+it('includes the full-year asistencia calendar for an admin, defaulting to the current year', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    $this->travelTo(CarbonImmutable::parse('2026-08-15'));
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', $conductor))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('asistencia.anio', 2026)
+            ->has('asistencia.calendarios', 12)
+            ->where('asistencia.calendarios.0.mes', '2026-01-01')
+            ->where('asistencia.calendarios.11.mes', '2026-12-01')
+            ->where('asistencia.calendarios.0.dias_debidos', 0)
+            ->where('asistencia.calendarios.0.notas', null)
+        );
+});
+
+it('hides the asistencia calendar from a visor', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('visor'))
+        ->get(route('conductores.show', $conductor))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->where('asistencia', null));
+});
+
+it('shows the requested year in the asistencia calendar', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', [$conductor, 'anio' => 2025]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('asistencia.anio', 2025)
+            ->where('asistencia.calendarios.0.mes', '2025-01-01')
+            ->where('asistencia.calendarios.11.mes', '2025-12-01')
+        );
+});
+
+it('defaults to the current year in the asistencia calendar when anio is invalid', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    $this->travelTo(CarbonImmutable::parse('2026-08-15'));
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', [$conductor, 'anio' => -5]))
+        ->assertInertia(fn (Assert $page) => $page->where('asistencia.anio', 2026));
+});
+
+it('builds a full-week grid for a month in the asistencia calendar, padding with neighboring days', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', [$conductor, 'anio' => 2026]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('asistencia.calendarios.7.dias', 42)
+            ->where('asistencia.calendarios.7.mes', '2026-08-01')
+            // Agosto 2026 empieza en sábado: la grilla arranca el lunes
+            // anterior (27 de julio) para completar la semana.
+            ->where('asistencia.calendarios.7.dias.0.fecha', '2026-07-27')
+            ->where('asistencia.calendarios.7.dias.0.es_relleno', true)
+            ->where('asistencia.calendarios.7.dias.5.fecha', '2026-08-01')
+            ->where('asistencia.calendarios.7.dias.5.es_relleno', false)
+            ->where('asistencia.calendarios.7.dias.35.fecha', '2026-08-31')
+            ->where('asistencia.calendarios.7.dias.35.es_relleno', false)
+            // Agosto termina en lunes: la grilla sigue hasta el domingo
+            // siguiente (6 de setiembre) para cerrar esa semana.
+            ->where('asistencia.calendarios.7.dias.41.fecha', '2026-09-06')
+            ->where('asistencia.calendarios.7.dias.41.es_relleno', true)
+        );
+});
+
+it('only brings marks for the right month in the asistencia calendar', function (): void {
+    $conductor = Conductor::factory()->create();
+    $otro = Conductor::factory()->create();
+
+    $asistencia = Asistencia::create([
+        'conductor_id' => $conductor->id,
+        'fecha' => '2026-08-10',
+        'estado' => EstadoAsistencia::Vacaciones,
+    ]);
+
+    // Otro mes y otro conductor: ninguna debe aparecer en el de agosto.
+    Asistencia::create([
+        'conductor_id' => $conductor->id,
+        'fecha' => '2026-07-30',
+        'estado' => EstadoAsistencia::Falta,
+    ]);
+    Asistencia::create([
+        'conductor_id' => $otro->id,
+        'fecha' => '2026-08-10',
+        'estado' => EstadoAsistencia::Falta,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', [$conductor, 'anio' => 2026]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('asistencia.calendarios.7.marcas.2026-08-10.estado', 'vacaciones')
+            ->where('asistencia.calendarios.7.marcas.2026-08-10.asistencia_id', $asistencia->id)
+            ->missing('asistencia.calendarios.7.marcas.2026-07-30')
+            ->has('asistencia.calendarios.7.marcas', 1)
+        );
+});
+
+it('reflects a mark and a removal made via AsistenciaController in the conductor asistencia calendar', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.marcar', $conductor), [
+            'fecha' => '2026-08-10',
+            'estado' => EstadoAsistencia::Asistencia->value,
+        ])
+        ->assertSessionHasNoErrors();
+
+    $asistencia = Asistencia::query()->sole();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', [$conductor, 'anio' => 2026]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('asistencia.calendarios.7.marcas.2026-08-10.asistencia_id', $asistencia->id)
+            ->where('asistencia.calendarios.7.marcas.2026-08-10.estado', 'asistencia')
+        );
+
+    actingAs(actorConRol('admin'))
+        ->delete(route('asistencia.destroy', $asistencia))
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', [$conductor, 'anio' => 2026]))
+        ->assertInertia(fn (Assert $page) => $page->missing('asistencia.calendarios.7.marcas.2026-08-10'));
+});
+
+it('surfaces dias_debidos and notas set for a month in the asistencia calendar', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.diasDebidos', $conductor), [
+            'mes' => '2026-08-15',
+            'dias_debidos' => 3,
+        ])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.notas', $conductor), [
+            'mes' => '2026-08-15',
+            'notas' => 'Acordó reponer el 30/08 el día que faltó por trámite.',
+        ])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', [$conductor, 'anio' => 2026]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('asistencia.calendarios.7.dias_debidos', 3)
+            ->where('asistencia.calendarios.7.notas', 'Acordó reponer el 30/08 el día que faltó por trámite.')
+        );
+});
+
+it('keeps dias_debidos independent per month in the asistencia calendar', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.diasDebidos', $conductor), ['mes' => '2026-08-01', 'dias_debidos' => 2])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('asistencia.diasDebidos', $conductor), ['mes' => '2026-09-01', 'dias_debidos' => 6])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', [$conductor, 'anio' => 2026]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('asistencia.calendarios.7.dias_debidos', 2)
+            ->where('asistencia.calendarios.8.dias_debidos', 6)
+        );
+});
+
+it('includes only this conductor\'s matched trips, newest first, in the recent trips card', function (): void {
+    $conductor = Conductor::factory()->create();
+    $otro = Conductor::factory()->create();
+
+    $viejo = Viaje::factory()->create([
+        'conductor_id' => $conductor->id,
+        'fecha_traslado' => '2026-07-01',
+    ]);
+    $nuevo = Viaje::factory()->create([
+        'conductor_id' => $conductor->id,
+        'fecha_traslado' => '2026-08-15',
+    ]);
+
+    // De otro conductor, o sin matchear contra el padrón: no deben salir acá.
+    Viaje::factory()->create(['conductor_id' => $otro->id]);
+    Viaje::factory()->create(['conductor_id' => null, 'conductor_dni' => $conductor->documento]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', $conductor))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('viajes', 2)
+            ->where('viajes.0.id', $nuevo->id)
+            ->where('viajes.1.id', $viejo->id)
+        );
+});
+
+it('lets a visor see the recent trips of a conductor', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('visor'))
+        ->get(route('conductores.show', $conductor))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->has('viajes'));
+});
+
+it('summarises trips, this month\'s attendance and documents in the ficha stats', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    $this->travelTo(CarbonImmutable::parse('2026-08-20'));
+
+    Viaje::factory()->create([
+        'conductor_id' => $conductor->id,
+        'fecha_traslado' => '2026-08-18',
+    ]);
+    Viaje::factory()->create([
+        'conductor_id' => $conductor->id,
+        'fecha_traslado' => '2026-07-02',
+    ]);
+
+    foreach (['2026-08-01', '2026-08-02', '2026-08-03'] as $fecha) {
+        Asistencia::create([
+            'conductor_id' => $conductor->id,
+            'fecha' => $fecha,
+            'estado' => EstadoAsistencia::Asistencia,
+        ]);
+    }
+
+    Asistencia::create([
+        'conductor_id' => $conductor->id,
+        'fecha' => '2026-08-04',
+        'estado' => EstadoAsistencia::Descanso,
+    ]);
+    Asistencia::create([
+        'conductor_id' => $conductor->id,
+        'fecha' => '2026-08-05',
+        'estado' => EstadoAsistencia::Falta,
+    ]);
+
+    // Del mes pasado: no debe contar en los números del mes en curso.
+    Asistencia::create([
+        'conductor_id' => $conductor->id,
+        'fecha' => '2026-07-15',
+        'estado' => EstadoAsistencia::Asistencia,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.show', $conductor))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('estadisticas.viajes_totales', 2)
+            ->where('estadisticas.ultimo_viaje', '2026-08-18')
+            ->where('estadisticas.dias_trabajados_mes', 3)
+            ->where('estadisticas.dias_descanso_mes', 1)
+            ->where('estadisticas.faltas_mes', 1)
+            ->where('estadisticas.documentos_vigentes', 0)
+            ->where('estadisticas.documentos_totales', 2)
+        );
+});
+
+it('leaves the attendance stats null for a visor, who cannot see asistencia', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('visor'))
+        ->get(route('conductores.show', $conductor))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('estadisticas.dias_trabajados_mes', null)
+            ->where('estadisticas.dias_descanso_mes', null)
+            ->where('estadisticas.faltas_mes', null)
+            ->where('estadisticas.viajes_totales', 0)
         );
 });
 

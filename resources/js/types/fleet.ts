@@ -295,18 +295,14 @@ export type AsistenciaMarca = {
 export type AsistenciaFila = {
     conductor_id: number;
     nombre_completo: string;
+    /** false si renunció —igual aparece en el ciclo donde tiene marcas, pero atenuado. */
+    activo: boolean;
     marcas: Record<string, AsistenciaMarca>;
 };
 
 /** Un día de la grilla del calendario individual: puede ser relleno del mes vecino. */
 export type AsistenciaCalendarioDia = AsistenciaDia & {
     es_relleno: boolean;
-};
-
-/** El conductor dueño del calendario individual de asistencia. */
-export type AsistenciaConductor = {
-    id: number;
-    nombre_completo: string;
 };
 
 /** Un mes completo del calendario individual, con su propia grilla y marcas. */
@@ -318,6 +314,98 @@ export type AsistenciaCalendarioMes = {
     dias_debidos: number;
     /** Notas libres del mes —incidencias, acuerdos verbales, etc.—, también a mano. */
     notas: string | null;
+};
+
+/** La pestaña de Asistencia en la ficha del conductor: null si el usuario no puede verla (visor). */
+export type AsistenciaCalendarioAnual = {
+    anio: number;
+    calendarios: AsistenciaCalendarioMes[];
+};
+
+/** Un cliente del padrón, tal como se lista en `/clientes`. */
+export type ClienteListItem = {
+    id: number;
+    ruc: string;
+    razon_social: string;
+    /** Nombre corto para tablas y gráficos. */
+    alias: string;
+    contacto: string | null;
+    telefono: string | null;
+    recurrente: boolean;
+    activo: boolean;
+    viajes_count: number;
+    /** Fecha del viaje más reciente; null si nunca se le movió nada. */
+    ultimo_viaje: string | null;
+};
+
+/** El cliente completo, para su ficha y su formulario. */
+export type Cliente = {
+    id: number;
+    ruc: string;
+    razon_social: string;
+    alias: string;
+    /** Con el que se lo conoce en la calle, cuando no es la razón social. */
+    nombre_comercial: string | null;
+    contacto: string | null;
+    telefono: string | null;
+    email: string | null;
+    direccion: string | null;
+    recurrente: boolean;
+    activo: boolean;
+    notas: string | null;
+};
+
+/** Un viaje en el historial de la ficha del cliente. */
+export type ClienteViajeItem = {
+    id: number;
+    numero_gr: string;
+    fecha_traslado: string;
+    placa_tracto: string;
+    placa_carreta: string | null;
+    conductor_nombre: string;
+    /** Null cuando el DNI de la GR no matcheó contra el padrón. */
+    conductor_id: number | null;
+    origen_ciudad: string;
+    destino_ciudad: string;
+    tipo_carga: string;
+    tipo_carga_label: string;
+    peso: number;
+    unidad_peso: string;
+    archivo_url: string | null;
+};
+
+/**
+ * Los números de cabecera de la ficha del conductor. Los días del mes salen
+ * de las marcas de asistencia: llegan en `null` para quien no puede verlas
+ * (visor), y esas tarjetas no se muestran.
+ */
+export type ConductorEstadisticas = {
+    viajes_totales: number;
+    /** Fecha del viaje más reciente, o null si nunca manejó uno. */
+    ultimo_viaje: string | null;
+    dias_trabajados_mes: number | null;
+    dias_descanso_mes: number | null;
+    faltas_mes: number | null;
+    documentos_vigentes: number;
+    documentos_totales: number;
+};
+
+/**
+ * Un viaje en el historial de la ficha del conductor. Es un subconjunto chico
+ * de `ViajeListItem`: acá solo interesa repasar qué manejó —fecha, unidad,
+ * cliente, carga y GR—, no auditar el viaje (para eso está `/viajes`).
+ */
+export type ConductorViajeItem = {
+    id: number;
+    numero_gr: string;
+    fecha_traslado: string;
+    cliente: string;
+    tipo_carga: string;
+    tipo_carga_label: string;
+    placa_tracto: string;
+    placa_carreta: string | null;
+    /** Null si por alguna razón el PDF de la GR no quedó adjunto. */
+    archivo_url: string | null;
 };
 
 export type NovedadItem = {
