@@ -22,7 +22,10 @@ export default function VehiculoCreate({ tipoInicial, ...props }: Props) {
                 href: (esCarreta ? vehiculos.carretas() : vehiculos.tractos())
                     .url,
             },
-            { title: 'Nuevo', href: create({ query: { tipo: tipoInicial } }).url },
+            {
+                title: 'Nuevo',
+                href: create({ query: { tipo: tipoInicial } }).url,
+            },
         ],
     });
 

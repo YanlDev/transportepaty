@@ -32,6 +32,7 @@ type Props = {
 
 type FormData = {
     placa: string;
+    tuc: string;
     marca: string;
     modelo: string;
     anio: number | '';
@@ -59,6 +60,7 @@ export function VehiculoForm({
 }: Props) {
     const { data, setData, post, put, processing, errors } = useForm<FormData>({
         placa: vehiculo?.placa ?? '',
+        tuc: vehiculo?.tuc ?? '',
         marca: vehiculo?.marca ?? '',
         modelo: vehiculo?.modelo ?? '',
         anio: vehiculo?.anio ?? '',
@@ -110,6 +112,22 @@ export function VehiculoForm({
                                 setData('placa', e.target.value.toUpperCase())
                             }
                             placeholder="ABC-123"
+                        />
+                    )}
+                </Field>
+                <Field
+                    label="TUC"
+                    error={errors.tuc}
+                    ayuda="Certificado de habilitación vehicular. La guía de remisión lo exige por cada placa declarada."
+                >
+                    {(id) => (
+                        <Input
+                            id={id}
+                            value={data.tuc}
+                            onChange={(e) =>
+                                setData('tuc', e.target.value.toUpperCase())
+                            }
+                            placeholder="21M25000279E"
                         />
                     )}
                 </Field>
@@ -408,11 +426,13 @@ function Field({
     label,
     error,
     required,
+    ayuda,
     children,
 }: {
     label: string;
     error?: string;
     required?: boolean;
+    ayuda?: string;
     children: (id: string) => React.ReactNode;
 }) {
     const id = useId();
@@ -424,6 +444,7 @@ function Field({
                 {required && <span className="text-destructive"> *</span>}
             </Label>
             {children(id)}
+            {ayuda && <p className="text-xs text-muted-foreground">{ayuda}</p>}
             <InputError message={error} />
         </div>
     );

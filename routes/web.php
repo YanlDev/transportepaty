@@ -4,8 +4,12 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
+use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GuiaController;
 use App\Http\Controllers\NovedadController;
+use App\Http\Controllers\ParametroCostoController;
+use App\Http\Controllers\UbigeoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
@@ -32,6 +36,22 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('clientes', ClienteController::class)
         ->parameters(['clientes' => 'cliente']);
 
+    // El PDF y la previsualización van antes del resource para que
+    // `cotizaciones/previsualizar` no se lea como el `show` de una cotización.
+    Route::post('cotizaciones/previsualizar', [CotizacionController::class, 'previsualizar'])
+        ->name('cotizaciones.previsualizar');
+    Route::get('cotizaciones/{cotizacion}/pdf', [CotizacionController::class, 'pdf'])
+        ->name('cotizaciones.pdf');
+    Route::resource('cotizaciones', CotizacionController::class)
+        ->parameters(['cotizaciones' => 'cotizacion']);
+
+    Route::get('parametros-costo', [ParametroCostoController::class, 'edit'])
+        ->name('parametros-costo.edit');
+    Route::put('parametros-costo', [ParametroCostoController::class, 'update'])
+        ->name('parametros-costo.update');
+    Route::put('parametros-costo/componentes/{componente}', [ParametroCostoController::class, 'updateComponente'])
+        ->name('parametros-costo.componentes.update');
+
     Route::post('novedades', [NovedadController::class, 'store'])->name('novedades.store');
     Route::post('novedades/{novedad}/levantar', [NovedadController::class, 'levantar'])
         ->name('novedades.levantar');
@@ -43,7 +63,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('viajes/resolver', [ViajeController::class, 'resolver'])->name('viajes.resolver');
     Route::patch('viajes/{viaje}/tipo-carga', [ViajeController::class, 'actualizarTipoCarga'])
         ->name('viajes.actualizarTipoCarga');
+    Route::patch('viajes/{viaje}/gre', [ViajeController::class, 'actualizarGre'])
+        ->name('viajes.actualizarGre');
     Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])->name('viajes.destroy');
+
+    // Emisión de guías de remisión del transportista ante SUNAT.
+    Route::get('guias', [GuiaController::class, 'index'])->name('guias.index');
+    Route::get('guias/nueva', [GuiaController::class, 'create'])->name('guias.create');
+    Route::post('guias', [GuiaController::class, 'store'])->name('guias.store');
+    Route::post('guias/{viaje}/reintentar', [GuiaController::class, 'reintentar'])->name('guias.reintentar');
+    Route::get('ubigeos', UbigeoController::class)->name('ubigeos.buscar');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');

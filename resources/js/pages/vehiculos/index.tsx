@@ -74,7 +74,9 @@ export default function VehiculosIndex({
     const { auth } = usePage().props;
     const puedeGestionar = auth.roles.includes('admin');
     const textos = TEXTOS[seccion];
-    const url = (seccion === 'tracto' ? vehiculos.tractos() : vehiculos.carretas()).url;
+    const url = (
+        seccion === 'tracto' ? vehiculos.tractos() : vehiculos.carretas()
+    ).url;
     const IconoVacio = textos.icono;
 
     setLayoutProps({
@@ -89,7 +91,9 @@ export default function VehiculosIndex({
                 <div>
                     <p className="text-sm text-muted-foreground">
                         {paginador.total}{' '}
-                        {paginador.total === 1 ? textos.singular : textos.plural}
+                        {paginador.total === 1
+                            ? textos.singular
+                            : textos.plural}
                     </p>
                 </div>
 
@@ -121,7 +125,8 @@ export default function VehiculosIndex({
                     </p>
                     <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                         Ajusta los filtros de búsqueda
-                        {puedeGestionar && ` o registra tu primer${seccion === 'carreta' ? 'a' : ''} ${seccion}`}
+                        {puedeGestionar &&
+                            ` o registra tu primer${seccion === 'carreta' ? 'a' : ''} ${seccion}`}
                         .
                     </p>
                     {puedeGestionar && (

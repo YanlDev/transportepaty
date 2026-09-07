@@ -554,3 +554,24 @@ it('still finds a placa searched with its hyphen', function (): void {
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page->has('vehiculos.data', 1));
 });
+
+it('stores the TUC, which the guia de remision demands per plate', function (): void {
+    $admin = User::factory()->create()->assignRole('admin');
+
+    actingAs($admin)
+        ->post(route('vehiculos.store'), datosVehiculo(['tuc' => '21M25000279E']))
+        ->assertRedirect();
+
+    expect(Vehiculo::first()->tuc)->toBe('21M25000279E');
+});
+
+it('accepts a vehiculo without TUC, since the padron predates the GRE', function (): void {
+    $admin = User::factory()->create()->assignRole('admin');
+
+    actingAs($admin)
+        ->post(route('vehiculos.store'), datosVehiculo(['tuc' => null]))
+        ->assertRedirect()
+        ->assertSessionHasNoErrors();
+
+    expect(Vehiculo::first()->tuc)->toBeNull();
+});

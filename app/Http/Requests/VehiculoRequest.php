@@ -29,6 +29,11 @@ abstract class VehiculoRequest extends FormRequest
     {
         return [
             'placa' => ['required', 'string', 'max:10', $this->reglaPlacaUnica()],
+
+            // Certificado de habilitación vehicular. Opcional en el padrón —hay
+            // unidades que no lo tienen cargado todavía— pero sin él la guía de
+            // remisión de esa placa no se puede emitir.
+            'tuc' => ['nullable', 'string', 'max:30'],
             'marca' => ['nullable', 'string', 'max:100'],
             'modelo' => ['nullable', 'string', 'max:100'],
             'anio' => ['nullable', 'integer', 'min:1950', 'max:'.(now()->year + 1)],

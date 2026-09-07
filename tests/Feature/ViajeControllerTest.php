@@ -3,11 +3,14 @@
 use App\Enums\TipoCarga;
 use App\Models\Cliente;
 use App\Models\Conductor;
+use App\Models\PuntoTraslado;
+use App\Models\User;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Services\ImportadorViaje;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Inertia\Testing\AssertableInertia;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -535,4 +538,50 @@ it('filters the list by cliente, tipo_carga and destino_ciudad', function (): vo
     actingAs(actorConRol('admin'))
         ->get(route('viajes.index', ['cliente' => 'MINSUR S.A.', 'buscar' => 'CAM703']))
         ->assertInertia(fn ($page) => $page->has('viajes.data', 1));
+});
+
+it('lists what each viaje is missing to be emitted', function (): void {
+    $admin = User::factory()->create()->assignRole('admin');
+    Viaje::factory()->create();
+
+    actingAs($admin)
+        ->get(route('viajes.index'))
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('viajes.data.0.gre_estado', 'pendiente')
+            ->has('viajes.data.0.gre_faltantes')
+            ->has('puntos')
+            ->has('motivosTraslado'));
+});
+
+it('saves the puntos and motivo a viaje needs for its guia', function (): void {
+    $admin = User::factory()->create()->assignRole('admin');
+    $viaje = Viaje::factory()->create();
+    $partida = PuntoTraslado::factory()->create();
+    $llegada = PuntoTraslado::factory()->create();
+
+    actingAs($admin)
+        ->patch(route('viajes.actualizarGre', $viaje), [
+            'punto_partida_id' => $partida->id,
+            'punto_llegada_id' => $llegada->id,
+            'motivo_traslado' => '01',
+        ])
+        ->assertRedirect();
+
+    expect($viaje->fresh())
+        ->punto_partida_id->toBe($partida->id)
+        ->punto_llegada_id->toBe($llegada->id)
+        ->and($viaje->fresh()->motivo_traslado->value)->toBe('01');
+});
+
+it('rejects a motivo outside the SUNAT catalogue', function (): void {
+    $admin = User::factory()->create()->assignRole('admin');
+    $viaje = Viaje::factory()->create();
+
+    actingAs($admin)
+        ->patch(route('viajes.actualizarGre', $viaje), [
+            'punto_partida_id' => null,
+            'punto_llegada_id' => null,
+            'motivo_traslado' => '99',
+        ])
+        ->assertSessionHasErrors('motivo_traslado');
 });

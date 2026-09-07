@@ -1,7 +1,9 @@
 import { Link, usePage } from '@inertiajs/react';
 import {
+    Calculator,
     CalendarCheck,
     IconContext,
+    FileText,
     IdentificationCard,
     Path,
     Buildings,
@@ -13,6 +15,8 @@ import {
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
+import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
+import guias from '@/actions/App/Http/Controllers/GuiaController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
@@ -65,6 +69,16 @@ const gestionNavItems: NavItem[] = [
         title: 'Clientes',
         href: clientes.index(),
         icon: Buildings,
+    },
+    {
+        title: 'Guías',
+        href: guias.index(),
+        icon: FileText,
+    },
+    {
+        title: 'Cotizaciones',
+        href: cotizaciones.index(),
+        icon: Calculator,
     },
 ];
 

@@ -35,9 +35,11 @@ use Illuminate\Support\Carbon;
  * @property int|null $carga_util
  * @property Carbon|null $fecha_adquisicion
  * @property string|null $observaciones
+ * @property string|null $tuc
  */
 #[Fillable([
     'placa',
+    'tuc',
     'marca',
     'modelo',
     'anio',

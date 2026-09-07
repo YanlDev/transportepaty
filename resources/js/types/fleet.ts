@@ -116,6 +116,8 @@ export type VehiculoListItem = {
 export type Vehiculo = {
     id: number;
     placa: string;
+    /** Certificado de habilitación vehicular, obligatorio para emitir la GRE. */
+    tuc: string | null;
     marca: string | null;
     modelo: string | null;
     anio: number | null;
@@ -264,6 +266,15 @@ export type ViajeListItem = {
     tipo_carga_label: string;
     peso: number;
     unidad_peso: string;
+    /** Punto del catálogo declarado como partida ante SUNAT; null si falta. */
+    punto_partida_id: number | null;
+    punto_llegada_id: number | null;
+    /** Código del catálogo 20 de SUNAT. */
+    motivo_traslado: string;
+    gre_estado: string;
+    gre_estado_label: string;
+    /** Qué impide emitir la guía; vacío cuando está lista. */
+    gre_faltantes: string[];
     /** Null si por alguna razón el PDF no quedó adjunto. */
     archivo_url: string | null;
 };
@@ -418,3 +429,177 @@ export type NovedadItem = {
     desde: string;
     vigente: boolean;
 };
+
+/**
+ * Un lugar de partida o llegada del catálogo. Existe por la guía de remisión
+ * electrónica, que exige el ubigeo INEI de ambos extremos del traslado.
+ */
+export type PuntoTraslado = {
+    id: number;
+    /** Nombre corto con el que se lo elige: «Mina San Rafael». */
+    nombre: string;
+    /** Los 6 dígitos del catálogo del INEI. */
+    ubigeo: string;
+    direccion: string;
+    /** RUC del contribuyente dueño del local, si se declara como anexo. */
+    ruc: string | null;
+    /** Código de establecimiento anexo, de 4 dígitos. */
+    cod_local: string | null;
+    activo: boolean;
+};
+
+/** El punto en la tabla del catálogo, con cuánto se usa. */
+export type PuntoTrasladoListItem = PuntoTraslado & {
+    /** Viajes que lo usan como partida o como llegada. */
+    usos: number;
+};
+
+/**
+ * El contexto que comparten todos los costos fijos: cuántas unidades hay y
+ * cuántos días al año cada una está realmente disponible para vender.
+ */
+export type ParametroFlota = {
+    tamano_flota: number;
+    dias_ano: number;
+    dias_mantenimiento: number;
+    dias_certificaciones: number;
+    dias_sincronizacion: number;
+    /** En tanto por uno: 0.18 es 18%. */
+    igv_pct: number;
+    /** En tanto por uno: 0.12 es 12%. */
+    margen_pct_default: number;
+    viatico_dia: number;
+    /** Los días del año menos los que se pierden. Lo calcula el servidor. */
+    dias_disponibles: number;
+};
+
+/** Un paso intermedio de la cuenta que deriva la tasa de un componente. */
+export type PasoDerivacion = {
+    etiqueta: string;
+    valor: number;
+    formato: 'moneda' | 'numero' | 'porcentaje' | 'dias' | 'km';
+};
+
+/**
+ * Lo que puede valer una entrada de un método: un número, un texto, un sí/no,
+ * o una lista de filas (las localidades donde se abastece la flota, las vidas
+ * de un juego de neumáticos).
+ */
+export type FilaEntrada = Record<string, string | number | boolean>;
+
+export type ValorEntrada = string | number | boolean | FilaEntrada[];
+
+export type EntradasComponente = Record<string, ValorEntrada>;
+
+/** Una línea de la estructura de costos de la casa. */
+export type ComponenteCosto = {
+    id: number;
+    nombre: string;
+    tipo: 'fijo_dia' | 'variable_km';
+    /** Cómo se lee la tasa: «S/ por día» o «S/ por km». */
+    unidad: string;
+    naturaleza: 'directo' | 'indirecto';
+    metodo: string;
+    metodo_label: string;
+    entradas: EntradasComponente;
+    activo: boolean;
+    tasa: number;
+    pasos: PasoDerivacion[];
+};
+
+/** Lo que suma la estructura vigente, por día parado y por km rodado. */
+export type TotalesCosto = {
+    fijo_dia: number;
+    fijo_dia_directo: number;
+    fijo_dia_indirecto: number;
+    variable_km: number;
+    variable_km_directo: number;
+    variable_km_indirecto: number;
+};
+
+/** Una línea del desglose de una cotización, ya con su importe. */
+export type LineaDesglose = {
+    nombre: string;
+    tipo: string;
+    naturaleza: 'directo' | 'indirecto';
+    tasa: number;
+    importe: number;
+    /** Cuánto pesa en el subtotal, en tanto por uno. */
+    participacion_pct: number;
+};
+
+/** Un concepto propio del tramo (peajes, viáticos): siempre directo. */
+export type LineaRuta = {
+    nombre: string;
+    campo: string;
+    importe: number;
+    participacion_pct: number;
+};
+
+export type Desglose = {
+    componentes: LineaDesglose[];
+    ruta: LineaRuta[];
+};
+
+/** El desglose de una tarifa, calculado siempre en el servidor. */
+export type DesgloseCotizacion = {
+    desglose: Desglose;
+    total_directo: number;
+    total_indirecto: number;
+    costo_operativo: number;
+    /** Con los fijos dentro: sirve para comparar rutas de largo distinto. */
+    costo_por_km: number;
+    margen: number;
+    subtotal: number;
+    igv: number;
+    total: number;
+};
+
+/** Los conceptos propios del tramo que se cargan por cotización. */
+export type CostosRuta = {
+    peajes: number;
+    viaticos: number;
+    alojamiento: number;
+    cochera: number;
+    carga_descarga: number;
+    otros_ruta: number;
+};
+
+export type CotizacionListItem = {
+    id: number;
+    numero: string;
+    fecha: string;
+    cliente_nombre: string;
+    origen: string;
+    destino: string;
+    km: number;
+    dias: number;
+    costo_por_km: number;
+    total: number;
+    estado: string;
+    estado_label: string;
+};
+
+/** La cotización completa, para su ficha y su formulario. */
+export type Cotizacion = Omit<DesgloseCotizacion, 'costo_por_km'> &
+    CostosRuta & {
+        id: number;
+        numero: string;
+        fecha: string;
+        valido_hasta: string;
+        cliente_id: number | null;
+        cliente_nombre: string;
+        cliente_ruc: string | null;
+        punto_partida_id: number | null;
+        punto_llegada_id: number | null;
+        origen: string;
+        destino: string;
+        material: string | null;
+        km: number;
+        dias: number;
+        margen_pct: number;
+        costo_por_km: number;
+        estado: string;
+        estado_label: string;
+        notas: string | null;
+    };
