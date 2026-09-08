@@ -503,3 +503,38 @@ it('clears fecha_baja and motivo_baja when reactivating a conductor', function (
         ->and($conductor->fecha_baja)->toBeNull()
         ->and($conductor->motivo_baja)->toBeNull();
 });
+
+it('serves the full year of asistencia on its own page', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    $this->travelTo(CarbonImmutable::parse('2026-08-15'));
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.asistencia', $conductor))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('conductores/asistencia')
+            ->where('conductor.id', $conductor->id)
+            ->where('asistencia.anio', 2026)
+            ->has('asistencia.calendarios', 12)
+        );
+});
+
+it('honours the requested year on the asistencia page', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('conductores.asistencia', [$conductor, 'anio' => 2025]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('asistencia.anio', 2025)
+            ->where('asistencia.calendarios.0.mes', '2025-01-01')
+        );
+});
+
+it('keeps the asistencia page away from a visor', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('visor'))
+        ->get(route('conductores.asistencia', $conductor))
+        ->assertForbidden();
+});

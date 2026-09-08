@@ -6,10 +6,8 @@ use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\GuiaController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\ParametroCostoController;
-use App\Http\Controllers\UbigeoController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
@@ -25,6 +23,11 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::resource('conductores', ConductorController::class)
         ->parameters(['conductores' => 'conductor']);
+
+    // El año completo de asistencia va aparte de la ficha: son doce
+    // calendarios y ahí adentro dejaban las celdas ilegibles.
+    Route::get('conductores/{conductor}/asistencia', [ConductorController::class, 'asistencia'])
+        ->name('conductores.asistencia');
 
     Route::scopeBindings()->group(function () {
         Route::post('conductores/{conductor}/documentos', [ConductorDocumentoController::class, 'store'])
@@ -63,16 +66,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('viajes/resolver', [ViajeController::class, 'resolver'])->name('viajes.resolver');
     Route::patch('viajes/{viaje}/tipo-carga', [ViajeController::class, 'actualizarTipoCarga'])
         ->name('viajes.actualizarTipoCarga');
-    Route::patch('viajes/{viaje}/gre', [ViajeController::class, 'actualizarGre'])
-        ->name('viajes.actualizarGre');
     Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])->name('viajes.destroy');
-
-    // Emisión de guías de remisión del transportista ante SUNAT.
-    Route::get('guias', [GuiaController::class, 'index'])->name('guias.index');
-    Route::get('guias/nueva', [GuiaController::class, 'create'])->name('guias.create');
-    Route::post('guias', [GuiaController::class, 'store'])->name('guias.store');
-    Route::post('guias/{viaje}/reintentar', [GuiaController::class, 'reintentar'])->name('guias.reintentar');
-    Route::get('ubigeos', UbigeoController::class)->name('ubigeos.buscar');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');

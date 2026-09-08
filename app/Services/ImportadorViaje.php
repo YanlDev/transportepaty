@@ -257,7 +257,7 @@ class ImportadorViaje
             return null;
         }
 
-        return Conductor::query()->where('documento', $dni)->first();
+        return Conductor::query()->whereDocumento($dni)->first();
     }
 
     private function parsearFechaHora(string $texto): ?Carbon

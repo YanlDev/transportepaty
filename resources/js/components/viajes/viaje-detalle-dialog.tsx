@@ -8,33 +8,20 @@ import {
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';
-import { ViajeGrePanel } from '@/components/viajes/viaje-gre-panel';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
-import type { EnumOption, ViajeListItem } from '@/types/fleet';
+import type { ViajeListItem } from '@/types/fleet';
 
 type Props = {
     /** `null` cierra el diálogo — controlado por quién lo usa, no hay estado propio de "cuál viaje". */
     viaje: ViajeListItem | null;
     onOpenChange: (abierto: boolean) => void;
-    /** Catálogo de puntos activos para completar los datos de la GRE. */
-    puntos: EnumOption[];
-    motivosTraslado: EnumOption[];
-    puedeEditar: boolean;
 };
 
 /**
  * El detalle completo de un viaje, para cuando la fila de la tabla no
- * alcanza (destino completo, origen, documento). Solo trae la GR
- * transportista —la que emite Paty—: la guía remitente del cliente se
- * maneja aparte (bot de descarga desde SUNAT), no vive en este diálogo.
+ * alcanza (destino completo, origen, documento).
  */
-export function ViajeDetalleDialog({
-    viaje,
-    onOpenChange,
-    puntos,
-    motivosTraslado,
-    puedeEditar,
-}: Props) {
+export function ViajeDetalleDialog({ viaje, onOpenChange }: Props) {
     return (
         <Dialog open={viaje !== null} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-lg">
@@ -122,13 +109,6 @@ export function ViajeDetalleDialog({
                                 />
                             </div>
                         </div>
-
-                        <ViajeGrePanel
-                            viaje={viaje}
-                            puntos={puntos}
-                            motivosTraslado={motivosTraslado}
-                            puedeEditar={puedeEditar}
-                        />
                     </>
                 )}
             </DialogContent>

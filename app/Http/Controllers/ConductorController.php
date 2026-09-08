@@ -176,6 +176,27 @@ class ConductorController extends Controller
     }
 
     /**
+     * El año completo de asistencia del conductor, en su propia pantalla.
+     *
+     * Vive aparte de la ficha porque son doce calendarios: desplegados ahí
+     * adentro empujaban el resto del expediente y dejaban las celdas
+     * apretadas, que es justo donde hay que marcar.
+     */
+    public function asistencia(Request $request, Conductor $conductor): Response
+    {
+        $this->authorize('view', $conductor);
+        $this->authorize('viewAny', Asistencia::class);
+
+        return Inertia::render('conductores/asistencia', [
+            'conductor' => $conductor->only(['id', 'nombres', 'apellidos', 'documento']),
+            'asistencia' => $this->calendarioService->paraConductor(
+                $conductor,
+                $this->anioPedido($request),
+            ),
+        ]);
+    }
+
+    /**
      * El año pedido para la pestaña de asistencia, o el año en curso si no
      * se pidió uno válido.
      */

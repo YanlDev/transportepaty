@@ -8,6 +8,7 @@ use App\Enums\TipoDocumentoConductor;
 use Database\Factories\ConductorFactory;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -111,6 +112,29 @@ class Conductor extends Model
     public function viajes(): HasMany
     {
         return $this->hasMany(Viaje::class);
+    }
+
+    /**
+     * Busca por número de documento ignorando los ceros a la izquierda: el
+     * DNI que trae la GR viene con sus ocho dígitos («02301443») y el del
+     * padrón a veces se cargó desde una hoja de cálculo que se comió el cero
+     * («2301443»). Son el mismo documento, así que deben matchear igual.
+     *
+     * @param  Builder<$this>  $query
+     */
+    public function scopeWhereDocumento(Builder $query, string $documento): void
+    {
+        $sinCeros = ltrim($documento, '0');
+
+        if ($sinCeros === '') {
+            $query->where('documento', $documento);
+
+            return;
+        }
+
+        // `ltrim` con lista de caracteres se comporta igual en PostgreSQL y en
+        // SQLite, así que la misma expresión sirve en producción y en tests.
+        $query->whereRaw("ltrim(documento, '0') = ?", [$sinCeros]);
     }
 
     /**

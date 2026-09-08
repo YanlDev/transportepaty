@@ -2,8 +2,6 @@
 
 namespace App\Models;
 
-use App\Enums\EstadoGre;
-use App\Enums\MotivoTraslado;
 use App\Enums\TipoCarga;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -44,14 +42,6 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string|null $conductor_dni
  * @property int|null $conductor_id
  * @property string|null $observaciones
- * @property int|null $punto_partida_id
- * @property int|null $punto_llegada_id
- * @property MotivoTraslado $motivo_traslado
- * @property EstadoGre $gre_estado
- * @property string|null $gre_ticket
- * @property array<string, mixed>|null $gre_respuesta
- * @property-read PuntoTraslado|null $puntoPartida
- * @property-read PuntoTraslado|null $puntoLlegada
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
@@ -80,12 +70,6 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'conductor_dni',
     'conductor_id',
     'observaciones',
-    'punto_partida_id',
-    'punto_llegada_id',
-    'motivo_traslado',
-    'gre_estado',
-    'gre_ticket',
-    'gre_respuesta',
 ])]
 class Viaje extends Model implements HasMedia
 {
@@ -141,25 +125,6 @@ class Viaje extends Model implements HasMedia
      *
      * Requiere `clienteDelPadron` precargada para no caer en N+1.
      */
-    /**
-     * Punto de partida declarado ante SUNAT. Es distinto de `origen`: ese es
-     * el texto que traía el PDF importado, este es el catálogo con ubigeo.
-     *
-     * @return BelongsTo<PuntoTraslado, $this>
-     */
-    public function puntoPartida(): BelongsTo
-    {
-        return $this->belongsTo(PuntoTraslado::class, 'punto_partida_id');
-    }
-
-    /**
-     * @return BelongsTo<PuntoTraslado, $this>
-     */
-    public function puntoLlegada(): BelongsTo
-    {
-        return $this->belongsTo(PuntoTraslado::class, 'punto_llegada_id');
-    }
-
     public function nombreCliente(): string
     {
         return $this->clienteDelPadron?->alias ?? $this->cliente;
@@ -285,17 +250,6 @@ class Viaje extends Model implements HasMedia
     }
 
     /**
-     * Los mismos valores por defecto que la migración, para que un viaje recién
-     * creado ya los tenga en memoria sin releerlo de la base.
-     *
-     * @var array<string, string>
-     */
-    protected $attributes = [
-        'motivo_traslado' => MotivoTraslado::TrasladoEntreEstablecimientos->value,
-        'gre_estado' => EstadoGre::Pendiente->value,
-    ];
-
-    /**
      * @return array<string, string>
      */
     protected function casts(): array
@@ -304,9 +258,6 @@ class Viaje extends Model implements HasMedia
             'fecha_emision' => 'datetime',
             'fecha_traslado' => 'date:Y-m-d',
             'guias_remitente' => 'array',
-            'gre_respuesta' => 'array',
-            'gre_estado' => EstadoGre::class,
-            'motivo_traslado' => MotivoTraslado::class,
             'peso' => 'decimal:3',
             'tipo_carga' => TipoCarga::class,
         ];

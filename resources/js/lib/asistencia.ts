@@ -1,6 +1,14 @@
 import type { EstadoAsistencia } from '@/types/fleet';
 
 /**
+ * Los días de la semana en el orden en que se rotulan las grillas: de lunes
+ * a domingo, igual que el calendario mensual que arma el backend. Las letras
+ * son las mismas que manda `dia_semana`, así que el índice acá sirve para
+ * saber en qué columna cae una fecha.
+ */
+export const diasSemana = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+/**
  * Color, letra y etiquetas de cada estado, compartido entre el rooster, el
  * calendario individual y la ficha del conductor.
  *

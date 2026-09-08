@@ -266,15 +266,6 @@ export type ViajeListItem = {
     tipo_carga_label: string;
     peso: number;
     unidad_peso: string;
-    /** Punto del catálogo declarado como partida ante SUNAT; null si falta. */
-    punto_partida_id: number | null;
-    punto_llegada_id: number | null;
-    /** Código del catálogo 20 de SUNAT. */
-    motivo_traslado: string;
-    gre_estado: string;
-    gre_estado_label: string;
-    /** Qué impide emitir la guía; vacío cuando está lista. */
-    gre_faltantes: string[];
     /** Null si por alguna razón el PDF no quedó adjunto. */
     archivo_url: string | null;
 };

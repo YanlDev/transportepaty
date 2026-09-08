@@ -4,8 +4,6 @@ namespace Database\Factories;
 
 use App\Enums\TipoCarga;
 use App\Models\Conductor;
-use App\Models\PuntoTraslado;
-use App\Models\Vehiculo;
 use App\Models\Viaje;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -70,43 +68,6 @@ class ViajeFactory extends Factory
             'conductor_nombre' => $otro->conductor_nombre,
             'conductor_dni' => $otro->conductor_dni,
             'conductor_id' => $otro->conductor_id,
-        ]);
-    }
-
-    /**
-     * Viaje con todo lo que la GRE-T exige: puntos con ubigeo, RUC de las dos
-     * partes, tracto con TUC y conductor con licencia. Los viajes importados
-     * desde PDF no traen nada de esto, así que sin este estado no hay guía
-     * que emitir.
-     */
-    public function emisible(): static
-    {
-        return $this->state(fn (): array => [
-            'cliente' => 'MINSUR S.A.',
-            'cliente_ruc' => '20100136741',
-            'destinatario' => 'MINSUR S.A.',
-            'destinatario_ruc' => '20100136741',
-            'peso' => 10150.000,
-            'unidad_peso' => 'KGM',
-            'guias_remitente' => [['numero' => 'T012 - 855', 'ruc' => '20100136741']],
-            'punto_partida_id' => PuntoTraslado::factory()->create([
-                'nombre' => 'Planta Paracas',
-                'ubigeo' => '070101',
-                'direccion' => 'CAR. PANAMERICANA SUR KM. 238 ZONA INDUSTRIAL',
-            ]),
-            'punto_llegada_id' => PuntoTraslado::factory()->create([
-                'nombre' => 'Mina San Rafael',
-                'ubigeo' => '210902',
-                'direccion' => 'DESVIO C. JULIACA-MACUSANI KM. 102 ASIENTO MINERO SAN RAFAEL',
-            ]),
-            'tracto_id' => Vehiculo::factory()->create(['placa' => 'VEP793', 'tuc' => '21M25000279E']),
-            'carreta_id' => Vehiculo::factory()->create(['placa' => 'BRI984', 'tuc' => '21M25000102E']),
-            'conductor_id' => Conductor::factory()->create([
-                'nombres' => 'ROSENDO',
-                'apellidos' => 'MAMANI CLEMENCIA',
-                'documento' => '01328149',
-                'licencia' => 'U01328149',
-            ]),
         ]);
     }
 }

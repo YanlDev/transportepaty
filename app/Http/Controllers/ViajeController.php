@@ -3,18 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
-use App\Enums\MotivoTraslado;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\StoreViajeManualRequest;
 use App\Http\Requests\StoreViajeRequest;
-use App\Http\Requests\UpdateGreViajeRequest;
 use App\Http\Requests\UpdateTipoCargaViajeRequest;
 use App\Models\Conductor;
-use App\Models\PuntoTraslado;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
-use App\Services\ConstructorGuiaTransportista;
 use App\Services\ImportadorViaje;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -26,7 +22,7 @@ use Inertia\Response;
 
 class ViajeController extends Controller
 {
-    public function index(Request $request, ConstructorGuiaTransportista $constructor): Response
+    public function index(Request $request): Response
     {
         $this->authorize('viewAny', Viaje::class);
 
@@ -40,17 +36,11 @@ class ViajeController extends Controller
         $viajes = Viaje::query()
             // `media` va acá también: sin precargarla, `getFirstMediaUrl()` de
             // más abajo dispara una consulta por viaje de la página (N+1).
-            // El TUC de cada placa, la licencia del conductor y los puntos se
-            // traen acá porque son justo lo que revisa `faltantes()` más abajo:
-            // sin precargarlos, calcular si el viaje es emitible costaría varias
-            // consultas por fila.
             ->with([
-                'tracto:id,placa,tuc',
-                'carreta:id,placa,tuc',
-                'conductor:id,nombres,apellidos,licencia',
+                'tracto:id,placa',
+                'carreta:id,placa',
+                'conductor:id,nombres,apellidos',
                 'clienteDelPadron:id,alias',
-                'puntoPartida:id,nombre',
-                'puntoLlegada:id,nombre',
                 'media',
             ])
             ->when($filtros['buscar'], function ($query, string $buscar): void {
@@ -104,14 +94,6 @@ class ViajeController extends Controller
                 'peso' => (float) $viaje->peso,
                 'unidad_peso' => $viaje->unidad_peso,
                 'archivo_url' => $viaje->getFirstMediaUrl('archivo') ?: null,
-                'punto_partida_id' => $viaje->punto_partida_id,
-                'punto_llegada_id' => $viaje->punto_llegada_id,
-                'motivo_traslado' => $viaje->motivo_traslado->value,
-                'gre_estado' => $viaje->gre_estado->value,
-                'gre_estado_label' => $viaje->gre_estado->label(),
-                // Qué le falta al viaje para poder emitirse. Se calcula acá y
-                // no en el navegador porque son reglas de SUNAT, no de la UI.
-                'gre_faltantes' => $constructor->faltantes($viaje),
             ]);
 
         return Inertia::render('viajes/index', [
@@ -121,16 +103,6 @@ class ViajeController extends Controller
             'tiposCarga' => TipoCarga::opcionesDeViaje(),
             'clientes' => $this->opcionesClientes(),
             'ciudadesDestino' => $this->opcionesCiudadesDestino(),
-            'puntos' => PuntoTraslado::query()
-                ->activos()
-                ->orderBy('nombre')
-                ->get(['id', 'nombre', 'ubigeo'])
-                ->map(fn (PuntoTraslado $punto): array => [
-                    'value' => (string) $punto->id,
-                    'label' => "{$punto->nombre} ({$punto->ubigeo})",
-                ])
-                ->all(),
-            'motivosTraslado' => MotivoTraslado::options(),
         ]);
     }
 
@@ -277,19 +249,6 @@ class ViajeController extends Controller
         $this->authorize('update', $viaje);
 
         $viaje->update(['tipo_carga' => $request->validated('tipo_carga')]);
-
-        return back();
-    }
-
-    /**
-     * Guarda los datos que la guía electrónica exige y el PDF importado no
-     * trae: los puntos del catálogo —con su ubigeo— y el motivo del traslado.
-     */
-    public function actualizarGre(UpdateGreViajeRequest $request, Viaje $viaje): RedirectResponse
-    {
-        $this->authorize('update', $viaje);
-
-        $viaje->update($request->validated());
 
         return back();
     }

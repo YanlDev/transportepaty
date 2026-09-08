@@ -13,7 +13,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { estadoConfig } from '@/lib/asistencia';
+import { diasSemana, estadoConfig } from '@/lib/asistencia';
 import { cn } from '@/lib/utils';
 import type {
     AsistenciaDia,
@@ -48,6 +48,14 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
 
     const ultimoDia = dias[dias.length - 1];
     const rangoCiclo = `${formatearCorto(dias[0].fecha)} – ${formatearCorto(ultimoDia.fecha)}`;
+
+    /*
+     * La grilla va de lunes a domingo, como el calendario de la ficha del
+     * conductor. El ciclo arranca un 28, que cae en cualquier día de la
+     * semana, así que la primera fila lleva delante tantas celdas vacías
+     * como haga falta para que cada día quede bajo su columna.
+     */
+    const celdasVacias = Math.max(0, diasSemana.indexOf(dias[0].dia_semana));
 
     const filasFiltradas = useMemo(() => {
         const termino = buscar.trim().toLowerCase();
@@ -141,6 +149,7 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
                             key={fila.conductor_id}
                             fila={fila}
                             dias={dias}
+                            celdasVacias={celdasVacias}
                         />
                     ))}
                 </div>
@@ -164,9 +173,11 @@ function formatearCorto(fecha: string): string {
 function ConductorCicloTarjeta({
     fila,
     dias,
+    celdasVacias,
 }: {
     fila: AsistenciaFila;
     dias: AsistenciaDia[];
+    celdasVacias: number;
 }) {
     return (
         <div
@@ -190,7 +201,29 @@ function ConductorCicloTarjeta({
                 )}
             </Link>
 
+            <div className="mb-1 grid grid-cols-7 gap-1">
+                {diasSemana.map((letra, indice) => (
+                    <span
+                        key={letra}
+                        className={cn(
+                            'text-center text-[10px] font-medium',
+                            indice === 6
+                                ? 'text-foreground/70'
+                                : 'text-muted-foreground/70',
+                        )}
+                    >
+                        {letra}
+                    </span>
+                ))}
+            </div>
+
             <div className="grid grid-cols-7 gap-1">
+                {Array.from({ length: celdasVacias }, (_, indice) => (
+                    <div
+                        key={`vacia-${indice}`}
+                        className="aspect-square w-full sm:size-7"
+                    />
+                ))}
                 {dias.map((dia) => (
                     <DiaCiclo
                         key={dia.fecha}

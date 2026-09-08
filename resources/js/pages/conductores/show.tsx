@@ -17,11 +17,11 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import conductores, {
+    asistencia as rutaAsistencia,
     edit,
     show,
 } from '@/actions/App/Http/Controllers/ConductorController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
-import { CalendarioAsistenciaAnual } from '@/components/asistencia/calendario-anual';
 import { AgregarDocumentoConductorDialog } from '@/components/conductores/agregar-documento-dialog';
 import { DocumentoRanuraConductor } from '@/components/conductores/documento-ranura';
 import { Button } from '@/components/ui/button';
@@ -58,7 +58,7 @@ type Props = {
  * sus números y su actividad al centro, y sus papeles a la derecha. Sustituye
  * a las pestañas: acá casi todo lo que se consulta a diario se ve sin hacer
  * un solo clic, y lo que sí necesita profundidad —el año completo de
- * asistencia— se despliega sobre el mismo lugar.
+ * asistencia— se abre en su propia pantalla.
  */
 export default function ConductorShow({
     conductor,
@@ -623,9 +623,10 @@ function GuiaRemision({ viaje }: { viaje: ConductorViajeItem }) {
 }
 
 /**
- * La asistencia del conductor: un mes a la vez, con su resumen al lado. El
- * año completo —doce calendarios, para marcar de corrido— se despliega abajo
- * solo cuando hace falta, en vez de ocupar la ficha entera de entrada.
+ * La asistencia del conductor en la ficha: solo un mes a la vez, con su
+ * resumen al lado. El año completo —doce calendarios, para marcar de
+ * corrido— vive en su propia pantalla: desplegado acá empujaba el resto del
+ * expediente y dejaba las celdas demasiado apretadas para marcar en ellas.
  */
 function Asistencia({
     conductorId,
@@ -640,8 +641,6 @@ function Asistencia({
     const [indiceMes, setIndiceMes] = useState(() =>
         hoy.getFullYear() === asistencia.anio ? hoy.getMonth() : 0,
     );
-    const [verAnio, setVerAnio] = useState(false);
-
     const mes = asistencia.calendarios[indiceMes];
 
     if (!mes) {
@@ -669,28 +668,13 @@ function Asistencia({
                 <div className="flex flex-col gap-4">
                     <ResumenMes mes={mes} />
 
-                    <Button
-                        variant="outline"
-                        className="w-full"
-                        onClick={() => setVerAnio((abierto) => !abierto)}
-                    >
-                        {verAnio
-                            ? 'Ocultar el año'
-                            : 'Ver detalle de asistencia'}
+                    <Button asChild variant="outline" className="w-full">
+                        <Link href={rutaAsistencia(conductorId)}>
+                            Ver detalle de asistencia
+                        </Link>
                     </Button>
                 </div>
             </div>
-
-            {verAnio && (
-                <div className="border-t p-4">
-                    <CalendarioAsistenciaAnual
-                        conductorId={conductorId}
-                        anio={asistencia.anio}
-                        calendarios={asistencia.calendarios}
-                        urlPagina={show(conductorId).url}
-                    />
-                </div>
-            )}
         </section>
     );
 }

@@ -1,7 +1,5 @@
 <?php
 
-use App\Enums\EstadoGre;
-use App\Enums\MotivoTraslado;
 use Illuminate\Database\Migrations\Migration;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
@@ -18,12 +16,14 @@ return new class extends Migration
             $table->foreignId('punto_partida_id')->nullable()->after('destino')->constrained('puntos_traslado')->nullOnDelete();
             $table->foreignId('punto_llegada_id')->nullable()->after('punto_partida_id')->constrained('puntos_traslado')->nullOnDelete();
 
-            $table->string('motivo_traslado', 2)->default(MotivoTraslado::TrasladoEntreEstablecimientos->value)->after('punto_llegada_id');
+            // Los valores van literales: los enums que los nombraban se fueron
+            // con el módulo de guías, y la migración ya corrió en producción.
+            $table->string('motivo_traslado', 2)->default('04')->after('punto_llegada_id');
 
             // Estado del documento ante SUNAT. Los viajes que ya existen vienen
             // de PDF emitidos desde el portal SOL, así que nacen en `pendiente`
             // y solo cambian si se emiten desde acá.
-            $table->string('gre_estado')->default(EstadoGre::Pendiente->value)->after('observaciones');
+            $table->string('gre_estado')->default('pendiente')->after('observaciones');
             $table->string('gre_ticket')->nullable()->after('gre_estado');
 
             // Respuesta cruda del CDR: código, descripción y notas. Se guarda

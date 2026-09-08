@@ -36,8 +36,9 @@ const CELDA_CON_BORDE = 'border-r border-b border-border';
 
 /**
  * El calendario de asistencia de un conductor: los doce meses del año
- * elegido, navegable año por año. Vive en la pestaña de Asistencia de la
- * ficha del conductor (`conductores/show`) — antes era su propia página.
+ * elegido, navegable año por año. Vive en su propia pantalla
+ * (`conductores/asistencia`): son doce calendarios, y dentro de la ficha
+ * dejaban las celdas demasiado apretadas para marcar en ellas.
  */
 export function CalendarioAsistenciaAnual({
     conductorId,

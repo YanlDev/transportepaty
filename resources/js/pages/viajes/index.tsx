@@ -5,13 +5,11 @@ import {
     FilePenLine,
     RefreshCw,
     Route as RouteIcon,
-    Send,
     Trash2,
     Upload,
 } from 'lucide-react';
 import { useMemo, useRef, useState } from 'react';
 import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
-import { create as emitirGuia } from '@/actions/App/Http/Controllers/GuiaController';
 import { show as mostrarVehiculo } from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes, {
     create,
@@ -113,9 +111,6 @@ type Props = {
     tiposCarga: EnumOption[];
     clientes: EnumOption[];
     ciudadesDestino: EnumOption[];
-    /** Catálogo de puntos con ubigeo, para completar los datos de la GRE. */
-    puntos: EnumOption[];
-    motivosTraslado: EnumOption[];
 };
 
 export default function ViajesIndex({
@@ -125,8 +120,6 @@ export default function ViajesIndex({
     tiposCarga,
     clientes,
     ciudadesDestino,
-    puntos,
-    motivosTraslado,
 }: Props) {
     const { auth } = usePage().props;
     const puedeGestionar = auth.roles.includes('admin');
@@ -162,12 +155,6 @@ export default function ViajesIndex({
                         {pendientes > 0 && (
                             <ReintentarCoincidencias pendientes={pendientes} />
                         )}
-                        <Button asChild>
-                            <Link href={emitirGuia.url()}>
-                                <Send className="size-4" />
-                                Emitir guía
-                            </Link>
-                        </Button>
                         <Button asChild variant="outline">
                             <Link href={create()}>
                                 <FilePenLine className="size-4" />
@@ -418,9 +405,6 @@ export default function ViajesIndex({
                         setViajeSeleccionado(null);
                     }
                 }}
-                puntos={puntos}
-                motivosTraslado={motivosTraslado}
-                puedeEditar={puedeGestionar}
             />
         </div>
     );

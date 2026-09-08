@@ -61,6 +61,11 @@ it('builds a cycle starting on the 28th that runs through the day before the nex
             ->where('inicioCiclo', '2026-01-28')
             ->has('dias', 31)
             ->where('dias.0.fecha', '2026-01-28')
+            // La grilla rotula las columnas con el día de la semana del ciclo.
+            ->where('dias.0.dia_semana', 'X')
+            ->where('dias.0.es_domingo', false)
+            ->where('dias.4.dia_semana', 'D')
+            ->where('dias.4.es_domingo', true)
             ->where('dias.30.fecha', '2026-02-27')
             ->has('filas', 2)
             ->where('filas.0.conductor_id', $marcado->id)
