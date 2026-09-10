@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\EstadoAsistencia;
+use App\Enums\TipoDocumentoConductor;
 use App\Models\Asistencia;
 use App\Models\Conductor;
 use App\Models\Viaje;
@@ -350,7 +351,9 @@ it('summarises trips, this month\'s attendance and documents in the ficha stats'
             ->where('estadisticas.dias_descanso_mes', 1)
             ->where('estadisticas.faltas_mes', 1)
             ->where('estadisticas.documentos_vigentes', 0)
-            ->where('estadisticas.documentos_totales', 2)
+            // Del enum y no un número fijo: agregar un documento obligatorio
+            // no debería romper un test que mide otra cosa.
+            ->where('estadisticas.documentos_totales', count(TipoDocumentoConductor::obligatorios()))
         );
 });
 

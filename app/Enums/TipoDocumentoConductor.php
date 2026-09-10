@@ -12,6 +12,11 @@ enum TipoDocumentoConductor: string
 {
     use HasLabel;
 
+    /** Documento de identidad. No vence a efectos del semáforo: la caducidad
+     * del DNI no inhabilita a nadie para conducir, pero el papel tiene que
+     * estar en el expediente. */
+    case Dni = 'dni';
+
     /** Licencia de conducir profesional, categoría A-IIIc. */
     case LicenciaConducir = 'licencia_conducir';
 
@@ -24,6 +29,7 @@ enum TipoDocumentoConductor: string
     public function label(): string
     {
         return match ($this) {
+            self::Dni => 'DNI',
             self::LicenciaConducir => 'Licencia de conducir A-IIIc',
             self::LicenciaEspecial => 'Licencia especial',
             self::Otro => 'Otro',
@@ -36,6 +42,7 @@ enum TipoDocumentoConductor: string
     public function abreviatura(): string
     {
         return match ($this) {
+            self::Dni => 'DNI',
             self::LicenciaConducir => 'Licencia',
             self::LicenciaEspecial => 'Especial',
             self::Otro => 'Otro',
