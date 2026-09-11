@@ -11,6 +11,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\ParametroCostoController;
+use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
@@ -97,6 +98,15 @@ Route::middleware('auth')->group(function () {
     // Sacar un solo viaje de su factura, sin anular la factura entera.
     Route::delete('viajes/{viaje}/factura', [FacturaController::class, 'desvincular'])
         ->name('facturas.desvincular');
+
+    // Qué unidades salen con carga particular cada día. Se carga antes de
+    // que exista la GR, así que no se deduce de `viajes`.
+    Route::get('programacion', [ProgramacionController::class, 'index'])->name('programacion.index');
+    Route::post('programacion', [ProgramacionController::class, 'store'])->name('programacion.store');
+    Route::put('programacion/{programacion}', [ProgramacionController::class, 'update'])
+        ->name('programacion.update');
+    Route::delete('programacion/{programacion}', [ProgramacionController::class, 'destroy'])
+        ->name('programacion.destroy');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');

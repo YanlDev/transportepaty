@@ -17,6 +17,7 @@ import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
+import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
@@ -58,6 +59,16 @@ const navItems: NavItem[] = [
         icon: TruckTrailer,
     },
 ];
+
+/**
+ * Qué unidades salen con carga particular cada día. La lee abastecimiento
+ * para preparar la carga, así que entra con el mismo permiso de operación.
+ */
+const programacionNavItem: NavItem = {
+    title: 'Programación',
+    href: programacion.index(),
+    icon: CalendarCheck,
+};
 
 /** Los viajes: la lee también el contador, que factura contra ellos. */
 const viajesNavItem: NavItem = {
@@ -144,6 +155,9 @@ export function AppSidebar() {
                 <IconContext.Provider value={{ weight: 'duotone' }}>
                     <NavMain items={principales} />
                     {puedeVerViajes && <NavMain items={[viajesNavItem]} />}
+                    {puedeVerOperacion && (
+                        <NavMain items={[programacionNavItem]} />
+                    )}
                     {puedeVerOperacion && <NavMain items={gestionNavItems} />}
                     {(esAdmin || esContador) && (
                         <NavMain items={contabilidadNavItems} />
