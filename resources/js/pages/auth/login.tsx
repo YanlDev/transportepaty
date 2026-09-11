@@ -1,23 +1,20 @@
 import { Form, Head } from '@inertiajs/react';
-import { Lock, Mail } from 'lucide-react';
+import { Lock, User } from 'lucide-react';
 import InputError from '@/components/input-error';
 import PasskeyVerify from '@/components/passkey-verify';
 import PasswordInput from '@/components/password-input';
-import TextLink from '@/components/text-link';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { store } from '@/routes/login';
-import { request } from '@/routes/password';
 
 type Props = {
     status?: string;
-    canResetPassword: boolean;
 };
 
-export default function Login({ status, canResetPassword }: Props) {
+export default function Login({ status }: Props) {
     return (
         <>
             <Head title="Iniciar sesión" />
@@ -33,39 +30,30 @@ export default function Login({ status, canResetPassword }: Props) {
                     <>
                         <div className="grid gap-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="email">
-                                    Correo electrónico
+                                <Label htmlFor="username">
+                                    Usuario o correo
                                 </Label>
                                 <div className="relative">
-                                    <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                                    <User className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input
-                                        id="email"
-                                        type="email"
-                                        name="email"
+                                        id="username"
+                                        type="text"
+                                        name="username"
                                         required
                                         autoFocus
                                         tabIndex={1}
-                                        autoComplete="email"
-                                        placeholder="ejemplo@empresa.com"
+                                        autoComplete="username"
+                                        autoCapitalize="none"
+                                        spellCheck={false}
+                                        placeholder="tu usuario"
                                         className="pl-10"
                                     />
                                 </div>
-                                <InputError message={errors.email} />
+                                <InputError message={errors.username} />
                             </div>
 
                             <div className="grid gap-2">
-                                <div className="flex items-center">
-                                    <Label htmlFor="password">Contraseña</Label>
-                                    {canResetPassword && (
-                                        <TextLink
-                                            href={request()}
-                                            className="ml-auto text-sm"
-                                            tabIndex={5}
-                                        >
-                                            ¿Olvidaste tu contraseña?
-                                        </TextLink>
-                                    )}
-                                </div>
+                                <Label htmlFor="password">Contraseña</Label>
                                 <div className="relative">
                                     <Lock className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <PasswordInput
@@ -106,7 +94,7 @@ export default function Login({ status, canResetPassword }: Props) {
             </Form>
 
             {status && (
-                <div className="mb-4 text-center text-sm font-medium text-indigo-600">
+                <div className="mb-4 text-center text-sm font-medium text-marca-600">
                     {status}
                 </div>
             )}

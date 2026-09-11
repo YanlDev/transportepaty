@@ -83,6 +83,9 @@ export function TablaCobranza({
                         <TableHead>Destino</TableHead>
                         <TableHead>Tipo de carga</TableHead>
                         <TableHead className="text-right">Peso</TableHead>
+                        {/* Sin título: el ojo se explica solo y así queda
+                            pegado al peso, cerrando el bloque de operación. */}
+                        <TableHead className="w-0" />
                         <TableHead className={INICIO_COBRANZA}>
                             Estado
                         </TableHead>

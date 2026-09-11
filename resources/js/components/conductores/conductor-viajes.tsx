@@ -29,7 +29,7 @@ export function ConductorViajes({
 }) {
     return (
         <section className="rounded-xl border border-border bg-card">
-            <div className="flex items-center justify-between gap-2 border-b p-4">
+            <div className="flex items-center justify-between gap-2 border-b p-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
                     <RouteIcon className="size-4 text-muted-foreground" />
                     Viajes recientes

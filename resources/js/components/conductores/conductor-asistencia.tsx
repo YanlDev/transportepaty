@@ -38,14 +38,14 @@ export function ConductorAsistencia({
 
     return (
         <section className="rounded-xl border border-border bg-card">
-            <div className="border-b p-4">
+            <div className="border-b p-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
                     <CalendarCheck className="size-4 text-muted-foreground" />
                     Asistencia
                 </h2>
             </div>
 
-            <div className="grid gap-6 p-4 lg:grid-cols-[minmax(0,1fr)_260px]">
+            <div className="grid gap-4 p-3 lg:grid-cols-[minmax(0,1fr)_200px]">
                 <MesCompacto
                     mes={mes}
                     puedeRetroceder={indiceMes > 0}
@@ -54,7 +54,7 @@ export function ConductorAsistencia({
                     onAvanzar={() => setIndiceMes((i) => i + 1)}
                 />
 
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-3">
                     <ResumenMes mes={mes} />
 
                     <Button asChild variant="outline" className="w-full">
@@ -92,11 +92,11 @@ function MesCompacto({
 
     return (
         <div>
-            <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="mb-2 flex items-center justify-between gap-2">
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="size-9"
+                    className="size-8"
                     onClick={onRetroceder}
                     disabled={!puedeRetroceder}
                     aria-label="Mes anterior"
@@ -109,7 +109,7 @@ function MesCompacto({
                 <Button
                     variant="ghost"
                     size="icon"
-                    className="size-9"
+                    className="size-8"
                     onClick={onAvanzar}
                     disabled={!puedeAvanzar}
                     aria-label="Mes siguiente"
@@ -118,7 +118,7 @@ function MesCompacto({
                 </Button>
             </div>
 
-            <div className="grid grid-cols-7 justify-items-center gap-y-1.5">
+            <div className="grid grid-cols-7 justify-items-center gap-y-1">
                 {nombresDias.map((nombre, indice) => (
                     <span
                         key={indice}
@@ -138,7 +138,7 @@ function MesCompacto({
                             key={dia.fecha}
                             title={`${dia.numero} — ${info ? info.label : 'Sin marcar'}`}
                             className={cn(
-                                'grid size-8 place-items-center rounded-full text-xs font-medium tabular-nums',
+                                'grid size-7 place-items-center rounded-full text-xs font-medium tabular-nums',
                                 dia.es_relleno && 'text-muted-foreground/30',
                                 !dia.es_relleno &&
                                     !info &&
@@ -180,7 +180,7 @@ function ResumenMes({ mes }: { mes: AsistenciaCalendarioMes }) {
             {(Object.keys(estadoConfig) as EstadoAsistencia[]).map((estado) => (
                 <div
                     key={estado}
-                    className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm"
+                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
                 >
                     <span className="flex items-center gap-2.5">
                         <span
@@ -198,7 +198,7 @@ function ResumenMes({ mes }: { mes: AsistenciaCalendarioMes }) {
                 </div>
             ))}
 
-            <div className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+            <div className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
                 <span className="flex items-center gap-2.5 text-muted-foreground">
                     <span
                         className="size-2.5 shrink-0 rounded-full bg-muted-foreground/40"

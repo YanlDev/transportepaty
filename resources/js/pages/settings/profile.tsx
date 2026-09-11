@@ -72,10 +72,9 @@ export default function Profile({
                                     id="email"
                                     type="email"
                                     className="mt-1 block w-full"
-                                    defaultValue={auth.user.email}
+                                    defaultValue={auth.user.email ?? ''}
                                     name="email"
-                                    required
-                                    autoComplete="username"
+                                    autoComplete="email"
                                     placeholder="Email address"
                                 />
 
@@ -86,6 +85,7 @@ export default function Profile({
                             </div>
 
                             {mustVerifyEmail &&
+                                auth.user.email !== null &&
                                 auth.user.email_verified_at === null && (
                                     <div>
                                         <p className="-mt-4 text-sm text-muted-foreground">
@@ -102,7 +102,7 @@ export default function Profile({
 
                                         {status ===
                                             'verification-link-sent' && (
-                                            <div className="mt-2 text-sm font-medium text-indigo-600">
+                                            <div className="mt-2 text-sm font-medium text-marca-600">
                                                 A new verification link has been
                                                 sent to your email address.
                                             </div>

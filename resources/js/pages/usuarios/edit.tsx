@@ -4,23 +4,21 @@ import usuarios, { edit } from '@/actions/App/Http/Controllers/UserController';
 import { Button } from '@/components/ui/button';
 import { ResetPasswordDialog } from '@/components/usuarios/reset-password-dialog';
 import { UserForm } from '@/components/usuarios/user-form';
-import type { ConductorLinkOption } from '@/types/fleet';
 
 type Usuario = {
     id: number;
     name: string;
-    email: string;
+    username: string;
+    email: string | null;
     role: string | null;
-    conductor_id: number | null;
 };
 
 type Props = {
     usuario: Usuario;
     roles: string[];
-    conductores: ConductorLinkOption[];
 };
 
-export default function UsuarioEdit({ usuario, roles, conductores }: Props) {
+export default function UsuarioEdit({ usuario, roles }: Props) {
     setLayoutProps({
         breadcrumbs: [
             { title: 'Usuarios', href: usuarios.index().url },
@@ -35,7 +33,7 @@ export default function UsuarioEdit({ usuario, roles, conductores }: Props) {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <p className="text-sm text-muted-foreground">
-                        {usuario.name} · {usuario.email}
+                        {usuario.name} · {usuario.username}
                     </p>
                 </div>
 
@@ -50,12 +48,7 @@ export default function UsuarioEdit({ usuario, roles, conductores }: Props) {
                 />
             </div>
 
-            <UserForm
-                mode="edit"
-                usuario={usuario}
-                roles={roles}
-                conductores={conductores}
-            />
+            <UserForm mode="edit" usuario={usuario} roles={roles} />
         </div>
     );
 }

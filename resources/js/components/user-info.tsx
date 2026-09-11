@@ -2,6 +2,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
 import type { User } from '@/types';
 
+/**
+ * `showEmail` cayó en desuso como nombre: lo que se muestra debajo del nombre
+ * es el usuario con el que se entra, porque hay cuentas sin correo y esa línea
+ * quedaba vacía. El correo acompaña al usuario solo cuando existe.
+ */
 export function UserInfo({
     user,
     showEmail = false,
@@ -23,7 +28,8 @@ export function UserInfo({
                 <span className="truncate font-medium">{user.name}</span>
                 {showEmail && (
                     <span className="truncate text-xs text-muted-foreground">
-                        {user.email}
+                        {user.username}
+                        {user.email ? ` · ${user.email}` : ''}
                     </span>
                 )}
             </div>

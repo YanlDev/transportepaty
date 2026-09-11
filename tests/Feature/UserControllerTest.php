@@ -1,6 +1,5 @@
 <?php
 
-use App\Models\Conductor;
 use App\Models\User;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
@@ -8,7 +7,7 @@ use Spatie\Permission\Models\Role;
 use function Pest\Laravel\actingAs;
 
 beforeEach(function (): void {
-    foreach (['admin', 'visor', 'conductor'] as $role) {
+    foreach (['admin', 'visor', 'contador'] as $role) {
         Role::findOrCreate($role, 'web');
     }
 });
@@ -21,11 +20,11 @@ function datosUsuario(array $overrides = []): array
 {
     return array_merge([
         'name' => 'Nuevo Usuario',
+        'username' => 'nuevo_usuario',
         'email' => 'nuevo@ejemplo.com',
         'password' => 'contrasena-segura',
         'password_confirmation' => 'contrasena-segura',
         'role' => 'visor',
-        'conductor_id' => null,
     ], $overrides);
 }
 
@@ -48,7 +47,7 @@ it('forbids non-admins from the user list', function (): void {
         ->get(route('usuarios.index'))
         ->assertForbidden();
 
-    actingAs(actorConRol('conductor'))
+    actingAs(actorConRol('contador'))
         ->get(route('usuarios.index'))
         ->assertForbidden();
 });
@@ -65,19 +64,22 @@ it('lets an admin create a verified user with a role', function (): void {
     expect($user->hasRole('visor'))->toBeTrue();
 });
 
-it('links a conductor when creating a conductor user', function (): void {
-    $conductor = Conductor::factory()->create(['user_id' => null]);
-
+it('rejects the retired conductor role', function (): void {
     actingAs(actorConRol('admin'))
-        ->post(route('usuarios.store'), datosUsuario([
-            'role' => 'conductor',
-            'conductor_id' => $conductor->id,
-        ]))
-        ->assertRedirect(route('usuarios.index'));
+        ->post(route('usuarios.store'), datosUsuario(['role' => 'conductor']))
+        ->assertSessionHasErrors('role');
 
-    $user = User::where('email', 'nuevo@ejemplo.com')->first();
+    $this->assertDatabaseMissing('users', ['email' => 'nuevo@ejemplo.com']);
+});
 
-    expect($conductor->fresh()->user_id)->toBe($user->id);
+it('only offers the roles that exist', function (): void {
+    actingAs(actorConRol('admin'))
+        ->get(route('usuarios.create'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('usuarios/create')
+            ->where('roles', ['admin', 'contador', 'visor'])
+        );
 });
 
 it('forbids non-admins from creating users', function (): void {
@@ -92,11 +94,58 @@ it('validates required fields when creating', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('usuarios.store'), datosUsuario([
             'name' => '',
-            'email' => '',
+            'username' => '',
             'password' => '',
             'role' => '',
         ]))
-        ->assertSessionHasErrors(['name', 'email', 'password', 'role']);
+        ->assertSessionHasErrors(['name', 'username', 'password', 'role']);
+});
+
+it('creates an account without an email', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('usuarios.store'), datosUsuario([
+            'role' => 'visor',
+            'email' => '',
+        ]))
+        ->assertRedirect(route('usuarios.index'));
+
+    $user = User::where('username', 'nuevo_usuario')->first();
+
+    expect($user)->not->toBeNull();
+    expect($user->email)->toBeNull();
+});
+
+it('requires an email for an admin, who also logs in with it', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('usuarios.store'), datosUsuario([
+            'role' => 'admin',
+            'email' => '',
+        ]))
+        ->assertSessionHasErrors('email');
+
+    $this->assertDatabaseMissing('users', ['username' => 'nuevo_usuario']);
+});
+
+it('lowercases the username so it matches what the login sends', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('usuarios.store'), datosUsuario(['username' => 'JPerez']))
+        ->assertRedirect(route('usuarios.index'));
+
+    $this->assertDatabaseHas('users', ['username' => 'jperez']);
+});
+
+it('rejects a duplicate username', function (): void {
+    User::factory()->create(['username' => 'tomado']);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('usuarios.store'), datosUsuario(['username' => 'tomado']))
+        ->assertSessionHasErrors('username');
+});
+
+it('rejects a username that could be confused with an email', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('usuarios.store'), datosUsuario(['username' => 'j@ejemplo.com']))
+        ->assertSessionHasErrors('username');
 });
 
 it('rejects a duplicate email', function (): void {
@@ -120,6 +169,7 @@ it('lets an admin update a user email and role', function (): void {
     actingAs(actorConRol('admin'))
         ->put(route('usuarios.update', $user), [
             'name' => 'Nombre Editado',
+            'username' => 'editado',
             'email' => 'editado@ejemplo.com',
             'role' => 'admin',
         ])
@@ -131,22 +181,6 @@ it('lets an admin update a user email and role', function (): void {
     expect($user->email)->toBe('editado@ejemplo.com');
     expect($user->hasRole('admin'))->toBeTrue();
     expect($user->hasRole('visor'))->toBeFalse();
-});
-
-it('unlinks the conductor when the role is no longer conductor', function (): void {
-    $user = User::factory()->create();
-    $user->assignRole('conductor');
-    $conductor = Conductor::factory()->create(['user_id' => $user->id]);
-
-    actingAs(actorConRol('admin'))
-        ->put(route('usuarios.update', $user), [
-            'name' => $user->name,
-            'email' => $user->email,
-            'role' => 'visor',
-        ])
-        ->assertRedirect(route('usuarios.index'));
-
-    expect($conductor->fresh()->user_id)->toBeNull();
 });
 
 it('lets an admin reset a user password', function (): void {
@@ -170,19 +204,6 @@ it('lets an admin delete a user', function (): void {
         ->delete(route('usuarios.destroy', $user))
         ->assertRedirect(route('usuarios.index'));
 
-    $this->assertDatabaseMissing('users', ['id' => $user->id]);
-});
-
-it('unlinks a conductor before deleting the user', function (): void {
-    $user = User::factory()->create();
-    $user->assignRole('conductor');
-    $conductor = Conductor::factory()->create(['user_id' => $user->id]);
-
-    actingAs(actorConRol('admin'))
-        ->delete(route('usuarios.destroy', $user))
-        ->assertRedirect(route('usuarios.index'));
-
-    expect($conductor->fresh()->user_id)->toBeNull();
     $this->assertDatabaseMissing('users', ['id' => $user->id]);
 });
 

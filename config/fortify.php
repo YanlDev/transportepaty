@@ -45,7 +45,7 @@ return [
     |
     */
 
-    'username' => 'email',
+    'username' => 'username',
 
     'email' => 'email',
 
@@ -161,7 +161,10 @@ return [
     */
 
     'features' => [
-        Features::resetPasswords(),
+        // Sin `resetPasswords()` a propósito: no hay recuperación por correo.
+        // La mayoría de las cuentas no tiene casilla, así que toda contraseña
+        // olvidada la repone el admin desde /usuarios, y la del admin se
+        // cambia con `php artisan usuario:password` en el servidor.
         Features::emailVerification(),
         Features::twoFactorAuthentication([
             'confirm' => true,

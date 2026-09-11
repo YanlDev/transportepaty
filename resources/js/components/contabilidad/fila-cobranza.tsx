@@ -1,6 +1,7 @@
 import { AccionesFila } from '@/components/contabilidad/acciones-fila';
 import { CeldasCobranza } from '@/components/contabilidad/celdas-cobranza';
 import { EstadoCobranzaBadge } from '@/components/contabilidad/estado-cobranza-badge';
+import { VerGuia } from '@/components/contabilidad/ver-guia';
 import { Copiable } from '@/components/copiable';
 import { DireccionCelda } from '@/components/direccion-celda';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -65,7 +66,7 @@ export function FilaCobranza({
             <TableCell className="font-mono text-[11px] whitespace-nowrap text-blue-950 tabular-nums dark:text-blue-300">
                 <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
             </TableCell>
-            <TableCell className="font-mono text-[11px] whitespace-nowrap text-indigo-600 tabular-nums dark:text-indigo-400">
+            <TableCell className="font-mono text-[11px] whitespace-nowrap text-marca-600 tabular-nums dark:text-marca-400">
                 <GuiasRemitenteCelda guias={viaje.guias_remitente} />
             </TableCell>
             <TableCell className="text-[11px] whitespace-nowrap">
@@ -115,6 +116,9 @@ export function FilaCobranza({
             </TableCell>
             <TableCell className="text-right whitespace-nowrap tabular-nums">
                 {formatearPeso(viaje.peso, viaje.unidad_peso)}
+            </TableCell>
+            <TableCell className="w-0">
+                <VerGuia viaje={viaje} />
             </TableCell>
 
             <TableCell className={cn(INICIO_COBRANZA, 'whitespace-nowrap')}>

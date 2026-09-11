@@ -46,17 +46,10 @@ export type ConductorListItem = {
 export type UserListItem = {
     id: number;
     name: string;
-    email: string;
+    username: string;
+    email: string | null;
     email_verified_at: string | null;
     roles: { id: number; name: string }[];
-};
-
-/** A conductor option for linking from the user form. */
-export type ConductorLinkOption = {
-    id: number;
-    nombres: string;
-    apellidos: string;
-    nombre_completo: string;
 };
 
 /** Situación de un documento obligatorio concreto. */

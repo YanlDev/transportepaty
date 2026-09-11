@@ -14,7 +14,7 @@ use Spatie\Permission\Models\Role;
 use function Pest\Laravel\actingAs;
 
 beforeEach(function (): void {
-    foreach (['admin', 'visor', 'conductor'] as $role) {
+    foreach (['admin', 'visor', 'contador'] as $role) {
         Role::findOrCreate($role, 'web');
     }
 });
@@ -61,6 +61,22 @@ it('lets authenticated users see the tractos list', function (): void {
             ->where('seccion', 'tracto')
             ->has('vehiculos.data', 3)
         );
+});
+
+it('lets the contador see the tractos list', function (): void {
+    Vehiculo::factory()->count(2)->create();
+
+    actingAs(usuarioCon('contador'))
+        ->get(route('tractos.index'))
+        ->assertSuccessful();
+});
+
+it('lets the contador open a vehiculo', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    actingAs(usuarioCon('contador'))
+        ->get(route('vehiculos.show', $vehiculo))
+        ->assertSuccessful();
 });
 
 it('lets authenticated users see the carretas list', function (): void {

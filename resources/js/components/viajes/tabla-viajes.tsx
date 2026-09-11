@@ -92,7 +92,7 @@ export function TablaViajes({
                                     etiqueta="N° GR"
                                 />
                             </TableCell>
-                            <TableCell className="font-mono text-[11px] whitespace-nowrap text-indigo-600 tabular-nums dark:text-indigo-400">
+                            <TableCell className="font-mono text-[11px] whitespace-nowrap text-marca-600 tabular-nums dark:text-marca-400">
                                 <GuiasRemitenteCelda
                                     guias={viaje.guias_remitente}
                                 />

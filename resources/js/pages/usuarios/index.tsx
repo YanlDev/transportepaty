@@ -1,5 +1,13 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Mail, Pencil, Plus, ShieldCheck, Trash2, Users } from 'lucide-react';
+import {
+    AtSign,
+    Mail,
+    Pencil,
+    Plus,
+    ShieldCheck,
+    Trash2,
+    Users,
+} from 'lucide-react';
 import usuarios, {
     create,
     edit,
@@ -20,17 +28,21 @@ type Props = {
 /**
  * Cada rol con su color. No usa `StatusBadge` porque ahí los tonos significan
  * estado —bien, ojo, mal— y acá solo distinguen a quién es quién.
+ *
+ * El contador es verde y no celeste: desde que el acento de la app es el azul
+ * del logo, el celeste quedaba a un paso del badge del admin y los dos se
+ * leían como el mismo rol de reojo.
  */
 const ROLE_BADGES: Record<string, { label: string; className: string }> = {
     admin: {
         label: 'Administrador',
         className:
-            'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 dark:bg-indigo-950 dark:text-indigo-300',
+            'bg-marca-50 text-marca-700 ring-1 ring-marca-600/20 dark:bg-marca-950 dark:text-marca-300',
     },
-    conductor: {
-        label: 'Conductor',
+    contador: {
+        label: 'Contador',
         className:
-            'bg-sky-50 text-sky-700 ring-1 ring-sky-600/20 dark:bg-sky-950 dark:text-sky-300',
+            'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950 dark:text-emerald-300',
     },
     visor: {
         label: 'Visor',
@@ -69,7 +81,7 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
             <Input
                 value={buscar}
                 onChange={(e) => setBuscar(e.target.value)}
-                placeholder="Buscar por nombre o email..."
+                placeholder="Buscar por nombre, usuario o correo..."
                 className="max-w-sm"
             />
 
@@ -156,7 +168,7 @@ function UsuarioCard({
         <article className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-marca-50 text-marca-800 dark:bg-marca-950 dark:text-marca-300">
                         <ShieldCheck className="size-4.5" />
                     </span>
                     <div>
@@ -169,9 +181,15 @@ function UsuarioCard({
                             )}
                         </h2>
                         <p className="flex items-center gap-1 text-xs text-muted-foreground">
-                            <Mail className="size-3" />
-                            {usuario.email}
+                            <AtSign className="size-3" />
+                            {usuario.username}
                         </p>
+                        {usuario.email && (
+                            <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Mail className="size-3" />
+                                {usuario.email}
+                            </p>
+                        )}
                     </div>
                 </div>
                 {badge && (

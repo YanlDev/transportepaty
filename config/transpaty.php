@@ -14,6 +14,7 @@ return [
     */
 
     'admin' => [
+        'username' => env('ADMIN_USERNAME', 'admin'),
         'email' => env('ADMIN_EMAIL', 'admin@transpaty.com'),
         'name' => env('ADMIN_NAME', 'Admin Transpaty'),
         'password' => env('ADMIN_PASSWORD', 'transpaty2026'),

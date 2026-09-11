@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests;
 
+use App\Concerns\ProfileValidationRules;
+use App\Concerns\UsernameCanonicalizado;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -10,6 +12,8 @@ use Spatie\Permission\Models\Role;
 
 class StoreUserRequest extends FormRequest
 {
+    use ProfileValidationRules, UsernameCanonicalizado;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -26,11 +30,12 @@ class StoreUserRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')],
+            'name' => $this->nameRules(),
+            'username' => $this->usernameRules(),
+            // El admin entra por correo, así que sin correo no hay admin.
+            'email' => ['required_if:role,admin', ...$this->emailRules(requerido: false)],
             'password' => ['required', 'confirmed', Password::defaults()],
             'role' => ['required', Rule::in(Role::pluck('name'))],
-            'conductor_id' => ['nullable', 'exists:conductores,id'],
         ];
     }
 }

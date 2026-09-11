@@ -12,9 +12,9 @@ enum TipoDocumentoConductor: string
 {
     use HasLabel;
 
-    /** Documento de identidad. No vence a efectos del semáforo: la caducidad
-     * del DNI no inhabilita a nadie para conducir, pero el papel tiene que
-     * estar en el expediente. */
+    /** Documento de identidad. Su caducidad se registra, pero no inhabilita a
+     * nadie para conducir: lo exigible es que el papel esté en el expediente
+     * (ver `vencimientoInhabilita`). */
     case Dni = 'dni';
 
     /** Licencia de conducir profesional, categoría A-IIIc. */
@@ -56,6 +56,23 @@ enum TipoDocumentoConductor: string
     public function esObligatorio(): bool
     {
         return $this !== self::Otro;
+    }
+
+    /**
+     * Si estar vencido impide salir a ruta.
+     *
+     * El DNI es la excepción, y es una distinción real y no una comodidad: un
+     * DNI caducado no le quita a nadie la habilitación para conducir —eso lo
+     * dan las licencias—, pero sí importa para planilla y trámites, así que la
+     * fecha se guarda y se avisa en ámbar en vez de pintar al conductor de
+     * rojo y sacarlo de la programación por algo que no lo inhabilita.
+     *
+     * Faltar es otra cosa: el papel tiene que estar en el expediente, y un DNI
+     * ausente sigue siendo rojo.
+     */
+    public function vencimientoInhabilita(): bool
+    {
+        return $this !== self::Dni;
     }
 
     /**

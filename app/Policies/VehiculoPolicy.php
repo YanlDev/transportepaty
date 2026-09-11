@@ -9,10 +9,14 @@ class VehiculoPolicy
 {
     /**
      * Determine whether the user can view any models.
+     *
+     * El contador entra en lectura: al facturar tiene que identificar la placa
+     * que viene en la guía. El menú ya le mostraba Tractos y Carretas, así que
+     * hasta acá la policy le devolvía un 403 sobre un enlace visible.
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'visor', 'conductor']);
+        return $user->hasAnyRole(['admin', 'visor', 'contador']);
     }
 
     /**
@@ -23,7 +27,7 @@ class VehiculoPolicy
      */
     public function view(User $user, Vehiculo $vehiculo): bool
     {
-        return $user->hasAnyRole(['admin', 'visor', 'conductor']);
+        return $user->hasAnyRole(['admin', 'visor', 'contador']);
     }
 
     /**

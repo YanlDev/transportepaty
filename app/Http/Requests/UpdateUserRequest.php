@@ -2,6 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Concerns\ProfileValidationRules;
+use App\Concerns\UsernameCanonicalizado;
+use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -9,6 +12,8 @@ use Spatie\Permission\Models\Role;
 
 class UpdateUserRequest extends FormRequest
 {
+    use ProfileValidationRules, UsernameCanonicalizado;
+
     /**
      * Determine if the user is authorized to make this request.
      */
@@ -24,11 +29,15 @@ class UpdateUserRequest extends FormRequest
      */
     public function rules(): array
     {
+        $usuario = $this->route('user');
+        $usuarioId = $usuario instanceof User ? $usuario->id : null;
+
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->route('user'))],
+            'name' => $this->nameRules(),
+            'username' => $this->usernameRules($usuarioId),
+            // El admin entra por correo, así que sin correo no hay admin.
+            'email' => ['required_if:role,admin', ...$this->emailRules($usuarioId, requerido: false)],
             'role' => ['required', Rule::in(Role::pluck('name'))],
-            'conductor_id' => ['nullable', 'exists:conductores,id'],
         ];
     }
 }

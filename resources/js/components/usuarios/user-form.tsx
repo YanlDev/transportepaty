@@ -14,53 +14,57 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import type { ConductorLinkOption } from '@/types/fleet';
-
-// Radix Select no admite items con value vacío, así que usamos un centinela
-// para representar "sin conductor vinculado".
-const SIN_CONDUCTOR = '__sin_conductor__';
 
 const ROLE_LABELS: Record<string, string> = {
     admin: 'Administrador',
-    conductor: 'Conductor',
     visor: 'Visor',
+    contador: 'Contador',
+};
+
+/**
+ * Qué habilita cada rol, en una línea. Se muestra al elegirlo porque el nombre
+ * del rol no dice lo suficiente para decidir cuál darle a alguien.
+ */
+const ROLE_DESCRIPCIONES: Record<string, string> = {
+    admin: 'Acceso completo: gestiona flota, conductores, viajes, cobranza, asistencia y usuarios.',
+    visor: 'Solo lectura de la operación: flota, conductores, viajes, clientes y cotizaciones. No ve cobranza.',
+    contador: 'Solo la cobranza: facturas, pagos y cuentas. Lee viajes y unidades para facturar contra ellos.',
 };
 
 type UsuarioEdit = {
     id: number;
     name: string;
-    email: string;
+    username: string;
+    email: string | null;
     role: string | null;
-    conductor_id: number | null;
 };
 
 type Props = {
     mode: 'create' | 'edit';
     usuario?: UsuarioEdit;
     roles: string[];
-    conductores: ConductorLinkOption[];
 };
 
 type FormData = {
     name: string;
+    username: string;
     email: string;
     password: string;
     password_confirmation: string;
     role: string;
-    conductor_id: string | null;
 };
 
-export function UserForm({ mode, usuario, roles, conductores }: Props) {
+export function UserForm({ mode, usuario, roles }: Props) {
     const { data, setData, post, put, processing, errors } = useForm<FormData>({
         name: usuario?.name ?? '',
+        username: usuario?.username ?? '',
         email: usuario?.email ?? '',
         password: '',
         password_confirmation: '',
         role: usuario?.role ?? '',
-        conductor_id: usuario?.conductor_id
-            ? String(usuario.conductor_id)
-            : null,
     });
+
+    const esAdmin = data.role === 'admin';
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -69,14 +73,6 @@ export function UserForm({ mode, usuario, roles, conductores }: Props) {
             post(store().url);
         } else if (usuario) {
             put(update(usuario.id).url);
-        }
-    };
-
-    const cambiarRol = (value: string) => {
-        setData('role', value);
-
-        if (value !== 'conductor') {
-            setData('conductor_id', null);
         }
     };
 
@@ -105,7 +101,35 @@ export function UserForm({ mode, usuario, roles, conductores }: Props) {
                             />
                         )}
                     </Field>
-                    <Field label="Email" error={errors.email} required>
+                    <Field
+                        label="Usuario"
+                        error={errors.username}
+                        ayuda="Con esto entra al sistema. Letras, números, guiones y guiones bajos."
+                        required
+                    >
+                        {(id) => (
+                            <Input
+                                id={id}
+                                value={data.username}
+                                onChange={(e) =>
+                                    setData('username', e.target.value)
+                                }
+                                autoCapitalize="none"
+                                spellCheck={false}
+                                placeholder="jperez"
+                            />
+                        )}
+                    </Field>
+                    <Field
+                        label="Correo"
+                        error={errors.email}
+                        ayuda={
+                            esAdmin
+                                ? 'Obligatorio: el administrador también entra con su correo.'
+                                : 'Opcional. Sin correo, la cuenta entra solo con su usuario.'
+                        }
+                        required={esAdmin}
+                    >
                         {(id) => (
                             <Input
                                 id={id}
@@ -118,11 +142,18 @@ export function UserForm({ mode, usuario, roles, conductores }: Props) {
                             />
                         )}
                     </Field>
-                    <Field label="Rol" error={errors.role} required>
+                    <Field
+                        label="Rol"
+                        error={errors.role}
+                        ayuda={ROLE_DESCRIPCIONES[data.role]}
+                        required
+                    >
                         {(id) => (
                             <Select
                                 value={data.role}
-                                onValueChange={cambiarRol}
+                                onValueChange={(value) =>
+                                    setData('role', value)
+                                }
                             >
                                 <SelectTrigger id={id}>
                                     <SelectValue placeholder="Seleccionar rol" />
@@ -137,44 +168,6 @@ export function UserForm({ mode, usuario, roles, conductores }: Props) {
                             </Select>
                         )}
                     </Field>
-                    {data.role === 'conductor' && (
-                        <Field
-                            label="Conductor vinculado"
-                            error={errors.conductor_id}
-                        >
-                            {(id) => (
-                                <Select
-                                    value={data.conductor_id ?? SIN_CONDUCTOR}
-                                    onValueChange={(value) =>
-                                        setData(
-                                            'conductor_id',
-                                            value === SIN_CONDUCTOR
-                                                ? null
-                                                : value,
-                                        )
-                                    }
-                                >
-                                    <SelectTrigger id={id}>
-                                        <SelectValue placeholder="Sin conductor" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value={SIN_CONDUCTOR}>
-                                            Sin conductor
-                                        </SelectItem>
-                                        {conductores.map((c) => (
-                                            <SelectItem
-                                                key={c.id}
-                                                value={String(c.id)}
-                                            >
-                                                {c.nombre_completo}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                        </Field>
-                    )}
-
                     {mode === 'create' && (
                         <>
                             <Field

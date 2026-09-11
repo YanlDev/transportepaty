@@ -65,22 +65,36 @@ export function DocumentoTarjeta({
                 <p className="truncate text-sm leading-tight font-medium text-foreground">
                     {ranura.label}
                 </p>
-                <p className="mt-0.5 truncate text-xs text-muted-foreground">
+                {/* El vencimiento es el dato por el que se mira esta pantalla,
+                    así que nunca se trunca: si falta ancho, se corta el número
+                    de documento, que se puede leer en el visor. */}
+                <p className="mt-0.5 flex items-baseline gap-1 text-xs text-muted-foreground">
                     {documento?.numero && (
-                        <span className="font-mono">{documento.numero} · </span>
+                        <>
+                            <span className="truncate font-mono">
+                                {documento.numero}
+                            </span>
+                            <span aria-hidden>·</span>
+                        </>
                     )}
-                    <span className="tabular-nums">{fecha}</span>
+                    <span className="shrink-0 tabular-nums">{fecha}</span>
                 </p>
             </div>
 
-            <span
-                className={cn(
-                    'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                    tema.chip,
-                )}
-            >
-                {ranura.estado_label}
-            </span>
+            {/* El chip solo aparece cuando hay algo que avisar. Un «Vigente»
+                en cada fila es ruido —lo normal es que todo esté al día— y
+                encima se comía el ancho del número y la fecha, que es lo que
+                de verdad se viene a leer acá. */}
+            {estado !== 'vigente' && (
+                <span
+                    className={cn(
+                        'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                        tema.chip,
+                    )}
+                >
+                    {ranura.estado_label}
+                </span>
+            )}
 
             <div className="flex shrink-0 items-center gap-0.5">
                 {documento === null

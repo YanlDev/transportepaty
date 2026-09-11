@@ -37,9 +37,9 @@ import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
 /**
- * Destinos visibles para cualquier usuario autenticado. Tractos y carretas van
- * separados —con su propio ícono— para encontrar cada uno directo, en vez de
- * filtrar por tipo dentro de un listado combinado de vehículos.
+ * Destinos visibles para cualquier rol. Tractos y carretas van separados —con
+ * su propio ícono— para encontrar cada uno directo, en vez de filtrar por tipo
+ * dentro de un listado combinado de vehículos.
  */
 const navItems: NavItem[] = [
     {
@@ -109,7 +109,8 @@ export function AppSidebar() {
     // contrapartida de lo que factura.
     const puedeVerViajes = puedeVerOperacion || esContador;
 
-    // Conductores exige admin o visor; el conductor de a pie solo ve Vehículos.
+    // Conductores exige admin o visor: el contador ve las unidades para
+    // identificar la placa de una guía, pero no el padrón de choferes.
     const principales = puedeVerOperacion
         ? [
               ...navItems,

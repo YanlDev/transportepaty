@@ -58,7 +58,10 @@ export default function ConductorShow({
         <div className="mx-auto flex h-full w-full max-w-[1600px] flex-1 flex-col gap-4 p-4 md:p-6">
             <Head title={conductor.nombre_completo} />
 
-            <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_320px]">
+            {/* La columna de documentos es la que manda el ancho: tiene que
+                entrar «número · Vence dd/mm/aaaa» sin cortarse. Lo que sobra
+                va al medio, que se adapta. */}
+            <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)] xl:grid-cols-[280px_minmax(0,1fr)_380px]">
                 <ConductorIdentidad
                     conductor={conductor}
                     puedeEditar={puedeEditar}

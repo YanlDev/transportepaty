@@ -155,8 +155,14 @@ class Conductor extends Model
 
     /**
      * Estado de la documentación obligatoria del conductor. Rojo si falta algún
-     * documento o si alguno ya venció; ámbar si alguno vence dentro del plazo de
-     * aviso; verde si está todo en regla.
+     * documento o si venció alguno de los que inhabilitan; ámbar si alguno
+     * vence dentro del plazo de aviso, o si caducó el DNI —que se avisa pero
+     * no saca a nadie de ruta (ver `TipoDocumentoConductor::vencimientoInhabilita`)—;
+     * verde si está todo en regla.
+     *
+     * `vencidos` los lista a todos igual, caduque lo que caduque: la ficha
+     * tiene que mostrar el DNI vencido aunque el semáforo no se ponga rojo por
+     * él.
      *
      * Requiere la relación `documentos` precargada para no caer en N+1.
      *
@@ -175,6 +181,10 @@ class Conductor extends Model
         $porVencer = [];
         $detalle = [];
 
+        // Los vencidos que sí sacan de ruta. Se cuentan aparte de `$vencidos`
+        // porque esa lista es para mostrar y esta para decidir el color.
+        $inhabilitan = [];
+
         foreach (TipoDocumentoConductor::obligatorios() as $tipo) {
             $documento = $this->documentoDe($tipo);
             $estado = $documento?->estado() ?? EstadoDocumento::Faltante;
@@ -185,6 +195,10 @@ class Conductor extends Model
                 EstadoDocumento::PorVencer => $porVencer[] = $tipo->label(),
                 EstadoDocumento::Vigente => null,
             };
+
+            if ($estado === EstadoDocumento::Vencido && $tipo->vencimientoInhabilita()) {
+                $inhabilitan[] = $tipo->label();
+            }
 
             $detalle[] = [
                 'tipo' => $tipo->value,
@@ -197,8 +211,8 @@ class Conductor extends Model
         }
 
         $semaforo = match (true) {
-            $faltantes !== [] || $vencidos !== [] => SemaforoDocumental::Rojo,
-            $porVencer !== [] => SemaforoDocumental::Ambar,
+            $faltantes !== [] || $inhabilitan !== [] => SemaforoDocumental::Rojo,
+            $porVencer !== [] || $vencidos !== [] => SemaforoDocumental::Ambar,
             default => SemaforoDocumental::Verde,
         };
 

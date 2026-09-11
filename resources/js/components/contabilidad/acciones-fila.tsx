@@ -1,4 +1,4 @@
-import { Eye, Link2Off, Trash2 } from 'lucide-react';
+import { Link2Off, Trash2 } from 'lucide-react';
 import {
     desvincular,
     destroy,
@@ -8,15 +8,14 @@ import {
     Resaltado,
 } from '@/components/confirmar-borrado-dialog';
 import { Button } from '@/components/ui/button';
-import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
-import { formatearFecha } from '@/lib/format';
 import type { ViajeContable } from '@/types/contabilidad';
 
 /**
- * Ver el PDF de la GR, sacar este viaje de su factura, o anular la factura
- * entera. El visor va acá y no en `/viajes` solamente porque es contra ese
- * documento que se factura: quien cobra tiene que poder mirarlo sin cambiar de
- * pantalla.
+ * Lo que se le puede hacer a la factura de esta fila: sacarle este viaje, o
+ * anularla entera. Ver la GR no está acá sino junto al peso (`VerGuia`),
+ * porque es leer la operación y no tocar la cobranza.
+ *
+ * Queda vacío cuando el viaje no se facturó todavía o el usuario no factura.
  */
 export function AccionesFila({
     viaje,
@@ -29,24 +28,6 @@ export function AccionesFila({
 
     return (
         <div className="flex items-center justify-end gap-1">
-            <DocumentoVisorDialog
-                url={viaje.archivo_url ?? ''}
-                esPdf
-                titulo={`GR ${viaje.numero_gr}`}
-                detalle={`${viaje.cliente} · ${formatearFecha(viaje.fecha_traslado)}`}
-                trigger={
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={!viaje.archivo_url}
-                        className="size-8 text-muted-foreground"
-                        aria-label="Vista rápida de la GR"
-                    >
-                        <Eye className="size-4" />
-                    </Button>
-                }
-            />
-
             {/* Desvincular solo tiene sentido en una factura de varias GR: si
                 cobra una sola, sacarla la dejaría vacía y eso es anularla. */}
             {factura !== null && puedeFacturar && factura.viajes_count > 1 && (

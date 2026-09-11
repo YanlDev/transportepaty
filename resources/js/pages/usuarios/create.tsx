@@ -3,14 +3,12 @@ import usuarios, {
     create,
 } from '@/actions/App/Http/Controllers/UserController';
 import { UserForm } from '@/components/usuarios/user-form';
-import type { ConductorLinkOption } from '@/types/fleet';
 
 type Props = {
     roles: string[];
-    conductores: ConductorLinkOption[];
 };
 
-export default function UsuarioCreate({ roles, conductores }: Props) {
+export default function UsuarioCreate({ roles }: Props) {
     return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
             <Head title="Nuevo usuario" />
@@ -21,7 +19,7 @@ export default function UsuarioCreate({ roles, conductores }: Props) {
                 </p>
             </div>
 
-            <UserForm mode="create" roles={roles} conductores={conductores} />
+            <UserForm mode="create" roles={roles} />
         </div>
     );
 }

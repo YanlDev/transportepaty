@@ -26,6 +26,7 @@ class UserFactory extends Factory
     {
         return [
             'name' => fake()->name(),
+            'username' => fake()->unique()->userName(),
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
@@ -34,6 +35,16 @@ class UserFactory extends Factory
             'two_factor_recovery_codes' => null,
             'two_factor_confirmed_at' => null,
         ];
+    }
+
+    /**
+     * Una cuenta sin correo: el caso de todo el que no es admin.
+     */
+    public function sinCorreo(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'email' => null,
+        ]);
     }
 
     /**

@@ -26,27 +26,31 @@
     --radius-3xl: 20px;
     --radius-4xl: 24px;
 
-    /* Acento de marca: índigo/violeta en vez del navy calibrado al logo —
-       decisión de producto de ir por un acento más "herramienta B2B moderna"
-       (tipo Linear) aunque ya no matchee el azul físico del logo (#1E5AA8).
-       El logo en sí no se toca, solo el color de acento de la UI. */
-    --color-indigo-50: oklch(0.962 0.018 272.314);
-    --color-indigo-100: oklch(0.93 0.034 272.788);
-    --color-indigo-200: oklch(0.87 0.065 274.039);
-    --color-indigo-300: oklch(0.785 0.115 274.713);
-    --color-indigo-400: oklch(0.673 0.182 276.935);
-    --color-indigo-500: oklch(0.585 0.233 277.117);
-    --color-indigo-600: oklch(0.511 0.262 276.966);
-    --color-indigo-700: oklch(0.457 0.24 277.023);
-    --color-indigo-800: oklch(0.398 0.195 277.366);
-    --color-indigo-900: oklch(0.359 0.144 278.697);
-    --color-indigo-950: oklch(0.257 0.09 281.288);
+    /* Acento de la interfaz: el azul físico del logo (#0059A9, muestreado del
+       PNG en `public/marca/`), no un azul elegido a ojo. Reemplaza al índigo
+       violeta que había antes, que era una decisión de producto de ir por un
+       acento "tipo Linear" y dejaba la app de un color que la marca no tiene.
 
-    /* Gris grafito del logo real (el «EMPRESA DE» / «S.C.R.L.» y el doble
-       trazo en L): neutro, sin tinte azul, para que se distinga a propósito
-       del --foreground general de la app. Solo se usa dentro del wordmark de
-       marca (`app-logo-full.tsx`), no como color de texto general. */
-    --color-graphite: oklch(0.348 0 0);
+       La escala está construida en OKLCH sobre el tono del logo (253.7°) con
+       el croma recortado al límite de sRGB en cada paso, así ningún tinte se
+       aplana contra el borde del espacio de color. El 600 es el azul del logo
+       exacto —es el paso que alimenta `--primary`— y de ahí sale todo lo demás.
+
+       Se llama `marca` y no `indigo` a propósito: antes esta escala redefinía
+       la paleta índigo de Tailwind, así que `bg-indigo-600` pintaba algo que no
+       era índigo. Un nombre propio evita que el siguiente que lea el JSX crea
+       que está poniendo violeta. */
+    --color-marca-50: oklch(0.97 0.014 253.7);
+    --color-marca-100: oklch(0.937 0.03 253.7);
+    --color-marca-200: oklch(0.884 0.056 253.7);
+    --color-marca-300: oklch(0.806 0.096 253.7);
+    --color-marca-400: oklch(0.7 0.15 253.7);
+    --color-marca-500: oklch(0.575 0.174 253.7);
+    --color-marca-600: oklch(0.467 0.147 253.7);
+    --color-marca-700: oklch(0.413 0.125 253.7);
+    --color-marca-800: oklch(0.358 0.108 253.7);
+    --color-marca-900: oklch(0.308 0.09 253.7);
+    --color-marca-950: oklch(0.228 0.056 253.7);
 
     --color-background: var(--background);
     --color-foreground: var(--foreground);
@@ -99,37 +103,37 @@
     --card-foreground: oklch(0.18 0.02 260);
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.18 0.02 260);
-    /* indigo-600, no indigo-800: paso intermedio con buen contraste sobre
-       blanco para botones/links. indigo-800 se usa aparte para texto sobre
-       fondo claro (`secondary-foreground`/`accent-foreground`), donde
-       conviene más oscuro. */
-    --primary: var(--color-indigo-600);
+    /* marca-600, no marca-800: es el azul del logo tal cual, y tiene buen
+       contraste sobre blanco para botones y enlaces. El 800 se usa aparte para
+       texto sobre fondo claro (`secondary-foreground`/`accent-foreground`),
+       donde conviene más oscuro. */
+    --primary: var(--color-marca-600);
     --primary-foreground: oklch(0.985 0 0);
     --secondary: oklch(0.965 0.008 255);
-    --secondary-foreground: var(--color-indigo-800);
+    --secondary-foreground: var(--color-marca-800);
     --muted: oklch(0.965 0.008 255);
     --muted-foreground: oklch(0.53 0.03 258);
-    --accent: var(--color-indigo-50);
-    --accent-foreground: var(--color-indigo-800);
+    --accent: var(--color-marca-50);
+    --accent-foreground: var(--color-marca-800);
     --destructive: oklch(0.577 0.245 27.325);
     --destructive-foreground: oklch(0.577 0.245 27.325);
     --border: oklch(0.912 0.012 255);
     --input: oklch(0.912 0.012 255);
-    --ring: var(--color-indigo-500);
-    --chart-1: var(--color-indigo-800);
-    --chart-2: var(--color-indigo-600);
-    --chart-3: var(--color-indigo-400);
-    --chart-4: var(--color-indigo-300);
-    --chart-5: var(--color-indigo-200);
+    --ring: var(--color-marca-500);
+    --chart-1: var(--color-marca-800);
+    --chart-2: var(--color-marca-600);
+    --chart-3: var(--color-marca-400);
+    --chart-4: var(--color-marca-300);
+    --chart-5: var(--color-marca-200);
     --radius: 7px;
     --sidebar: oklch(0.98 0.006 255);
     --sidebar-foreground: oklch(0.18 0.02 260);
-    --sidebar-primary: var(--color-indigo-600);
+    --sidebar-primary: var(--color-marca-600);
     --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: var(--color-indigo-50);
-    --sidebar-accent-foreground: var(--color-indigo-800);
+    --sidebar-accent: var(--color-marca-50);
+    --sidebar-accent-foreground: var(--color-marca-800);
     --sidebar-border: oklch(0.912 0.012 255);
-    --sidebar-ring: var(--color-indigo-500);
+    --sidebar-ring: var(--color-marca-500);
 }
 
 .dark {
@@ -139,8 +143,8 @@
     --card-foreground: oklch(0.975 0.006 255);
     --popover: oklch(0.205 0.032 261);
     --popover-foreground: oklch(0.975 0.006 255);
-    --primary: var(--color-indigo-300);
-    --primary-foreground: var(--color-indigo-950);
+    --primary: var(--color-marca-300);
+    --primary-foreground: var(--color-marca-950);
     --secondary: oklch(0.272 0.038 260);
     --secondary-foreground: oklch(0.975 0.006 255);
     --muted: oklch(0.272 0.038 260);
@@ -151,20 +155,20 @@
     --destructive-foreground: oklch(0.637 0.237 25.331);
     --border: oklch(0.29 0.038 260);
     --input: oklch(0.29 0.038 260);
-    --ring: var(--color-indigo-400);
-    --chart-1: var(--color-indigo-300);
-    --chart-2: var(--color-indigo-400);
-    --chart-3: var(--color-indigo-500);
-    --chart-4: var(--color-indigo-600);
-    --chart-5: var(--color-indigo-200);
+    --ring: var(--color-marca-400);
+    --chart-1: var(--color-marca-300);
+    --chart-2: var(--color-marca-400);
+    --chart-3: var(--color-marca-500);
+    --chart-4: var(--color-marca-600);
+    --chart-5: var(--color-marca-200);
     --sidebar: oklch(0.205 0.032 261);
     --sidebar-foreground: oklch(0.975 0.006 255);
-    --sidebar-primary: var(--color-indigo-300);
-    --sidebar-primary-foreground: var(--color-indigo-950);
+    --sidebar-primary: var(--color-marca-300);
+    --sidebar-primary-foreground: var(--color-marca-950);
     --sidebar-accent: oklch(0.272 0.038 260);
     --sidebar-accent-foreground: oklch(0.975 0.006 255);
     --sidebar-border: oklch(0.29 0.038 260);
-    --sidebar-ring: var(--color-indigo-400);
+    --sidebar-ring: var(--color-marca-400);
 }
 
 @layer base {
@@ -180,7 +184,7 @@
 /* Etiqueta de placa permanente sobre los marcadores del mapa de flota.
    Color de marca a propósito: el estado (ámbar/rojo/gris) lo indica el auto. */
 .leaflet-tooltip.placa-tooltip {
-    background: var(--color-indigo-900);
+    background: var(--color-marca-900);
     color: #fff;
     border: none;
     border-radius: 0;
@@ -192,5 +196,5 @@
 }
 
 .leaflet-tooltip.placa-tooltip::before {
-    border-top-color: var(--color-indigo-900);
+    border-top-color: var(--color-marca-900);
 }

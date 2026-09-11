@@ -13,13 +13,17 @@ class AdminSeeder extends Seeder
      * Se recrea en cada `migrate:fresh --seed` para que el sistema nunca quede
      * sin acceso. La contraseña sale de ADMIN_PASSWORD; el valor por defecto
      * solo sirve para desarrollo y debe cambiarse antes de salir a producción.
+     *
+     * Se identifica por `username` y no por correo: el correo es opcional en el
+     * resto de las cuentas y acá era la clave de búsqueda.
      */
     public function run(): void
     {
         $admin = User::updateOrCreate(
-            ['email' => config('transpaty.admin.email')],
+            ['username' => config('transpaty.admin.username')],
             [
                 'name' => config('transpaty.admin.name'),
+                'email' => config('transpaty.admin.email'),
                 'password' => config('transpaty.admin.password'),
             ],
         );

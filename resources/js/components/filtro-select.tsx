@@ -1,3 +1,4 @@
+import { FiltroBuscable } from '@/components/filtro-buscable';
 import {
     Select,
     SelectContent,
@@ -10,10 +11,22 @@ import type { EnumOption } from '@/types/fleet';
 const TODOS = 'todos';
 
 /**
- * Un selector de filtro con opción "todos" — usado por `VehiculoFiltros` y
- * `viajes/index`, junto a `FiltrosBarra`. Ocupa todo el ancho dentro del
- * panel móvil y se ajusta al contenido en escritorio, donde comparte fila
- * con la búsqueda.
+ * A partir de esta cantidad de opciones el desplegable deja de servir: la
+ * lista tapa media pantalla y hay que recorrerla a ojo. Ahí se pasa solo al
+ * buscador. El número no tiene nada de especial —es donde «Estado» o «Carga»,
+ * que son listas cortas y cerradas, siguen cómodos como desplegable, y
+ * «Cliente» o «Destino», que crecen con los datos, ya no.
+ */
+const MAXIMO_DESPLEGABLE = 12;
+
+/**
+ * Un selector de filtro con opción "todos" — usado por `VehiculoFiltros`,
+ * `viajes/index` y la cobranza, junto a `FiltrosBarra`. Ocupa todo el ancho
+ * dentro del panel móvil y se ajusta al contenido en escritorio, donde
+ * comparte fila con la búsqueda.
+ *
+ * Elige solo cómo mostrarse según cuántas opciones reciba, así un filtro que
+ * crece con los datos no hay que ir a cambiarlo a mano cuando se pone largo.
  */
 export function FiltroSelect({
     valor,
@@ -28,6 +41,18 @@ export function FiltroSelect({
     etiqueta: string;
     opciones: EnumOption[];
 }) {
+    if (opciones.length > MAXIMO_DESPLEGABLE) {
+        return (
+            <FiltroBuscable
+                valor={valor}
+                onCambio={onCambio}
+                todos={todos}
+                etiqueta={etiqueta}
+                opciones={opciones}
+            />
+        );
+    }
+
     return (
         <Select
             value={valor ?? TODOS}
