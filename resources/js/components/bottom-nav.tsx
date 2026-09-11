@@ -1,17 +1,20 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import {
     CalendarCheck,
     IconContext,
     IdentificationCard,
     Path,
+    Receipt,
     SquaresFour,
     Truck,
 } from '@phosphor-icons/react';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
+import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import { useCurrentUrl } from '@/hooks/use-current-url';
+import { usePermisos } from '@/hooks/use-permisos';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
@@ -27,21 +30,32 @@ import type { NavItem } from '@/types';
  * de cinco destinos acá y ninguno se puede tocar sin errarle.
  */
 export function BottomNav() {
-    const { auth } = usePage().props;
-    const esAdmin = auth.roles.includes('admin');
-    const puedeGestionar = esAdmin || auth.roles.includes('visor');
+    const { esAdmin, esContador, puedeVerOperacion } = usePermisos();
     const { isCurrentOrParentUrl } = useCurrentUrl();
 
     const items: NavItem[] = [
         { title: 'Inicio', href: dashboard(), icon: SquaresFour },
         { title: 'Tractos', href: vehiculos.tractos(), icon: Truck },
-        ...(puedeGestionar
+        ...(puedeVerOperacion || esContador
+            ? [{ title: 'Viajes', href: viajes.index(), icon: Path }]
+            : []),
+        ...(puedeVerOperacion
             ? [
-                  { title: 'Viajes', href: viajes.index(), icon: Path },
                   {
                       title: 'Conductores',
                       href: conductores.index(),
                       icon: IdentificationCard,
+                  },
+              ]
+            : []),
+        // Para el contador la cobranza es su pantalla, no una más: por eso
+        // entra al pulgar aunque el admin ya tenga cinco destinos acá.
+        ...(esContador
+            ? [
+                  {
+                      title: 'Cobranza',
+                      href: contabilidad.index(),
+                      icon: Receipt,
                   },
               ]
             : []),

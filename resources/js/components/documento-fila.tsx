@@ -5,6 +5,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { TableCell, TableRow } from '@/components/ui/table';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { estiloDocumento } from '@/lib/documentos';
 import { formatearFecha } from '@/lib/format';
@@ -13,7 +14,7 @@ import type { RanuraDocumental } from '@/types/fleet';
 
 type Props = {
     ranura: RanuraDocumental;
-    puedeGestionar: boolean;
+    puedeEditar: boolean;
     /** Se llama al confirmar el borrado del documento cargado. */
     onEliminar: () => void;
     /**
@@ -33,7 +34,7 @@ type Props = {
  */
 export function DocumentoFila({
     ranura,
-    puedeGestionar,
+    puedeEditar,
     onEliminar,
     renderCargar,
 }: Props) {
@@ -41,8 +42,8 @@ export function DocumentoFila({
     const tema = estiloDocumento[estado];
 
     return (
-        <tr className="border-b last:border-0 hover:bg-muted/40">
-            <td className="max-w-0 p-3">
+        <TableRow>
+            <TableCell className="max-w-0">
                 <p
                     className={cn(
                         'truncate text-sm',
@@ -57,9 +58,9 @@ export function DocumentoFila({
                         {documento.numero}
                     </p>
                 )}
-            </td>
+            </TableCell>
 
-            <td className="p-3 text-sm whitespace-nowrap tabular-nums">
+            <TableCell className="text-sm whitespace-nowrap tabular-nums">
                 {documento?.fecha_vencimiento ? (
                     <span
                         className={cn(
@@ -74,9 +75,9 @@ export function DocumentoFila({
                 ) : (
                     <span className="text-muted-foreground">—</span>
                 )}
-            </td>
+            </TableCell>
 
-            <td className="p-3">
+            <TableCell>
                 <span
                     className={cn(
                         'inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium whitespace-nowrap',
@@ -89,12 +90,12 @@ export function DocumentoFila({
                     />
                     {ranura.estado_label}
                 </span>
-            </td>
+            </TableCell>
 
-            <td className="p-3">
+            <TableCell>
                 <div className="flex items-center justify-end gap-0.5">
                     {documento === null
-                        ? puedeGestionar &&
+                        ? puedeEditar &&
                           renderCargar(
                               <button
                                   type="button"
@@ -133,7 +134,7 @@ export function DocumentoFila({
                                 }
                             />
 
-                            {puedeGestionar && (
+                            {puedeEditar && (
                                 <DropdownMenu>
                                     <DropdownMenuTrigger
                                         title={`Acciones de ${ranura.label}`}
@@ -156,7 +157,7 @@ export function DocumentoFila({
                         </>
                     )}
                 </div>
-            </td>
-        </tr>
+            </TableCell>
+        </TableRow>
     );
 }

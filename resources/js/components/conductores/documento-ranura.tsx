@@ -8,7 +8,7 @@ type Props = {
     ranura: RanuraDocumental;
     conductorId: number;
     tipos: EnumOption[];
-    puedeGestionar: boolean;
+    puedeEditar: boolean;
 };
 
 /**
@@ -19,12 +19,12 @@ export function DocumentoRanuraConductor({
     ranura,
     conductorId,
     tipos,
-    puedeGestionar,
+    puedeEditar,
 }: Props) {
     return (
         <DocumentoTarjeta
             ranura={ranura}
-            puedeGestionar={puedeGestionar}
+            puedeEditar={puedeEditar}
             onEliminar={() => {
                 if (ranura.documento === null) {
                     return;

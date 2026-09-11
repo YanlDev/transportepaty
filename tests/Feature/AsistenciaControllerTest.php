@@ -78,14 +78,14 @@ it('builds a cycle starting on the 28th that runs through the day before the nex
 });
 
 it('defaults to the cycle in progress today when no cycle is requested', function (): void {
-    $this->travelTo(CarbonImmutable::parse('2026-02-27'));
+    $this->travelTo(CarbonImmutable::parse('2026-02-27 12:00:00'));
 
     actingAs(actorConRol('admin'))
         ->get(route('asistencia.index'))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page->where('inicioCiclo', '2026-01-28'));
 
-    $this->travelTo(CarbonImmutable::parse('2026-02-28'));
+    $this->travelTo(CarbonImmutable::parse('2026-02-28 12:00:00'));
 
     actingAs(actorConRol('admin'))
         ->get(route('asistencia.index'))
@@ -178,6 +178,27 @@ it('lets an admin clear a mark back to unmarked', function (): void {
         ->assertSessionHasNoErrors();
 
     expect(Asistencia::query()->count())->toBe(0);
+});
+
+/**
+ * Desmarcar un día es su propio permiso, no el de corregirlo: el controlador
+ * autorizaba con `update` porque la policy no tenía `delete`.
+ */
+it('keeps everyone but the admin from clearing a mark', function (): void {
+    $conductor = Conductor::factory()->create();
+    $asistencia = Asistencia::create([
+        'conductor_id' => $conductor->id,
+        'fecha' => '2026-08-03',
+        'estado' => EstadoAsistencia::Falta,
+    ]);
+
+    foreach (['visor', 'conductor', 'contador'] as $rol) {
+        actingAs(actorConRol($rol))
+            ->delete(route('asistencia.destroy', $asistencia))
+            ->assertForbidden();
+    }
+
+    expect(Asistencia::query()->count())->toBe(1);
 });
 
 it('rejects an invalid estado', function (): void {

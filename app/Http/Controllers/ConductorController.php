@@ -12,6 +12,7 @@ use App\Models\Conductor;
 use App\Models\User;
 use App\Models\Viaje;
 use App\Services\CalendarioAsistenciaService;
+use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -154,8 +155,8 @@ class ConductorController extends Controller
         $porEstadoEsteMes = $puedeVerAsistencia
             ? $conductor->asistencias()
                 ->whereBetween('fecha', [
-                    now()->startOfMonth()->toDateString(),
-                    now()->endOfMonth()->toDateString(),
+                    RelojOperativo::inicioDelMes()->toDateString(),
+                    RelojOperativo::finDelMes()->toDateString(),
                 ])
                 ->get()
                 ->countBy(fn (Asistencia $asistencia): string => $asistencia->estado->value)

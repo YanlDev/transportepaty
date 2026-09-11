@@ -176,13 +176,13 @@ return new class extends Migration
             ],
         ];
 
-        return array_values(array_map(fn (array $componente, int $indice): array => [
+        return array_map(fn (array $componente, int $indice): array => [
             ...$componente,
             'entradas' => json_encode($componente['entradas']),
             'orden' => $indice + 1,
             'activo' => true,
             'created_at' => now(),
             'updated_at' => now(),
-        ], $componentes, array_keys($componentes)));
+        ], $componentes, array_keys($componentes));
     }
 };

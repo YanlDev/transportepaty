@@ -1,11 +1,11 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { Calculator, Plus, Settings2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import cotizaciones, {
     create,
     show,
 } from '@/actions/App/Http/Controllers/CotizacionController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
+import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -16,6 +16,8 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { useFiltros } from '@/hooks/use-filtros';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha } from '@/lib/format';
 import type { CotizacionListItem, EnumOption, Paginator } from '@/types/fleet';
 
@@ -37,37 +39,14 @@ export default function CotizacionesIndex({
     filtros,
     estados,
 }: Props) {
-    const { auth } = usePage().props;
-    const puedeGestionar = auth.roles.includes('admin');
+    const { puedeEditar } = usePermisos();
 
-    const [buscar, setBuscar] = useState(filtros.buscar ?? '');
+    const { buscar, setBuscar, aplicar } = useFiltros(
+        filtros,
+        cotizaciones.index().url,
+    );
 
-    useEffect(() => {
-        if (buscar === (filtros.buscar ?? '')) {
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            router.get(
-                cotizaciones.index().url,
-                {
-                    buscar: buscar || undefined,
-                    estado: filtros.estado ?? undefined,
-                },
-                { preserveState: true, preserveScroll: true, replace: true },
-            );
-        }, 300);
-
-        return () => clearTimeout(timeout);
-    }, [buscar, filtros.buscar, filtros.estado]);
-
-    const filtrarPorEstado = (estado: string | null) => {
-        router.get(
-            cotizaciones.index().url,
-            { buscar: buscar || undefined, estado: estado ?? undefined },
-            { preserveState: true, preserveScroll: true, replace: true },
-        );
-    };
+    const filtrarPorEstado = (estado: string | null) => aplicar({ estado });
 
     return (
         <div className="mx-auto flex h-full w-full max-w-[1400px] flex-1 flex-col gap-4 p-4 md:p-6">
@@ -86,7 +65,7 @@ export default function CotizacionesIndex({
                     </p>
                 </div>
 
-                {puedeGestionar && (
+                {puedeEditar && (
                     <div className="flex flex-wrap items-center gap-2">
                         <Button asChild variant="outline">
                             <Link href={parametrosCosto.edit()}>
@@ -137,18 +116,16 @@ export default function CotizacionesIndex({
             </div>
 
             {paginador.data.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
-                        <Calculator className="size-7" />
-                    </div>
-                    <p className="font-medium">
-                        No hay cotizaciones que mostrar
-                    </p>
-                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                        Ajusta la búsqueda
-                        {puedeGestionar && ' o arma una tarifa nueva'}.
-                    </p>
-                </div>
+                <EmptyState
+                    icono={<Calculator className="size-7" />}
+                    titulo="No hay cotizaciones que mostrar"
+                    descripcion={
+                        <>
+                            Ajusta la búsqueda
+                            {puedeEditar && ' o arma una tarifa nueva'}.
+                        </>
+                    }
+                />
             ) : (
                 <>
                     <div className="flex flex-col gap-2 lg:hidden">

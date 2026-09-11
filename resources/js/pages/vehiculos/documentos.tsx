@@ -1,4 +1,4 @@
-import { Head, Link, setLayoutProps, usePage } from '@inertiajs/react';
+import { Head, Link, setLayoutProps } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 import vehiculos, {
     show,
@@ -7,6 +7,7 @@ import { index as documentosIndex } from '@/actions/App/Http/Controllers/Vehicul
 import { Button } from '@/components/ui/button';
 import { AgregarDocumentoDialog } from '@/components/vehiculos/agregar-documento-dialog';
 import { DocumentoRanura } from '@/components/vehiculos/documento-ranura';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearPlaca } from '@/lib/format';
 import type { EnumOption, RanuraDocumental } from '@/types/fleet';
 
@@ -30,8 +31,7 @@ export default function VehiculoDocumentos({
     ranuras,
     tiposDocumento,
 }: Props) {
-    const { auth } = usePage().props;
-    const puedeGestionar = auth.roles.includes('admin');
+    const { puedeEditar } = usePermisos();
     const esTracto = vehiculo.tipo === 'tracto';
 
     setLayoutProps({
@@ -73,7 +73,7 @@ export default function VehiculoDocumentos({
                     </p>
                 </div>
 
-                {puedeGestionar && (
+                {puedeEditar && (
                     <AgregarDocumentoDialog
                         vehiculoId={vehiculo.id}
                         tipos={tiposDocumento}
@@ -88,7 +88,7 @@ export default function VehiculoDocumentos({
                         ranura={ranura}
                         vehiculoId={vehiculo.id}
                         tipos={tiposDocumento}
-                        puedeGestionar={puedeGestionar}
+                        puedeEditar={puedeEditar}
                     />
                 ))}
             </div>

@@ -28,7 +28,9 @@ return new class extends Migration
         foreach ($porRuc as $ruc => $viajes) {
             // La razón social más repetida de ese RUC: si una GR la escribió
             // distinto, manda la grafía mayoritaria.
-            $razonSocial = $viajes
+            // `countBy` deja la razón social como clave y PHP convierte a
+            // entero las que parecen número; se devuelve a texto al leerla.
+            $razonSocial = (string) $viajes
                 ->countBy('cliente')
                 ->sortDesc()
                 ->keys()

@@ -72,6 +72,30 @@ it('orders the list by how much each client moves', function (): void {
         );
 });
 
+/**
+ * La escala de la barra de proporción es el tope global y no el de la página,
+ * para que una barra llena signifique lo mismo en la página 1 que en la 2.
+ */
+it('scales the bar against the busiest client of the whole padrón', function (): void {
+    $mucho = Cliente::factory()->create(['alias' => 'Mucho']);
+    $poco = Cliente::factory()->create(['alias' => 'Poco']);
+
+    Viaje::factory()->count(4)->create(['cliente_id' => $mucho->id]);
+    Viaje::factory()->create(['cliente_id' => $poco->id]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('clientes.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('maxViajes', 4));
+});
+
+it('leaves the bar scale at zero when no trip is linked to the padrón', function (): void {
+    Cliente::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('clientes.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('maxViajes', 0));
+});
+
 it('finds a client by alias, razón social or RUC', function (): void {
     Cliente::factory()->create([
         'alias' => 'Minsur',
@@ -175,7 +199,7 @@ it('shows the client ficha with its recent trips', function (): void {
 });
 
 it('compares this month against the previous one in the ficha', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     $cliente = Cliente::factory()->create();
 
@@ -198,7 +222,7 @@ it('compares this month against the previous one in the ficha', function (): voi
 });
 
 it('leaves the variation null when there is no previous month to compare against', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     $cliente = Cliente::factory()->create();
     Viaje::factory()->create([

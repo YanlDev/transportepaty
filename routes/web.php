@@ -4,8 +4,11 @@ use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
+use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\CotizacionController;
+use App\Http\Controllers\CuentaBancariaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\ParametroCostoController;
 use App\Http\Controllers\UserController;
@@ -67,6 +70,28 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::patch('viajes/{viaje}/tipo-carga', [ViajeController::class, 'actualizarTipoCarga'])
         ->name('viajes.actualizarTipoCarga');
     Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])->name('viajes.destroy');
+
+    // La cobranza: la misma tabla de viajes leída desde el dinero. Las
+    // cuentas van antes del resto para que `cuentas-bancarias` no se confunda
+    // con un parámetro de contabilidad.
+    Route::get('contabilidad', [ContabilidadController::class, 'index'])->name('contabilidad.index');
+    Route::get('contabilidad/cuentas', [CuentaBancariaController::class, 'index'])
+        ->name('cuentas-bancarias.index');
+    Route::post('contabilidad/cuentas', [CuentaBancariaController::class, 'store'])
+        ->name('cuentas-bancarias.store');
+    Route::put('contabilidad/cuentas/{cuenta}', [CuentaBancariaController::class, 'update'])
+        ->name('cuentas-bancarias.update');
+    Route::delete('contabilidad/cuentas/{cuenta}', [CuentaBancariaController::class, 'destroy'])
+        ->name('cuentas-bancarias.destroy');
+
+    Route::post('facturas', [FacturaController::class, 'store'])->name('facturas.store');
+    // PATCH y no PUT: la cobranza se edita celda por celda y cada guardado
+    // manda solo el campo que se acaba de tocar.
+    Route::patch('facturas/{factura}', [FacturaController::class, 'update'])->name('facturas.update');
+    Route::delete('facturas/{factura}', [FacturaController::class, 'destroy'])->name('facturas.destroy');
+    // Sacar un solo viaje de su factura, sin anular la factura entera.
+    Route::delete('viajes/{viaje}/factura', [FacturaController::class, 'desvincular'])
+        ->name('facturas.desvincular');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');

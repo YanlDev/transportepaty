@@ -301,7 +301,16 @@ class ExportarAsistenciasPlanilla extends Command
 
         $rId = null;
 
-        foreach ($workbook->xpath('//m:sheet') as $sheet) {
+        // `xpath()` devuelve `false` si el XML está malformado. Sin el guardia,
+        // eso reventaba dentro del `foreach` con un error de tipo en vez de
+        // decir qué archivo vino mal.
+        $hojas = $workbook->xpath('//m:sheet');
+
+        if ($hojas === false) {
+            throw new RuntimeException('No se pudo leer la lista de hojas de xl/workbook.xml.');
+        }
+
+        foreach ($hojas as $sheet) {
             $atributos = $sheet->attributes();
             $atributosR = $sheet->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships');
 
@@ -319,7 +328,13 @@ class ExportarAsistenciasPlanilla extends Command
         $rels = new \SimpleXMLElement($relsXml);
         $rels->registerXPathNamespace('p', 'http://schemas.openxmlformats.org/package/2006/relationships');
 
-        foreach ($rels->xpath('//p:Relationship') as $relacion) {
+        $relaciones = $rels->xpath('//p:Relationship');
+
+        if ($relaciones === false) {
+            throw new RuntimeException('No se pudieron leer las relaciones de xl/_rels/workbook.xml.rels.');
+        }
+
+        foreach ($relaciones as $relacion) {
             $atributos = $relacion->attributes();
 
             if ((string) $atributos['Id'] === $rId) {
@@ -368,7 +383,9 @@ class ExportarAsistenciasPlanilla extends Command
             /** @var \DOMElement $celda */
             $celda = $nodos->item(0);
 
-            if ($xpath->query('m:f', $celda)->length > 0) {
+            $formulas = $xpath->query('m:f', $celda);
+
+            if ($formulas !== false && $formulas->length > 0) {
                 $this->warn("  celda {$coordenada} tiene una fórmula, se saltó para no pisarla.");
 
                 continue;
@@ -393,6 +410,12 @@ class ExportarAsistenciasPlanilla extends Command
             $celda->appendChild($is);
         }
 
-        return $dom->saveXML();
+        $xml = $dom->saveXML();
+
+        if ($xml === false) {
+            throw new RuntimeException('No se pudo serializar la hoja modificada.');
+        }
+
+        return $xml;
     }
 }

@@ -10,6 +10,7 @@ use App\Models\Asistencia;
 use App\Models\Conductor;
 use App\Models\DescansoDebido;
 use App\Services\CalendarioAsistenciaService;
+use App\Services\RelojOperativo;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
@@ -157,7 +158,7 @@ class AsistenciaController extends Controller
      */
     public function destroy(Asistencia $asistencia): RedirectResponse
     {
-        $this->authorize('update', $asistencia);
+        $this->authorize('delete', $asistencia);
 
         $asistencia->delete();
 
@@ -173,9 +174,9 @@ class AsistenciaController extends Controller
         $inicio = $request->string('inicio')->value();
 
         try {
-            return $inicio === '' ? $this->cicloDe(CarbonImmutable::now()) : CarbonImmutable::parse($inicio);
+            return $inicio === '' ? $this->cicloDe(RelojOperativo::fechaDeHoy()) : CarbonImmutable::parse($inicio);
         } catch (\Exception) {
-            return $this->cicloDe(CarbonImmutable::now());
+            return $this->cicloDe(RelojOperativo::fechaDeHoy());
         }
     }
 

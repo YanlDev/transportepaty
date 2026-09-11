@@ -31,7 +31,9 @@ class ClasificarCargaMinsur extends Command
         $reclasificados = $sinPatron = 0;
 
         foreach ($viajes as $viaje) {
-            $tipoCarga = $this->importador->clasificarCarga($viaje->guias_remitente ?? []);
+            // `array_values` porque el JSON guardado puede volver con las
+            // claves salteadas y el clasificador espera una lista.
+            $tipoCarga = $this->importador->clasificarCarga(array_values($viaje->guias_remitente ?? []));
 
             if ($tipoCarga === null) {
                 $sinPatron++;

@@ -52,9 +52,13 @@ return [
 
     'channels' => [
 
+        // Por defecto `daily` y no `single`: con un solo archivo el log crece
+        // sin techo —llegó a 3 MB en desarrollo, sin nadie mirándolo— y buscar
+        // el error de ayer obliga a recorrer meses. La rotación diaria guarda
+        // `LOG_DAILY_DAYS` días y descarta el resto sola.
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => explode(',', (string) env('LOG_STACK', 'daily')),
             'ignore_exceptions' => false,
         ],
 

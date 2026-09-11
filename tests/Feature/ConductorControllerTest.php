@@ -92,7 +92,7 @@ it('exposes the edit form with a date-only license expiry', function (): void {
 it('includes the full-year asistencia calendar for an admin, defaulting to the current year', function (): void {
     $conductor = Conductor::factory()->create();
 
-    $this->travelTo(CarbonImmutable::parse('2026-08-15'));
+    $this->travelTo(CarbonImmutable::parse('2026-08-15 12:00:00'));
 
     actingAs(actorConRol('admin'))
         ->get(route('conductores.show', $conductor))
@@ -131,7 +131,7 @@ it('shows the requested year in the asistencia calendar', function (): void {
 it('defaults to the current year in the asistencia calendar when anio is invalid', function (): void {
     $conductor = Conductor::factory()->create();
 
-    $this->travelTo(CarbonImmutable::parse('2026-08-15'));
+    $this->travelTo(CarbonImmutable::parse('2026-08-15 12:00:00'));
 
     actingAs(actorConRol('admin'))
         ->get(route('conductores.show', [$conductor, 'anio' => -5]))
@@ -305,7 +305,7 @@ it('lets a visor see the recent trips of a conductor', function (): void {
 it('summarises trips, this month\'s attendance and documents in the ficha stats', function (): void {
     $conductor = Conductor::factory()->create();
 
-    $this->travelTo(CarbonImmutable::parse('2026-08-20'));
+    $this->travelTo(CarbonImmutable::parse('2026-08-20 12:00:00'));
 
     Viaje::factory()->create([
         'conductor_id' => $conductor->id,
@@ -471,7 +471,7 @@ it('requires a motivo when deactivating a conductor', function (): void {
 it('defaults fecha_baja to today when deactivating without one', function (): void {
     $conductor = Conductor::factory()->create(['activo' => true]);
 
-    $this->travelTo('2026-09-04');
+    $this->travelTo('2026-09-04 12:00:00');
 
     actingAs(actorConRol('admin'))
         ->put(route('conductores.update', $conductor), datosConductor([
@@ -510,7 +510,7 @@ it('clears fecha_baja and motivo_baja when reactivating a conductor', function (
 it('serves the full year of asistencia on its own page', function (): void {
     $conductor = Conductor::factory()->create();
 
-    $this->travelTo(CarbonImmutable::parse('2026-08-15'));
+    $this->travelTo(CarbonImmutable::parse('2026-08-15 12:00:00'));
 
     actingAs(actorConRol('admin'))
         ->get(route('conductores.asistencia', $conductor))

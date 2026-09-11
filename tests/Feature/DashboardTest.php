@@ -26,6 +26,25 @@ it('redirects guests to login', function (): void {
     $this->get(route('dashboard'))->assertRedirect(route('login'));
 });
 
+/**
+ * El tablero junta la meta mensual, la mezcla de carga por cliente y el estado
+ * documental de toda la flota. El rol `conductor` existe para que un chofer
+ * consulte su unidad, no para leer la operación completa.
+ */
+it('keeps the conductor out of the tablero', function (): void {
+    actingAs(actorConRol('conductor'))
+        ->get(route('dashboard'))
+        ->assertForbidden();
+});
+
+it('lets the admin, the visor and the contador see the tablero', function (): void {
+    foreach (['admin', 'visor', 'contador'] as $rol) {
+        actingAs(actorConRol($rol))
+            ->get(route('dashboard'))
+            ->assertSuccessful();
+    }
+});
+
 it('summarises the fleet by type and status in the resumen tiles', function (): void {
     Vehiculo::factory()->count(2)->create(['estado' => EstadoVehiculo::Activo]);
     Vehiculo::factory()->create(['estado' => EstadoVehiculo::EnMantenimiento]);
@@ -86,7 +105,7 @@ it('counts active novedades for the not-schedulable tile', function (): void {
 });
 
 it('breaks down Minsur cargo by tipo for the range, counting one per real trip not per GR', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     // Dos GR del mismo camión, mismo conductor, mismo día: es una sola
     // salida (ver `Viaje::claveGrupoViaje()`) y debe contar una sola vez.
@@ -109,7 +128,7 @@ it('breaks down Minsur cargo by tipo for the range, counting one per real trip n
 });
 
 it('matches Minsur regardless of the spacing variant in the razón social', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     Viaje::factory()->create(['cliente' => 'MINSUR S. A.', 'fecha_traslado' => '2026-08-10']);
 
@@ -122,7 +141,7 @@ it('matches Minsur regardless of the spacing variant in the razón social', func
 });
 
 it('defaults the range to the current month', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-07-05']);
     Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
@@ -141,7 +160,7 @@ it('defaults the range to the current month', function (): void {
 });
 
 it('widens the range to the last three months when asked', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-06-05']);
     Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
@@ -159,7 +178,7 @@ it('widens the range to the last three months when asked', function (): void {
 });
 
 it('falls back to the current month when the periodo is not one of the presets', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard', ['periodo' => 'inventado']))
@@ -170,7 +189,7 @@ it('falls back to the current month when the periodo is not one of the presets',
 });
 
 it('counts one trip for the same unit across two consecutive days (Mur-Wy case)', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     $primeraGr = Viaje::factory()->create(['cliente' => 'MUR - WY S.A.C.', 'fecha_traslado' => '2026-08-03']);
     Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'MUR - WY S.A.C.', 'fecha_traslado' => '2026-08-03']);
@@ -185,7 +204,7 @@ it('counts one trip for the same unit across two consecutive days (Mur-Wy case)'
 });
 
 it('counts trips per client with its share, Minsur included', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     $primeraGr = Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-08-05']);
     Viaje::factory()->delMismoViajeQue($primeraGr)->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-08-05']);
@@ -211,7 +230,7 @@ it('counts trips per client with its share, Minsur included', function (): void 
 });
 
 it('splits trips between Minsur and everyone else', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     Viaje::factory()->deMinsur()->create(['fecha_traslado' => '2026-08-05']);
     Viaje::factory()->deMinsur()->create(['fecha_traslado' => '2026-08-06']);
@@ -288,7 +307,7 @@ it('summarises how many units are available today', function (): void {
 });
 
 it('lists the last registered trips regardless of the range', function (): void {
-    $this->travelTo('2026-09-10');
+    $this->travelTo('2026-09-10 12:00:00');
 
     $viejo = Viaje::factory()->create(['fecha_traslado' => '2026-05-01']);
     $nuevo = Viaje::factory()->create(['fecha_traslado' => '2026-09-08']);
@@ -303,7 +322,7 @@ it('lists the last registered trips regardless of the range', function (): void 
 });
 
 it('tracks progress toward the monthly concentrado goal for the current month, counting real trips not GR rows', function (): void {
-    $this->travelTo('2026-08-10');
+    $this->travelTo('2026-08-10 12:00:00');
 
     // Dos GR de la misma salida: un solo viaje real.
     $primeraGr = Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-08-01']);
@@ -328,7 +347,7 @@ it('tracks progress toward the monthly concentrado goal for the current month, c
 });
 
 it('leaves ritmoNecesario null on the last day of the month', function (): void {
-    $this->travelTo('2026-08-31');
+    $this->travelTo('2026-08-31 12:00:00');
 
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
@@ -339,7 +358,7 @@ it('leaves ritmoNecesario null on the last day of the month', function (): void 
 });
 
 it('keeps persona natural clients in the same viajesPorCliente list as empresas', function (): void {
-    $this->travelTo('2026-08-20');
+    $this->travelTo('2026-08-20 12:00:00');
 
     Viaje::factory()->create(['cliente' => 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN', 'fecha_traslado' => '2026-08-05']);
     Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-08-06']);

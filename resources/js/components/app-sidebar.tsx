@@ -1,4 +1,4 @@
-import { Link, usePage } from '@inertiajs/react';
+import { Link } from '@inertiajs/react';
 import {
     Calculator,
     CalendarCheck,
@@ -6,6 +6,7 @@ import {
     IdentificationCard,
     Path,
     Buildings,
+    Receipt,
     SquaresFour,
     Truck,
     TruckTrailer,
@@ -14,6 +15,7 @@ import {
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
+import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
@@ -30,6 +32,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { usePermisos } from '@/hooks/use-permisos';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
@@ -56,13 +59,15 @@ const navItems: NavItem[] = [
     },
 ];
 
+/** Los viajes: la lee también el contador, que factura contra ellos. */
+const viajesNavItem: NavItem = {
+    title: 'Viajes',
+    href: viajes.index(),
+    icon: Path,
+};
+
 /** Requiere rol admin o visor. */
 const gestionNavItems: NavItem[] = [
-    {
-        title: 'Viajes',
-        href: viajes.index(),
-        icon: Path,
-    },
     {
         title: 'Clientes',
         href: clientes.index(),
@@ -72,6 +77,15 @@ const gestionNavItems: NavItem[] = [
         title: 'Cotizaciones',
         href: cotizaciones.index(),
         icon: Calculator,
+    },
+];
+
+/** Solo para admin y contador: la cobranza y las cuentas de la empresa. */
+const contabilidadNavItems: NavItem[] = [
+    {
+        title: 'Contabilidad',
+        href: contabilidad.index(),
+        icon: Receipt,
     },
 ];
 
@@ -90,12 +104,13 @@ const adminNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const { auth } = usePage().props;
-    const esAdmin = auth.roles.includes('admin');
-    const puedeGestionar = esAdmin || auth.roles.includes('visor');
+    const { esAdmin, esContador, puedeVerOperacion } = usePermisos();
+    // El contador no gestiona la operación, pero sí lee los viajes: son la
+    // contrapartida de lo que factura.
+    const puedeVerViajes = puedeVerOperacion || esContador;
 
     // Conductores exige admin o visor; el conductor de a pie solo ve Vehículos.
-    const principales = puedeGestionar
+    const principales = puedeVerOperacion
         ? [
               ...navItems,
               {
@@ -127,7 +142,11 @@ export function AppSidebar() {
             <SidebarContent>
                 <IconContext.Provider value={{ weight: 'duotone' }}>
                     <NavMain items={principales} />
-                    {puedeGestionar && <NavMain items={gestionNavItems} />}
+                    {puedeVerViajes && <NavMain items={[viajesNavItem]} />}
+                    {puedeVerOperacion && <NavMain items={gestionNavItems} />}
+                    {(esAdmin || esContador) && (
+                        <NavMain items={contabilidadNavItems} />
+                    )}
                     {esAdmin && <NavMain items={adminNavItems} />}
                 </IconContext.Provider>
             </SidebarContent>

@@ -21,6 +21,29 @@ pest()->extend(TestCase::class)
 
 /*
 |--------------------------------------------------------------------------
+| Reloj de las pruebas
+|--------------------------------------------------------------------------
+|
+| La aplicación calcula en UTC pero deriva los días de calendario en hora de
+| Lima (ver `App\Services\RelojOperativo`). Entre las 19:00 y la medianoche de
+| Lima las dos zonas están en días distintos, así que una prueba que corriera
+| en ese rato vería «hoy» distinto según qué reloj mirara y fallaría sola.
+|
+| Congelarlas a mediodía elimina esa ambigüedad: a las 12:00 UTC son las 07:00
+| en Lima, el mismo día en ambas zonas, y una fixture escrita como
+| `now()->subDay()` significa exactamente «ayer» en los dos marcos.
+|
+| El borde en sí no queda sin probar: `RelojOperativoTest` se para a propósito
+| en la franja donde las zonas discrepan.
+|
+*/
+
+pest()->beforeEach(function (): void {
+    $this->travelTo(now()->setTime(12, 0));
+})->in('Feature');
+
+/*
+|--------------------------------------------------------------------------
 | Expectations
 |--------------------------------------------------------------------------
 |

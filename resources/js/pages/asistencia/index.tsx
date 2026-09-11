@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import asistencia, {
     destroy,
@@ -7,6 +7,7 @@ import asistencia, {
 } from '@/actions/App/Http/Controllers/AsistenciaController';
 import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
 import { EstadoAsistenciaOpciones } from '@/components/asistencia/estado-asistencia-opciones';
+import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -139,9 +140,11 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
             </div>
 
             {filasFiltradas.length === 0 ? (
-                <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed py-20 text-center text-sm text-muted-foreground">
-                    No se encontraron conductores.
-                </div>
+                <EmptyState
+                    icono={<User className="size-7" />}
+                    titulo="No se encontraron conductores"
+                    descripcion="Ajusta la búsqueda."
+                />
             ) : (
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                     {filasFiltradas.map((fila) => (

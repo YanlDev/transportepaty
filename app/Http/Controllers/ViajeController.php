@@ -71,54 +71,16 @@ class ViajeController extends Controller
             ->orderByDesc('id')
             ->paginate(25)
             ->withQueryString()
-            ->through(fn (Viaje $viaje): array => [
-                'id' => $viaje->id,
-                'numero_gr' => $viaje->numero_gr,
-                'guias_remitente' => $viaje->guias_remitente,
-                'grupo_viaje' => $viaje->claveGrupoViaje(),
-                'fecha_traslado' => $viaje->fecha_traslado->toDateString(),
-                'placa_tracto' => $viaje->placa_tracto,
-                'placa_carreta' => $viaje->placa_carreta,
-                'tracto_id' => $viaje->tracto_id,
-                'carreta_id' => $viaje->carreta_id,
-                'conductor_nombre' => $viaje->conductor_nombre,
-                'conductor_id' => $viaje->conductor_id,
-                'cliente' => $viaje->nombreCliente(),
-                'destinatario' => $viaje->destinatario,
-                'origen' => $viaje->origen,
-                'origen_ciudad' => $viaje->ciudadOrigen(),
-                'destino' => $viaje->destino,
-                'destino_ciudad' => $viaje->ciudadDestino(),
-                'tipo_carga' => $viaje->tipo_carga->value,
-                'tipo_carga_label' => $viaje->tipo_carga->label(),
-                'peso' => (float) $viaje->peso,
-                'unidad_peso' => $viaje->unidad_peso,
-                'archivo_url' => $viaje->getFirstMediaUrl('archivo') ?: null,
-            ]);
+            ->through(fn (Viaje $viaje): array => $viaje->datosDeListado());
 
         return Inertia::render('viajes/index', [
             'viajes' => $viajes,
             'filtros' => $filtros,
             'pendientes' => $this->pendientes()->count(),
             'tiposCarga' => TipoCarga::opcionesDeViaje(),
-            'clientes' => $this->opcionesClientes(),
+            'clientes' => Viaje::opcionesDeCliente(),
             'ciudadesDestino' => $this->opcionesCiudadesDestino(),
         ]);
-    }
-
-    /**
-     * @return array<int, array{value: string, label: string}>
-     */
-    private function opcionesClientes(): array
-    {
-        return Viaje::query()
-            ->select('cliente')
-            ->distinct()
-            ->orderBy('cliente')
-            ->pluck('cliente')
-            ->map(fn (string $cliente): array => ['value' => $cliente, 'label' => $cliente])
-            ->values()
-            ->all();
     }
 
     /**

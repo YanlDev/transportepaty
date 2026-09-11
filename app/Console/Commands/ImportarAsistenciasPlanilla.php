@@ -40,7 +40,10 @@ class ImportarAsistenciasPlanilla extends Command
     private const COLUMNA_PRIMER_DIA = 13; // M
 
     /**
-     * @var array<string, EstadoAsistencia>
+     * PHP convierte a entero las claves que son numéricas, así que el '1' de
+     * la planilla entra como int y el tipo tiene que admitir ambas.
+     *
+     * @var array<int|string, EstadoAsistencia>
      */
     private const MAPA_CODIGOS = [
         '1' => EstadoAsistencia::Asistencia,

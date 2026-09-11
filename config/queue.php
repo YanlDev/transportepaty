@@ -41,7 +41,12 @@ return [
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
             'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
-            'after_commit' => false,
+            // Los jobs se despachan recién cuando la transacción que los creó
+            // hizo commit. Hoy no hay ninguno encolado, pero el primero que
+            // aparezca va a nacer dentro de una transacción —así se escribe
+            // todo acá— y con `false` el worker podría tomarlo antes de que
+            // exista la fila que va a leer.
+            'after_commit' => true,
         ],
 
         'beanstalkd' => [

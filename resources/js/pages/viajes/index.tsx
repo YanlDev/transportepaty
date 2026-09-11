@@ -1,107 +1,24 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import {
-    AlertTriangle,
-    Eye,
-    FilePenLine,
-    RefreshCw,
-    Route as RouteIcon,
-    Trash2,
-    Upload,
-} from 'lucide-react';
-import { useMemo, useRef, useState } from 'react';
-import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
-import { show as mostrarVehiculo } from '@/actions/App/Http/Controllers/VehiculoController';
-import viajes, {
-    create,
-    resolver,
-    store,
-} from '@/actions/App/Http/Controllers/ViajeController';
-import { Copiable } from '@/components/copiable';
-import { DireccionCelda } from '@/components/direccion-celda';
+import { Head, Link } from '@inertiajs/react';
+import { FilePenLine, Route as RouteIcon } from 'lucide-react';
+import { useState } from 'react';
+import viajes, { create } from '@/actions/App/Http/Controllers/ViajeController';
+import { EmptyState } from '@/components/empty-state';
 import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
 import { Button } from '@/components/ui/button';
+import { Paginacion } from '@/components/ui/paginacion';
 import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
-import {
-    Tooltip,
-    TooltipContent,
-    TooltipProvider,
-    TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
-import { ClienteChip } from '@/components/viajes/cliente-chip';
-import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
-import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
+    ReintentarCoincidencias,
+    SubirGuias,
+} from '@/components/viajes/acciones-guias';
+import { TablaViajes } from '@/components/viajes/tabla-viajes';
 import { ViajeDetalleDialog } from '@/components/viajes/viaje-detalle-dialog';
 import { ViajeTarjetaMovil } from '@/components/viajes/viaje-tarjeta-movil';
-import { useViajeFiltros } from '@/hooks/use-viaje-filtros';
+import { usePermisos } from '@/hooks/use-permisos';
 import type { FiltrosViaje } from '@/hooks/use-viaje-filtros';
-import { formatearFecha, formatearPeso, formatearPlaca } from '@/lib/format';
-import { cn } from '@/lib/utils';
+import { useViajeFiltros } from '@/hooks/use-viaje-filtros';
+import { agruparViajes } from '@/lib/agrupar-viajes';
 import type { EnumOption, Paginator, ViajeListItem } from '@/types/fleet';
-
-type FilaViaje = {
-    viaje: ViajeListItem;
-    agrupado: boolean;
-    colorGrupo: string | null;
-};
-
-/**
- * Colores del borde de grupo, alternados entre grupos consecutivos — no por
- * significado (a diferencia del color de cliente), solo para que dos grupos
- * distintos que caen uno pegado al otro en la tabla (ej. dos placas
- * distintas, mismo día) no se lean como un borde continuo de un solo grupo.
- * Con 2 alcanza: grupos consecutivos nunca repiten color entre sí.
- */
-const COLORES_GRUPO = [
-    'border-l-primary',
-    'border-l-slate-400 dark:border-l-slate-500',
-] as const;
-
-/**
- * Una GR no es un viaje: el mismo camión puede salir una vez y llevar carga
- * de dos clientes, cada una con su propia GR (ver `Viaje::claveGrupoViaje`
- * en el backend). Acá solo se cuenta cuántas filas comparten esa clave —
- * si hay más de una, se marcan como agrupadas para que la tabla les ponga
- * un borde compartido en vez de tratarlas como viajes independientes.
- */
-function agruparViajes(datos: ViajeListItem[]): FilaViaje[] {
-    const conteos = new Map<string, number>();
-
-    for (const viaje of datos) {
-        conteos.set(
-            viaje.grupo_viaje,
-            (conteos.get(viaje.grupo_viaje) ?? 0) + 1,
-        );
-    }
-
-    let indiceGrupo = -1;
-    let claveAnterior: string | null = null;
-
-    return datos.map((viaje) => {
-        const agrupado = (conteos.get(viaje.grupo_viaje) ?? 0) > 1;
-
-        if (viaje.grupo_viaje !== claveAnterior) {
-            indiceGrupo++;
-            claveAnterior = viaje.grupo_viaje;
-        }
-
-        return {
-            viaje,
-            agrupado,
-            colorGrupo: agrupado
-                ? COLORES_GRUPO[indiceGrupo % COLORES_GRUPO.length]
-                : null,
-        };
-    });
-}
 
 type Props = {
     viajes: Paginator<ViajeListItem>;
@@ -121,8 +38,7 @@ export default function ViajesIndex({
     clientes,
     ciudadesDestino,
 }: Props) {
-    const { auth } = usePage().props;
-    const puedeGestionar = auth.roles.includes('admin');
+    const { puedeEditar } = usePermisos();
     const { buscar, setBuscar, aplicar } = useViajeFiltros(filtros);
     const filtrosActivos = [
         filtros.cliente,
@@ -131,10 +47,7 @@ export default function ViajesIndex({
     ].filter(Boolean).length;
     const [viajeSeleccionado, setViajeSeleccionado] =
         useState<ViajeListItem | null>(null);
-    const filas = useMemo(
-        () => agruparViajes(paginador.data),
-        [paginador.data],
-    );
+    const filas = agruparViajes(paginador.data);
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -150,7 +63,7 @@ export default function ViajesIndex({
                     </p>
                 </div>
 
-                {puedeGestionar && (
+                {puedeEditar && (
                     <div className="flex flex-wrap items-center gap-2">
                         {pendientes > 0 && (
                             <ReintentarCoincidencias pendientes={pendientes} />
@@ -204,19 +117,17 @@ export default function ViajesIndex({
             </FiltrosBarra>
 
             {paginador.data.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
-                        <RouteIcon className="size-7" />
-                    </div>
-                    <p className="font-medium">No se encontraron viajes</p>
-                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                        {filtros.buscar
+                <EmptyState
+                    icono={<RouteIcon className="size-7" />}
+                    titulo="No se encontraron viajes"
+                    descripcion={
+                        filtros.buscar
                             ? 'Ajusta la búsqueda.'
-                            : puedeGestionar
+                            : puedeEditar
                               ? 'Sube tus primeras GR para empezar el historial.'
-                              : 'Todavía no se ha subido ninguna GR.'}
-                    </p>
-                </div>
+                              : 'Todavía no se ha subido ninguna GR.'
+                    }
+                />
             ) : (
                 <>
                     <div className="flex flex-col gap-2 sm:hidden">
@@ -225,174 +136,19 @@ export default function ViajesIndex({
                                 key={viaje.id}
                                 viaje={viaje}
                                 tiposCarga={tiposCarga}
-                                puedeGestionar={puedeGestionar}
+                                puedeEditar={puedeEditar}
                                 colorGrupo={colorGrupo}
                                 onVerDetalle={() => setViajeSeleccionado(viaje)}
                             />
                         ))}
                     </div>
 
-                    <div className="hidden overflow-x-auto rounded-xl border shadow-sm sm:block">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="hover:bg-transparent">
-                                    <TableHead>Fecha</TableHead>
-                                    <TableHead>N° GR</TableHead>
-                                    <TableHead>GR Remitente</TableHead>
-                                    <TableHead>Tracto</TableHead>
-                                    <TableHead>Carreta</TableHead>
-                                    <TableHead>Conductor</TableHead>
-                                    <TableHead>Cliente</TableHead>
-                                    <TableHead>Origen</TableHead>
-                                    <TableHead>Destino</TableHead>
-                                    <TableHead>Tipo de carga</TableHead>
-                                    <TableHead className="text-right">
-                                        Peso
-                                    </TableHead>
-                                    <TableHead className="w-0" />
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {filas.map(({ viaje, colorGrupo }) => (
-                                    <TableRow
-                                        key={viaje.id}
-                                        className={cn(
-                                            'group/fila cursor-pointer',
-                                            colorGrupo &&
-                                                cn('border-l-2', colorGrupo),
-                                        )}
-                                        onClick={(evento) => {
-                                            const objetivo =
-                                                evento.target as HTMLElement;
-
-                                            if (
-                                                objetivo.closest(
-                                                    'a, button, [role="menuitem"]',
-                                                )
-                                            ) {
-                                                return;
-                                            }
-
-                                            setViajeSeleccionado(viaje);
-                                        }}
-                                    >
-                                        <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
-                                            {formatearFecha(
-                                                viaje.fecha_traslado,
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="font-mono text-[11px] whitespace-nowrap text-blue-950 tabular-nums dark:text-blue-300">
-                                            <Copiable
-                                                valor={viaje.numero_gr}
-                                                etiqueta="N° GR"
-                                            />
-                                        </TableCell>
-                                        <TableCell className="font-mono text-[11px] whitespace-nowrap text-indigo-600 tabular-nums dark:text-indigo-400">
-                                            <GuiasRemitenteCelda
-                                                guias={viaje.guias_remitente}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-[11px] whitespace-nowrap">
-                                            <PlacaCelda
-                                                placa={viaje.placa_tracto}
-                                                vehiculoId={viaje.tracto_id}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-[11px] whitespace-nowrap">
-                                            {viaje.placa_carreta ? (
-                                                <PlacaCelda
-                                                    placa={viaje.placa_carreta}
-                                                    vehiculoId={
-                                                        viaje.carreta_id
-                                                    }
-                                                />
-                                            ) : (
-                                                '—'
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-[11px] whitespace-nowrap">
-                                            <NombreCelda
-                                                nombre={viaje.conductor_nombre}
-                                                conductorId={viaje.conductor_id}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="max-w-[160px] overflow-hidden">
-                                            <ClienteChip
-                                                cliente={viaje.cliente}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="max-w-[160px] overflow-hidden">
-                                            <DireccionCelda
-                                                ciudad={viaje.origen_ciudad}
-                                                direccion={viaje.origen}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="max-w-[160px] overflow-hidden">
-                                            <DireccionCelda
-                                                ciudad={viaje.destino_ciudad}
-                                                direccion={viaje.destino}
-                                            />
-                                        </TableCell>
-                                        <TableCell>
-                                            <TipoCargaCelda
-                                                viajeId={viaje.id}
-                                                valor={viaje.tipo_carga}
-                                                label={viaje.tipo_carga_label}
-                                                opciones={tiposCarga}
-                                                editable={puedeGestionar}
-                                            />
-                                        </TableCell>
-                                        <TableCell className="text-right whitespace-nowrap tabular-nums">
-                                            {formatearPeso(
-                                                viaje.peso,
-                                                viaje.unidad_peso,
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center justify-end gap-1">
-                                                <DocumentoVisorDialog
-                                                    url={
-                                                        viaje.archivo_url ?? ''
-                                                    }
-                                                    esPdf
-                                                    titulo={`GR ${viaje.numero_gr}`}
-                                                    detalle={`${viaje.cliente} · ${formatearFecha(viaje.fecha_traslado)}`}
-                                                    trigger={
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            disabled={
-                                                                !viaje.archivo_url
-                                                            }
-                                                            className="size-8 text-muted-foreground"
-                                                            aria-label="Vista rápida de la GR"
-                                                        >
-                                                            <Eye className="size-4" />
-                                                        </Button>
-                                                    }
-                                                />
-                                                {puedeGestionar && (
-                                                    <DeleteViajeDialog
-                                                        viaje={viaje}
-                                                        trigger={
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="icon"
-                                                                className="size-8 text-muted-foreground hover:text-destructive"
-                                                                aria-label="Eliminar viaje"
-                                                            >
-                                                                <Trash2 className="size-4" />
-                                                            </Button>
-                                                        }
-                                                    />
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
+                    <TablaViajes
+                        filas={filas}
+                        tiposCarga={tiposCarga}
+                        puedeEditar={puedeEditar}
+                        onVerDetalle={setViajeSeleccionado}
+                    />
 
                     <Paginacion paginador={paginador} />
                 </>
@@ -411,241 +167,12 @@ export default function ViajesIndex({
 }
 
 /**
- * Placa tal como vino en la GR. Si matcheó contra el padrón de vehículos,
- * enlaza a su ficha; si no, se marca en ámbar: mismo lenguaje visual que el
- * resto de la app para «esto necesita que alguien lo revise».
- */
-function PlacaCelda({
-    placa,
-    vehiculoId,
-}: {
-    placa: string;
-    vehiculoId: number | null;
-}) {
-    if (vehiculoId !== null) {
-        return (
-            <Link
-                href={mostrarVehiculo(vehiculoId)}
-                className="hover:underline"
-            >
-                {formatearPlaca(placa)}
-            </Link>
-        );
-    }
-
-    return (
-        <TooltipProvider>
-            <Tooltip>
-                <TooltipTrigger className="inline-flex cursor-help items-center gap-1 text-amber-700 dark:text-amber-500">
-                    <AlertTriangle className="size-3.5" />
-                    {formatearPlaca(placa)}
-                </TooltipTrigger>
-                <TooltipContent>
-                    No se encontró esta placa en el padrón de vehículos.
-                </TooltipContent>
-            </Tooltip>
-        </TooltipProvider>
-    );
-}
-
-/**
- * La GR-transportista puede referir más de una GR-remitente (varias cargas
- * de un mismo cliente en un solo viaje). Cada una va en su propia línea con
- * guion —no todas juntas en una sola cadena— porque cada número ya trae su
- * propio guion interno (ej. «T954 - 273462») y concatenarlas sin separar por
- * línea las vuelve ilegibles. Cada línea usa `Copiable`, igual que placa/TUC
- * en el listado de vehículos, para copiarla y conciliar contra SUNAT.
- */
-function GuiasRemitenteCelda({
-    guias,
-}: {
-    guias: { numero: string; ruc: string }[] | null;
-}) {
-    if (!guias || guias.length === 0) {
-        return <span className="text-muted-foreground">—</span>;
-    }
-
-    return (
-        <div className="flex flex-col gap-0.5">
-            {guias.map((guia, indice) => (
-                <Copiable
-                    key={indice}
-                    valor={guia.numero}
-                    etiqueta="GR remitente"
-                >
-                    - {guia.numero}
-                </Copiable>
-            ))}
-        </div>
-    );
-}
-
-function NombreCelda({
-    nombre,
-    conductorId,
-}: {
-    nombre: string;
-    conductorId: number | null;
-}) {
-    if (conductorId !== null) {
-        return (
-            <Link
-                href={mostrarConductor(conductorId)}
-                className="hover:underline"
-            >
-                {nombre}
-            </Link>
-        );
-    }
-
-    return (
-        <TooltipProvider>
-            <Tooltip>
-                <TooltipTrigger className="inline-flex cursor-help items-center gap-1 text-amber-700 dark:text-amber-500">
-                    <AlertTriangle className="size-3.5" />
-                    {nombre}
-                </TooltipTrigger>
-                <TooltipContent>
-                    No se encontró este DNI en el padrón de conductores.
-                </TooltipContent>
-            </Tooltip>
-        </TooltipProvider>
-    );
-}
-
-/**
  * La GR no trae qué tipo de carga es —eso solo lo sabe quien clasifica el
  * archivo a mano—, así que se corrige acá mismo con un desplegable en vez de
  * mandar a un formulario aparte. El badge queda neutro (no el color del
  * cliente) para no competir con el chip de `ClienteChip`, que es la señal
  * principal de la fila.
  */
-/**
- * Vuelve a intentar resolver tracto/carreta/conductor contra el padrón de
- * hoy. Existe porque la GR suele subirse antes de que la unidad o el
- * conductor estén cargados: crearlos después no actualiza solo lo ya
- * importado, hay que pedirlo.
- */
-function ReintentarCoincidencias({ pendientes }: { pendientes: number }) {
-    const [procesando, setProcesando] = useState(false);
-
-    const reintentar = () => {
-        setProcesando(true);
-
-        router.post(
-            resolver().url,
-            {},
-            {
-                preserveScroll: true,
-                onFinish: () => setProcesando(false),
-            },
-        );
-    };
-
-    return (
-        <Button variant="outline" onClick={reintentar} disabled={procesando}>
-            <RefreshCw
-                className={`size-4 ${procesando ? 'animate-spin' : ''}`}
-            />
-            Reintentar coincidencias
-            <span className="ml-1 inline-flex min-w-5 items-center justify-center rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white">
-                {pendientes}
-            </span>
-        </Button>
-    );
-}
-
-/**
- * Selector de archivos nativo, oculto tras el botón. Sube y sube de una: no
- * hace falta un diálogo con más campos porque todo sale del PDF.
- */
-function SubirGuias() {
-    const fileInput = useRef<HTMLInputElement>(null);
-    const [subiendo, setSubiendo] = useState(false);
-
-    const seleccionar = (evento: React.ChangeEvent<HTMLInputElement>) => {
-        const archivos = Array.from(evento.target.files ?? []);
-
-        if (archivos.length === 0) {
-            return;
-        }
-
-        setSubiendo(true);
-
-        router.post(
-            store().url,
-            { archivos },
-            {
-                forceFormData: true,
-                preserveScroll: true,
-                onFinish: () => {
-                    setSubiendo(false);
-
-                    if (fileInput.current) {
-                        fileInput.current.value = '';
-                    }
-                },
-            },
-        );
-    };
-
-    return (
-        <>
-            <input
-                ref={fileInput}
-                type="file"
-                accept="application/pdf"
-                multiple
-                className="hidden"
-                onChange={seleccionar}
-            />
-            <Button
-                onClick={() => fileInput.current?.click()}
-                disabled={subiendo}
-            >
-                <Upload className="size-4" />
-                {subiendo ? 'Subiendo...' : 'Subir GR'}
-            </Button>
-        </>
-    );
-}
-
-function Paginacion({ paginador }: { paginador: Paginator<ViajeListItem> }) {
-    if (paginador.last_page <= 1) {
-        return null;
-    }
-
-    return (
-        <div className="mt-auto flex flex-wrap items-center justify-between gap-3 pt-2">
-            <p className="text-sm text-muted-foreground">
-                Mostrando {paginador.from}–{paginador.to} de {paginador.total}
-            </p>
-            <div className="flex flex-wrap gap-1">
-                {paginador.links.map((link, indice) => (
-                    <Button
-                        key={indice}
-                        asChild={!!link.url}
-                        size="sm"
-                        variant={link.active ? 'default' : 'outline'}
-                        disabled={!link.url}
-                    >
-                        {link.url ? (
-                            <Link
-                                href={link.url}
-                                preserveScroll
-                                dangerouslySetInnerHTML={{ __html: link.label }}
-                            />
-                        ) : (
-                            <span
-                                dangerouslySetInnerHTML={{ __html: link.label }}
-                            />
-                        )}
-                    </Button>
-                ))}
-            </div>
-        </div>
-    );
-}
 
 ViajesIndex.layout = {
     breadcrumbs: [{ title: 'Viajes', href: viajes.index().url }],

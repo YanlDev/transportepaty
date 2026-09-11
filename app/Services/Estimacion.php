@@ -2,8 +2,6 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Carbon;
-
 /**
  * Cuándo se espera que una unidad llegue a su destino. La confianza importa
  * tanto como el número: mientras no haya recorridos suficientes en el histórico,
@@ -34,7 +32,7 @@ final readonly class Estimacion
 
     public function esHoy(): bool
     {
-        return $this->fechaEstimada === Carbon::now()->toDateString();
+        return $this->fechaEstimada === RelojOperativo::hoy();
     }
 
     /**

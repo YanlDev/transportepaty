@@ -36,6 +36,32 @@ it('redirects guests to login', function (): void {
     $this->get(route('viajes.index'))->assertRedirect(route('login'));
 });
 
+/**
+ * Pasado el tope de PHP, el servidor descarta el cuerpo entero antes de que
+ * Laravel lo vea y el usuario recibía «archivos es obligatorio», como si no
+ * hubiera adjuntado nada. Validando por debajo del límite el mensaje dice lo
+ * que realmente pasó.
+ */
+it('rechaza un lote más grande de lo que aguanta el servidor', function (): void {
+    $lote = array_fill(0, 21, gr());
+
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => $lote])
+        ->assertSessionHasErrors('archivos');
+
+    expect(Viaje::query()->count())->toBe(0);
+});
+
+it('rechaza una GR más pesada de lo que acepta la subida', function (): void {
+    $pesada = UploadedFile::fake()->create('gr-gigante.pdf', 3072, 'application/pdf');
+
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [$pesada]])
+        ->assertSessionHasErrors('archivos.0');
+
+    expect(Viaje::query()->count())->toBe(0);
+});
+
 it('lets a visor see the list but not upload', function (): void {
     actingAs(actorConRol('visor'))
         ->get(route('viajes.index'))

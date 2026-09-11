@@ -5,6 +5,7 @@ namespace App\Models;
 use Database\Factories\ClienteFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -28,6 +29,12 @@ use Illuminate\Support\Str;
  * @property bool $recurrente
  * @property bool $activo
  * @property string|null $notas
+ * @property-read Collection<int, Viaje> $viajes
+ *
+ * Agregados que el listado pide con `withCount`/`withMax`; solo están
+ * presentes en esas consultas.
+ * @property-read int|null $viajes_count
+ * @property-read string|null $viajes_max_fecha_traslado
  */
 #[Fillable([
     'ruc',

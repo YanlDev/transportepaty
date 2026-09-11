@@ -9,7 +9,7 @@ import type { ConductorListItem } from '@/types/fleet';
 
 type Props = {
     conductor: ConductorListItem;
-    puedeGestionar: boolean;
+    puedeEditar: boolean;
 };
 
 /**
@@ -17,7 +17,7 @@ type Props = {
  * se usan en la calle: nombre, celular —para llamar— y licencia con su
  * revalidación. DNI y procedencia quedan en el detalle.
  */
-export function ConductorTarjetaMovil({ conductor, puedeGestionar }: Props) {
+export function ConductorTarjetaMovil({ conductor, puedeEditar }: Props) {
     return (
         <div
             className={cn(
@@ -67,7 +67,7 @@ export function ConductorTarjetaMovil({ conductor, puedeGestionar }: Props) {
                     ` · vence ${conductor.licencia_vence}`}
             </p>
 
-            {puedeGestionar && (
+            {puedeEditar && (
                 <div className="flex items-center justify-end gap-1 border-t pt-2">
                     <Button
                         asChild

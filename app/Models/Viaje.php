@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Enums\EstadoCobranza;
 use App\Enums\TipoCarga;
+use Database\Factories\ViajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -42,6 +44,8 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string|null $conductor_dni
  * @property int|null $conductor_id
  * @property string|null $observaciones
+ * @property int|null $factura_id
+ * @property-read Factura|null $factura
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
@@ -70,10 +74,13 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'conductor_dni',
     'conductor_id',
     'observaciones',
+    'factura_id',
 ])]
 class Viaje extends Model implements HasMedia
 {
+    /** @use HasFactory<ViajeFactory> */
     use HasFactory;
+
     use InteractsWithMedia;
 
     /**
@@ -94,6 +101,26 @@ class Viaje extends Model implements HasMedia
     public function carreta(): BelongsTo
     {
         return $this->belongsTo(Vehiculo::class, 'carreta_id')->withTrashed();
+    }
+
+    /**
+     * La factura que cobra este viaje, cuando ya se emitió. Null mientras esté
+     * sin facturar, que es el estado de todo lo que se importa.
+     *
+     * @return BelongsTo<Factura, $this>
+     */
+    public function factura(): BelongsTo
+    {
+        return $this->belongsTo(Factura::class);
+    }
+
+    /**
+     * En qué punto del cobro está. Requiere `factura` precargada para no caer
+     * en N+1 al recorrer un listado.
+     */
+    public function estadoCobranza(): EstadoCobranza
+    {
+        return $this->factura?->estado() ?? EstadoCobranza::SinFacturar;
     }
 
     /**
@@ -127,7 +154,9 @@ class Viaje extends Model implements HasMedia
      */
     public function nombreCliente(): string
     {
-        return $this->clienteDelPadron?->alias ?? $this->cliente;
+        $delPadron = $this->clienteDelPadron;
+
+        return $delPadron === null ? $this->cliente : $delPadron->alias;
     }
 
     /**
@@ -240,6 +269,67 @@ class Viaje extends Model implements HasMedia
 
                 return $grupos;
             });
+    }
+
+    /**
+     * La fila del viaje tal como la dibujan los listados. Vive acá y no en un
+     * controlador porque `/viajes` y `/contabilidad` muestran exactamente las
+     * mismas columnas de operación —la segunda solo añade las de cobranza— y
+     * dos copias se desincronizarían a la primera columna nueva.
+     *
+     * Requiere `tracto`, `carreta`, `conductor`, `clienteDelPadron` y `media`
+     * precargadas para no caer en N+1.
+     *
+     * @return array<string, mixed>
+     */
+    public function datosDeListado(): array
+    {
+        return [
+            'id' => $this->id,
+            'numero_gr' => $this->numero_gr,
+            'guias_remitente' => $this->guias_remitente,
+            'grupo_viaje' => $this->claveGrupoViaje(),
+            'fecha_traslado' => $this->fecha_traslado->toDateString(),
+            'placa_tracto' => $this->placa_tracto,
+            'placa_carreta' => $this->placa_carreta,
+            'tracto_id' => $this->tracto_id,
+            'carreta_id' => $this->carreta_id,
+            'conductor_nombre' => $this->conductor_nombre,
+            'conductor_id' => $this->conductor_id,
+            'cliente' => $this->nombreCliente(),
+            'destinatario' => $this->destinatario,
+            'origen' => $this->origen,
+            'origen_ciudad' => $this->ciudadOrigen(),
+            'destino' => $this->destino,
+            'destino_ciudad' => $this->ciudadDestino(),
+            'tipo_carga' => $this->tipo_carga->value,
+            'tipo_carga_label' => $this->tipo_carga->label(),
+            'peso' => (float) $this->peso,
+            'unidad_peso' => $this->unidad_peso,
+            'archivo_url' => $this->getFirstMediaUrl('archivo') ?: null,
+        ];
+    }
+
+    /**
+     * Los clientes distintos que aparecen en los viajes, como opciones para un
+     * filtro. Sale del texto crudo de la GR y no del padrón porque el filtro
+     * tiene que ofrecer también a los que todavía no están dados de alta.
+     *
+     * Vive acá y no en un controlador porque `/viajes` y `/contabilidad`
+     * arman exactamente la misma lista.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public static function opcionesDeCliente(): array
+    {
+        return self::query()
+            ->select('cliente')
+            ->distinct()
+            ->orderBy('cliente')
+            ->pluck('cliente')
+            ->map(fn (string $cliente): array => ['value' => $cliente, 'label' => $cliente])
+            ->values()
+            ->all();
     }
 
     public function registerMediaCollections(): void

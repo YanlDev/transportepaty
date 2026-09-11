@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoCotizacion;
 use App\Http\Requests\CotizacionRequest;
+use App\Http\Requests\PrevisualizarCotizacionRequest;
 use App\Models\Cliente;
 use App\Models\ComponenteCosto;
 use App\Models\Cotizacion;
@@ -154,19 +155,11 @@ class CotizacionController extends Controller
      * muestre la tarifa mientras se completa. Vive en el servidor —y no
      * repetido en el frontend— para que haya una sola fórmula.
      */
-    public function previsualizar(Request $request): JsonResponse
+    public function previsualizar(PrevisualizarCotizacionRequest $request): JsonResponse
     {
         $this->authorize('create', Cotizacion::class);
 
-        $datos = $request->validate([
-            'km' => ['required', 'numeric', 'min:0'],
-            'dias' => ['required', 'numeric', 'min:0'],
-            'margen_pct' => ['required', 'numeric', 'min:0', 'max:1'],
-            ...array_fill_keys(
-                array_keys(CalculadoraCotizacion::CONCEPTOS_RUTA),
-                ['nullable', 'numeric', 'min:0'],
-            ),
-        ]);
+        $datos = $request->validated();
 
         $flota = ParametroFlota::vigentes();
         $calculo = $this->calculadora->calcular($datos, $this->lineasVigentes($flota), $flota->igv_pct);

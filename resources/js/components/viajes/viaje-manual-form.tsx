@@ -1,12 +1,10 @@
 import { Link, useForm } from '@inertiajs/react';
-import { useId } from 'react';
 import viajes, {
     storeManual,
 } from '@/actions/App/Http/Controllers/ViajeController';
-import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -434,30 +432,5 @@ export function ViajeManualForm({
                 </Button>
             </div>
         </form>
-    );
-}
-
-function Field({
-    label,
-    error,
-    required,
-    children,
-}: {
-    label: string;
-    error?: string;
-    required?: boolean;
-    children: (id: string) => React.ReactNode;
-}) {
-    const id = useId();
-
-    return (
-        <div className="grid gap-1.5">
-            <Label htmlFor={id}>
-                {label}
-                {required && <span className="text-destructive"> *</span>}
-            </Label>
-            {children(id)}
-            <InputError message={error} />
-        </div>
     );
 }

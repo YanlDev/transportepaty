@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Un lugar desde o hacia donde se traslada carga: una planta, una mina, un
@@ -49,22 +48,6 @@ class PuntoTraslado extends Model
     public function scopeActivos(Builder $query): Builder
     {
         return $query->where('activo', true);
-    }
-
-    /**
-     * @return HasMany<Viaje, $this>
-     */
-    public function viajesComoPartida(): HasMany
-    {
-        return $this->hasMany(Viaje::class, 'punto_partida_id');
-    }
-
-    /**
-     * @return HasMany<Viaje, $this>
-     */
-    public function viajesComoLlegada(): HasMany
-    {
-        return $this->hasMany(Viaje::class, 'punto_llegada_id');
     }
 
     /**

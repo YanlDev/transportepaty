@@ -8,7 +8,7 @@ type Props = {
     ranura: RanuraDocumental;
     vehiculoId: number;
     tipos: EnumOption[];
-    puedeGestionar: boolean;
+    puedeEditar: boolean;
 };
 
 /**
@@ -20,12 +20,12 @@ export function DocumentoFilaVehiculo({
     ranura,
     vehiculoId,
     tipos,
-    puedeGestionar,
+    puedeEditar,
 }: Props) {
     return (
         <DocumentoFila
             ranura={ranura}
-            puedeGestionar={puedeGestionar}
+            puedeEditar={puedeEditar}
             onEliminar={() => {
                 if (ranura.documento === null) {
                     return;

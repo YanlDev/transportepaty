@@ -381,6 +381,26 @@ export type ClienteViajeItem = {
  * de las marcas de asistencia: llegan en `null` para quien no puede verlas
  * (visor), y esas tarjetas no se muestran.
  */
+/**
+ * Los números de cabecera de la ficha del cliente. `variacion_mes` llega en
+ * null cuando no hay mes anterior contra el cual comparar, que es distinto de
+ * una variación de 0%.
+ */
+export type ClienteEstadisticas = {
+    viajes_totales: number;
+    viajes_mes: number;
+    variacion_mes: number | null;
+    ultimo_viaje: string | null;
+    primer_viaje: string | null;
+    tipos_carga: number;
+    carga_principal: string | null;
+    ruta_frecuente: {
+        origen: string;
+        destino: string;
+        viajes: number;
+    } | null;
+};
+
 export type ConductorEstadisticas = {
     viajes_totales: number;
     /** Fecha del viaje más reciente, o null si nunca manejó uno. */

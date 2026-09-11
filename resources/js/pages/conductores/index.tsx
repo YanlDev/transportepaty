@@ -1,6 +1,5 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { Pencil, Plus, Trash2, User } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import conductores, {
     create,
     edit,
@@ -8,6 +7,7 @@ import conductores, {
 } from '@/actions/App/Http/Controllers/ConductorController';
 import { ConductorTarjetaMovil } from '@/components/conductores/conductor-tarjeta-movil';
 import { DeleteConductorDialog } from '@/components/conductores/delete-conductor-dialog';
+import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -19,6 +19,8 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { useFiltros } from '@/hooks/use-filtros';
+import { usePermisos } from '@/hooks/use-permisos';
 import { cn } from '@/lib/utils';
 import type { ConductorListItem, Paginator } from '@/types/fleet';
 
@@ -31,28 +33,11 @@ export default function ConductoresIndex({
     conductores: paginador,
     filtros,
 }: Props) {
-    const { props, url } = usePage();
-    const { auth } = props;
-    const puedeGestionar = auth.roles.includes('admin');
+    const { url } = usePage();
+    const { puedeEditar } = usePermisos();
     const query = url.includes('?') ? url.slice(url.indexOf('?')) : '';
 
-    const [buscar, setBuscar] = useState(filtros.buscar ?? '');
-
-    useEffect(() => {
-        if (buscar === (filtros.buscar ?? '')) {
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            router.get(
-                conductores.index().url,
-                { buscar: buscar || undefined },
-                { preserveState: true, preserveScroll: true, replace: true },
-            );
-        }, 300);
-
-        return () => clearTimeout(timeout);
-    }, [buscar, filtros.buscar]);
+    const { buscar, setBuscar } = useFiltros(filtros, conductores.index().url);
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -68,7 +53,7 @@ export default function ConductoresIndex({
                     </p>
                 </div>
 
-                {puedeGestionar && (
+                {puedeEditar && (
                     <Button asChild>
                         <Link href={create()}>
                             <Plus className="size-4" />
@@ -86,24 +71,26 @@ export default function ConductoresIndex({
             />
 
             {paginador.data.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
-                        <User className="size-7" />
-                    </div>
-                    <p className="font-medium">No se encontraron conductores</p>
-                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                        Ajusta la búsqueda
-                        {puedeGestionar && ' o registra tu primer conductor'}.
-                    </p>
-                    {puedeGestionar && (
-                        <Button asChild variant="outline" className="mt-6">
-                            <Link href={create()}>
-                                <Plus className="size-4" />
-                                Nuevo conductor
-                            </Link>
-                        </Button>
-                    )}
-                </div>
+                <EmptyState
+                    icono={<User className="size-7" />}
+                    titulo="No se encontraron conductores"
+                    descripcion={
+                        <>
+                            Ajusta la búsqueda
+                            {puedeEditar && ' o registra tu primer conductor'}.
+                        </>
+                    }
+                    accion={
+                        puedeEditar && (
+                            <Button asChild variant="outline">
+                                <Link href={create()}>
+                                    <Plus className="size-4" />
+                                    Nuevo conductor
+                                </Link>
+                            </Button>
+                        )
+                    }
+                />
             ) : (
                 <>
                     <div className="flex flex-col gap-2 sm:hidden">
@@ -111,7 +98,7 @@ export default function ConductoresIndex({
                             <ConductorTarjetaMovil
                                 key={conductor.id}
                                 conductor={conductor}
-                                puedeGestionar={puedeGestionar}
+                                puedeEditar={puedeEditar}
                             />
                         ))}
                     </div>
@@ -129,7 +116,7 @@ export default function ConductoresIndex({
                                     <TableHead>Celular</TableHead>
                                     <TableHead>Procedencia</TableHead>
                                     <TableHead>Estado</TableHead>
-                                    {puedeGestionar && (
+                                    {puedeEditar && (
                                         <TableHead className="text-right">
                                             Acciones
                                         </TableHead>
@@ -203,7 +190,7 @@ export default function ConductoresIndex({
                                                 />
                                             </span>
                                         </TableCell>
-                                        {puedeGestionar && (
+                                        {puedeEditar && (
                                             <TableCell className="text-right">
                                                 <div className="flex items-center justify-end gap-1">
                                                     <Button

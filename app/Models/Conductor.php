@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\EstadoDocumento;
 use App\Enums\SemaforoDocumental;
 use App\Enums\TipoDocumentoConductor;
+use App\Services\RelojOperativo;
+use Carbon\CarbonInterface;
 use Database\Factories\ConductorFactory;
 use Illuminate\Database\Eloquent\Attributes\Appends;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -30,7 +32,11 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $fecha_nacimiento
  * @property string|null $procedencia
  * @property bool $activo
- * @property Carbon|null $fecha_baja
+ *
+ * `CarbonInterface` y no `Carbon`: la aplicación resuelve las fechas a
+ * `CarbonImmutable` (ver `AppServiceProvider`), que no desciende de
+ * `Illuminate\Support\Carbon`, y acá además se asigna en el `saving`.
+ * @property CarbonInterface|null $fecha_baja
  * @property string|null $motivo_baja
  * @property-read string $nombre_completo
  */
@@ -72,7 +78,7 @@ class Conductor extends Model
                 $conductor->fecha_baja = null;
                 $conductor->motivo_baja = null;
             } elseif ($conductor->isDirty('activo') && $conductor->fecha_baja === null) {
-                $conductor->fecha_baja = now()->toDateString();
+                $conductor->fecha_baja = RelojOperativo::fechaDeHoy();
             }
         });
     }

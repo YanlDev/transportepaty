@@ -69,6 +69,22 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Business Timezone
+    |--------------------------------------------------------------------------
+    |
+    | La zona en la que ocurre la operación. La aplicación sigue guardando y
+    | calculando en UTC —que es lo que recomienda Laravel—, pero hay valores
+    | que no son un instante sino un día del calendario: la fecha de emisión
+    | de una factura, el día del mes que se lleva de la meta, la fecha de baja
+    | de un conductor. Esos se derivan de acá, vía `App\Services\RelojOperativo`,
+    | para que no salgan corridos un día entre las 19:00 y la medianoche.
+    |
+    */
+
+    'business_timezone' => env('APP_BUSINESS_TIMEZONE', 'America/Lima'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------
     |

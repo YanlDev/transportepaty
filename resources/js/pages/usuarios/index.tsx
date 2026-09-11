@@ -1,13 +1,15 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { Mail, Pencil, Plus, ShieldCheck, Trash2, Users } from 'lucide-react';
-import { useEffect, useState } from 'react';
 import usuarios, {
     create,
     edit,
 } from '@/actions/App/Http/Controllers/UserController';
+import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DeleteUserDialog } from '@/components/usuarios/delete-user-dialog';
+import { useFiltros } from '@/hooks/use-filtros';
+import { cn } from '@/lib/utils';
 import type { Paginator, UserListItem } from '@/types/fleet';
 
 type Props = {
@@ -15,41 +17,32 @@ type Props = {
     filtros: { buscar: string };
 };
 
+/**
+ * Cada rol con su color. No usa `StatusBadge` porque ahí los tonos significan
+ * estado —bien, ojo, mal— y acá solo distinguen a quién es quién.
+ */
 const ROLE_BADGES: Record<string, { label: string; className: string }> = {
     admin: {
         label: 'Administrador',
-        className: 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20',
+        className:
+            'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20 dark:bg-indigo-950 dark:text-indigo-300',
     },
     conductor: {
         label: 'Conductor',
-        className: 'bg-sky-50 text-sky-700 ring-1 ring-sky-600/20',
+        className:
+            'bg-sky-50 text-sky-700 ring-1 ring-sky-600/20 dark:bg-sky-950 dark:text-sky-300',
     },
     visor: {
         label: 'Visor',
-        className: 'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20',
+        className:
+            'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-950 dark:text-amber-300',
     },
 };
 
 export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
     const { auth } = usePage().props;
 
-    const [buscar, setBuscar] = useState(filtros.buscar ?? '');
-
-    useEffect(() => {
-        if (buscar === (filtros.buscar ?? '')) {
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            router.get(
-                usuarios.index().url,
-                { buscar: buscar || undefined },
-                { preserveState: true, preserveScroll: true, replace: true },
-            );
-        }, 300);
-
-        return () => clearTimeout(timeout);
-    }, [buscar, filtros.buscar]);
+    const { buscar, setBuscar } = useFiltros(filtros, usuarios.index().url);
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -81,21 +74,19 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
             />
 
             {paginador.data.length === 0 ? (
-                <div className="flex flex-1 flex-col items-center justify-center rounded-xl border border-dashed py-20 text-center">
-                    <div className="mb-4 grid size-14 place-items-center rounded-full bg-muted text-muted-foreground">
-                        <Users className="size-7" />
-                    </div>
-                    <p className="font-medium">No se encontraron usuarios</p>
-                    <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                        Ajusta la búsqueda o crea tu primer usuario.
-                    </p>
-                    <Button asChild variant="outline" className="mt-6">
-                        <Link href={create()}>
-                            <Plus className="size-4" />
-                            Nuevo usuario
-                        </Link>
-                    </Button>
-                </div>
+                <EmptyState
+                    icono={<Users className="size-7" />}
+                    titulo="No se encontraron usuarios"
+                    descripcion="Ajusta la búsqueda o crea tu primer usuario."
+                    accion={
+                        <Button asChild variant="outline">
+                            <Link href={create()}>
+                                <Plus className="size-4" />
+                                Nuevo usuario
+                            </Link>
+                        </Button>
+                    }
+                />
             ) : (
                 <>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -165,7 +156,7 @@ function UsuarioCard({
         <article className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
-                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-800">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-indigo-50 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300">
                         <ShieldCheck className="size-4.5" />
                     </span>
                     <div>
@@ -185,7 +176,10 @@ function UsuarioCard({
                 </div>
                 {badge && (
                     <span
-                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${badge.className}`}
+                        className={cn(
+                            'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                            badge.className,
+                        )}
                     >
                         {badge.label}
                     </span>

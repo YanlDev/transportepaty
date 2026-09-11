@@ -13,7 +13,7 @@ import type { RanuraDocumental } from '@/types/fleet';
 
 type Props = {
     ranura: RanuraDocumental;
-    puedeGestionar: boolean;
+    puedeEditar: boolean;
     /** Se llama al confirmar el borrado del documento cargado. */
     onEliminar: () => void;
     /**
@@ -31,7 +31,7 @@ type Props = {
  */
 export function DocumentoTarjeta({
     ranura,
-    puedeGestionar,
+    puedeEditar,
     onEliminar,
     renderCargar,
 }: Props) {
@@ -84,7 +84,7 @@ export function DocumentoTarjeta({
 
             <div className="flex shrink-0 items-center gap-0.5">
                 {documento === null
-                    ? puedeGestionar &&
+                    ? puedeEditar &&
                       renderCargar(
                           <button
                               type="button"
@@ -126,7 +126,7 @@ export function DocumentoTarjeta({
                         {/* Eliminar vive en el menú y no como un botón suelto:
                             es destructivo y no hace falta tenerlo a un toque de
                             distancia mientras se revisa el expediente. */}
-                        {puedeGestionar && (
+                        {puedeEditar && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger
                                     title={`Acciones de ${ranura.label}`}

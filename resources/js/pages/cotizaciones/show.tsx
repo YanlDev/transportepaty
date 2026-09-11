@@ -1,4 +1,4 @@
-import { Head, Link, setLayoutProps, usePage } from '@inertiajs/react';
+import { Head, Link, setLayoutProps } from '@inertiajs/react';
 import { Download, Pencil } from 'lucide-react';
 import cotizaciones, {
     edit,
@@ -7,6 +7,7 @@ import cotizaciones, {
 } from '@/actions/App/Http/Controllers/CotizacionController';
 import { DesglosePanel } from '@/components/cotizaciones/desglose-panel';
 import { Button } from '@/components/ui/button';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha } from '@/lib/format';
 import type { Cotizacion } from '@/types/fleet';
 
@@ -22,8 +23,7 @@ function soles(monto: number): string {
 }
 
 export default function CotizacionShow({ cotizacion }: Props) {
-    const { auth } = usePage().props;
-    const puedeGestionar = auth.roles.includes('admin');
+    const { puedeEditar } = usePermisos();
 
     setLayoutProps({
         breadcrumbs: [
@@ -61,7 +61,7 @@ export default function CotizacionShow({ cotizacion }: Props) {
                             Descargar proforma
                         </a>
                     </Button>
-                    {puedeGestionar && (
+                    {puedeEditar && (
                         <Button asChild>
                             <Link href={edit(cotizacion.id)}>
                                 <Pencil className="size-4" />

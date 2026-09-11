@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\StoreNovedadRequest;
 use App\Models\Novedad;
+use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 
 /**
@@ -32,7 +33,7 @@ class NovedadController extends Controller
     {
         $this->authorize('update', $novedad);
 
-        $novedad->levantar(now()->toDateString());
+        $novedad->levantar(RelojOperativo::hoy());
 
         $novedad->load('tracto');
 

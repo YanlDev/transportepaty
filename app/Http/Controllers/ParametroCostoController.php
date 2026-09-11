@@ -8,7 +8,6 @@ use App\Enums\TipoComponente;
 use App\Http\Requests\UpdateComponenteCostoRequest;
 use App\Http\Requests\UpdateParametroFlotaRequest;
 use App\Models\ComponenteCosto;
-use App\Models\Cotizacion;
 use App\Models\ParametroFlota;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Collection;
@@ -28,7 +27,7 @@ class ParametroCostoController extends Controller
 {
     public function edit(): Response
     {
-        $this->authorize('create', Cotizacion::class);
+        $this->authorize('update', ParametroFlota::class);
 
         $flota = ParametroFlota::vigentes();
         $componentes = ComponenteCosto::query()->ordenados()->get();
@@ -65,7 +64,7 @@ class ParametroCostoController extends Controller
 
     public function update(UpdateParametroFlotaRequest $request): RedirectResponse
     {
-        $this->authorize('create', Cotizacion::class);
+        $this->authorize('update', ParametroFlota::class);
 
         ParametroFlota::vigentes()->update($request->validated());
 
@@ -79,7 +78,7 @@ class ParametroCostoController extends Controller
 
     public function updateComponente(UpdateComponenteCostoRequest $request, ComponenteCosto $componente): RedirectResponse
     {
-        $this->authorize('create', Cotizacion::class);
+        $this->authorize('update', ParametroFlota::class);
 
         $componente->update($request->validated());
 

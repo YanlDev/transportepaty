@@ -49,15 +49,16 @@ class CalculadoraCotizacion
      */
     public function lineasDesde(Collection $componentes, ParametroFlota $flota): array
     {
-        return $componentes
-            ->map(fn (ComponenteCosto $componente): array => [
-                'nombre' => $componente->nombre,
-                'tipo' => $componente->tipo->value,
-                'naturaleza' => $componente->naturaleza->value,
-                'tasa' => $componente->tasa($flota),
-            ])
-            ->values()
-            ->all();
+        return array_values(
+            $componentes
+                ->map(fn (ComponenteCosto $componente): array => [
+                    'nombre' => $componente->nombre,
+                    'tipo' => $componente->tipo->value,
+                    'naturaleza' => $componente->naturaleza->value,
+                    'tasa' => $componente->tasa($flota),
+                ])
+                ->all()
+        );
     }
 
     /**

@@ -23,13 +23,13 @@ import type { EnumOption, ViajeListItem } from '@/types/fleet';
 export function ViajeTarjetaMovil({
     viaje,
     tiposCarga,
-    puedeGestionar,
+    puedeEditar,
     colorGrupo,
     onVerDetalle,
 }: {
     viaje: ViajeListItem;
     tiposCarga: EnumOption[];
-    puedeGestionar: boolean;
+    puedeEditar: boolean;
     colorGrupo: string | null;
     onVerDetalle: () => void;
 }) {
@@ -98,7 +98,7 @@ export function ViajeTarjetaMovil({
                         valor={viaje.tipo_carga}
                         label={viaje.tipo_carga_label}
                         opciones={tiposCarga}
-                        editable={puedeGestionar}
+                        editable={puedeEditar}
                     />
 
                     <DocumentoVisorDialog
@@ -119,7 +119,7 @@ export function ViajeTarjetaMovil({
                         }
                     />
 
-                    {puedeGestionar && (
+                    {puedeEditar && (
                         <DeleteViajeDialog
                             viaje={viaje}
                             trigger={

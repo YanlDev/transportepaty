@@ -6,8 +6,10 @@ use App\Http\Requests\StoreClienteRequest;
 use App\Http\Requests\UpdateClienteRequest;
 use App\Models\Cliente;
 use App\Models\Viaje;
+use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -61,8 +63,26 @@ class ClienteController extends Controller
             'filtros' => $filtros,
             // El tope global —no el de la página— para que la barra de
             // proporción signifique lo mismo en la página 1 que en la 2.
-            'maxViajes' => Cliente::query()->withCount('viajes')->get()->max('viajes_count') ?? 0,
+            'maxViajes' => $this->maxViajesPorCliente(),
         ]);
+    }
+
+    /**
+     * Cuántos viajes tiene el cliente que más mueve. Es solo la escala de la
+     * barra de proporción del listado.
+     *
+     * Sale de una agregación y no de traer los clientes con su conteo: eso
+     * hidrataba el padrón entero en PHP —una segunda pasada completa, además
+     * de la paginada— para quedarse con un número.
+     */
+    private function maxViajesPorCliente(): int
+    {
+        $conteos = Viaje::query()
+            ->whereNotNull('cliente_id')
+            ->groupBy('cliente_id')
+            ->selectRaw('count(*) as total');
+
+        return (int) DB::query()->fromSub($conteos, 'conteos')->max('total');
     }
 
     public function show(Cliente $cliente): Response
@@ -120,8 +140,8 @@ class ClienteController extends Controller
     {
         $viajes = $cliente->viajes()->get(['fecha_traslado', 'origen', 'destino', 'tipo_carga']);
 
-        $inicioMes = now()->startOfMonth();
-        $inicioMesAnterior = $inicioMes->copy()->subMonth();
+        $inicioMes = RelojOperativo::inicioDelMes();
+        $inicioMesAnterior = $inicioMes->subMonth();
 
         $delMes = $viajes->filter(
             fn (Viaje $viaje): bool => $viaje->fecha_traslado->gte($inicioMes)
@@ -138,7 +158,15 @@ class ClienteController extends Controller
             ->countBy(fn (Viaje $viaje): string => $viaje->ciudadOrigen().'|'.$viaje->ciudadDestino())
             ->sortDesc();
 
-        $rutaFrecuente = $porRuta->keys()->first();
+        // `countBy` deja el valor agrupado como clave del arreglo, y PHP
+        // convierte a entero cualquier clave que parezca un número. Se
+        // devuelven a texto al leerlas porque son etiquetas y nombres de
+        // ciudad, no números.
+        $rutaFrecuente = $porRuta->keys()->map(strval(...))->first();
+        $cargaPrincipal = $porTipo->keys()->map(strval(...))->first();
+
+        // Las fechas ya en `Y-m-d`, que ordena igual que cronológicamente.
+        $fechas = $viajes->map(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString());
 
         return [
             'viajes_totales' => $viajes->count(),
@@ -148,14 +176,14 @@ class ClienteController extends Controller
             'variacion_mes' => $delMesAnterior > 0
                 ? round(($delMes - $delMesAnterior) / $delMesAnterior * 100, 1)
                 : null,
-            'ultimo_viaje' => $viajes->max('fecha_traslado')?->toDateString(),
-            'primer_viaje' => $viajes->min('fecha_traslado')?->toDateString(),
+            'ultimo_viaje' => $fechas->max(),
+            'primer_viaje' => $fechas->min(),
             'tipos_carga' => $porTipo->count(),
-            'carga_principal' => $porTipo->keys()->first(),
+            'carga_principal' => $cargaPrincipal,
             'ruta_frecuente' => $rutaFrecuente === null ? null : [
                 'origen' => explode('|', $rutaFrecuente)[0],
                 'destino' => explode('|', $rutaFrecuente)[1],
-                'viajes' => $porRuta->first(),
+                'viajes' => $porRuta->first() ?? 0,
             ],
         ];
     }

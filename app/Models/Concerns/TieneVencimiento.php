@@ -3,6 +3,7 @@
 namespace App\Models\Concerns;
 
 use App\Enums\EstadoDocumento;
+use App\Services\RelojOperativo;
 
 /**
  * Comparte la lectura del vencimiento entre los documentos de vehículo y de
@@ -33,7 +34,7 @@ trait TieneVencimiento
             return EstadoDocumento::Vigente;
         }
 
-        $hoy = now()->startOfDay();
+        $hoy = RelojOperativo::fechaDeHoy();
 
         return match (true) {
             $this->fecha_vencimiento->lt($hoy) => EstadoDocumento::Vencido,

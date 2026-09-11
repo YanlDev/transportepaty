@@ -1,15 +1,14 @@
 import { Link, useForm, useHttp } from '@inertiajs/react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import cotizaciones, {
     previsualizar,
     store,
     update,
 } from '@/actions/App/Http/Controllers/CotizacionController';
 import { DesglosePanel } from '@/components/cotizaciones/desglose-panel';
-import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -646,33 +645,5 @@ export function CotizacionForm({
                 </Button>
             </div>
         </form>
-    );
-}
-
-function Field({
-    label,
-    error,
-    required,
-    ayuda,
-    children,
-}: {
-    label: string;
-    error?: string;
-    required?: boolean;
-    ayuda?: string;
-    children: (id: string) => React.ReactNode;
-}) {
-    const id = useId();
-
-    return (
-        <div className="grid gap-1.5">
-            <Label htmlFor={id}>
-                {label}
-                {required && <span className="text-destructive"> *</span>}
-            </Label>
-            {children(id)}
-            {ayuda && <p className="text-xs text-muted-foreground">{ayuda}</p>}
-            <InputError message={error} />
-        </div>
     );
 }
