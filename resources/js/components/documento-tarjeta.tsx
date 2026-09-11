@@ -5,6 +5,7 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ValorEditable } from '@/components/valor-editable';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { estiloDocumento } from '@/lib/documentos';
 import { formatearFecha } from '@/lib/format';
@@ -14,6 +15,11 @@ import type { RanuraDocumental } from '@/types/fleet';
 type Props = {
     ranura: RanuraDocumental;
     puedeEditar: boolean;
+    /**
+     * A dónde mandar la corrección del vencimiento. Null cuando la ranura está
+     * vacía: primero hay que cargar el documento.
+     */
+    urlVencimiento: string | null;
     /** Se llama al confirmar el borrado del documento cargado. */
     onEliminar: () => void;
     /**
@@ -32,6 +38,7 @@ type Props = {
 export function DocumentoTarjeta({
     ranura,
     puedeEditar,
+    urlVencimiento,
     onEliminar,
     renderCargar,
 }: Props) {
@@ -77,7 +84,28 @@ export function DocumentoTarjeta({
                             <span aria-hidden>·</span>
                         </>
                     )}
-                    <span className="shrink-0 tabular-nums">{fecha}</span>
+                    {/* El vencimiento se corrige acá mismo, de un clic: es el
+                        dato que más se carga mal y el que cambia al renovar,
+                        y hasta ahora arreglarlo obligaba a volver a subir el
+                        archivo escaneado. */}
+                    {documento !== null &&
+                    puedeEditar &&
+                    urlVencimiento !== null ? (
+                        <ValorEditable
+                            url={urlVencimiento}
+                            campo="fecha_vencimiento"
+                            valor={documento.fecha_vencimiento}
+                            tipo="fecha"
+                            editable
+                            etiqueta={`el vencimiento de ${ranura.label}`}
+                            className="w-auto shrink-0 text-xs tabular-nums"
+                            ancho="min-w-32"
+                        >
+                            {fecha}
+                        </ValorEditable>
+                    ) : (
+                        <span className="shrink-0 tabular-nums">{fecha}</span>
+                    )}
                 </p>
             </div>
 

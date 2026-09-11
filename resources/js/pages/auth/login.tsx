@@ -30,9 +30,7 @@ export default function Login({ status }: Props) {
                     <>
                         <div className="grid gap-6">
                             <div className="grid gap-2">
-                                <Label htmlFor="username">
-                                    Usuario o correo
-                                </Label>
+                                <Label htmlFor="username">Usuario</Label>
                                 <div className="relative">
                                     <User className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                                     <Input

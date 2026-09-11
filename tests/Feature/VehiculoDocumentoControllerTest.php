@@ -94,3 +94,62 @@ it('accepts the same document type on a tracto', function (): void {
         ->post(route('vehiculos.documentos.store', $tracto), datosDocumento())
         ->assertSessionHasNoErrors();
 });
+
+/**
+ * El caso típico: el SOAT renovado por el que solo cambió la fecha.
+ */
+it('corrige el vencimiento sin tocar el archivo', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vehiculos.documentos.store', $vehiculo), datosDocumento())
+        ->assertSessionHasNoErrors();
+
+    $documento = $vehiculo->documentos()->sole();
+    $mediaOriginal = $documento->getFirstMedia('archivo');
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('vehiculos.documentos.vencimiento', [$vehiculo, $documento]), [
+            'fecha_vencimiento' => '2030-06-30',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $documento->refresh();
+
+    expect($documento->fecha_vencimiento->toDateString())->toBe('2030-06-30')
+        ->and($documento->numero)->toBe('SOAT-001')
+        ->and($documento->getFirstMedia('archivo')?->id)->toBe($mediaOriginal->id);
+});
+
+it('rechaza un vencimiento anterior a la emisión del documento', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+    $documento = $vehiculo->documentos()->create([
+        'tipo' => TipoDocumento::Soat,
+        'fecha_emision' => '2026-05-01',
+        'fecha_vencimiento' => '2027-05-01',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('vehiculos.documentos.vencimiento', [$vehiculo, $documento]), [
+            'fecha_vencimiento' => '2026-04-30',
+        ])
+        ->assertSessionHasErrors('fecha_vencimiento');
+
+    expect($documento->refresh()->fecha_vencimiento->toDateString())->toBe('2027-05-01');
+});
+
+it('no deja al visor corregir el vencimiento', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+    $documento = $vehiculo->documentos()->create([
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => '2027-05-01',
+    ]);
+
+    actingAs(actorConRol('visor'))
+        ->patch(route('vehiculos.documentos.vencimiento', [$vehiculo, $documento]), [
+            'fecha_vencimiento' => '2030-06-30',
+        ])
+        ->assertForbidden();
+
+    expect($documento->refresh()->fecha_vencimiento->toDateString())->toBe('2027-05-01');
+});

@@ -4,10 +4,8 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
-use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -30,7 +28,6 @@ class FortifyServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureActions();
-        $this->configureAuthentication();
         $this->configureViews();
         $this->configureRateLimiting();
     }
@@ -45,47 +42,11 @@ class FortifyServiceProvider extends ServiceProvider
     }
 
     /**
-     * Resuelve la cuenta que intenta entrar.
-     *
-     * El campo del formulario acepta las dos cosas: el usuario —con lo que
-     * entra todo el mundo— o el correo, reservado al admin. Esa reserva es
-     * deliberada y no una consecuencia de quién tiene casilla cargada: si
-     * mañana un visor recibe un correo en su ficha, sigue entrando por usuario.
-     */
-    private function configureAuthentication(): void
-    {
-        Fortify::authenticateUsing(function (Request $request): ?User {
-            $identificador = (string) $request->input(Fortify::username());
-
-            $porUsuario = User::where('username', $identificador)->first();
-            $usuario = $porUsuario ?? User::where('email', $identificador)->first();
-
-            if (! $usuario instanceof User) {
-                return null;
-            }
-
-            if ($porUsuario === null && ! $usuario->hasRole('admin')) {
-                return null;
-            }
-
-            if (! Hash::check((string) $request->input('password'), $usuario->password)) {
-                return null;
-            }
-
-            return $usuario;
-        });
-    }
-
-    /**
      * Configure Fortify views.
      */
     private function configureViews(): void
     {
         Fortify::loginView(fn (Request $request) => Inertia::render('auth/login', [
-            'status' => $request->session()->get('status'),
-        ]));
-
-        Fortify::verifyEmailView(fn (Request $request) => Inertia::render('auth/verify-email', [
             'status' => $request->session()->get('status'),
         ]));
 

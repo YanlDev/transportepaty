@@ -1,5 +1,8 @@
 import { router } from '@inertiajs/react';
-import { destroy } from '@/actions/App/Http/Controllers/ConductorDocumentoController';
+import {
+    actualizarVencimiento,
+    destroy,
+} from '@/actions/App/Http/Controllers/ConductorDocumentoController';
 import { AgregarDocumentoConductorDialog } from '@/components/conductores/agregar-documento-dialog';
 import { DocumentoTarjeta } from '@/components/documento-tarjeta';
 import type { EnumOption, RanuraDocumental } from '@/types/fleet';
@@ -25,6 +28,12 @@ export function DocumentoRanuraConductor({
         <DocumentoTarjeta
             ranura={ranura}
             puedeEditar={puedeEditar}
+            urlVencimiento={
+                ranura.documento === null
+                    ? null
+                    : actualizarVencimiento([conductorId, ranura.documento.id])
+                          .url
+            }
             onEliminar={() => {
                 if (ranura.documento === null) {
                     return;

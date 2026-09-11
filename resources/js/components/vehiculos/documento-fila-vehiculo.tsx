@@ -1,5 +1,8 @@
 import { router } from '@inertiajs/react';
-import { destroy } from '@/actions/App/Http/Controllers/VehiculoDocumentoController';
+import {
+    actualizarVencimiento,
+    destroy,
+} from '@/actions/App/Http/Controllers/VehiculoDocumentoController';
 import { DocumentoFila } from '@/components/documento-fila';
 import { AgregarDocumentoDialog } from '@/components/vehiculos/agregar-documento-dialog';
 import type { EnumOption, RanuraDocumental } from '@/types/fleet';
@@ -26,6 +29,12 @@ export function DocumentoFilaVehiculo({
         <DocumentoFila
             ranura={ranura}
             puedeEditar={puedeEditar}
+            urlVencimiento={
+                ranura.documento === null
+                    ? null
+                    : actualizarVencimiento([vehiculoId, ranura.documento.id])
+                          .url
+            }
             onEliminar={() => {
                 if (ranura.documento === null) {
                     return;

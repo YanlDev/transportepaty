@@ -147,3 +147,82 @@ it('deja fuera de eliminar documentos a quien no administra', function (): void 
 
     expect($conductor->documentos()->count())->toBe(1);
 });
+
+/**
+ * La corrección rápida del vencimiento: el archivo escaneado está bien, lo que
+ * se cargó mal —o se renovó— es la fecha.
+ */
+it('corrige el vencimiento sin tocar el archivo ni el resto del documento', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->post(route('conductores.documentos.store', $conductor), datosDocumentoConductor())
+        ->assertSessionHasNoErrors();
+
+    $documento = $conductor->documentos()->sole();
+    $mediaOriginal = $documento->getFirstMedia('archivo');
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('conductores.documentos.vencimiento', [$conductor, $documento]), [
+            'fecha_vencimiento' => '2030-01-31',
+        ])
+        ->assertSessionHasNoErrors();
+
+    $documento->refresh();
+
+    expect($documento->fecha_vencimiento->toDateString())->toBe('2030-01-31')
+        ->and($documento->numero)->toBe('Q-12345678')
+        ->and($documento->getFirstMedia('archivo')?->id)->toBe($mediaOriginal->id);
+});
+
+/**
+ * Vaciar la fecha es un valor válido, no un error: el DNI no vence.
+ */
+it('deja vaciar el vencimiento', function (): void {
+    $conductor = Conductor::factory()->create();
+    $documento = $conductor->documentos()->create([
+        'tipo' => TipoDocumentoConductor::LicenciaConducir,
+        'fecha_vencimiento' => '2027-08-02',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('conductores.documentos.vencimiento', [$conductor, $documento]), [
+            'fecha_vencimiento' => null,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($documento->refresh()->fecha_vencimiento)->toBeNull();
+});
+
+it('rechaza un vencimiento anterior a la emisión del documento', function (): void {
+    $conductor = Conductor::factory()->create();
+    $documento = $conductor->documentos()->create([
+        'tipo' => TipoDocumentoConductor::LicenciaConducir,
+        'fecha_emision' => '2026-03-10',
+        'fecha_vencimiento' => '2031-03-10',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('conductores.documentos.vencimiento', [$conductor, $documento]), [
+            'fecha_vencimiento' => '2026-03-09',
+        ])
+        ->assertSessionHasErrors('fecha_vencimiento');
+
+    expect($documento->refresh()->fecha_vencimiento->toDateString())->toBe('2031-03-10');
+});
+
+it('no deja al visor corregir el vencimiento', function (): void {
+    $conductor = Conductor::factory()->create();
+    $documento = $conductor->documentos()->create([
+        'tipo' => TipoDocumentoConductor::LicenciaConducir,
+        'fecha_vencimiento' => '2027-08-02',
+    ]);
+
+    actingAs(actorConRol('visor'))
+        ->patch(route('conductores.documentos.vencimiento', [$conductor, $documento]), [
+            'fecha_vencimiento' => '2030-01-31',
+        ])
+        ->assertForbidden();
+
+    expect($documento->refresh()->fecha_vencimiento->toDateString())->toBe('2027-08-02');
+});

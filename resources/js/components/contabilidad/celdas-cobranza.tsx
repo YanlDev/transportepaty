@@ -1,8 +1,9 @@
-import { CeldaEditable } from '@/components/contabilidad/celda-editable';
+import { update } from '@/actions/App/Http/Controllers/FacturaController';
 import { CeldaEntidad } from '@/components/contabilidad/celda-entidad';
 import { CeldaMoneda } from '@/components/contabilidad/celda-moneda';
 import { CeldaNuevaFactura } from '@/components/contabilidad/celda-nueva-factura';
 import { TableCell } from '@/components/ui/table';
+import { ValorEditable } from '@/components/valor-editable';
 import { formatearFecha } from '@/lib/format';
 import type { CuentaOpcion, ViajeContable } from '@/types/contabilidad';
 import type { EnumOption } from '@/types/fleet';
@@ -58,8 +59,8 @@ export function CeldasCobranza({
                         monedas={monedas}
                         editable={editable}
                     />
-                    <CeldaEditable
-                        facturaId={factura.id}
+                    <ValorEditable
+                        url={update(factura.id).url}
                         campo="monto"
                         valor={factura.monto}
                         tipo="numero"
@@ -85,13 +86,13 @@ export function CeldasCobranza({
                                 )}
                             </span>
                         )}
-                    </CeldaEditable>
+                    </ValorEditable>
                 </div>
             </TableCell>
 
             <TableCell className="font-mono text-[11px] whitespace-nowrap tabular-nums">
-                <CeldaEditable
-                    facturaId={factura.id}
+                <ValorEditable
+                    url={update(factura.id).url}
                     campo="numero"
                     valor={factura.numero}
                     editable={editable}
@@ -100,8 +101,8 @@ export function CeldasCobranza({
             </TableCell>
 
             <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
-                <CeldaEditable
-                    facturaId={factura.id}
+                <ValorEditable
+                    url={update(factura.id).url}
                     campo="fecha_emision"
                     valor={factura.fecha_emision}
                     tipo="fecha"
@@ -111,12 +112,12 @@ export function CeldasCobranza({
                     {factura.fecha_emision
                         ? formatearFecha(factura.fecha_emision)
                         : null}
-                </CeldaEditable>
+                </ValorEditable>
             </TableCell>
 
             <TableCell className="whitespace-nowrap tabular-nums">
-                <CeldaEditable
-                    facturaId={factura.id}
+                <ValorEditable
+                    url={update(factura.id).url}
                     campo="fecha_pago"
                     valor={factura.fecha_pago}
                     tipo="fecha"
@@ -126,7 +127,7 @@ export function CeldasCobranza({
                     {factura.fecha_pago
                         ? formatearFecha(factura.fecha_pago)
                         : null}
-                </CeldaEditable>
+                </ValorEditable>
             </TableCell>
 
             <TableCell className="whitespace-nowrap text-muted-foreground">
@@ -149,8 +150,8 @@ export function CeldasCobranza({
             </TableCell>
 
             <TableCell className="max-w-[220px] text-muted-foreground">
-                <CeldaEditable
-                    facturaId={factura.id}
+                <ValorEditable
+                    url={update(factura.id).url}
                     campo="observacion"
                     valor={factura.observacion}
                     editable={editable}

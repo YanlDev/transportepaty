@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Database\Factories\UserFactory;
-use Illuminate\Contracts\Auth\MustVerifyEmail;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -32,15 +31,13 @@ use Spatie\Permission\Traits\HasRoles;
 #[Fillable(['name', 'username', 'email', 'password'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 /**
- * Implementa `MustVerifyEmail` a propósito: Fortify tiene la verificación
- * habilitada y todas las rutas pasan por el middleware `verified`, pero sin
- * esta interfaz ese middleware dejaba pasar a cualquiera —daba una protección
- * que no existía.
- *
- * No deja a nadie afuera: las cuentas se crean solo desde `/usuarios`, y ahí
- * se marcan como verificadas en el acto (no hay registro abierto).
+ * Sin `MustVerifyEmail`: el correo no es la credencial de entrada —lo es el
+ * `username`— y es opcional, así que no hay nada que verificar. Cuando la
+ * interfaz estaba puesta, las cuentas cargadas sin verificar quedaban
+ * atrapadas en la pantalla de verificación sin poder usar el sistema, y el
+ * correo de verificación no llevaba a ninguna parte.
  */
-class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
+class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasRoles, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;

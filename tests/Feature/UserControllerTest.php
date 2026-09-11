@@ -115,15 +115,18 @@ it('creates an account without an email', function (): void {
     expect($user->email)->toBeNull();
 });
 
-it('requires an email for an admin, who also logs in with it', function (): void {
+it('creates an admin without an email too, since nobody logs in with it', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('usuarios.store'), datosUsuario([
             'role' => 'admin',
             'email' => '',
         ]))
-        ->assertSessionHasErrors('email');
+        ->assertRedirect(route('usuarios.index'));
 
-    $this->assertDatabaseMissing('users', ['username' => 'nuevo_usuario']);
+    $user = User::where('username', 'nuevo_usuario')->first();
+
+    expect($user->email)->toBeNull();
+    expect($user->hasRole('admin'))->toBeTrue();
 });
 
 it('lowercases the username so it matches what the login sends', function (): void {

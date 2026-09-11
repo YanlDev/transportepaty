@@ -72,35 +72,23 @@ class AuthenticationTest extends TestCase
         $this->assertAuthenticatedAs($user);
     }
 
-    public function test_an_admin_can_authenticate_with_their_email()
-    {
-        $user = User::factory()->create();
-        $user->assignRole('admin');
-
-        $response = $this->post(route('login.store'), [
-            'username' => $user->email,
-            'password' => 'password',
-        ]);
-
-        $this->assertAuthenticatedAs($user);
-        $response->assertRedirect(route('dashboard', absolute: false));
-    }
-
     /**
-     * El correo es la puerta del admin y de nadie más. Que un visor tenga
-     * casilla cargada no lo habilita a entrar por ahí.
+     * El correo no abre ninguna puerta, ni siquiera la del admin: es un dato de
+     * contacto. Al sistema se entra con el usuario y nada más.
      */
-    public function test_non_admins_can_not_authenticate_with_their_email()
+    public function test_nobody_authenticates_with_their_email()
     {
-        $user = User::factory()->create();
-        $user->assignRole('visor');
+        foreach (['admin', 'visor'] as $rol) {
+            $user = User::factory()->create();
+            $user->assignRole($rol);
 
-        $this->post(route('login.store'), [
-            'username' => $user->email,
-            'password' => 'password',
-        ]);
+            $this->post(route('login.store'), [
+                'username' => $user->email,
+                'password' => 'password',
+            ]);
 
-        $this->assertGuest();
+            $this->assertGuest();
+        }
     }
 
     public function test_users_with_two_factor_enabled_are_redirected_to_two_factor_challenge()
@@ -134,6 +122,22 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertGuest();
+    }
+
+    /**
+     * La cuenta sin correo verificado tiene que poder usar el sistema. Cuando
+     * el modelo implementaba `MustVerifyEmail`, tres cuentas reales de
+     * producción quedaron encerradas en la pantalla de verificación, con un
+     * correo que nunca llegaba porque no es la credencial de entrada.
+     */
+    public function test_an_account_without_a_verified_email_can_use_the_app()
+    {
+        $user = User::factory()->sinCorreo()->create(['email_verified_at' => null]);
+        $user->assignRole('visor');
+
+        $this->actingAs($user)
+            ->get(route('dashboard'))
+            ->assertSuccessful();
     }
 
     public function test_users_can_logout()

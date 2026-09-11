@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ActualizarVencimientoRequest;
 use App\Http\Requests\StoreConductorDocumentoRequest;
 use App\Models\Conductor;
 use App\Models\ConductorDocumento;
@@ -31,6 +32,30 @@ class ConductorDocumentoController extends Controller
         return back()->with('toast', [
             'type' => 'success',
             'message' => 'Documento guardado correctamente.',
+        ]);
+    }
+
+    /**
+     * Corrige el vencimiento sin volver a subir el archivo.
+     *
+     * Es la edición que más se pide en el expediente: el documento escaneado
+     * está bien, lo que se cargó mal —o se renovó— es la fecha. Reemplazar el
+     * archivo entero para corregir un día era el único camino que había.
+     */
+    public function actualizarVencimiento(
+        ActualizarVencimientoRequest $request,
+        Conductor $conductor,
+        ConductorDocumento $documento,
+    ): RedirectResponse {
+        $this->authorize('update', $conductor);
+
+        $documento->update([
+            'fecha_vencimiento' => $request->validated('fecha_vencimiento'),
+        ]);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => 'Vencimiento actualizado.',
         ]);
     }
 

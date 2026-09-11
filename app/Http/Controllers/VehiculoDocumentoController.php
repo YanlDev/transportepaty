@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\TipoDocumento;
+use App\Http\Requests\ActualizarVencimientoRequest;
 use App\Http\Requests\StoreVehiculoDocumentoRequest;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
@@ -65,6 +66,27 @@ class VehiculoDocumentoController extends Controller
         return back()->with('toast', [
             'type' => 'success',
             'message' => 'Documento guardado correctamente.',
+        ]);
+    }
+
+    /**
+     * Corrige el vencimiento sin volver a subir el archivo. El caso típico es
+     * el SOAT renovado por el que solo cambió la fecha.
+     */
+    public function actualizarVencimiento(
+        ActualizarVencimientoRequest $request,
+        Vehiculo $vehiculo,
+        VehiculoDocumento $documento,
+    ): RedirectResponse {
+        $this->authorize('update', $vehiculo);
+
+        $documento->update([
+            'fecha_vencimiento' => $request->validated('fecha_vencimiento'),
+        ]);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => 'Vencimiento actualizado.',
         ]);
     }
 

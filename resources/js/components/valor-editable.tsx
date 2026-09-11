@@ -1,14 +1,14 @@
 import { router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { update } from '@/actions/App/Http/Controllers/FacturaController';
 import { avisarError } from '@/lib/aviso-error';
 import { cn } from '@/lib/utils';
 
 type Tipo = 'texto' | 'numero' | 'fecha';
 
 type Props = {
-    facturaId: number;
-    /** La columna de `facturas` que guarda esta celda. */
+    /** A dónde se manda el `PATCH`. */
+    url: string;
+    /** El nombre del campo que se manda; también la columna que lo guarda. */
     campo: string;
     /** El valor guardado; null cuando la celda está vacía. */
     valor: string | number | null;
@@ -18,21 +18,24 @@ type Props = {
     editable: boolean;
     placeholder?: string;
     className?: string;
-    /** Ancho mínimo del input, para que la celda no salte al entrar en edición. */
+    /** Ancho mínimo del input, para que nada salte al entrar en edición. */
     ancho?: string;
+    /** Cómo nombrarlo en el lector de pantalla. Por defecto, el campo. */
+    etiqueta?: string;
 };
 
 /**
- * Una celda de la cobranza que se edita en el sitio, como en la hoja de
- * cálculo de la que viene: un clic la abre, Enter o salir del campo la guarda,
- * Escape la deja como estaba.
+ * Un valor que se edita donde se lee: un clic lo abre, Enter o salir del campo
+ * lo guarda, Escape lo deja como estaba.
  *
- * Manda solo su propio campo (`PATCH` parcial) y no la fila entera: dos celdas
- * de la misma factura pueden editarse una tras otra sin que la segunda pise lo
- * que guardó la primera.
+ * Nació como celda de la cobranza —de ahí el gesto de hoja de cálculo— y sirve
+ * igual fuera de una tabla, como el vencimiento en la ficha de un documento.
+ * Por eso recibe la URL en vez de conocer una ruta: manda solo su propio campo
+ * (`PATCH` parcial) y nunca el registro entero, así dos valores del mismo
+ * registro se editan uno tras otro sin que el segundo pise al primero.
  */
-export function CeldaEditable({
-    facturaId,
+export function ValorEditable({
+    url,
     campo,
     valor,
     children,
@@ -41,6 +44,7 @@ export function CeldaEditable({
     placeholder = '—',
     className,
     ancho = 'min-w-24',
+    etiqueta,
 }: Props) {
     const [editando, setEditando] = useState(false);
     const [borrador, setBorrador] = useState('');
@@ -76,8 +80,8 @@ export function CeldaEditable({
         const limpio = borrador.trim();
         const nuevo = limpio === '' ? null : limpio;
 
-        // Sin cambios no se manda nada: entrar y salir de una celda no debería
-        // costar una visita al servidor ni marcar la factura como tocada.
+        // Sin cambios no se manda nada: entrar y salir de un campo no debería
+        // costar una visita al servidor ni marcar el registro como tocado.
         if (nuevo === (valor === null ? null : String(valor))) {
             return;
         }
@@ -85,7 +89,7 @@ export function CeldaEditable({
         setGuardando(true);
 
         router.patch(
-            update(facturaId).url,
+            url,
             { [campo]: nuevo },
             {
                 preserveScroll: true,
@@ -134,7 +138,7 @@ export function CeldaEditable({
         <button
             type="button"
             onClick={abrir}
-            aria-label={`Editar ${campo}`}
+            aria-label={`Editar ${etiqueta ?? campo}`}
             className={cn(
                 'w-full rounded-sm px-1 py-0.5 text-left hover:bg-accent',
                 guardando && 'animate-pulse opacity-60',

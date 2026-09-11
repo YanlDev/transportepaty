@@ -161,11 +161,14 @@ return [
     */
 
     'features' => [
-        // Sin `resetPasswords()` a propósito: no hay recuperación por correo.
-        // La mayoría de las cuentas no tiene casilla, así que toda contraseña
-        // olvidada la repone el admin desde /usuarios, y la del admin se
-        // cambia con `php artisan usuario:password` en el servidor.
-        Features::emailVerification(),
+        // Sin `resetPasswords()` ni `emailVerification()` a propósito. La
+        // mayoría de las cuentas no tiene casilla: el identificador es el
+        // usuario, el correo es opcional y lo carga el admin a mano. Verificar
+        // un correo que nadie usa para entrar solo servía para dejar afuera a
+        // gente con cuenta válida, y recuperar por correo no es posible.
+        //
+        // Toda contraseña olvidada la repone el admin desde /usuarios, y la del
+        // admin con `php artisan usuario:password` en el servidor.
         Features::twoFactorAuthentication([
             'confirm' => true,
             'confirmPassword' => true,

@@ -28,8 +28,8 @@ class AdminSeeder extends Seeder
             ],
         );
 
-        // `email_verified_at` no es asignable en masa, pero las rutas están tras
-        // el middleware `verified`: sin esto el admin entra y queda bloqueado.
+        // El correo del admin sale de la configuración, así que se da por bueno.
+        // `email_verified_at` no es asignable en masa: se fuerza.
         $admin->forceFill(['email_verified_at' => now()])->save();
 
         $admin->syncRoles(['admin']);

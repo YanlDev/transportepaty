@@ -32,8 +32,8 @@ class StoreUserRequest extends FormRequest
         return [
             'name' => $this->nameRules(),
             'username' => $this->usernameRules(),
-            // El admin entra por correo, así que sin correo no hay admin.
-            'email' => ['required_if:role,admin', ...$this->emailRules(requerido: false)],
+            // Dato de contacto, nada más: nadie entra al sistema con el correo.
+            'email' => $this->emailRules(requerido: false),
             'password' => ['required', 'confirmed', Password::defaults()],
             'role' => ['required', Rule::in(Role::pluck('name'))],
         ];

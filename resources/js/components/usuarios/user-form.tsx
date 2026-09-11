@@ -26,7 +26,7 @@ const ROLE_LABELS: Record<string, string> = {
  * del rol no dice lo suficiente para decidir cuál darle a alguien.
  */
 const ROLE_DESCRIPCIONES: Record<string, string> = {
-    admin: 'Acceso completo: gestiona flota, conductores, viajes, cobranza, asistencia y usuarios.',
+    admin: 'Acceso completo: gestiona flota, conductores, viajes, cobranza, asistencia y las cuentas de los demás.',
     visor: 'Solo lectura de la operación: flota, conductores, viajes, clientes y cotizaciones. No ve cobranza.',
     contador: 'Solo la cobranza: facturas, pagos y cuentas. Lee viajes y unidades para facturar contra ellos.',
 };
@@ -63,8 +63,6 @@ export function UserForm({ mode, usuario, roles }: Props) {
         password_confirmation: '',
         role: usuario?.role ?? '',
     });
-
-    const esAdmin = data.role === 'admin';
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -123,12 +121,7 @@ export function UserForm({ mode, usuario, roles }: Props) {
                     <Field
                         label="Correo"
                         error={errors.email}
-                        ayuda={
-                            esAdmin
-                                ? 'Obligatorio: el administrador también entra con su correo.'
-                                : 'Opcional. Sin correo, la cuenta entra solo con su usuario.'
-                        }
-                        required={esAdmin}
+                        ayuda="Opcional, solo como dato de contacto. Al sistema se entra con el usuario."
                     >
                         {(id) => (
                             <Input

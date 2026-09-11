@@ -6,6 +6,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { TableCell, TableRow } from '@/components/ui/table';
+import { ValorEditable } from '@/components/valor-editable';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { estiloDocumento } from '@/lib/documentos';
 import { formatearFecha } from '@/lib/format';
@@ -15,6 +16,11 @@ import type { RanuraDocumental } from '@/types/fleet';
 type Props = {
     ranura: RanuraDocumental;
     puedeEditar: boolean;
+    /**
+     * A dónde mandar la corrección del vencimiento. Null cuando la ranura está
+     * vacía: primero hay que cargar el documento.
+     */
+    urlVencimiento: string | null;
     /** Se llama al confirmar el borrado del documento cargado. */
     onEliminar: () => void;
     /**
@@ -35,6 +41,7 @@ type Props = {
 export function DocumentoFila({
     ranura,
     puedeEditar,
+    urlVencimiento,
     onEliminar,
     renderCargar,
 }: Props) {
@@ -61,17 +68,31 @@ export function DocumentoFila({
             </TableCell>
 
             <TableCell className="text-sm whitespace-nowrap tabular-nums">
-                {documento?.fecha_vencimiento ? (
-                    <span
-                        className={cn(
-                            estado === 'vencido' &&
-                                'text-red-700 dark:text-red-400',
-                            estado === 'por_vencer' &&
-                                'text-amber-700 dark:text-amber-500',
-                        )}
+                {documento !== null &&
+                puedeEditar &&
+                urlVencimiento !== null ? (
+                    <ValorEditable
+                        url={urlVencimiento}
+                        campo="fecha_vencimiento"
+                        valor={documento.fecha_vencimiento}
+                        tipo="fecha"
+                        editable
+                        etiqueta={`el vencimiento de ${ranura.label}`}
+                        placeholder="Sin vencimiento"
+                        ancho="min-w-32"
                     >
-                        {formatearFecha(documento.fecha_vencimiento)}
-                    </span>
+                        {documento.fecha_vencimiento === null ? null : (
+                            <FechaVencimiento
+                                fecha={documento.fecha_vencimiento}
+                                estado={estado}
+                            />
+                        )}
+                    </ValorEditable>
+                ) : documento?.fecha_vencimiento ? (
+                    <FechaVencimiento
+                        fecha={documento.fecha_vencimiento}
+                        estado={estado}
+                    />
                 ) : (
                     <span className="text-muted-foreground">—</span>
                 )}
@@ -159,5 +180,25 @@ export function DocumentoFila({
                 </div>
             </TableCell>
         </TableRow>
+    );
+}
+
+/** La fecha con el color de su situación: rojo si venció, ámbar si está cerca. */
+function FechaVencimiento({
+    fecha,
+    estado,
+}: {
+    fecha: string;
+    estado: RanuraDocumental['estado'];
+}) {
+    return (
+        <span
+            className={cn(
+                estado === 'vencido' && 'text-red-700 dark:text-red-400',
+                estado === 'por_vencer' && 'text-amber-700 dark:text-amber-500',
+            )}
+        >
+            {formatearFecha(fecha)}
+        </span>
     );
 }

@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\Route;
 // autenticados son reenviados al dashboard por el middleware `guest` del login).
 Route::redirect('/', '/login')->name('home');
 
-Route::middleware(['auth', 'verified'])->group(function () {
+Route::middleware('auth')->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::resource('conductores', ConductorController::class)
@@ -35,6 +35,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::scopeBindings()->group(function () {
         Route::post('conductores/{conductor}/documentos', [ConductorDocumentoController::class, 'store'])
             ->name('conductores.documentos.store');
+        Route::patch('conductores/{conductor}/documentos/{documento}/vencimiento', [ConductorDocumentoController::class, 'actualizarVencimiento'])
+            ->name('conductores.documentos.vencimiento');
         Route::delete('conductores/{conductor}/documentos/{documento}', [ConductorDocumentoController::class, 'destroy'])
             ->name('conductores.documentos.destroy');
     });
@@ -117,6 +119,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             ->name('vehiculos.documentos.index');
         Route::post('vehiculos/{vehiculo}/documentos', [VehiculoDocumentoController::class, 'store'])
             ->name('vehiculos.documentos.store');
+        Route::patch('vehiculos/{vehiculo}/documentos/{documento}/vencimiento', [VehiculoDocumentoController::class, 'actualizarVencimiento'])
+            ->name('vehiculos.documentos.vencimiento');
         Route::delete('vehiculos/{vehiculo}/documentos/{documento}', [VehiculoDocumentoController::class, 'destroy'])
             ->name('vehiculos.documentos.destroy');
     });

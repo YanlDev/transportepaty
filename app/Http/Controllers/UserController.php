@@ -70,9 +70,9 @@ class UserController extends Controller
             'password' => $validated['password'],
         ]);
 
-        // Las cuentas creadas a mano se marcan como verificadas para que puedan
-        // iniciar sesión sin el flujo de verificación de correo. La columna no
-        // es asignable en masa, así que se fuerza explícitamente.
+        // El correo lo carga el admin, así que se da por bueno de entrada. No
+        // hay flujo de verificación que lo confirme después, y la columna no es
+        // asignable en masa: se fuerza explícitamente.
         $user->forceFill(['email_verified_at' => now()])->save();
 
         $user->assignRole($validated['role']);
