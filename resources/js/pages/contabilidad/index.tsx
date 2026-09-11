@@ -1,5 +1,5 @@
 import { Head, Link } from '@inertiajs/react';
-import { Landmark, Receipt } from 'lucide-react';
+import { Download, Landmark, Receipt } from 'lucide-react';
 import { useState } from 'react';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cuentas from '@/actions/App/Http/Controllers/CuentaBancariaController';
@@ -67,6 +67,13 @@ export default function ContabilidadIndex({
         filtros.hasta,
     ].filter(Boolean).length;
 
+    // Los filtros que van en el enlace de descarga: el archivo tiene que
+    // traer el mismo recorte que se está viendo. Los vacíos se sacan para no
+    // mandar `?cliente=` y que el servidor lo lea como un filtro puesto.
+    const filtrosAplicados = Object.fromEntries(
+        Object.entries(filtros).filter(([, valor]) => Boolean(valor)),
+    ) as Record<string, string>;
+
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Contabilidad" />
@@ -77,12 +84,27 @@ export default function ContabilidadIndex({
                     onMes={(mes) => aplicar({ mes, desde: null, hasta: null })}
                 />
 
-                <Button asChild variant="outline">
-                    <Link href={cuentas.index()}>
-                        <Landmark className="size-4" />
-                        Cuentas
-                    </Link>
-                </Button>
+                <div className="flex gap-2">
+                    {/* Un <a> y no un <Link>: la respuesta es un archivo, y
+                        una visita de Inertia no sabe qué hacer con eso. */}
+                    <Button asChild variant="outline">
+                        <a
+                            href={contabilidad.exportar.url({
+                                query: filtrosAplicados,
+                            })}
+                        >
+                            <Download className="size-4" />
+                            Excel
+                        </a>
+                    </Button>
+
+                    <Button asChild variant="outline">
+                        <Link href={cuentas.index()}>
+                            <Landmark className="size-4" />
+                            Cuentas
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <FiltrosBarra

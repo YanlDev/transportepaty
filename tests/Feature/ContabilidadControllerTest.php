@@ -313,3 +313,34 @@ it('only offers active cuentas for a new cobro', function (): void {
             ->where('cuentas.0.alias', 'BCP Soles')
         );
 });
+
+/**
+ * El orden de la tabla no puede depender del id, que es el orden en que se
+ * importaron las GR y no tiene relación con su correlativo: dentro de un
+ * mismo día las filas salían salteadas (12413, 12412, 12410, 12409, 12414).
+ */
+it('orders by fecha and then by the GR correlativo, not by import order', function (): void {
+    // Se crean con el correlativo desordenado a propósito, para que el id y el
+    // N° de GR no coincidan en orden.
+    foreach (['EG03-00012410', 'EG03-00012414', 'EG03-00012409'] as $numero) {
+        Viaje::factory()->create([
+            'numero_gr' => $numero,
+            'fecha_traslado' => '2026-09-11',
+        ]);
+    }
+
+    Viaje::factory()->create([
+        'numero_gr' => 'EG03-00012500',
+        'fecha_traslado' => '2026-09-10',
+    ]);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page
+            // La fecha manda: el 10 va después del 11 aunque su GR sea mayor.
+            ->where('viajes.data.0.numero_gr', 'EG03-00012414')
+            ->where('viajes.data.1.numero_gr', 'EG03-00012410')
+            ->where('viajes.data.2.numero_gr', 'EG03-00012409')
+            ->where('viajes.data.3.numero_gr', 'EG03-00012500')
+        );
+});

@@ -77,6 +77,9 @@ Route::middleware('auth')->group(function () {
     // cuentas van antes del resto para que `cuentas-bancarias` no se confunda
     // con un parámetro de contabilidad.
     Route::get('contabilidad', [ContabilidadController::class, 'index'])->name('contabilidad.index');
+    // Antes de `cuentas` por lo mismo: `exportar` no es un parámetro.
+    Route::get('contabilidad/exportar', [ContabilidadController::class, 'exportar'])
+        ->name('contabilidad.exportar');
     Route::get('contabilidad/cuentas', [CuentaBancariaController::class, 'index'])
         ->name('cuentas-bancarias.index');
     Route::post('contabilidad/cuentas', [CuentaBancariaController::class, 'store'])

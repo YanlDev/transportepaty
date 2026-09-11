@@ -96,7 +96,7 @@ class ClienteController extends Controller
                 // `media` evita el N+1 de `getFirstMediaUrl()` de abajo.
                 ->with(['media', 'conductor:id,nombres,apellidos'])
                 ->orderByDesc('fecha_traslado')
-                ->orderByDesc('id')
+                ->orderByDesc('numero_gr')
                 ->limit(self::VIAJES_RECIENTES)
                 ->get()
                 ->map(fn (Viaje $viaje): array => [

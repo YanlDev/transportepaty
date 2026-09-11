@@ -593,3 +593,24 @@ it('filters the list by cliente, tipo_carga and destino_ciudad', function (): vo
         ->get(route('viajes.index', ['cliente' => 'MINSUR S.A.', 'buscar' => 'CAM703']))
         ->assertInertia(fn ($page) => $page->has('viajes.data', 1));
 });
+
+/**
+ * El listado se ordenaba por id, que es el orden de importación de las GR y no
+ * su correlativo: dentro de un mismo día las filas salían salteadas.
+ */
+it('orders by fecha and then by the GR correlativo, not by import order', function (): void {
+    foreach (['EG03-00012410', 'EG03-00012414', 'EG03-00012409'] as $numero) {
+        Viaje::factory()->create([
+            'numero_gr' => $numero,
+            'fecha_traslado' => '2026-09-11',
+        ]);
+    }
+
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('viajes.data.0.numero_gr', 'EG03-00012414')
+            ->where('viajes.data.1.numero_gr', 'EG03-00012410')
+            ->where('viajes.data.2.numero_gr', 'EG03-00012409')
+        );
+});

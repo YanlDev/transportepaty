@@ -378,7 +378,7 @@ class ResumenTablero
         return array_values(Viaje::query()
             ->with(['media', 'clienteDelPadron:id,alias'])
             ->orderByDesc('fecha_traslado')
-            ->orderByDesc('id')
+            ->orderByDesc('numero_gr')
             ->limit(5)
             ->get()
             ->map(fn (Viaje $viaje): array => [

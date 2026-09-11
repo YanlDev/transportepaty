@@ -111,7 +111,7 @@ class ConductorController extends Controller
                 // consulta por viaje si no se precarga.
                 ->with(['media', 'clienteDelPadron:id,alias'])
                 ->orderByDesc('fecha_traslado')
-                ->orderByDesc('id')
+                ->orderByDesc('numero_gr')
                 ->limit(self::VIAJES_RECIENTES)
                 ->get()
                 // El historial es para repasar qué manejó, no para auditar el

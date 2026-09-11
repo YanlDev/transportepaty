@@ -7,10 +7,12 @@ use App\Enums\Moneda;
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
+use App\Services\ExportadorCobranza;
 use App\Services\ResumenCobranza;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 /**
  * La misma tabla de viajes, leída desde la cobranza: qué se facturó, cuánto,
@@ -21,23 +23,21 @@ use Inertia\Response;
  *
  * Los recuentos viven en `ResumenCobranza`; acá queda leer los filtros de la
  * petición y armar la fila tal como la dibuja la tabla.
+ *
+ * @phpstan-import-type FiltrosCobranza from ResumenCobranza
  */
 class ContabilidadController extends Controller
 {
-    public function __construct(private readonly ResumenCobranza $cobranza) {}
+    public function __construct(
+        private readonly ResumenCobranza $cobranza,
+        private readonly ExportadorCobranza $exportador,
+    ) {}
 
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', Factura::class);
 
-        $filtros = [
-            'buscar' => $request->string('buscar')->trim()->value(),
-            'cliente' => $request->string('cliente')->trim()->value(),
-            'estado' => $request->string('estado')->trim()->value(),
-            'mes' => $this->mesValido($request->string('mes')->trim()->value()),
-            'desde' => $request->date('desde')?->toDateString(),
-            'hasta' => $request->date('hasta')?->toDateString(),
-        ];
+        $filtros = $this->filtros($request);
 
         $viajes = $this->cobranza->consulta($filtros)
             // Las relaciones se cargan solo acá: las otras dos ramas que usan
@@ -59,7 +59,7 @@ class ContabilidadController extends Controller
                 'factura.viajes:id,factura_id',
             ])
             ->orderByDesc('fecha_traslado')
-            ->orderByDesc('id')
+            ->orderByDesc('numero_gr')
             ->paginate(50)
             ->withQueryString()
             ->through(fn (Viaje $viaje): array => $this->filaContable($viaje));
@@ -74,6 +74,46 @@ class ContabilidadController extends Controller
             'meses' => $this->cobranza->opcionesDeMes(),
             'cuentas' => $this->opcionesCuentas(),
         ]);
+    }
+
+    /**
+     * La misma tabla que `index()`, en un .xlsx, con los filtros que venían en
+     * la URL. Sin paginar a propósito: lo que se descarga es todo lo que cae
+     * bajo el filtro, no la página que quedó abierta.
+     */
+    public function exportar(Request $request): BinaryFileResponse
+    {
+        $this->authorize('viewAny', Factura::class);
+
+        // El archivo se arma en disco y no en memoria porque el escritor de
+        // PhpSpreadsheet necesita un archivo real para el .zip del .xlsx.
+        // `deleteFileAfterSend` lo borra apenas termina la descarga.
+        $ruta = tempnam(sys_get_temp_dir(), 'cobranza');
+
+        $this->exportador->escribir($this->filtros($request), $ruta);
+
+        return response()
+            ->download($ruta, $this->exportador->nombreArchivo())
+            ->deleteFileAfterSend();
+    }
+
+    /**
+     * Los filtros de la cobranza tal como llegan en la URL. Los comparten la
+     * tabla y la exportación, que tienen que mirar exactamente el mismo
+     * recorte: si divergen, el archivo deja de ser lo que se ve en pantalla.
+     *
+     * @return FiltrosCobranza
+     */
+    private function filtros(Request $request): array
+    {
+        return [
+            'buscar' => $request->string('buscar')->trim()->value(),
+            'cliente' => $request->string('cliente')->trim()->value(),
+            'estado' => $request->string('estado')->trim()->value(),
+            'mes' => $this->mesValido($request->string('mes')->trim()->value()),
+            'desde' => $request->date('desde')?->toDateString(),
+            'hasta' => $request->date('hasta')?->toDateString(),
+        ];
     }
 
     /**

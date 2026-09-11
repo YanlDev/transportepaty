@@ -68,7 +68,7 @@ class ViajeController extends Controller
                 });
             })
             ->orderByDesc('fecha_traslado')
-            ->orderByDesc('id')
+            ->orderByDesc('numero_gr')
             ->paginate(25)
             ->withQueryString()
             ->through(fn (Viaje $viaje): array => $viaje->datosDeListado());
