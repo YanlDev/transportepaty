@@ -15,6 +15,7 @@ import type {
     ConductorOpcion,
     DiaDeSemana,
     ProgramacionTarjeta,
+    UltimoViaje,
     UnidadOpcion,
 } from '@/types/programacion';
 
@@ -26,6 +27,7 @@ type Props = {
     conductores: ConductorOpcion[];
     clientes: ClienteOpcion[];
     destinosUsados: string[];
+    ultimoViajePorConductor: Record<number, UltimoViaje>;
 };
 
 const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const;
@@ -47,6 +49,7 @@ export default function ProgramacionIndex({
     conductores,
     clientes,
     destinosUsados,
+    ultimoViajePorConductor,
 }: Props) {
     const { puedeEditar } = usePermisos();
 
@@ -214,6 +217,7 @@ export default function ProgramacionIndex({
                     conductores={conductores}
                     clientes={clientes}
                     destinosUsados={destinosUsados}
+                    ultimoViajePorConductor={ultimoViajePorConductor}
                 />
             )}
         </div>

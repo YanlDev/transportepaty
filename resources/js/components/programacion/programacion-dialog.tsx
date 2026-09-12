@@ -20,6 +20,7 @@ import type {
     ClienteOpcion,
     ConductorOpcion,
     ProgramacionTarjeta,
+    UltimoViaje,
     UnidadOpcion,
 } from '@/types/programacion';
 
@@ -32,13 +33,17 @@ type FormData = {
 };
 
 /**
- * Programar una unidad, o corregir una ya programada. Cuatro campos y nada
+ * Programar una unidad, o corregir una ya programada. Cinco campos y nada
  * más: el pedido fue explícito en que cargar tenía que ser rápido, así que
- * todo lo que no sea unidad, conductor, cliente y destino queda afuera.
+ * todo lo que no sea día, unidad, conductor, cliente y destino queda afuera.
  *
- * Al crear, el diálogo se queda abierto y limpia solo la unidad y el
- * conductor: se programa de a varias unidades para el mismo cliente y
- * destino, y volver a tipearlos cada vez es justo lo que hace lenta la carga.
+ * Tres cosas lo hacen rápido, y las tres apuntan a lo mismo —no volver a
+ * tipear lo que no cambia entre una unidad y la siguiente:
+ *
+ * 1. Elegir el conductor deja puesta la unidad de su última guía.
+ * 2. Al guardar una nueva, el día, el cliente y el destino se conservan y el
+ *    diálogo queda abierto para seguir cargando.
+ * 3. El destino autocompleta con los ya usados.
  */
 export function ProgramacionDialog({
     open,
@@ -49,6 +54,7 @@ export function ProgramacionDialog({
     conductores,
     clientes,
     destinosUsados,
+    ultimoViajePorConductor,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -59,6 +65,8 @@ export function ProgramacionDialog({
     conductores: ConductorOpcion[];
     clientes: ClienteOpcion[];
     destinosUsados: string[];
+    /** Con qué tracto salió cada conductor la última vez, por `conductor_id`. */
+    ultimoViajePorConductor: Record<number, UltimoViaje>;
 }) {
     // La clave del diálogo en la página lo remonta al cambiar de tarjeta, así
     // que estos valores iniciales ya son los correctos y no hace falta
@@ -71,6 +79,31 @@ export function ProgramacionDialog({
             cliente_id: programacion?.cliente_id ?? null,
             destino: programacion?.destino ?? '',
         });
+
+    const ultimoDelConductor =
+        data.conductor_id === null
+            ? null
+            : (ultimoViajePorConductor[data.conductor_id] ?? null);
+
+    /**
+     * Elegir el conductor deja puesta la unidad con la que salió la última
+     * vez, que es casi siempre la misma. Pisa lo que hubiera antes a
+     * propósito: el caso normal es elegir conductor y guardar, y si la unidad
+     * de hoy es otra se cambia después, que es un clic contra los dos que
+     * ahorra en las demás.
+     *
+     * Un conductor sin guías previas —uno nuevo— no prellena nada en vez de
+     * dejar una unidad inventada.
+     */
+    const elegirConductor = (conductorId: number) => {
+        const ultimo = ultimoViajePorConductor[conductorId];
+
+        setData((anterior) => ({
+            ...anterior,
+            conductor_id: conductorId,
+            vehiculo_id: ultimo ? ultimo.vehiculo_id : anterior.vehiculo_id,
+        }));
+    };
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -102,14 +135,32 @@ export function ProgramacionDialog({
                             : 'Programar unidad'}
                     </DialogTitle>
                     <DialogDescription>
-                        Carga particular del {fecha}. Al guardar una nueva, el
-                        cliente y el destino quedan puestos para seguir cargando
-                        unidades.
+                        Al guardar una nueva, el día, el cliente y el destino
+                        quedan puestos para seguir cargando unidades.
                     </DialogDescription>
                 </DialogHeader>
 
                 <form onSubmit={enviar} className="flex flex-col gap-4">
                     <div className="grid gap-4 sm:grid-cols-2">
+                        {/* Editable y no fijo al día que se está viendo: se
+                            programa mirando hoy para cargar mañana. */}
+                        <Field
+                            label="Día de carga"
+                            error={errors.fecha}
+                            required
+                        >
+                            {(id) => (
+                                <Input
+                                    id={id}
+                                    type="date"
+                                    value={data.fecha}
+                                    onChange={(evento) =>
+                                        setData('fecha', evento.target.value)
+                                    }
+                                />
+                            )}
+                        </Field>
+
                         <Field
                             label="Unidad"
                             error={errors.vehiculo_id}
@@ -136,15 +187,18 @@ export function ProgramacionDialog({
                             label="Conductor"
                             error={errors.conductor_id}
                             required
+                            ayuda={
+                                ultimoDelConductor
+                                    ? `Última GR: ${ultimoDelConductor.placa} el ${ultimoDelConductor.fecha}.`
+                                    : undefined
+                            }
                         >
                             {(id) => (
                                 <SelectorBuscable
                                     id={id}
                                     etiqueta="Conductor"
                                     valor={data.conductor_id}
-                                    onCambio={(valor) =>
-                                        setData('conductor_id', valor)
-                                    }
+                                    onCambio={elegirConductor}
                                     invalido={Boolean(errors.conductor_id)}
                                     opciones={conductores.map((conductor) => ({
                                         valor: conductor.id,

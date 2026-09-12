@@ -4,6 +4,7 @@ use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Programacion;
 use App\Models\Vehiculo;
+use App\Models\Viaje;
 use App\Services\RelojOperativo;
 use Spatie\Permission\Models\Role;
 
@@ -218,4 +219,85 @@ it('offers the destinations already typed, so the same place is not written twic
             ->where('destinosUsados.0', 'ILAVE')
             ->where('destinosUsados.1', 'JULIACA')
         );
+});
+
+/**
+ * Lo que hace rápida la carga: elegir el conductor deja puesta la unidad con
+ * la que salió la última vez, porque un chofer maneja casi siempre el mismo
+ * tracto. El dato sale de las guías, no de programaciones anteriores.
+ */
+it('sends the unit of each conductor last GR, to prefill the form', function (): void {
+    $conductor = Conductor::factory()->create();
+    $viejo = Vehiculo::factory()->create(['placa' => 'VIEJO11']);
+    $reciente = Vehiculo::factory()->create(['placa' => 'NUEVO22']);
+
+    Viaje::factory()->create([
+        'conductor_id' => $conductor->id,
+        'tracto_id' => $viejo->id,
+        'fecha_traslado' => '2026-08-01',
+    ]);
+
+    Viaje::factory()->create([
+        'conductor_id' => $conductor->id,
+        'tracto_id' => $reciente->id,
+        'fecha_traslado' => '2026-09-05',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('programacion.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where("ultimoViajePorConductor.{$conductor->id}.vehiculo_id", $reciente->id)
+            ->where("ultimoViajePorConductor.{$conductor->id}.placa", 'NUEVO22')
+            ->where("ultimoViajePorConductor.{$conductor->id}.fecha", '2026-09-05')
+        );
+});
+
+it('leaves out conductores with no GR to prefill from', function (): void {
+    // Un chofer nuevo no tiene con qué prellenar: mejor nada que una unidad
+    // inventada.
+    $sinViajes = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->get(route('programacion.index'))
+        ->assertInertia(fn ($page) => $page
+            ->missing("ultimoViajePorConductor.{$sinViajes->id}")
+        );
+});
+
+it('ignores trips whose tracto could not be resolved', function (): void {
+    $conductor = Conductor::factory()->create();
+    $tracto = Vehiculo::factory()->create(['placa' => 'SIRVE11']);
+
+    // La GR más reciente quedó sin tracto resuelto: debe caer a la anterior
+    // que sí lo tiene, en vez de dejar al conductor sin prellenado.
+    Viaje::factory()->create([
+        'conductor_id' => $conductor->id,
+        'tracto_id' => null,
+        'fecha_traslado' => '2026-09-10',
+    ]);
+
+    Viaje::factory()->create([
+        'conductor_id' => $conductor->id,
+        'tracto_id' => $tracto->id,
+        'fecha_traslado' => '2026-09-01',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('programacion.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where("ultimoViajePorConductor.{$conductor->id}.placa", 'SIRVE11')
+        );
+});
+
+it('programs for a day other than the one being shown', function (): void {
+    // El día de carga es un campo del formulario: se programa mirando hoy
+    // para cargar mañana.
+    actingAs(actorConRol('admin'))
+        ->get(route('programacion.index', ['fecha' => '2026-09-15']));
+
+    actingAs(actorConRol('admin'))
+        ->post(route('programacion.store'), datosDeProgramacion(['fecha' => '2026-09-20']))
+        ->assertRedirect();
+
+    $this->assertDatabaseHas('programaciones', ['fecha' => '2026-09-20']);
 });

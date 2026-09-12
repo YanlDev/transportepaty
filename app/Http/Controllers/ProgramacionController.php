@@ -9,6 +9,7 @@ use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Programacion;
 use App\Models\Vehiculo;
+use App\Models\Viaje;
 use App\Services\RelojOperativo;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -60,6 +61,7 @@ class ProgramacionController extends Controller
             'conductores' => $this->opcionesConductores(),
             'clientes' => $this->opcionesClientes(),
             'destinosUsados' => $this->destinosUsados(),
+            'ultimoViajePorConductor' => $this->ultimoViajePorConductor(),
         ]);
     }
 
@@ -207,6 +209,54 @@ class ProgramacionController extends Controller
                 'alias' => $cliente->alias,
             ])
             ->all();
+    }
+
+    /**
+     * Con qué tracto salió cada conductor la última vez, según sus guías.
+     *
+     * Es lo que hace rápida la carga: elegir el conductor deja la unidad
+     * puesta, porque un chofer maneja casi siempre el mismo tracto. Se manda
+     * con la página y no por una consulta al elegir para que el prellenado
+     * sea instantáneo — son sesenta filas, no justifica una ida al servidor.
+     *
+     * Sale de los viajes y no de las programaciones anteriores porque la guía
+     * es el registro de lo que la unidad hizo de verdad; una programación
+     * pudo no haberse cumplido.
+     *
+     * @return array<int, array{vehiculo_id: int, placa: string, fecha: string}>
+     */
+    private function ultimoViajePorConductor(): array
+    {
+        // Se ordena y se queda con el primero de cada conductor en PHP en vez
+        // de resolverlo con `DISTINCT ON`, que es solo de Postgres y dejaría
+        // la consulta sin correr en los tests (SQLite). Con el volumen de
+        // viajes de la operación el costo es despreciable.
+        return Viaje::query()
+            ->whereNotNull('conductor_id')
+            ->whereNotNull('tracto_id')
+            ->with('tracto:id,placa')
+            ->orderByDesc('fecha_traslado')
+            ->orderByDesc('numero_gr')
+            ->get(['id', 'conductor_id', 'tracto_id', 'fecha_traslado'])
+            ->unique('conductor_id')
+            ->reduce(function (array $mapa, Viaje $viaje): array {
+                $conductorId = $viaje->conductor_id;
+                $tractoId = $viaje->tracto_id;
+
+                // La consulta ya los excluye; el chequeo está para que el
+                // mapa tenga el tipo que declara el docblock, sin castear.
+                if ($conductorId === null || $tractoId === null) {
+                    return $mapa;
+                }
+
+                $mapa[$conductorId] = [
+                    'vehiculo_id' => $tractoId,
+                    'placa' => $viaje->tracto->placa,
+                    'fecha' => $viaje->fecha_traslado->toDateString(),
+                ];
+
+                return $mapa;
+            }, []);
     }
 
     /**

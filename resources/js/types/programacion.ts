@@ -34,3 +34,13 @@ export type ClienteOpcion = {
     id: number;
     alias: string;
 };
+
+/**
+ * Con qué tracto salió cada conductor la última vez, según sus guías.
+ * Alimenta el prellenado del formulario, indexado por `conductor_id`.
+ */
+export type UltimoViaje = {
+    vehiculo_id: number;
+    placa: string;
+    fecha: string;
+};
