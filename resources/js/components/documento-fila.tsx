@@ -1,4 +1,5 @@
-import { Eye, MoreVertical, Trash2, Upload } from 'lucide-react';
+import { Eye, MoreVertical, Pencil, Trash2, Upload } from 'lucide-react';
+import { useState } from 'react';
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -48,6 +49,11 @@ export function DocumentoFila({
     const { documento, estado } = ranura;
     const tema = estiloDocumento[estado];
 
+    // La edición del vencimiento vive en la celda, pero también se ofrece
+    // desde el menú de acciones: es donde se busca «editar», y la fecha sola
+    // no alcanzaba a comunicar que se podía tocar.
+    const [editandoVencimiento, setEditandoVencimiento] = useState(false);
+
     return (
         <TableRow>
             <TableCell className="max-w-0">
@@ -80,6 +86,9 @@ export function DocumentoFila({
                         etiqueta={`el vencimiento de ${ranura.label}`}
                         placeholder="Sin vencimiento"
                         ancho="min-w-32"
+                        editando={editandoVencimiento}
+                        onEditandoChange={setEditandoVencimiento}
+                        className="group/fecha flex items-center gap-1.5"
                     >
                         {documento.fecha_vencimiento === null ? null : (
                             <FechaVencimiento
@@ -87,6 +96,10 @@ export function DocumentoFila({
                                 estado={estado}
                             />
                         )}
+                        <Pencil
+                            aria-hidden
+                            className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/fecha:opacity-100"
+                        />
                     </ValorEditable>
                 ) : documento?.fecha_vencimiento ? (
                     <FechaVencimiento
@@ -165,6 +178,16 @@ export function DocumentoFila({
                                         <MoreVertical className="size-4" />
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end">
+                                        {urlVencimiento !== null && (
+                                            <DropdownMenuItem
+                                                onSelect={() =>
+                                                    setEditandoVencimiento(true)
+                                                }
+                                            >
+                                                <Pencil className="size-4" />
+                                                Editar vencimiento
+                                            </DropdownMenuItem>
+                                        )}
                                         <DropdownMenuItem
                                             variant="destructive"
                                             onSelect={onEliminar}

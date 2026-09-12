@@ -22,6 +22,13 @@ type Props = {
     ancho?: string;
     /** Cómo nombrarlo en el lector de pantalla. Por defecto, el campo. */
     etiqueta?: string;
+    /**
+     * Abre la edición desde afuera. Sirve para ofrecer el mismo campo desde
+     * otro lugar —un ítem de menú, por ejemplo— sin duplicar el formulario.
+     * Sin esta prop el componente maneja su apertura solo, como siempre.
+     */
+    editando?: boolean;
+    onEditandoChange?: (editando: boolean) => void;
 };
 
 /**
@@ -45,17 +52,51 @@ export function ValorEditable({
     className,
     ancho = 'min-w-24',
     etiqueta,
+    editando: editandoControlado,
+    onEditandoChange,
 }: Props) {
-    const [editando, setEditando] = useState(false);
+    const [editandoInterno, setEditandoInterno] = useState(false);
+
+    // Controlado si le pasan `editando`; si no, se maneja solo. Las dos ramas
+    // avisan por `onEditandoChange`, así quien abre desde afuera puede cerrar
+    // su propio estado cuando el campo se guarda o se cancela.
+    const editando = editandoControlado ?? editandoInterno;
+
+    const setEditando = (valor: boolean) => {
+        if (editandoControlado === undefined) {
+            setEditandoInterno(valor);
+        }
+
+        onEditandoChange?.(valor);
+    };
     const [borrador, setBorrador] = useState('');
     const [guardando, setGuardando] = useState(false);
     const input = useRef<HTMLInputElement>(null);
 
+    // El valor guardado, espejado en una ref, para poder sembrar el borrador al
+    // abrir sin que `valor` entre en las dependencias del efecto de apertura:
+    // si entrara, un cambio de props a mitad de la edición pisaría lo que se
+    // está tecleando. Se sincroniza en su propio efecto —nunca durante el
+    // render— y va declarado antes para correr primero.
+    const valorActual = useRef(valor);
+
     useEffect(() => {
-        if (editando) {
-            input.current?.focus();
-            input.current?.select();
+        valorActual.current = valor;
+    }, [valor]);
+
+    // El borrador se siembra acá y no al hacer clic porque la edición también
+    // se puede abrir desde afuera (`editando`), y por ese camino nunca pasa
+    // por el clic: sin esto el campo abriría vacío.
+    useEffect(() => {
+        if (!editando) {
+            return;
         }
+
+        const guardado = valorActual.current;
+
+        setBorrador(guardado === null ? '' : String(guardado));
+        input.current?.focus();
+        input.current?.select();
     }, [editando]);
 
     const mostrado =
@@ -69,10 +110,7 @@ export function ValorEditable({
         );
     }
 
-    const abrir = () => {
-        setBorrador(valor === null ? '' : String(valor));
-        setEditando(true);
-    };
+    const abrir = () => setEditando(true);
 
     const guardar = () => {
         setEditando(false);
