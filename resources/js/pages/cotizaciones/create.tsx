@@ -3,10 +3,11 @@ import cotizaciones, {
     create,
 } from '@/actions/App/Http/Controllers/CotizacionController';
 import { CotizacionForm } from '@/components/cotizaciones/cotizacion-form';
+import type { BorradorCotizacion } from '@/components/cotizaciones/cotizacion-form';
 import type {
     Cliente,
     EnumOption,
-    ParametroFlota,
+    LineaTarifa,
     PuntoTraslado,
 } from '@/types/fleet';
 
@@ -14,13 +15,18 @@ type Props = {
     clientes: Pick<Cliente, 'id' | 'alias' | 'razon_social' | 'ruc'>[];
     puntos: Pick<PuntoTraslado, 'id' | 'nombre' | 'direccion'>[];
     estados: EnumOption[];
-    flota: ParametroFlota;
+    lineas: LineaTarifa[];
+    /** Llega vacío como lista cuando no hay nada que precargar. */
+    borrador: BorradorCotizacion | [];
+    flota: { margen_pct_default: number; igv_pct: number };
 };
 
 export default function CotizacionCreate({
     clientes,
     puntos,
     estados,
+    lineas,
+    borrador,
     flota,
 }: Props) {
     setLayoutProps({
@@ -39,6 +45,8 @@ export default function CotizacionCreate({
                 clientes={clientes}
                 puntos={puntos}
                 estados={estados}
+                lineas={lineas}
+                borrador={Array.isArray(borrador) ? {} : borrador}
                 flota={flota}
             />
         </div>

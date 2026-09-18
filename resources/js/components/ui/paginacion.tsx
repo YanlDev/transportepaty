@@ -8,8 +8,17 @@ import type { Paginator } from '@/types/fleet';
  *
  * Las etiquetas llegan del backend con entidades HTML (`&laquo;`), por eso el
  * `dangerouslySetInnerHTML`: son literales de Laravel, no entrada del usuario.
+ *
+ * `preservarEstado` es para las páginas que guardan algo del usuario que tiene
+ * que sobrevivir al cambio de página, como una selección que abarca varias.
  */
-export function Paginacion<T>({ paginador }: { paginador: Paginator<T> }) {
+export function Paginacion<T>({
+    paginador,
+    preservarEstado = false,
+}: {
+    paginador: Paginator<T>;
+    preservarEstado?: boolean;
+}) {
     if (paginador.last_page <= 1) {
         return null;
     }
@@ -32,6 +41,7 @@ export function Paginacion<T>({ paginador }: { paginador: Paginator<T> }) {
                             <Link
                                 href={link.url}
                                 preserveScroll
+                                preserveState={preservarEstado}
                                 dangerouslySetInnerHTML={{ __html: link.label }}
                             />
                         ) : (

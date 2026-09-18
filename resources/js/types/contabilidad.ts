@@ -40,7 +40,16 @@ export type ViajeContable = ViajeListItem & {
     estado_label: string;
     /** Null cuando el viaje todavía no se facturó. */
     factura: FacturaResumen | null;
+    /** Cuándo llegó el papel de la GR a la oficina; null si todavía no. */
+    gr_fisica_recibida_at: string | null;
 };
+
+/**
+ * Un viaje marcado para facturar. Lleva el N° de GR además del id porque la
+ * selección cruza páginas: los que quedaron en otra página no están en la
+ * tabla y la barra los tiene que poder nombrar igual.
+ */
+export type ViajeSeleccionado = Pick<ViajeContable, 'id' | 'numero_gr'>;
 
 /** Totales por moneda: sumar soles con dólares daría un número sin sentido. */
 export type ResumenMoneda = {

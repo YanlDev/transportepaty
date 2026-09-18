@@ -293,3 +293,79 @@ it('suggests a short alias by dropping the forma societaria', function (): void 
         // Persona natural: no hay forma societaria que quitar.
         ->and(Cliente::aliasSugerido('GUZMAN REVILLA CHRISTOPHER CHRISTIAN'))->toBe('Guzman Revilla Christopher Christian');
 });
+
+it('registers a client from the express form and stays on the page', function (): void {
+    actingAs(actorConRol('admin'))
+        ->from(route('programacion.index'))
+        ->post(route('clientes.express'), [
+            'ruc' => '20100136741',
+            'razon_social' => 'MINSUR S.A.',
+            'alias' => 'Minsur',
+            'contacto' => 'Ana Torres',
+        ])
+        // Vuelve a lo que se estaba haciendo, no al padrón: el alta express
+        // existe para no cortar la carga de la programación.
+        ->assertRedirect(route('programacion.index'))
+        ->assertSessionHasNoErrors();
+
+    $cliente = Cliente::query()->sole();
+
+    expect($cliente->alias)->toBe('Minsur')
+        ->and($cliente->contacto)->toBe('Ana Torres')
+        // Los que el formulario mínimo no pregunta quedan en un default
+        // sensato, para completarse después en el padrón.
+        ->and($cliente->activo)->toBeTrue()
+        ->and($cliente->recurrente)->toBeFalse()
+        ->and($cliente->telefono)->toBeNull();
+});
+
+it('links the trips waiting for that RUC when registered from the express form', function (): void {
+    $esperando = Viaje::factory()->create([
+        'cliente_ruc' => '20100136741',
+        'cliente_id' => null,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('clientes.express'), [
+            'ruc' => '20100136741',
+            'razon_social' => 'MINSUR S.A.',
+            'alias' => 'Minsur',
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($esperando->fresh()->cliente_id)->toBe(Cliente::query()->sole()->id);
+});
+
+it('rejects a duplicate or malformed RUC from the express form', function (): void {
+    Cliente::factory()->create(['ruc' => '20100136741']);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('clientes.express'), [
+            'ruc' => '20100136741',
+            'razon_social' => 'MINSUR S.A.',
+            'alias' => 'Minsur',
+        ])
+        ->assertSessionHasErrors('ruc');
+
+    actingAs(actorConRol('admin'))
+        ->post(route('clientes.express'), [
+            'ruc' => '123',
+            'razon_social' => 'MINSUR S.A.',
+            'alias' => 'Minsur',
+        ])
+        ->assertSessionHasErrors('ruc');
+
+    $this->assertDatabaseCount('clientes', 1);
+});
+
+it('forbids a viewer from using the express form', function (): void {
+    actingAs(actorConRol('visor'))
+        ->post(route('clientes.express'), [
+            'ruc' => '20100136741',
+            'razon_social' => 'MINSUR S.A.',
+            'alias' => 'Minsur',
+        ])
+        ->assertForbidden();
+
+    $this->assertDatabaseCount('clientes', 0);
+});

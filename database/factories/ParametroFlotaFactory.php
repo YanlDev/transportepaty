@@ -29,7 +29,6 @@ class ParametroFlotaFactory extends Factory
             'dias_sincronizacion' => 53,
             'igv_pct' => 0.18,
             'margen_pct_default' => 0.12,
-            'viatico_dia' => 50,
         ];
     }
 }

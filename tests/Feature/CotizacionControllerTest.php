@@ -34,12 +34,6 @@ function datosCotizacion(array $overrides = []): array
         'material' => 'Materiales varios',
         'km' => 300,
         'dias' => 2,
-        'peajes' => 150,
-        'viaticos' => 100,
-        'alojamiento' => 0,
-        'cochera' => 0,
-        'carga_descarga' => 0,
-        'otros_ruta' => 0,
         'margen_pct' => 0.12,
         'estado' => 'borrador',
         'notas' => null,
@@ -60,7 +54,6 @@ function datosFlota(array $overrides = []): array
         'dias_sincronizacion' => 53,
         'igv_pct' => 0.18,
         'margen_pct_default' => 0.12,
-        'viatico_dia' => 50,
     ], $overrides);
 }
 
@@ -98,6 +91,7 @@ it('renders the create, edit and show screens', function (): void {
             ->has('clientes')
             ->has('puntos')
             ->has('flota')
+            ->has('lineas', 10)
         );
 
     actingAs(actorConRol('admin'))
@@ -119,12 +113,50 @@ it('renders the create, edit and show screens', function (): void {
         ->assertInertia(fn (Assert $page) => $page
             ->component('parametros-costo/edit')
             ->has('flota.dias_disponibles')
-            ->has('totales.fijo_dia_indirecto')
-            // Cada componente llega con su tasa ya resuelta y los pasos que la
-            // explican: es lo que la pantalla despliega.
+            ->has('totales.fijo_dia')
+            // Cada línea llega con la tasa con la que se cotiza y, aparte, la
+            // que sugiere su calculadora con los pasos que la explican.
             ->has('componentes.0.tasa')
+            ->has('componentes.0.tasa_calculada')
             ->has('componentes.0.pasos')
-            ->has('componentes', 9)
+            ->has('componentes', 10)
+        );
+});
+
+it('opens the quick route sheet with the current rate card', function (): void {
+    actingAs(actorConRol('admin'))
+        ->get(route('cotizaciones.cotizador'))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('cotizaciones/cotizador')
+            ->has('lineas', 10)
+            ->where('lineas.0.tasa', 268.13)
+            ->where('margen_pct_default', 0.12)
+            ->where('igv_pct', 0.18)
+        );
+});
+
+it('keeps the quick route sheet for the ones who quote', function (): void {
+    actingAs(actorConRol('visor'))
+        ->get(route('cotizaciones.cotizador'))
+        ->assertForbidden();
+});
+
+it('prefills a new quote with the route worked out in the sheet', function (): void {
+    actingAs(actorConRol('admin'))
+        ->get(route('cotizaciones.create', [
+            'cliente_nombre' => 'CALCESUR',
+            'destino' => 'CHILCANO',
+            'km' => '1275',
+            'dias' => '9',
+            'margen_pct' => '0.12',
+            'numero' => '006-9999',
+        ]))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('borrador.km', '1275')
+            ->where('borrador.destino', 'CHILCANO')
+            ->missing('borrador.numero')
         );
 });
 
@@ -142,12 +174,14 @@ it('calculates the tariff on the server when storing', function (): void {
     $cotizacion = Cotizacion::query()->sole();
 
     expect($cotizacion->costo_operativo)
-        ->toBe(round($cotizacion->total_directo + $cotizacion->total_indirecto, 2))
-        ->and($cotizacion->margen)->toBe(round($cotizacion->costo_operativo * 0.12, 2))
+        ->toBe(round($cotizacion->total_fijo + $cotizacion->total_variable, 2))
+        // Margen sobre el precio de venta: el costo es el 88 % de la tarifa.
+        ->and($cotizacion->subtotal)->toBe(round($cotizacion->costo_operativo / 0.88, 2))
+        ->and($cotizacion->margen)->toBe(round($cotizacion->subtotal - $cotizacion->costo_operativo, 2))
         ->and($cotizacion->igv)->toBe(round($cotizacion->subtotal * 0.18, 2))
         ->and($cotizacion->total)->toBe(round($cotizacion->subtotal + $cotizacion->igv, 2))
-        // Los costos del tramo son directos: entran enteros en esa mitad.
-        ->and($cotizacion->total_directo)->toBeGreaterThan(250.0);
+        // 2 días a 648.77 del tarifario de la hoja.
+        ->and($cotizacion->total_fijo)->toBe(1297.54);
 });
 
 it('ignores any totals sent by the client', function (): void {
@@ -196,10 +230,7 @@ it('recalculates on update with the rates the quote was issued with', function (
 
     // El diésel sube después de emitida: corregir el kilometraje no puede
     // arrastrar el precio nuevo a una proforma que el cliente ya tiene.
-    ComponenteCosto::query()->where('nombre', 'Combustible')->update([
-        'metodo' => 'manual',
-        'entradas' => json_encode(['tasa' => 99]),
-    ]);
+    ComponenteCosto::query()->where('nombre', 'Consumo de combustible')->update(['tasa' => 99]);
 
     actingAs(actorConRol('admin'))
         ->put(route('cotizaciones.update', $cotizacion), datosCotizacion(['km' => 400]))
@@ -211,21 +242,10 @@ it('recalculates on update with the rates the quote was issued with', function (
         ->and($cotizacion->km)->toBe(400);
 });
 
-it('previews the breakdown without saving anything', function (): void {
+it('rejects a margin that leaves no possible price', function (): void {
     actingAs(actorConRol('admin'))
-        ->postJson(route('cotizaciones.previsualizar'), [
-            'km' => 300,
-            'dias' => 2,
-            'peajes' => 250,
-            'margen_pct' => 0.12,
-        ])
-        ->assertSuccessful()
-        ->assertJsonStructure([
-            'desglose' => ['componentes', 'ruta'],
-            'total_directo', 'total_indirecto', 'costo_por_km', 'subtotal', 'igv', 'total',
-        ]);
-
-    expect(Cotizacion::query()->count())->toBe(0);
+        ->post(route('cotizaciones.store'), datosCotizacion(['margen_pct' => 1]))
+        ->assertSessionHasErrors('margen_pct');
 });
 
 it('serves the proforma as a pdf', function (): void {
@@ -253,33 +273,42 @@ it('forbids viewers from touching the cost parameters', function (): void {
 });
 
 /**
- * El caso real que ya se cotiza en el Excel de la casa: Pisco → San Rafael,
- * 1264 km en 5.5 días. Si el motor nuevo se desvía de este número, la tarifa
- * que sale del sistema deja de ser la que se negocia en la calle.
+ * La hoja real con la que se cotiza: CALCESUR → Chilcano, cal viva en bigbag,
+ * 9 días y 1275 km. Si el sistema se desvía de estos números, la tarifa que
+ * sale de acá deja de ser la que se negocia en la calle.
  */
-it('reproduces the cost per km of the real Pisco-San Rafael route', function (): void {
-    $flota = ParametroFlota::vigentes();
+it('reproduces the fixed and variable costs of the real route sheet', function (): void {
     $calculadora = new CalculadoraCotizacion;
 
     $calculo = $calculadora->calcular(
-        ['km' => 1264, 'dias' => 5.5, 'peajes' => 218.2, 'viaticos' => 275, 'cochera' => 105.4, 'margen_pct' => 0.12],
-        $calculadora->lineasDesde(ComponenteCosto::query()->activos()->ordenados()->get(), $flota),
-        $flota->igv_pct,
+        ['km' => 1275, 'dias' => 9, 'margen_pct' => 0.12],
+        $calculadora->lineasDesde(ComponenteCosto::query()->activos()->ordenados()->get()),
+        0.18,
     );
 
-    $costoPorKm = (new Cotizacion([...$calculo, 'km' => 1264]))->costoPorKm();
+    $importes = collect($calculo['desglose']['componentes'])->pluck('importe', 'nombre');
 
-    // Fijos ~3754 + variables ~3903 + ruta ~599 → alrededor de 6.5 S/. por km.
-    expect($costoPorKm)->toBeGreaterThan(6.2)
-        ->and($costoPorKm)->toBeLessThan(6.9);
+    expect($calculo['total_fijo'])->toBe(5838.93)
+        ->and($importes['Costo de oportunidad de los activos (tracto + carreta)'])->toBe(2413.17)
+        ->and($importes['Mano de obra directa (choferes)'])->toBe(2330.46)
+        ->and($importes['Consumo de combustible'])->toBe(3213.0)
+        ->and($importes['Mantenimiento de vehículos'])->toBe(306.0)
+        ->and($importes['Desgaste y reposición de neumáticos'])->toBe(267.75);
+});
 
-    // Las participaciones se miden contra el subtotal, así que los costos se
-    // reparten todo menos lo que se lleva el margen.
-    $participaciones = collect([
-        ...$calculo['desglose']['componentes'],
-        ...$calculo['desglose']['ruta'],
-    ])->sum('participacion_pct');
+/**
+ * En la hoja, 10,370.68 de costo operativo con 12 % de margen da 11,784.86: el
+ * margen es el 12 % de la tarifa, no del costo.
+ */
+it('takes the margin over the selling price like the route sheet', function (): void {
+    $calculo = (new CalculadoraCotizacion)->calcular(
+        ['km' => 1, 'dias' => 1, 'margen_pct' => 0.12],
+        [['nombre' => 'Costo operativo', 'tipo' => 'fijo_dia', 'naturaleza' => 'directo', 'tasa' => 10370.68]],
+        0.18,
+    );
 
-    expect($participaciones + $calculo['margen'] / $calculo['subtotal'])
-        ->toEqualWithDelta(1.0, 0.001);
+    expect($calculo['subtotal'])->toBe(11784.86)
+        ->and($calculo['margen'])->toBe(1414.18)
+        ->and($calculo['igv'])->toBe(2121.27)
+        ->and($calculo['total'])->toBe(13906.13);
 });

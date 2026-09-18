@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoCobranza;
 use App\Enums\Moneda;
+use App\Http\Requests\MarcarGrFisicaRequest;
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
 use App\Services\ExportadorCobranza;
 use App\Services\ResumenCobranza;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -98,6 +100,26 @@ class ContabilidadController extends Controller
     }
 
     /**
+     * Marca o desmarca que el papel de la GR ya está en la oficina. Lo hace
+     * quien puede facturar, igual que el resto de la cobranza.
+     *
+     * Volver a marcar una GR que ya estaba marcada no le cambia la fecha: la
+     * que vale es la primera vez que se registró que llegó.
+     */
+    public function marcarGrFisica(MarcarGrFisicaRequest $request, Viaje $viaje): RedirectResponse
+    {
+        $this->authorize('create', Factura::class);
+
+        $recibida = $request->boolean('recibida');
+
+        $viaje->update([
+            'gr_fisica_recibida_at' => $recibida ? ($viaje->gr_fisica_recibida_at ?? now()) : null,
+        ]);
+
+        return back();
+    }
+
+    /**
      * Los filtros de la cobranza tal como llegan en la URL. Los comparten la
      * tabla y la exportación, que tienen que mirar exactamente el mismo
      * recorte: si divergen, el archivo deja de ser lo que se ve en pantalla.
@@ -127,6 +149,7 @@ class ContabilidadController extends Controller
             // Las columnas de operación son las mismas de `/viajes`: acá no se
             // factura contra un resumen, se factura contra el viaje entero.
             ...$viaje->datosDeListado(),
+            'gr_fisica_recibida_at' => $viaje->gr_fisica_recibida_at?->toIso8601String(),
             'estado' => $viaje->estadoCobranza()->value,
             'estado_label' => $viaje->estadoCobranza()->label(),
             'factura' => $factura === null ? null : [

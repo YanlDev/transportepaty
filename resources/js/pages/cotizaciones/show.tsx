@@ -5,7 +5,7 @@ import cotizaciones, {
     pdf,
     show,
 } from '@/actions/App/Http/Controllers/CotizacionController';
-import { DesglosePanel } from '@/components/cotizaciones/desglose-panel';
+import { HojaTarifa } from '@/components/cotizaciones/hoja-tarifa';
 import { Button } from '@/components/ui/button';
 import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha } from '@/lib/format';
@@ -93,14 +93,27 @@ export default function CotizacionShow({ cotizacion }: Props) {
                 </dl>
             </section>
 
-            <DesglosePanel
-                desglose={{
-                    ...cotizacion,
-                    costo_por_km: cotizacion.costo_por_km,
-                }}
-                km={cotizacion.km}
-                dias={cotizacion.dias}
+            <HojaTarifa
+                lineas={cotizacion.desglose.componentes}
                 igvPct={igvPct}
+                margen={`${(cotizacion.margen_pct * 100).toFixed(2)} %`}
+                columnas={[
+                    {
+                        clave: 'ruta',
+                        kmNumero: cotizacion.km,
+                        resultado: cotizacion,
+                        dias: (
+                            <p className="text-right font-mono tabular-nums">
+                                {cotizacion.dias}
+                            </p>
+                        ),
+                        km: (
+                            <p className="text-right font-mono tabular-nums">
+                                {cotizacion.km.toLocaleString('es-PE')}
+                            </p>
+                        ),
+                    },
+                ]}
             />
 
             {cotizacion.notas && (

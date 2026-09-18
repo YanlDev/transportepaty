@@ -27,7 +27,6 @@ use Illuminate\Database\Eloquent\Model;
  * @property float $dias_sincronizacion
  * @property float $igv_pct
  * @property float $margen_pct_default
- * @property float $viatico_dia
  */
 #[Fillable([
     'tamano_flota',
@@ -37,7 +36,6 @@ use Illuminate\Database\Eloquent\Model;
     'dias_sincronizacion',
     'igv_pct',
     'margen_pct_default',
-    'viatico_dia',
 ])]
 class ParametroFlota extends Model
 {
@@ -79,7 +77,6 @@ class ParametroFlota extends Model
             'dias_sincronizacion' => 'float',
             'igv_pct' => 'float',
             'margen_pct_default' => 'float',
-            'viatico_dia' => 'float',
         ];
     }
 }

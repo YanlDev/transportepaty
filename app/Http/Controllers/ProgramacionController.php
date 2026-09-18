@@ -203,10 +203,14 @@ class ProgramacionController extends Controller
         return Cliente::query()
             ->where('activo', true)
             ->orderBy('alias')
-            ->get(['id', 'alias'])
+            ->get(['id', 'alias', 'ruc'])
             ->map(fn (Cliente $cliente): array => [
                 'id' => $cliente->id,
                 'alias' => $cliente->alias,
+                // Lo usa el alta express para quedarse con el cliente recién
+                // creado: al volver, es por su RUC que se lo encuentra en esta
+                // lista ya recargada.
+                'ruc' => $cliente->ruc,
             ])
             ->all();
     }

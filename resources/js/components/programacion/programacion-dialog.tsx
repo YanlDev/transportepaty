@@ -1,4 +1,6 @@
 import { useForm } from '@inertiajs/react';
+import { useState } from 'react';
+import { storeExpress } from '@/actions/App/Http/Controllers/ClienteController';
 import {
     store,
     update,
@@ -30,6 +32,14 @@ type FormData = {
     conductor_id: number | null;
     cliente_id: number | null;
     destino: string;
+};
+
+/** El alta mínima de un cliente, sin salir de la programación. */
+type FormCliente = {
+    ruc: string;
+    razon_social: string;
+    alias: string;
+    contacto: string;
 };
 
 /**
@@ -80,10 +90,72 @@ export function ProgramacionDialog({
             destino: programacion?.destino ?? '',
         });
 
+    /**
+     * El alta express, abierta con el texto que se alcanzó a escribir en el
+     * buscador de clientes. `null` mientras está cerrada.
+     *
+     * Va acá dentro y no en otro diálogo a propósito: un modal sobre otro
+     * modal se tapan entre sí, que es lo que se quiso evitar al pasar el
+     * selector a popover.
+     */
+    const [altaCliente, setAltaCliente] = useState<string | null>(null);
+
+    const formCliente = useForm<FormCliente>({
+        ruc: '',
+        razon_social: '',
+        alias: '',
+        contacto: '',
+    });
+
     const ultimoDelConductor =
         data.conductor_id === null
             ? null
             : (ultimoViajePorConductor[data.conductor_id] ?? null);
+
+    /**
+     * Lo escrito en el buscador arranca como razón social y como alias: en la
+     * mayoría de los casos se tipeó el nombre del cliente, así que quedan dos
+     * campos menos que llenar y el alias se recorta si hace falta.
+     */
+    const abrirAltaCliente = (texto: string) => {
+        formCliente.setData({
+            ruc: '',
+            razon_social: texto,
+            alias: texto.slice(0, 60),
+            contacto: '',
+        });
+        setAltaCliente(texto);
+    };
+
+    const cerrarAltaCliente = () => {
+        setAltaCliente(null);
+        formCliente.clearErrors();
+    };
+
+    /**
+     * Crea el cliente y lo deja elegido en el formulario, sin perder nada de
+     * lo ya cargado. Al volver, la página trae la lista de clientes recargada:
+     * el recién creado se reconoce ahí por su RUC, que es el único dato que
+     * con seguridad no cambió entre lo que se envió y lo que se guardó.
+     */
+    const crearCliente = () => {
+        const ruc = formCliente.data.ruc;
+
+        formCliente.post(storeExpress().url, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                const lista = (page.props.clientes ?? []) as ClienteOpcion[];
+                const creado = lista.find((cliente) => cliente.ruc === ruc);
+
+                if (creado) {
+                    setData('cliente_id', creado.id);
+                }
+
+                formCliente.reset();
+                setAltaCliente(null);
+            },
+        });
+    };
 
     /**
      * Elegir el conductor deja puesta la unidad con la que salió la última
@@ -226,6 +298,10 @@ export function ProgramacionDialog({
                                         valor: cliente.id,
                                         etiqueta: cliente.alias,
                                     }))}
+                                    crear={{
+                                        etiqueta: 'Crear cliente',
+                                        onCrear: abrirAltaCliente,
+                                    }}
                                 />
                             )}
                         </Field>
@@ -262,6 +338,128 @@ export function ProgramacionDialog({
                             )}
                         </Field>
                     </div>
+
+                    {/* No es un `<form>`: iría anidado dentro del de la
+                        programación, que el HTML no permite. Envía con un
+                        botón normal. */}
+                    {altaCliente !== null && (
+                        <div className="flex flex-col gap-4 rounded-md border border-dashed bg-muted/30 p-4">
+                            <p className="text-sm font-medium">
+                                Cliente nuevo
+                                <span className="ml-1 font-normal text-muted-foreground">
+                                    — el resto de la ficha se completa después
+                                    en el padrón.
+                                </span>
+                            </p>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <Field
+                                    label="RUC"
+                                    error={formCliente.errors.ruc}
+                                    required
+                                    ayuda="Con él se enlazan sus GR ya importadas."
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            inputMode="numeric"
+                                            maxLength={11}
+                                            value={formCliente.data.ruc}
+                                            onChange={(evento) =>
+                                                formCliente.setData(
+                                                    'ruc',
+                                                    evento.target.value.replace(
+                                                        /\D/g,
+                                                        '',
+                                                    ),
+                                                )
+                                            }
+                                            placeholder="20123456789"
+                                        />
+                                    )}
+                                </Field>
+
+                                <Field
+                                    label="Alias"
+                                    error={formCliente.errors.alias}
+                                    required
+                                    ayuda="El nombre corto que se ve en la tarjeta."
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            maxLength={60}
+                                            value={formCliente.data.alias}
+                                            onChange={(evento) =>
+                                                formCliente.setData(
+                                                    'alias',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </Field>
+
+                                <Field
+                                    label="Razón social"
+                                    error={formCliente.errors.razon_social}
+                                    required
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            value={
+                                                formCliente.data.razon_social
+                                            }
+                                            onChange={(evento) =>
+                                                formCliente.setData(
+                                                    'razon_social',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </Field>
+
+                                <Field
+                                    label="Contacto"
+                                    error={formCliente.errors.contacto}
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            value={formCliente.data.contacto}
+                                            onChange={(evento) =>
+                                                formCliente.setData(
+                                                    'contacto',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                            placeholder="Nombre y teléfono"
+                                        />
+                                    )}
+                                </Field>
+                            </div>
+
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={cerrarAltaCliente}
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="secondary"
+                                    onClick={crearCliente}
+                                    disabled={formCliente.processing}
+                                >
+                                    Crear y elegir
+                                </Button>
+                            </div>
+                        </div>
+                    )}
 
                     <DialogFooter>
                         <DialogClose asChild>

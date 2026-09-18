@@ -1,11 +1,11 @@
-import { Link, useForm, useHttp } from '@inertiajs/react';
-import { useEffect, useRef, useState } from 'react';
+import { Link, useForm } from '@inertiajs/react';
+import { useState } from 'react';
 import cotizaciones, {
-    previsualizar,
     store,
     update,
 } from '@/actions/App/Http/Controllers/CotizacionController';
-import { DesglosePanel } from '@/components/cotizaciones/desglose-panel';
+import { HojaTarifa } from '@/components/cotizaciones/hoja-tarifa';
+import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -18,13 +18,12 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { calcularTarifa } from '@/lib/tarifa';
 import type {
     Cliente,
     Cotizacion,
-    CostosRuta,
-    DesgloseCotizacion,
     EnumOption,
-    ParametroFlota,
+    LineaTarifa,
     PuntoTraslado,
 } from '@/types/fleet';
 
@@ -32,36 +31,30 @@ import type {
 type ClienteOpcion = Pick<Cliente, 'id' | 'alias' | 'razon_social' | 'ruc'>;
 type PuntoOpcion = Pick<PuntoTraslado, 'id' | 'nombre' | 'direccion'>;
 
+/** Lo que llega de la hoja rápida para no volver a tipearlo. */
+export type BorradorCotizacion = Partial<
+    Record<
+        | 'cliente_nombre'
+        | 'destino'
+        | 'material'
+        | 'km'
+        | 'dias'
+        | 'margen_pct',
+        string
+    >
+>;
+
 type Props = {
     mode: 'create' | 'edit';
     cotizacion?: Cotizacion;
+    /** El tarifario vigente; al editar se usa el que la cotización tenía. */
+    lineas?: LineaTarifa[];
+    borrador?: BorradorCotizacion;
     clientes: ClienteOpcion[];
     puntos: PuntoOpcion[];
     estados: EnumOption[];
-    flota: ParametroFlota;
+    flota: { margen_pct_default: number; igv_pct: number };
 };
-
-/**
- * Los conceptos propios del tramo, en el orden en que se cargan. Desglosarlos
- * no cambia la tarifa, pero es lo primero que se revisa cuando el cliente
- * pregunta por qué una ruta cuesta más que otra de los mismos kilómetros.
- */
-const CONCEPTOS_RUTA: {
-    campo: keyof CostosRuta;
-    label: string;
-    ayuda?: string;
-}[] = [
-    { campo: 'peajes', label: 'Peajes' },
-    {
-        campo: 'viaticos',
-        label: 'Viáticos',
-        ayuda: 'Se precarga con los días de ruta.',
-    },
-    { campo: 'alojamiento', label: 'Alojamiento' },
-    { campo: 'cochera', label: 'Cochera' },
-    { campo: 'carga_descarga', label: 'Carga y descarga' },
-    { campo: 'otros_ruta', label: 'Otros' },
-];
 
 type FormData = {
     fecha: string;
@@ -76,12 +69,6 @@ type FormData = {
     material: string;
     km: string;
     dias: string;
-    peajes: string;
-    viaticos: string;
-    alojamiento: string;
-    cochera: string;
-    carga_descarga: string;
-    otros_ruta: string;
     margen_pct: string;
     estado: string;
     notas: string;
@@ -89,12 +76,11 @@ type FormData = {
 
 const SIN_PUNTO = 'ninguno';
 
-/** Espera entre tecla y tecla antes de pedirle el desglose al servidor. */
-const ESPERA_PREVISUALIZACION = 400;
-
 export function CotizacionForm({
     mode,
     cotizacion,
+    lineas: lineasVigentes = [],
+    borrador = {},
     clientes,
     puntos,
     estados,
@@ -118,107 +104,42 @@ export function CotizacionForm({
             fecha: cotizacion?.fecha ?? fechas.hoy,
             valido_hasta: cotizacion?.valido_hasta ?? fechas.enQuinceDias,
             cliente_id: cotizacion?.cliente_id?.toString() ?? '',
-            cliente_nombre: cotizacion?.cliente_nombre ?? '',
+            cliente_nombre:
+                cotizacion?.cliente_nombre ?? borrador.cliente_nombre ?? '',
             cliente_ruc: cotizacion?.cliente_ruc ?? '',
             punto_partida_id:
                 cotizacion?.punto_partida_id?.toString() ?? SIN_PUNTO,
             punto_llegada_id:
                 cotizacion?.punto_llegada_id?.toString() ?? SIN_PUNTO,
             origen: cotizacion?.origen ?? '',
-            destino: cotizacion?.destino ?? '',
-            material: cotizacion?.material ?? '',
-            km: cotizacion?.km?.toString() ?? '',
-            dias: cotizacion?.dias?.toString() ?? '',
-            peajes: cotizacion?.peajes?.toString() ?? '0',
-            viaticos: cotizacion?.viaticos?.toString() ?? '0',
-            alojamiento: cotizacion?.alojamiento?.toString() ?? '0',
-            cochera: cotizacion?.cochera?.toString() ?? '0',
-            carga_descarga: cotizacion?.carga_descarga?.toString() ?? '0',
-            otros_ruta: cotizacion?.otros_ruta?.toString() ?? '0',
+            destino: cotizacion?.destino ?? borrador.destino ?? '',
+            material: cotizacion?.material ?? borrador.material ?? '',
+            km: cotizacion?.km?.toString() ?? borrador.km ?? '',
+            dias: cotizacion?.dias?.toString() ?? borrador.dias ?? '',
             margen_pct: (
-                (cotizacion?.margen_pct ?? flota.margen_pct_default) * 100
+                (cotizacion?.margen_pct ??
+                    (borrador.margen_pct === undefined
+                        ? flota.margen_pct_default
+                        : Number(borrador.margen_pct))) * 100
             ).toString(),
             estado: cotizacion?.estado ?? 'borrador',
             notas: cotizacion?.notas ?? '',
         });
 
-    // El desglose se pide al servidor —y no se recalcula acá— para que la
-    // fórmula viva en un solo lugar: la que cotiza es la que factura.
-    const preview = useHttp<
-        CostosRuta & { km: number; dias: number; margen_pct: number },
-        DesgloseCotizacion
-    >({
-        km: 0,
-        dias: 0,
-        peajes: 0,
-        viaticos: 0,
-        alojamiento: 0,
-        cochera: 0,
-        carga_descarga: 0,
-        otros_ruta: 0,
-        margen_pct: 0,
-    });
+    // Una cotización ya emitida se recalcula con las tasas que tenía, como
+    // hace el servidor al guardarla: corregir un kilometraje no le cambia el
+    // precio porque mientras tanto se haya tocado el tarifario.
+    const lineas: LineaTarifa[] = cotizacion
+        ? cotizacion.desglose.componentes
+        : lineasVigentes;
 
-    const km = Number(data.km);
-    const dias = Number(data.dias);
-    const margenPct = Number(data.margen_pct) / 100;
-    const rutaCompleta = km > 0 && dias > 0;
-
-    const costosRuta: CostosRuta = {
-        peajes: Number(data.peajes) || 0,
-        viaticos: Number(data.viaticos) || 0,
-        alojamiento: Number(data.alojamiento) || 0,
-        cochera: Number(data.cochera) || 0,
-        carga_descarga: Number(data.carga_descarga) || 0,
-        otros_ruta: Number(data.otros_ruta) || 0,
-    };
-
-    const { setData: setPreviewData, post: pedirDesglose } = preview;
-    // Se compara serializado y no por referencia: el objeto se arma en cada
-    // render y dispararía el efecto en cada tecla de cualquier campo.
-    const costosRutaSerializados = JSON.stringify(costosRuta);
-
-    useEffect(() => {
-        if (!rutaCompleta) {
-            return;
-        }
-
-        const temporizador = setTimeout(() => {
-            setPreviewData({
-                km,
-                dias,
-                margen_pct: Number.isFinite(margenPct) ? margenPct : 0,
-                ...(JSON.parse(costosRutaSerializados) as CostosRuta),
-            });
-
-            pedirDesglose(previsualizar().url);
-        }, ESPERA_PREVISUALIZACION);
-
-        return () => clearTimeout(temporizador);
-    }, [
-        km,
-        dias,
-        margenPct,
-        costosRutaSerializados,
-        rutaCompleta,
-        setPreviewData,
-        pedirDesglose,
-    ]);
-
-    // Los viáticos siguen a los días mientras nadie los toque a mano: es la
-    // regla de la casa (tantos soles por día), pero hay rutas donde se pactan
-    // distinto y ahí manda lo que se escribió.
-    const viaticosTocados = useRef(cotizacion !== undefined);
-
-    const cambiarDias = (valor: string) => {
-        setData((datos) => ({
-            ...datos,
-            dias: valor,
-            viaticos: viaticosTocados.current
-                ? datos.viaticos
-                : ((Number(valor) || 0) * flota.viatico_dia).toFixed(2),
-        }));
-    };
+    const km = Number(data.km) || 0;
+    const dias = Number(data.dias) || 0;
+    const margenPct = (Number(data.margen_pct) || 0) / 100;
+    const resultado =
+        km > 0 && dias > 0 && margenPct >= 0 && margenPct < 1
+            ? calcularTarifa(lineas, { km, dias, margenPct }, flota.igv_pct)
+            : null;
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -349,8 +270,8 @@ export function CotizacionForm({
                         Ruta
                     </h2>
                     <p className="text-xs text-muted-foreground">
-                        Los días son los que la unidad queda tomada, incluyendo
-                        esperas de carga y el retorno.
+                        Los puntos del catálogo llenan la dirección; si no está,
+                        alcanza con escribirla.
                     </p>
                 </div>
 
@@ -451,90 +372,84 @@ export function CotizacionForm({
                             />
                         )}
                     </Field>
-                    <Field label="Kilómetros" error={errors.km} required>
-                        {(id) => (
-                            <Input
-                                id={id}
-                                type="number"
-                                inputMode="numeric"
-                                min={1}
-                                value={data.km}
-                                onChange={(e) => setData('km', e.target.value)}
-                                placeholder="1264"
-                            />
-                        )}
-                    </Field>
-                    <Field
-                        label="Días de ruta"
-                        error={errors.dias}
-                        required
-                        ayuda="Admite medios días: 5.5 es válido."
-                    >
-                        {(id) => (
-                            <Input
-                                id={id}
-                                type="number"
-                                inputMode="decimal"
-                                step="0.5"
-                                min={0.5}
-                                value={data.dias}
-                                onChange={(e) => cambiarDias(e.target.value)}
-                                placeholder="5.5"
-                            />
-                        )}
-                    </Field>
                 </div>
             </section>
 
-            <section className="rounded-xl border border-border bg-card p-5">
-                <div className="mb-4">
+            <section className="flex flex-col gap-3">
+                <div>
                     <h2 className="text-sm font-semibold text-foreground">
-                        Costos de la ruta
+                        Tarifa
                     </h2>
                     <p className="text-xs text-muted-foreground">
-                        Lo que se paga en este tramo y no en otro. Todos son
-                        costos directos del viaje.
+                        {cotizacion
+                            ? 'Con las tasas con las que se emitió: cambiar el tarifario no mueve esta cotización.'
+                            : 'Los días son los que la unidad queda tomada, incluyendo esperas de carga y el retorno.'}
                     </p>
                 </div>
 
-                <div className="grid gap-4 sm:grid-cols-3">
-                    {CONCEPTOS_RUTA.map((concepto) => (
-                        <Field
-                            key={concepto.campo}
-                            label={`${concepto.label} (S/.)`}
-                            error={errors[concepto.campo]}
-                            required
-                            ayuda={concepto.ayuda}
-                        >
-                            {(id) => (
+                <HojaTarifa
+                    lineas={lineas}
+                    igvPct={flota.igv_pct}
+                    columnas={[
+                        {
+                            clave: 'ruta',
+                            kmNumero: km,
+                            resultado,
+                            dias: (
                                 <Input
-                                    id={id}
+                                    aria-label="Días de ruta"
                                     type="number"
                                     inputMode="decimal"
-                                    step="0.01"
-                                    min={0}
-                                    value={data[concepto.campo]}
-                                    onChange={(e) => {
-                                        if (concepto.campo === 'viaticos') {
-                                            viaticosTocados.current = true;
-                                        }
-
-                                        setData(concepto.campo, e.target.value);
-                                    }}
+                                    step="0.5"
+                                    min={0.5}
+                                    value={data.dias}
+                                    onChange={(e) =>
+                                        setData('dias', e.target.value)
+                                    }
+                                    placeholder="9"
+                                    className="h-8 bg-background text-right font-mono tabular-nums"
                                 />
-                            )}
-                        </Field>
-                    ))}
-                </div>
-            </section>
+                            ),
+                            km: (
+                                <Input
+                                    aria-label="Kilómetros"
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={1}
+                                    value={data.km}
+                                    onChange={(e) =>
+                                        setData('km', e.target.value)
+                                    }
+                                    placeholder="1275"
+                                    className="h-8 bg-background text-right font-mono tabular-nums"
+                                />
+                            ),
+                        },
+                    ]}
+                    margen={
+                        <div className="flex items-center justify-end gap-1">
+                            <Input
+                                aria-label="Margen de operación (%)"
+                                type="number"
+                                inputMode="decimal"
+                                step="0.5"
+                                min={0}
+                                max={90}
+                                value={data.margen_pct}
+                                onChange={(e) =>
+                                    setData('margen_pct', e.target.value)
+                                }
+                                className="h-7 w-16 text-right font-mono tabular-nums"
+                            />
+                            <span className="text-xs">%</span>
+                        </div>
+                    }
+                />
 
-            <DesglosePanel
-                desglose={rutaCompleta ? preview.response : null}
-                km={km}
-                dias={dias}
-                igvPct={flota.igv_pct}
-                calculando={preview.processing}
-            />
+                <InputError message={errors.dias} />
+                <InputError message={errors.km} />
+                <InputError message={errors.margen_pct} />
+            </section>
 
             <section className="rounded-xl border border-border bg-card p-5">
                 <div className="mb-4">
@@ -544,27 +459,6 @@ export function CotizacionForm({
                 </div>
 
                 <div className="grid gap-4 sm:grid-cols-2">
-                    <Field
-                        label="Margen (%)"
-                        error={errors.margen_pct}
-                        required
-                        ayuda={`Sugerido: ${(flota.margen_pct_default * 100).toFixed(0)}%.`}
-                    >
-                        {(id) => (
-                            <Input
-                                id={id}
-                                type="number"
-                                inputMode="decimal"
-                                step="0.5"
-                                min={0}
-                                max={100}
-                                value={data.margen_pct}
-                                onChange={(e) =>
-                                    setData('margen_pct', e.target.value)
-                                }
-                            />
-                        )}
-                    </Field>
                     <Field label="Estado" error={errors.estado} required>
                         {(id) => (
                             <Select

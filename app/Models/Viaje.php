@@ -45,6 +45,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property int|null $conductor_id
  * @property string|null $observaciones
  * @property int|null $factura_id
+ * @property Carbon|null $gr_fisica_recibida_at
  * @property-read Factura|null $factura
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
@@ -75,6 +76,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'conductor_id',
     'observaciones',
     'factura_id',
+    'gr_fisica_recibida_at',
 ])]
 class Viaje extends Model implements HasMedia
 {
@@ -347,6 +349,7 @@ class Viaje extends Model implements HasMedia
         return [
             'fecha_emision' => 'datetime',
             'fecha_traslado' => 'date:Y-m-d',
+            'gr_fisica_recibida_at' => 'datetime',
             'guias_remitente' => 'array',
             'peso' => 'decimal:3',
             'tipo_carga' => TipoCarga::class,

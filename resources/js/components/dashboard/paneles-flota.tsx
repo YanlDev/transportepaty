@@ -45,7 +45,7 @@ export function DocumentosPanel({ documentos }: { documentos: Documentos }) {
                             },
                             {
                                 clave: 'por_vencer',
-                                label: 'Por vencer (≤ 30 días)',
+                                label: 'Por vencer (≤ 15 días)',
                                 valor: documentos.por_vencer,
                                 color: 'var(--color-amber-500)',
                             },

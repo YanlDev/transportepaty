@@ -16,9 +16,9 @@ class ComponenteCostoFactory extends Factory
     protected $model = ComponenteCosto::class;
 
     /**
-     * Un componente de tasa fija: es el más simple de razonar en un test que
-     * no está probando la derivación en sí, sino qué hace la calculadora con
-     * la tasa una vez que la tiene.
+     * Una línea de tasa escrita y sin calculadora de apoyo: es la más simple
+     * de razonar en un test que no está probando la derivación en sí, sino qué
+     * hace la cotización con la tasa.
      *
      * @return array<string, mixed>
      */
@@ -29,7 +29,8 @@ class ComponenteCostoFactory extends Factory
             'tipo' => TipoComponente::FijoDia,
             'naturaleza' => NaturalezaCosto::Directo,
             'metodo' => MetodoCosto::Manual,
-            'entradas' => ['tasa' => 100],
+            'tasa' => 100,
+            'entradas' => [],
             'orden' => 0,
             'activo' => true,
         ];
@@ -39,8 +40,7 @@ class ComponenteCostoFactory extends Factory
     {
         return $this->state([
             'tipo' => TipoComponente::FijoDia,
-            'metodo' => MetodoCosto::Manual,
-            'entradas' => ['tasa' => $tasa],
+            'tasa' => $tasa,
         ]);
     }
 
@@ -48,8 +48,7 @@ class ComponenteCostoFactory extends Factory
     {
         return $this->state([
             'tipo' => TipoComponente::VariableKm,
-            'metodo' => MetodoCosto::Manual,
-            'entradas' => ['tasa' => $tasa],
+            'tasa' => $tasa,
         ]);
     }
 

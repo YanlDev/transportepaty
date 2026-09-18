@@ -110,3 +110,30 @@ it('fails when the given folder does not exist', function (): void {
     $this->artisan('transpaty:exportar-documentos-vehiculos', ['ruta' => $this->destino.'/fantasma'])
         ->assertFailed();
 });
+
+it('names the root folder as asked and groups the placas by tipo', function (): void {
+    $tracto = Vehiculo::factory()->create(['placa' => 'VBH-902', 'tipo' => TipoVehiculo::Tracto]);
+    $carreta = Vehiculo::factory()->create(['placa' => 'BUJ-810', 'tipo' => TipoVehiculo::Carreta]);
+
+    documentoConArchivo($tracto, TipoDocumento::Soat, '2027-02-15');
+    documentoConArchivo($carreta, TipoDocumento::Matpel, '2026-11-25');
+
+    $this->artisan('transpaty:exportar-documentos-vehiculos', [
+        'ruta' => $this->destino,
+        '--carpeta' => 'Flota Paty',
+        '--por-tipo' => true,
+    ])->assertSuccessful();
+
+    $flota = $this->destino.'/Flota Paty';
+
+    expect($flota.'/TRACTO/VBH-902/soat_VBH-902_vence-2027-02-15.pdf')->toBeFile()
+        ->and($flota.'/CARRETA/BUJ-810/matpel_BUJ-810_vence-2026-11-25.pdf')->toBeFile()
+        ->and(File::exists($flota.'/VBH-902'))->toBeFalse();
+});
+
+it('refuses a folder name that escapes the given ruta', function (): void {
+    $this->artisan('transpaty:exportar-documentos-vehiculos', [
+        'ruta' => $this->destino,
+        '--carpeta' => '../fuera',
+    ])->assertFailed();
+});

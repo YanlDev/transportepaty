@@ -1,10 +1,9 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { Calculator, Plus, Settings2 } from 'lucide-react';
+import { Calculator } from 'lucide-react';
 import cotizaciones, {
-    create,
     show,
 } from '@/actions/App/Http/Controllers/CotizacionController';
-import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
+import { CotizacionesTabs } from '@/components/cotizaciones/cotizaciones-tabs';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -52,6 +51,8 @@ export default function CotizacionesIndex({
         <div className="mx-auto flex h-full w-full max-w-[1400px] flex-1 flex-col gap-4 p-4 md:p-6">
             <Head title="Cotizaciones" />
 
+            <CotizacionesTabs actual="emitidas" />
+
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-xl font-semibold tracking-tight">
@@ -64,23 +65,6 @@ export default function CotizacionesIndex({
                             : 'tarifas armadas'}
                     </p>
                 </div>
-
-                {puedeEditar && (
-                    <div className="flex flex-wrap items-center gap-2">
-                        <Button asChild variant="outline">
-                            <Link href={parametrosCosto.edit()}>
-                                <Settings2 className="size-4" />
-                                Parámetros de costo
-                            </Link>
-                        </Button>
-                        <Button asChild>
-                            <Link href={create()}>
-                                <Plus className="size-4" />
-                                Nueva cotización
-                            </Link>
-                        </Button>
-                    </div>
-                )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -122,7 +106,9 @@ export default function CotizacionesIndex({
                     descripcion={
                         <>
                             Ajusta la búsqueda
-                            {puedeEditar && ' o arma una tarifa nueva'}.
+                            {puedeEditar &&
+                                ' o calcula una ruta en el Cotizador y emítela'}
+                            .
                         </>
                     }
                 />

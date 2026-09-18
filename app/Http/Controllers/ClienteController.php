@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreClienteExpressRequest;
 use App\Http\Requests\StoreClienteRequest;
 use App\Http\Requests\UpdateClienteRequest;
 use App\Models\Cliente;
@@ -201,13 +202,7 @@ class ClienteController extends Controller
 
         $cliente = Cliente::create($request->validated());
 
-        // Un cliente recién dado de alta suele tener viajes esperándolo: las
-        // GR se importan antes de que alguien lo registre, y quedaron con el
-        // RUC pero sin enlazar.
-        $enlazados = Viaje::query()
-            ->where('cliente_ruc', $cliente->ruc)
-            ->whereNull('cliente_id')
-            ->update(['cliente_id' => $cliente->id]);
+        $enlazados = $this->enlazarViajesHuerfanos($cliente);
 
         return to_route('clientes.index')->with('toast', [
             'type' => 'success',
@@ -215,6 +210,49 @@ class ClienteController extends Controller
                 ? "Cliente registrado y {$enlazados} viaje(s) enlazado(s)."
                 : 'Cliente registrado correctamente.',
         ]);
+    }
+
+    /**
+     * El alta mínima, para registrar un cliente sin abandonar el formulario
+     * que lo pide. Vuelve a la página de origen en vez de ir al padrón: el
+     * punto es seguir con lo que se estaba haciendo, que es programar.
+     *
+     * Deja la ficha marcada como activa y no recurrente; quien la complete
+     * después en el padrón decide si es de los de todos los días.
+     */
+    public function storeExpress(StoreClienteExpressRequest $request): RedirectResponse
+    {
+        $this->authorize('create', Cliente::class);
+
+        $cliente = Cliente::create([
+            ...$request->validated(),
+            'recurrente' => false,
+            'activo' => true,
+        ]);
+
+        $enlazados = $this->enlazarViajesHuerfanos($cliente);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => $enlazados > 0
+                ? "{$cliente->alias} registrado y {$enlazados} viaje(s) enlazado(s)."
+                : "{$cliente->alias} registrado correctamente.",
+        ]);
+    }
+
+    /**
+     * Un cliente recién dado de alta suele tener viajes esperándolo: las GR se
+     * importan antes de que alguien lo registre, y quedaron con el RUC pero
+     * sin enlazar.
+     *
+     * @return int Cuántos viajes quedaron enlazados.
+     */
+    private function enlazarViajesHuerfanos(Cliente $cliente): int
+    {
+        return Viaje::query()
+            ->where('cliente_ruc', $cliente->ruc)
+            ->whereNull('cliente_id')
+            ->update(['cliente_id' => $cliente->id]);
     }
 
     public function edit(Cliente $cliente): Response

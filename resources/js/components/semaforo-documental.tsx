@@ -78,7 +78,7 @@ export function ResumenProblemas({ estado }: Props) {
                         <Grupo titulo="Sin cargar" documentos={faltantes} />
                         <Grupo titulo="Vencidos" documentos={vencidos} />
                         <Grupo
-                            titulo="Vencen en 30 días"
+                            titulo="Vencen en 15 días"
                             documentos={porVencer}
                         />
                     </div>
@@ -138,7 +138,7 @@ export function LeyendaSemaforo() {
     return (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <Clave color="verde" texto="Documentación al día" />
-            <Clave color="ambar" texto="Vence en 30 días o menos" />
+            <Clave color="ambar" texto="Vence en 15 días o menos" />
             <Clave color="rojo" texto="Falta un documento o ya venció" />
         </div>
     );

@@ -68,6 +68,7 @@ it('carries the same operativo columns as the viajes list', function (): void {
                 'peso',
                 'unidad_peso',
                 'archivo_url',
+                'gr_fisica_recibida_at',
                 'estado',
                 'estado_label',
                 'factura',
@@ -343,4 +344,48 @@ it('orders by fecha and then by the GR correlativo, not by import order', functi
             ->where('viajes.data.2.numero_gr', 'EG03-00012409')
             ->where('viajes.data.3.numero_gr', 'EG03-00012500')
         );
+});
+
+it('marks and unmarks that the paper GR arrived at the office', function (): void {
+    $viaje = Viaje::factory()->create();
+    $contador = actorConRol('contador');
+
+    actingAs($contador)
+        ->patch(route('contabilidad.gr-fisica', $viaje), ['recibida' => true])
+        ->assertRedirect();
+
+    expect($viaje->fresh()->gr_fisica_recibida_at)->not->toBeNull();
+
+    actingAs($contador)
+        ->patch(route('contabilidad.gr-fisica', $viaje), ['recibida' => false])
+        ->assertRedirect();
+
+    expect($viaje->fresh()->gr_fisica_recibida_at)->toBeNull();
+});
+
+it('keeps the first fecha when the GR is marked again', function (): void {
+    $viaje = Viaje::factory()->create(['gr_fisica_recibida_at' => '2026-09-10 09:00:00']);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('contabilidad.gr-fisica', $viaje), ['recibida' => true]);
+
+    expect($viaje->fresh()->gr_fisica_recibida_at->toDateTimeString())->toBe('2026-09-10 09:00:00');
+});
+
+it('only lets the cobranza mark the paper GR', function (): void {
+    $viaje = Viaje::factory()->create();
+
+    actingAs(actorConRol('visor'))
+        ->patch(route('contabilidad.gr-fisica', $viaje), ['recibida' => true])
+        ->assertForbidden();
+
+    expect($viaje->fresh()->gr_fisica_recibida_at)->toBeNull();
+});
+
+it('requires saying whether the paper GR arrived', function (): void {
+    $viaje = Viaje::factory()->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('contabilidad.gr-fisica', $viaje), [])
+        ->assertSessionHasErrors('recibida');
 });

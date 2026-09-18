@@ -13,19 +13,20 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Una línea de la estructura de costos: qué se paga, si se paga por día o por
- * kilómetro, si es del viaje o de la estructura, y de dónde sale su tasa.
+ * Una línea del tarifario: qué se paga, si se paga por día o por kilómetro, y
+ * cuánto (la tasa).
  *
- * Antes esto era un solo número por día y otro por kilómetro. Aplastarlos
- * escondía justo lo que hay que mirar al ponerle precio a un viaje: cuánto del
- * costo se le puede atribuir al viaje y cuánto es estructura que el viaje
- * ayuda a pagar.
+ * La tasa se escribe a mano, como en la hoja de cotización de la casa. El
+ * método es solo una calculadora de apoyo: arma la cuenta (planilla,
+ * depreciación, rendimiento del diésel) y sugiere un número, pero lo que se
+ * cotiza es la tasa guardada.
  *
  * @property int $id
  * @property string $nombre
  * @property TipoComponente $tipo
  * @property NaturalezaCosto $naturaleza
  * @property MetodoCosto $metodo
+ * @property float $tasa
  * @property array<string, mixed> $entradas
  * @property int $orden
  * @property bool $activo
@@ -35,6 +36,7 @@ use Illuminate\Database\Eloquent\Model;
     'tipo',
     'naturaleza',
     'metodo',
+    'tasa',
     'entradas',
     'orden',
     'activo',
@@ -47,7 +49,7 @@ class ComponenteCosto extends Model
     protected $table = 'componentes_costo';
 
     /**
-     * La tasa del componente y el camino que la explica.
+     * La cuenta que arma la calculadora de apoyo y el camino que la explica.
      */
     public function derivacion(ParametroFlota $flota): Derivacion
     {
@@ -55,25 +57,20 @@ class ComponenteCosto extends Model
     }
 
     /**
-     * S/ por día si el componente es fijo, S/ por kilómetro si es variable.
+     * La tasa que sugiere la calculadora, que puede no coincidir con la que se
+     * cotiza: esa es `tasa`, y la decide quien arma el tarifario.
      */
-    public function tasa(ParametroFlota $flota): float
+    public function tasaCalculada(ParametroFlota $flota): float
     {
         return $this->derivacion($flota)->tasa;
     }
 
     /**
-     * Lo que aporta este componente a un viaje de tantos días y tantos
-     * kilómetros.
+     * Las líneas de tasa fija no tienen cuenta detrás que mostrar.
      */
-    public function importe(ParametroFlota $flota, float $km, float $dias): float
+    public function tieneCalculadora(): bool
     {
-        $unidades = match ($this->tipo) {
-            TipoComponente::FijoDia => $dias,
-            TipoComponente::VariableKm => $km,
-        };
-
-        return $this->tasa($flota) * $unidades;
+        return $this->metodo !== MetodoCosto::Manual;
     }
 
     /**
@@ -103,6 +100,7 @@ class ComponenteCosto extends Model
             'tipo' => TipoComponente::class,
             'naturaleza' => NaturalezaCosto::class,
             'metodo' => MetodoCosto::class,
+            'tasa' => 'float',
             'entradas' => 'array',
             'orden' => 'integer',
             'activo' => 'boolean',

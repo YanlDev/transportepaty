@@ -8,7 +8,11 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import type { FilaAgrupada } from '@/lib/agrupar-viajes';
-import type { CuentaOpcion, ViajeContable } from '@/types/contabilidad';
+import type {
+    CuentaOpcion,
+    ViajeContable,
+    ViajeSeleccionado,
+} from '@/types/contabilidad';
 import type { EnumOption } from '@/types/fleet';
 import { INICIO_COBRANZA } from './columnas-cobranza';
 
@@ -19,14 +23,15 @@ type Props = {
     cuentas: CuentaOpcion[];
     monedas: EnumOption[];
     puedeFacturar: boolean;
-    seleccion: number[];
-    onSeleccion: (ids: number[]) => void;
+    /** Puede traer viajes de otras páginas: no se tocan desde acá. */
+    seleccion: ViajeSeleccionado[];
+    onSeleccion: (seleccion: ViajeSeleccionado[]) => void;
 };
 
 /**
- * La hoja de cobranza. Las doce primeras columnas son el viaje tal como
- * ocurrió y no se tocan acá; de `INICIO_COBRANZA` en adelante empieza lo que
- * el contador llena.
+ * La hoja de cobranza. Las primeras columnas son el viaje tal como ocurrió y
+ * no se tocan acá —salvo el aspa de GR física, que marca la cobranza—; de
+ * `INICIO_COBRANZA` en adelante empieza lo que el contador llena.
  */
 export function TablaCobranza({
     filas,
@@ -37,15 +42,38 @@ export function TablaCobranza({
     seleccion,
     onSeleccion,
 }: Props) {
+    const idsMarcados = new Set(seleccion.map((viaje) => viaje.id));
+
     const todosMarcados =
         facturables.length > 0 &&
-        facturables.every((viaje) => seleccion.includes(viaje.id));
+        facturables.every((viaje) => idsMarcados.has(viaje.id));
 
-    const alternar = (viajeId: number) => {
+    const alternar = (viaje: ViajeContable) => {
         onSeleccion(
-            seleccion.includes(viajeId)
-                ? seleccion.filter((otro) => otro !== viajeId)
-                : [...seleccion, viajeId],
+            idsMarcados.has(viaje.id)
+                ? seleccion.filter((otro) => otro.id !== viaje.id)
+                : [...seleccion, { id: viaje.id, numero_gr: viaje.numero_gr }],
+        );
+    };
+
+    // Marcar o desmarcar «todos» es solo sobre esta página: lo elegido en
+    // otras páginas sigue en la selección.
+    const alternarPagina = (marcar: boolean) => {
+        const idsPagina = new Set(facturables.map((viaje) => viaje.id));
+        const deOtrasPaginas = seleccion.filter(
+            (viaje) => !idsPagina.has(viaje.id),
+        );
+
+        onSeleccion(
+            marcar
+                ? [
+                      ...deOtrasPaginas,
+                      ...facturables.map((viaje) => ({
+                          id: viaje.id,
+                          numero_gr: viaje.numero_gr,
+                      })),
+                  ]
+                : deOtrasPaginas,
         );
     };
 
@@ -61,13 +89,7 @@ export function TablaCobranza({
                                     checked={todosMarcados}
                                     disabled={facturables.length === 0}
                                     onCheckedChange={(marcado) =>
-                                        onSeleccion(
-                                            marcado
-                                                ? facturables.map(
-                                                      (viaje) => viaje.id,
-                                                  )
-                                                : [],
-                                        )
+                                        alternarPagina(marcado === true)
                                     }
                                 />
                             </TableHead>
@@ -75,6 +97,12 @@ export function TablaCobranza({
                         <TableHead>Fecha</TableHead>
                         <TableHead>N° GR</TableHead>
                         <TableHead>GR Remitente</TableHead>
+                        <TableHead
+                            className="text-center"
+                            title="GR física en oficina"
+                        >
+                            En ofi.
+                        </TableHead>
                         <TableHead>Tracto</TableHead>
                         <TableHead>Carreta</TableHead>
                         <TableHead>Conductor</TableHead>
@@ -109,7 +137,7 @@ export function TablaCobranza({
                             cuentas={cuentas}
                             monedas={monedas}
                             puedeFacturar={puedeFacturar}
-                            seleccionado={seleccion.includes(viaje.id)}
+                            seleccionado={idsMarcados.has(viaje.id)}
                             onSeleccionar={alternar}
                         />
                     ))}

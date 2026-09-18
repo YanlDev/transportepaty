@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\MetodoCosto;
 use App\Enums\NaturalezaCosto;
 use App\Enums\TipoComponente;
+use App\Http\Requests\StoreComponenteCostoRequest;
 use App\Http\Requests\UpdateComponenteCostoRequest;
 use App\Http\Requests\UpdateParametroFlotaRequest;
 use App\Models\ComponenteCosto;
@@ -15,13 +16,12 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * La estructura de costos de la casa: qué se paga, por día o por kilómetro, y
- * de dónde sale cada tasa.
+ * El tarifario de la casa: qué se paga, por día o por kilómetro, y cuánto.
  *
- * No es una pantalla de configuración cualquiera —es el Excel de costos, con
- * la cadena que deriva cada número a la vista— porque una tarifa se discute, y
- * poder abrir «mano de obra directa» y ver de dónde salen esos soles es lo que
- * separa un precio defendible de uno que hay que creer.
+ * Las tasas se escriben a mano, como en la hoja de cotización. Las líneas que
+ * tienen una cuenta detrás (planilla, depreciación, diésel) la muestran como
+ * calculadora de apoyo, para poder abrir «mano de obra directa» y ver de dónde
+ * saldrían esos soles antes de decidir el número que se cotiza.
  */
 class ParametroCostoController extends Controller
 {
@@ -37,28 +37,32 @@ class ParametroCostoController extends Controller
                 ...$flota->only([
                     'tamano_flota', 'dias_ano', 'dias_mantenimiento',
                     'dias_certificaciones', 'dias_sincronizacion', 'igv_pct',
-                    'margen_pct_default', 'viatico_dia',
+                    'margen_pct_default',
                 ]),
                 'dias_disponibles' => round($flota->diasDisponibles(), 2),
             ],
             'componentes' => $componentes
-                ->map(fn (ComponenteCosto $componente): array => [
-                    'id' => $componente->id,
-                    'nombre' => $componente->nombre,
-                    'tipo' => $componente->tipo->value,
-                    'unidad' => $componente->tipo->unidad(),
-                    'naturaleza' => $componente->naturaleza->value,
-                    'metodo' => $componente->metodo->value,
-                    'metodo_label' => $componente->metodo->label(),
-                    'entradas' => $componente->entradas,
-                    'activo' => $componente->activo,
-                    ...$componente->derivacion($flota)->toArray(),
-                ])
+                ->map(function (ComponenteCosto $componente) use ($flota): array {
+                    $derivacion = $componente->derivacion($flota);
+
+                    return [
+                        'id' => $componente->id,
+                        'nombre' => $componente->nombre,
+                        'tipo' => $componente->tipo->value,
+                        'unidad' => $componente->tipo->unidad(),
+                        'metodo' => $componente->metodo->value,
+                        'metodo_label' => $componente->metodo->label(),
+                        'entradas' => $componente->entradas,
+                        'activo' => $componente->activo,
+                        'tasa' => $componente->tasa,
+                        'tiene_calculadora' => $componente->tieneCalculadora(),
+                        'tasa_calculada' => $derivacion->tasa,
+                        'pasos' => $derivacion->pasos,
+                    ];
+                })
                 ->all(),
-            'totales' => $this->totales($componentes, $flota),
+            'totales' => $this->totales($componentes),
             'tipos' => TipoComponente::options(),
-            'naturalezas' => NaturalezaCosto::options(),
-            'metodos' => MetodoCosto::options(),
         ]);
     }
 
@@ -76,6 +80,25 @@ class ParametroCostoController extends Controller
         ]);
     }
 
+    public function storeComponente(StoreComponenteCostoRequest $request): RedirectResponse
+    {
+        $this->authorize('update', ParametroFlota::class);
+
+        $componente = ComponenteCosto::create([
+            ...$request->validated(),
+            'naturaleza' => NaturalezaCosto::Directo,
+            'metodo' => MetodoCosto::Manual,
+            'entradas' => [],
+            'orden' => (int) ComponenteCosto::query()->max('orden') + 1,
+            'activo' => true,
+        ]);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => "«{$componente->nombre}» agregado al tarifario.",
+        ]);
+    }
+
     public function updateComponente(UpdateComponenteCostoRequest $request, ComponenteCosto $componente): RedirectResponse
     {
         $this->authorize('update', ParametroFlota::class);
@@ -89,31 +112,19 @@ class ParametroCostoController extends Controller
     }
 
     /**
-     * Lo que suma la estructura, que es el número con el que se compara contra
-     * el Excel de la casa: tanto por día parado, tanto por kilómetro rodado.
+     * Lo que suma el tarifario vigente, que es el número de la hoja: tanto por
+     * día que la unidad queda tomada, tanto por kilómetro rodado.
      *
      * @param  Collection<int, ComponenteCosto>  $componentes
-     * @return array<string, float>
+     * @return array{fijo_dia: float, variable_km: float}
      */
-    private function totales(Collection $componentes, ParametroFlota $flota): array
+    private function totales(Collection $componentes): array
     {
         $activos = $componentes->where('activo', true);
 
-        $suma = fn (TipoComponente $tipo, ?NaturalezaCosto $naturaleza = null): float => round(
-            $activos
-                ->where('tipo', $tipo)
-                ->when($naturaleza !== null, fn ($lineas) => $lineas->where('naturaleza', $naturaleza))
-                ->sum(fn (ComponenteCosto $componente): float => $componente->tasa($flota)),
-            4,
-        );
-
         return [
-            'fijo_dia' => $suma(TipoComponente::FijoDia),
-            'fijo_dia_directo' => $suma(TipoComponente::FijoDia, NaturalezaCosto::Directo),
-            'fijo_dia_indirecto' => $suma(TipoComponente::FijoDia, NaturalezaCosto::Indirecto),
-            'variable_km' => $suma(TipoComponente::VariableKm),
-            'variable_km_directo' => $suma(TipoComponente::VariableKm, NaturalezaCosto::Directo),
-            'variable_km_indirecto' => $suma(TipoComponente::VariableKm, NaturalezaCosto::Indirecto),
+            'fijo_dia' => round($activos->where('tipo', TipoComponente::FijoDia)->sum('tasa'), 4),
+            'variable_km' => round($activos->where('tipo', TipoComponente::VariableKm)->sum('tasa'), 4),
         ];
     }
 }

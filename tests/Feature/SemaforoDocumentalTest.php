@@ -118,7 +118,7 @@ it('cuenta los documentos vencidos', function (): void {
         ->and($estado['faltantes'])->toBe([]);
 });
 
-it('pone en ámbar lo que vence dentro de los treinta días', function (): void {
+it('pone en ámbar lo que vence dentro de los quince días', function (): void {
     $vehiculo = Vehiculo::factory()->create();
     $documentos = documentosAlDia(TipoVehiculo::Tracto);
     $documentos[TipoDocumento::HabilitacionMtc->value] = now()->addDays(10)->format('Y-m-d');
@@ -128,6 +128,17 @@ it('pone en ámbar lo que vence dentro de los treinta días', function (): void 
     expect($estado['semaforo'])->toBe('ambar')
         ->and($estado['por_vencer'])->toBe(['TUC (habilitación MTC)'])
         ->and($estado['vencidos'])->toBe([]);
+});
+
+it('deja en verde lo que vence pasados los quince días', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+    $documentos = documentosAlDia(TipoVehiculo::Tracto);
+    $documentos[TipoDocumento::HabilitacionMtc->value] = now()->addDays(16)->format('Y-m-d');
+
+    $estado = estadoDocumentalCon($vehiculo, $documentos);
+
+    expect($estado['semaforo'])->toBe('verde')
+        ->and($estado['por_vencer'])->toBe([]);
 });
 
 it('trata como vigente el documento sin fecha de vencimiento', function (): void {

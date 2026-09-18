@@ -4,55 +4,62 @@ import { useId, useState } from 'react';
 import { updateComponente } from '@/actions/App/Http/Controllers/ParametroCostoController';
 import InputError from '@/components/input-error';
 import { EntradasEditor } from '@/components/parametros-costo/entradas-editor';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { formatearSoles } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type {
     ComponenteCosto,
     EntradasComponente,
-    EnumOption,
     PasoDerivacion,
 } from '@/types/fleet';
 
 type FormData = {
     nombre: string;
-    naturaleza: string;
+    tasa: string;
     activo: boolean;
     entradas: EntradasComponente;
 };
 
+/**
+ * Una línea del tarifario. Cerrada muestra la tasa con la que se cotiza;
+ * abierta deja cambiarla y, si la línea tiene una cuenta detrás, muestra la
+ * calculadora de apoyo con lo que sugiere.
+ */
 export function ComponenteCard({
     componente,
-    naturalezas,
 }: {
     componente: ComponenteCosto;
-    naturalezas: EnumOption[];
 }) {
     const [abierto, setAbierto] = useState(false);
     const nombreId = useId();
-    const naturalezaId = useId();
+    const tasaId = useId();
 
-    const { data, setData, put, processing, errors, isDirty } =
+    const { data, setData, put, transform, processing, errors, isDirty } =
         useForm<FormData>({
             nombre: componente.nombre,
-            naturaleza: componente.naturaleza,
+            tasa: componente.tasa.toString(),
             activo: componente.activo,
             entradas: componente.entradas,
         });
 
+    // Lo que sugiere la calculadora sale de las entradas guardadas: mientras
+    // haya cambios sin guardar, ese número ya no es el de la pantalla.
+    const entradasCambiadas =
+        JSON.stringify(data.entradas) !== JSON.stringify(componente.entradas);
+    const tasaCalculada = Number(componente.tasa_calculada.toFixed(4));
+    const usaLaCalculada = Number(data.tasa) === tasaCalculada;
+
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
+
+        // Una línea sin calculadora no tiene entradas que validar.
+        transform(({ entradas, ...datos }) =>
+            componente.tiene_calculadora ? { ...datos, entradas } : datos,
+        );
+
         put(updateComponente(componente.id).url, { preserveScroll: true });
     };
 
@@ -81,25 +88,17 @@ export function ComponenteCard({
                         {componente.nombre}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
-                        {componente.metodo_label}
+                        {!componente.activo
+                            ? 'No se cuenta al cotizar'
+                            : componente.tiene_calculadora
+                              ? `Con calculadora: ${componente.metodo_label.toLowerCase()}`
+                              : 'Tasa escrita'}
                     </p>
                 </div>
 
-                <Badge
-                    variant={
-                        componente.naturaleza === 'directo'
-                            ? 'default'
-                            : 'secondary'
-                    }
-                >
-                    {componente.naturaleza === 'directo'
-                        ? 'Directo'
-                        : 'Indirecto'}
-                </Badge>
-
                 <div className="w-32 shrink-0 text-right">
                     <p className="font-mono text-sm text-foreground tabular-nums">
-                        {formatearSoles(componente.tasa)}
+                        {formatearTasa(componente.tasa)}
                     </p>
                     <p className="text-xs text-muted-foreground">
                         {componente.unidad}
@@ -112,15 +111,6 @@ export function ComponenteCard({
                     onSubmit={submit}
                     className="flex flex-col gap-5 border-t border-border p-4"
                 >
-                    {componente.pasos.length > 0 && (
-                        <Derivacion
-                            pasos={componente.pasos}
-                            tasa={componente.tasa}
-                            unidad={componente.unidad}
-                            nombre={componente.nombre}
-                        />
-                    )}
-
                     <div className="grid gap-3 sm:grid-cols-3">
                         <div className="grid gap-1.5">
                             <Label htmlFor={nombreId}>Nombre</Label>
@@ -135,28 +125,22 @@ export function ComponenteCard({
                         </div>
 
                         <div className="grid gap-1.5">
-                            <Label htmlFor={naturalezaId}>Naturaleza</Label>
-                            <Select
-                                value={data.naturaleza}
-                                onValueChange={(valor) =>
-                                    setData('naturaleza', valor)
+                            <Label htmlFor={tasaId}>
+                                Tasa ({componente.unidad})
+                            </Label>
+                            <Input
+                                id={tasaId}
+                                type="number"
+                                inputMode="decimal"
+                                step="0.0001"
+                                min={0}
+                                value={data.tasa}
+                                onChange={(e) =>
+                                    setData('tasa', e.target.value)
                                 }
-                            >
-                                <SelectTrigger id={naturalezaId}>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {naturalezas.map((opcion) => (
-                                        <SelectItem
-                                            key={opcion.value}
-                                            value={opcion.value}
-                                        >
-                                            {opcion.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.naturaleza} />
+                                className="font-mono tabular-nums"
+                            />
+                            <InputError message={errors.tasa} />
                         </div>
 
                         <div className="grid gap-1.5">
@@ -178,17 +162,63 @@ export function ComponenteCard({
                         </div>
                     </div>
 
-                    <EntradasEditor
-                        metodo={componente.metodo}
-                        entradas={data.entradas}
-                        onChange={(entradas) => setData('entradas', entradas)}
-                        errors={errors as Record<string, string>}
-                    />
+                    {componente.tiene_calculadora && (
+                        <div className="flex flex-col gap-4 rounded-lg border border-dashed border-border p-4">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p className="text-xs font-semibold text-foreground">
+                                        Calculadora de apoyo
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                        {entradasCambiadas
+                                            ? 'Guardá para ver cuánto sugiere con estos datos.'
+                                            : `Sugiere ${formatearTasa(componente.tasa_calculada)} ${componente.unidad.replace('S/ ', '')}.`}
+                                    </p>
+                                </div>
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={
+                                        entradasCambiadas || usaLaCalculada
+                                    }
+                                    onClick={() =>
+                                        setData(
+                                            'tasa',
+                                            tasaCalculada.toString(),
+                                        )
+                                    }
+                                >
+                                    {usaLaCalculada
+                                        ? 'Ya usa esta tasa'
+                                        : 'Usar esta tasa'}
+                                </Button>
+                            </div>
+
+                            {componente.pasos.length > 0 && (
+                                <Derivacion
+                                    pasos={componente.pasos}
+                                    tasa={componente.tasa_calculada}
+                                    unidad={componente.unidad}
+                                    nombre="Tasa sugerida"
+                                />
+                            )}
+
+                            <EntradasEditor
+                                metodo={componente.metodo}
+                                entradas={data.entradas}
+                                onChange={(entradas) =>
+                                    setData('entradas', entradas)
+                                }
+                                errors={errors as Record<string, string>}
+                            />
+                        </div>
+                    )}
 
                     <div className="flex items-center justify-end gap-3 border-t border-border pt-3">
                         {isDirty && (
                             <p className="text-xs text-muted-foreground">
-                                La tasa se recalcula al guardar.
+                                Las cotizaciones ya emitidas no cambian.
                             </p>
                         )}
                         <Button type="submit" size="sm" disabled={processing}>
@@ -200,6 +230,14 @@ export function ComponenteCard({
             )}
         </div>
     );
+}
+
+/** Las tasas por km tienen centésimos de sol: dos decimales no alcanzan. */
+export function formatearTasa(tasa: number): string {
+    return `S/ ${tasa.toLocaleString('es-PE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 4,
+    })}`;
 }
 
 /**
@@ -242,7 +280,7 @@ function Derivacion({
                 <div className="mt-1 flex items-baseline justify-between gap-4 border-t border-border pt-2 text-xs">
                     <dt className="font-medium text-foreground">{nombre}</dt>
                     <dd className="font-mono font-semibold text-foreground tabular-nums">
-                        {formatearSoles(tasa)}{' '}
+                        {formatearTasa(tasa)}{' '}
                         <span className="font-sans font-normal text-muted-foreground">
                             {unidad}
                         </span>

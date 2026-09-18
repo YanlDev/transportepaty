@@ -18,7 +18,7 @@ trait TieneVencimiento
     /**
      * Días de anticipación con los que un vencimiento próximo pasa a ámbar.
      */
-    public const DIAS_AVISO_VENCIMIENTO = 30;
+    public const DIAS_AVISO_VENCIMIENTO = 15;
 
     /**
      * Situación del documento según su vencimiento. Nunca devuelve «faltante»:

@@ -3,7 +3,6 @@
 namespace App\Http\Requests;
 
 use App\Enums\EstadoCotizacion;
-use App\Services\CalculadoraCotizacion;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -42,15 +41,9 @@ class CotizacionRequest extends FormRequest
             // Admite medios días: hay rutas que se cotizan en 1.5 o 5.5 días,
             // y redondear hacia arriba encarece la tarifa sin motivo.
             'dias' => ['required', 'numeric', 'min:0.5'],
-            // Los conceptos del tramo van uno por uno: desglosarlos no cambia
-            // la tarifa, pero es lo primero que se revisa cuando el cliente
-            // pregunta por qué una ruta cuesta más que otra de los mismos
-            // kilómetros.
-            ...array_fill_keys(
-                array_keys(CalculadoraCotizacion::CONCEPTOS_RUTA),
-                ['required', 'numeric', 'min:0'],
-            ),
-            'margen_pct' => ['required', 'numeric', 'min:0', 'max:1'],
+            // Es margen sobre el precio de venta: la tarifa es el costo entre
+            // (1 − margen), así que un margen de 100 % no tiene tarifa posible.
+            'margen_pct' => ['required', 'numeric', 'min:0', 'max:0.9'],
             'estado' => ['required', Rule::enum(EstadoCotizacion::class)],
             'notas' => ['nullable', 'string', 'max:2000'],
         ];

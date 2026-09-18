@@ -42,13 +42,17 @@ Route::middleware('auth')->group(function () {
             ->name('conductores.documentos.destroy');
     });
 
+    // Antes del resource para que `clientes/express` no se lea como el `show`
+    // de un cliente.
+    Route::post('clientes/express', [ClienteController::class, 'storeExpress'])
+        ->name('clientes.express');
     Route::resource('clientes', ClienteController::class)
         ->parameters(['clientes' => 'cliente']);
 
-    // El PDF y la previsualización van antes del resource para que
-    // `cotizaciones/previsualizar` no se lea como el `show` de una cotización.
-    Route::post('cotizaciones/previsualizar', [CotizacionController::class, 'previsualizar'])
-        ->name('cotizaciones.previsualizar');
+    // El cotizador y el PDF van antes del resource para que
+    // `cotizaciones/cotizador` no se lea como el `show` de una cotización.
+    Route::get('cotizaciones/cotizador', [CotizacionController::class, 'cotizador'])
+        ->name('cotizaciones.cotizador');
     Route::get('cotizaciones/{cotizacion}/pdf', [CotizacionController::class, 'pdf'])
         ->name('cotizaciones.pdf');
     Route::resource('cotizaciones', CotizacionController::class)
@@ -58,6 +62,8 @@ Route::middleware('auth')->group(function () {
         ->name('parametros-costo.edit');
     Route::put('parametros-costo', [ParametroCostoController::class, 'update'])
         ->name('parametros-costo.update');
+    Route::post('parametros-costo/componentes', [ParametroCostoController::class, 'storeComponente'])
+        ->name('parametros-costo.componentes.store');
     Route::put('parametros-costo/componentes/{componente}', [ParametroCostoController::class, 'updateComponente'])
         ->name('parametros-costo.componentes.update');
 
@@ -95,6 +101,9 @@ Route::middleware('auth')->group(function () {
     // manda solo el campo que se acaba de tocar.
     Route::patch('facturas/{factura}', [FacturaController::class, 'update'])->name('facturas.update');
     Route::delete('facturas/{factura}', [FacturaController::class, 'destroy'])->name('facturas.destroy');
+    // Si el papel de la GR ya llegó a la oficina: lo marca la cobranza.
+    Route::patch('viajes/{viaje}/gr-fisica', [ContabilidadController::class, 'marcarGrFisica'])
+        ->name('contabilidad.gr-fisica');
     // Sacar un solo viaje de su factura, sin anular la factura entera.
     Route::delete('viajes/{viaje}/factura', [FacturaController::class, 'desvincular'])
         ->name('facturas.desvincular');

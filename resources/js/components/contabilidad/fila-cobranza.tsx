@@ -1,4 +1,5 @@
 import { AccionesFila } from '@/components/contabilidad/acciones-fila';
+import { CeldaGrFisica } from '@/components/contabilidad/celda-gr-fisica';
 import { CeldasCobranza } from '@/components/contabilidad/celdas-cobranza';
 import { EstadoCobranzaBadge } from '@/components/contabilidad/estado-cobranza-badge';
 import { VerGuia } from '@/components/contabilidad/ver-guia';
@@ -25,7 +26,7 @@ type Props = {
     monedas: EnumOption[];
     puedeFacturar: boolean;
     seleccionado: boolean;
-    onSeleccionar: (viajeId: number) => void;
+    onSeleccionar: (viaje: ViajeContable) => void;
 };
 
 /** Una GR en la hoja de cobranza: la operación a la izquierda, la plata a la derecha. */
@@ -54,7 +55,7 @@ export function FilaCobranza({
                         <Checkbox
                             aria-label={`Seleccionar la GR ${viaje.numero_gr}`}
                             checked={seleccionado}
-                            onCheckedChange={() => onSeleccionar(viaje.id)}
+                            onCheckedChange={() => onSeleccionar(viaje)}
                         />
                     )}
                 </TableCell>
@@ -68,6 +69,14 @@ export function FilaCobranza({
             </TableCell>
             <TableCell className="font-mono text-[11px] whitespace-nowrap text-marca-600 tabular-nums dark:text-marca-400">
                 <GuiasRemitenteCelda guias={viaje.guias_remitente} />
+            </TableCell>
+            <TableCell className="text-center">
+                <CeldaGrFisica
+                    viajeId={viaje.id}
+                    numeroGr={viaje.numero_gr}
+                    recibidaAt={viaje.gr_fisica_recibida_at}
+                    editable={puedeFacturar}
+                />
             </TableCell>
             <TableCell className="text-[11px] whitespace-nowrap">
                 <PlacaCelda

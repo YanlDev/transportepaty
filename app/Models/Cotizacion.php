@@ -32,16 +32,10 @@ use Illuminate\Support\Carbon;
  * @property string|null $material
  * @property int $km
  * @property float $dias
- * @property float $peajes
- * @property float $viaticos
- * @property float $alojamiento
- * @property float $cochera
- * @property float $carga_descarga
- * @property float $otros_ruta
- * @property array{componentes: list<array<string, mixed>>, ruta: list<array<string, mixed>>} $desglose
+ * @property array{componentes: list<array<string, mixed>>} $desglose
  * @property float $margen_pct
- * @property float $total_directo
- * @property float $total_indirecto
+ * @property float $total_fijo
+ * @property float $total_variable
  * @property float $costo_operativo
  * @property float $margen
  * @property float $subtotal
@@ -64,16 +58,10 @@ use Illuminate\Support\Carbon;
     'material',
     'km',
     'dias',
-    'peajes',
-    'viaticos',
-    'alojamiento',
-    'cochera',
-    'carga_descarga',
-    'otros_ruta',
     'desglose',
     'margen_pct',
-    'total_directo',
-    'total_indirecto',
+    'total_fijo',
+    'total_variable',
     'costo_operativo',
     'margen',
     'subtotal',
@@ -189,16 +177,10 @@ class Cotizacion extends Model
             'valido_hasta' => 'date',
             'km' => 'integer',
             'dias' => 'float',
-            'peajes' => 'float',
-            'viaticos' => 'float',
-            'alojamiento' => 'float',
-            'cochera' => 'float',
-            'carga_descarga' => 'float',
-            'otros_ruta' => 'float',
             'desglose' => 'array',
             'margen_pct' => 'float',
-            'total_directo' => 'float',
-            'total_indirecto' => 'float',
+            'total_fijo' => 'float',
+            'total_variable' => 'float',
             'costo_operativo' => 'float',
             'margen' => 'float',
             'subtotal' => 'float',

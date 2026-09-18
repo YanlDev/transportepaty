@@ -7,7 +7,6 @@ import type {
     Cliente,
     Cotizacion,
     EnumOption,
-    ParametroFlota,
     PuntoTraslado,
 } from '@/types/fleet';
 
@@ -16,7 +15,7 @@ type Props = {
     clientes: Pick<Cliente, 'id' | 'alias' | 'razon_social' | 'ruc'>[];
     puntos: Pick<PuntoTraslado, 'id' | 'nombre' | 'direccion'>[];
     estados: EnumOption[];
-    flota: ParametroFlota;
+    flota: { margen_pct_default: number; igv_pct: number };
 };
 
 export default function CotizacionEdit({

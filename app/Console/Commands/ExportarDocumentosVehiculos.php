@@ -11,22 +11,26 @@ use Illuminate\Support\Str;
 
 /**
  * Vuelca a disco el expediente documental que vive en la base: una carpeta
- * "VEHICULOS" con una subcarpeta por placa y, dentro, el archivo de cada
- * documento nombrado `<tipo>_<placa>[_vence-YYYY-MM-DD].<ext>`, para poder
- * revisarlo desde el explorador de archivos (OneDrive) sin entrar al sistema.
+ * raíz con una subcarpeta por placa y, dentro, el archivo de cada documento
+ * nombrado `<tipo>_<placa>[_vence-YYYY-MM-DD].<ext>`, para poder revisarlo
+ * desde el explorador de archivos (OneDrive) sin entrar al sistema.
+ *
+ * Con `--por-tipo` intercala un nivel «TRACTO» / «CARRETA» antes de la placa,
+ * que es como el cliente lee la flota: primero la unidad motriz, después el
+ * remolque.
  *
  * Solo escribe: nunca borra ni reescribe lo que ya está en la carpeta destino
  * salvo que se pase `--forzar`.
  */
 #[Signature('transpaty:exportar-documentos-vehiculos
-    {ruta : Carpeta raíz donde se creará la subcarpeta "VEHICULOS" (ej. la carpeta OneDrive del cliente)}
+    {ruta : Carpeta raíz donde se creará la subcarpeta de destino (ej. la carpeta OneDrive del cliente)}
+    {--carpeta=VEHICULOS : Nombre de la subcarpeta que se crea dentro de la ruta}
+    {--por-tipo : Agrupa las placas en subcarpetas "TRACTO" y "CARRETA"}
     {--forzar : Reescribe los archivos que ya existen en el destino}
     {--dry-run : Solo muestra qué se copiaría, sin escribir nada}')]
-#[Description('Exporta a "<ruta>/VEHICULOS/<placa>/" los documentos (SOAT, TUC, MATPEL, etc.) cargados en el sistema para cada tracto y carreta.')]
+#[Description('Exporta a "<ruta>/<carpeta>/[TIPO/]<placa>/" los documentos (SOAT, TUC, MATPEL, etc.) cargados en el sistema para cada tracto y carreta.')]
 class ExportarDocumentosVehiculos extends Command
 {
-    private const CARPETA = 'VEHICULOS';
-
     public function handle(): int
     {
         $ruta = rtrim((string) $this->argument('ruta'), '/\\');
@@ -39,7 +43,16 @@ class ExportarDocumentosVehiculos extends Command
 
         $seco = (bool) $this->option('dry-run');
         $forzar = (bool) $this->option('forzar');
-        $destinoRaiz = $ruta.DIRECTORY_SEPARATOR.self::CARPETA;
+        $porTipo = (bool) $this->option('por-tipo');
+        $carpeta = trim((string) $this->option('carpeta'));
+
+        if ($carpeta === '' || str_contains($carpeta, '/') || str_contains($carpeta, '\\')) {
+            $this->error('El nombre de la carpeta no puede ir vacío ni llevar separadores de ruta.');
+
+            return self::FAILURE;
+        }
+
+        $destinoRaiz = $ruta.DIRECTORY_SEPARATOR.$carpeta;
 
         if (! $seco && ! is_dir($destinoRaiz) && ! mkdir($destinoRaiz, 0775, true) && ! is_dir($destinoRaiz)) {
             $this->error("No se pudo crear la carpeta: {$destinoRaiz}");
@@ -49,7 +62,11 @@ class ExportarDocumentosVehiculos extends Command
 
         $copiados = $omitidos = $sinArchivo = 0;
 
-        $vehiculos = Vehiculo::query()->with(['documentos.media'])->orderBy('placa')->get();
+        $vehiculos = Vehiculo::query()
+            ->with(['documentos.media'])
+            ->orderBy('tipo')
+            ->orderBy('placa')
+            ->get();
 
         foreach ($vehiculos as $vehiculo) {
             $documentos = $vehiculo->documentos->sortBy(fn (VehiculoDocumento $documento): string => $documento->tipo->value);
@@ -59,7 +76,9 @@ class ExportarDocumentosVehiculos extends Command
             }
 
             $this->line("<info>{$vehiculo->placa}</info> ({$vehiculo->tipo->label()})");
-            $destinoPlaca = $destinoRaiz.DIRECTORY_SEPARATOR.$vehiculo->placa;
+            $destinoPlaca = $porTipo
+                ? $destinoRaiz.DIRECTORY_SEPARATOR.Str::upper($vehiculo->tipo->label()).DIRECTORY_SEPARATOR.$vehiculo->placa
+                : $destinoRaiz.DIRECTORY_SEPARATOR.$vehiculo->placa;
             $usados = [];
 
             foreach ($documentos as $documento) {

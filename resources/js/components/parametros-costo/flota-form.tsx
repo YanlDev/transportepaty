@@ -15,13 +15,13 @@ type FormData = {
     dias_sincronizacion: string;
     igv_pct: string;
     margen_pct_default: string;
-    viatico_dia: string;
 };
 
 /**
- * Los supuestos de la flota: cuántas unidades, cuántos días del año quedan
- * realmente disponibles, y los porcentajes del negocio. Todo lo demás de la
- * estructura de costos se divide por estos números.
+ * Los porcentajes del negocio (IGV, margen sugerido) y los supuestos de la
+ * flota que usan las calculadoras de apoyo: cuántas unidades y cuántos días
+ * del año quedan realmente disponibles. Cambiar la flota no mueve ninguna
+ * tasa del tarifario; solo lo que las calculadoras sugieren.
  *
  * Los porcentajes se editan en enteros (18, no 0.18) y se convierten al
  * enviar: nadie escribe tasas en decimales.
@@ -36,7 +36,6 @@ export function FlotaForm({ flota }: { flota: ParametroFlota }) {
             dias_sincronizacion: flota.dias_sincronizacion.toString(),
             igv_pct: (flota.igv_pct * 100).toString(),
             margen_pct_default: (flota.margen_pct_default * 100).toString(),
-            viatico_dia: flota.viatico_dia.toString(),
         });
 
     const submit = (event: React.FormEvent) => {
@@ -67,11 +66,13 @@ export function FlotaForm({ flota }: { flota: ParametroFlota }) {
             className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5"
         >
             <div>
-                <h2 className="text-sm font-semibold text-foreground">Flota</h2>
+                <h2 className="text-sm font-semibold text-foreground">
+                    Supuestos de las calculadoras
+                </h2>
                 <p className="text-xs text-muted-foreground">
-                    Un camión no factura los 365 días: lo que queda después de
-                    restar los días perdidos es el divisor de todos los costos
-                    fijos.
+                    Un camión no factura los 365 días: las calculadoras reparten
+                    los montos anuales sobre los días disponibles de la flota.
+                    Cambiarlos solo mueve lo que sugieren, no las tasas.
                 </p>
             </div>
 
@@ -164,7 +165,7 @@ export function FlotaForm({ flota }: { flota: ParametroFlota }) {
                 </div>
             </div>
 
-            <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-3">
+            <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
                 <Field label="IGV (%)" error={errors.igv_pct}>
                     {(id) => (
                         <Input
@@ -179,7 +180,7 @@ export function FlotaForm({ flota }: { flota: ParametroFlota }) {
                 <Field
                     label="Margen sugerido (%)"
                     error={errors.margen_pct_default}
-                    ayuda="Se precarga en cada cotización nueva."
+                    ayuda="Sobre la tarifa. Se precarga en cada cotización."
                 >
                     {(id) => (
                         <Input
@@ -193,29 +194,12 @@ export function FlotaForm({ flota }: { flota: ParametroFlota }) {
                         />
                     )}
                 </Field>
-                <Field
-                    label="Viático por día (S/)"
-                    error={errors.viatico_dia}
-                    ayuda="Precarga los viáticos de cada cotización según sus días."
-                >
-                    {(id) => (
-                        <Input
-                            id={id}
-                            type="number"
-                            step="0.5"
-                            value={data.viatico_dia}
-                            onChange={(e) =>
-                                setData('viatico_dia', e.target.value)
-                            }
-                        />
-                    )}
-                </Field>
             </div>
 
             <div className="flex justify-end border-t border-border pt-4">
                 <Button type="submit" disabled={processing}>
                     {processing && <Spinner />}
-                    Guardar flota
+                    Guardar
                 </Button>
             </div>
         </form>

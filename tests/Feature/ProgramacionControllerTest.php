@@ -301,3 +301,16 @@ it('programs for a day other than the one being shown', function (): void {
 
     $this->assertDatabaseHas('programaciones', ['fecha' => '2026-09-20']);
 });
+
+it('sends each client RUC, which is how the express form finds the one it just created', function (): void {
+    Cliente::factory()->create(['alias' => 'Minsur', 'ruc' => '20100136741', 'activo' => true]);
+    Cliente::factory()->create(['activo' => false]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('programacion.index'))
+        ->assertInertia(fn ($page) => $page
+            ->has('clientes', 1)
+            ->where('clientes.0.alias', 'Minsur')
+            ->where('clientes.0.ruc', '20100136741')
+        );
+});

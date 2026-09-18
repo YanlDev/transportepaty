@@ -17,6 +17,7 @@ import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
+import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
@@ -33,6 +34,7 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
+import { useCurrentUrl } from '@/hooks/use-current-url';
 import { usePermisos } from '@/hooks/use-permisos';
 import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
@@ -116,9 +118,27 @@ const adminNavItems: NavItem[] = [
 
 export function AppSidebar() {
     const { esAdmin, esContador, puedeVerOperacion } = usePermisos();
+    const { isCurrentUrl } = useCurrentUrl();
     // El contador no gestiona la operación, pero sí lee los viajes: son la
     // contrapartida de lo que factura.
     const puedeVerViajes = puedeVerOperacion || esContador;
+
+    // Cotizaciones es un solo módulo con pestañas (cotizador, emitidas,
+    // tarifario). El admin entra por el cotizador, que es para lo que viene;
+    // el visor solo puede leer las emitidas.
+    const gestion = gestionNavItems.map((item) =>
+        item.title === 'Cotizaciones'
+            ? {
+                  ...item,
+                  href: esAdmin
+                      ? cotizaciones.cotizador()
+                      : cotizaciones.index(),
+                  isActive:
+                      isCurrentUrl(cotizaciones.index(), undefined, true) ||
+                      isCurrentUrl(parametrosCosto.edit(), undefined, true),
+              }
+            : item,
+    );
 
     // Conductores exige admin o visor: el contador ve las unidades para
     // identificar la placa de una guía, pero no el padrón de choferes.
@@ -158,7 +178,7 @@ export function AppSidebar() {
                     {puedeVerOperacion && (
                         <NavMain items={[programacionNavItem]} />
                     )}
-                    {puedeVerOperacion && <NavMain items={gestionNavItems} />}
+                    {puedeVerOperacion && <NavMain items={gestion} />}
                     {(esAdmin || esContador) && (
                         <NavMain items={contabilidadNavItems} />
                     )}

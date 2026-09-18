@@ -33,6 +33,8 @@ export type ConductorOpcion = {
 export type ClienteOpcion = {
     id: number;
     alias: string;
+    /** Con el que el alta express reconoce al cliente que acaba de crear. */
+    ruc: string;
 };
 
 /**

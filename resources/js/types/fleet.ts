@@ -69,7 +69,7 @@ export type DocumentoResumen = {
 
 /**
  * Semáforo y listas de problemas. Verde: todo presente y vigente. Ámbar: algo
- * vence dentro de 30 días. Rojo: falta algo o ya venció.
+ * vence dentro de 15 días. Rojo: falta algo o ya venció.
  *
  * Es lo único que se puede agregar entre varios vehículos, así que es la forma
  * que toma la documentación de una unidad completa (tracto + carreta).
@@ -472,7 +472,6 @@ export type ParametroFlota = {
     igv_pct: number;
     /** En tanto por uno: 0.12 es 12%. */
     margen_pct_default: number;
-    viatico_dia: number;
     /** Los días del año menos los que se pierden. Lo calcula el servidor. */
     dias_disponibles: number;
 };
@@ -495,78 +494,56 @@ export type ValorEntrada = string | number | boolean | FilaEntrada[];
 
 export type EntradasComponente = Record<string, ValorEntrada>;
 
-/** Una línea de la estructura de costos de la casa. */
+/** Una línea del tarifario de la casa. */
 export type ComponenteCosto = {
     id: number;
     nombre: string;
     tipo: 'fijo_dia' | 'variable_km';
     /** Cómo se lee la tasa: «S/ por día» o «S/ por km». */
     unidad: string;
-    naturaleza: 'directo' | 'indirecto';
     metodo: string;
     metodo_label: string;
     entradas: EntradasComponente;
     activo: boolean;
+    /** La tasa con la que se cotiza: se escribe a mano. */
     tasa: number;
+    /** Si hay una cuenta detrás (planilla, diésel) que sugiera la tasa. */
+    tiene_calculadora: boolean;
+    /** Lo que sugiere la calculadora con sus entradas guardadas. */
+    tasa_calculada: number;
     pasos: PasoDerivacion[];
 };
 
-/** Lo que suma la estructura vigente, por día parado y por km rodado. */
+/** Lo que suma el tarifario vigente, por día tomado y por km rodado. */
 export type TotalesCosto = {
     fijo_dia: number;
-    fijo_dia_directo: number;
-    fijo_dia_indirecto: number;
     variable_km: number;
-    variable_km_directo: number;
-    variable_km_indirecto: number;
+};
+
+/** Una línea del tarifario tal como entra a la cuenta de una tarifa. */
+export type LineaTarifa = {
+    nombre: string;
+    /** `fijo_dia` se multiplica por días; cualquier otro, por km. */
+    tipo: string;
+    naturaleza: string;
+    tasa: number;
 };
 
 /** Una línea del desglose de una cotización, ya con su importe. */
-export type LineaDesglose = {
-    nombre: string;
-    tipo: string;
-    naturaleza: 'directo' | 'indirecto';
-    tasa: number;
-    importe: number;
-    /** Cuánto pesa en el subtotal, en tanto por uno. */
-    participacion_pct: number;
-};
+export type LineaDesglose = LineaTarifa & { importe: number };
 
-/** Un concepto propio del tramo (peajes, viáticos): siempre directo. */
-export type LineaRuta = {
-    nombre: string;
-    campo: string;
-    importe: number;
-    participacion_pct: number;
-};
-
-export type Desglose = {
-    componentes: LineaDesglose[];
-    ruta: LineaRuta[];
-};
-
-/** El desglose de una tarifa, calculado siempre en el servidor. */
-export type DesgloseCotizacion = {
-    desglose: Desglose;
-    total_directo: number;
-    total_indirecto: number;
+/** La tarifa de una ruta, con la misma forma que la guarda el servidor. */
+export type ResultadoTarifa = {
+    desglose: { componentes: LineaDesglose[] };
+    margen_pct: number;
+    total_fijo: number;
+    total_variable: number;
     costo_operativo: number;
-    /** Con los fijos dentro: sirve para comparar rutas de largo distinto. */
-    costo_por_km: number;
     margen: number;
+    /** La tarifa sin IGV. */
     subtotal: number;
     igv: number;
     total: number;
-};
-
-/** Los conceptos propios del tramo que se cargan por cotización. */
-export type CostosRuta = {
-    peajes: number;
-    viaticos: number;
-    alojamiento: number;
-    cochera: number;
-    carga_descarga: number;
-    otros_ruta: number;
 };
 
 export type CotizacionListItem = {
@@ -585,25 +562,24 @@ export type CotizacionListItem = {
 };
 
 /** La cotización completa, para su ficha y su formulario. */
-export type Cotizacion = Omit<DesgloseCotizacion, 'costo_por_km'> &
-    CostosRuta & {
-        id: number;
-        numero: string;
-        fecha: string;
-        valido_hasta: string;
-        cliente_id: number | null;
-        cliente_nombre: string;
-        cliente_ruc: string | null;
-        punto_partida_id: number | null;
-        punto_llegada_id: number | null;
-        origen: string;
-        destino: string;
-        material: string | null;
-        km: number;
-        dias: number;
-        margen_pct: number;
-        costo_por_km: number;
-        estado: string;
-        estado_label: string;
-        notas: string | null;
-    };
+export type Cotizacion = ResultadoTarifa & {
+    id: number;
+    numero: string;
+    fecha: string;
+    valido_hasta: string;
+    cliente_id: number | null;
+    cliente_nombre: string;
+    cliente_ruc: string | null;
+    punto_partida_id: number | null;
+    punto_llegada_id: number | null;
+    origen: string;
+    destino: string;
+    material: string | null;
+    km: number;
+    dias: number;
+    margen_pct: number;
+    costo_por_km: number;
+    estado: string;
+    estado_label: string;
+    notas: string | null;
+};

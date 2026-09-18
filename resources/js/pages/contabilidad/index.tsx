@@ -20,6 +20,7 @@ import type {
     FiltrosContabilidad,
     ResumenCobranza as Resumen,
     ViajeContable,
+    ViajeSeleccionado,
 } from '@/types/contabilidad';
 import type { EnumOption, Paginator } from '@/types/fleet';
 
@@ -47,9 +48,11 @@ export default function ContabilidadIndex({
     const { puedeFacturar } = usePermisos();
     const { buscar, setBuscar, aplicar } = useContabilidadFiltros(filtros);
 
-    // Los ids elegidos, no los viajes: la fila se re-renderiza en cada visita
-    // de Inertia y guardar el objeto dejaría copias viejas en la selección.
-    const [seleccion, setSeleccion] = useState<number[]>([]);
+    // Solo id y N° de GR, no el viaje entero: la fila se re-renderiza en cada
+    // visita de Inertia y guardar el objeto dejaría copias viejas en la
+    // selección. Sobrevive al cambio de página (la paginación preserva el
+    // estado) para poder juntar en una factura viajes de páginas distintas.
+    const [seleccion, setSeleccion] = useState<ViajeSeleccionado[]>([]);
 
     const filas = agruparViajes(paginador.data);
 
@@ -177,7 +180,12 @@ export default function ContabilidadIndex({
 
             {seleccion.length > 0 && puedeFacturar && (
                 <BarraSeleccion
-                    viajeIds={seleccion}
+                    seleccion={seleccion}
+                    onQuitar={(viajeId) =>
+                        setSeleccion(
+                            seleccion.filter((viaje) => viaje.id !== viajeId),
+                        )
+                    }
                     onListo={() => setSeleccion([])}
                 />
             )}
@@ -200,7 +208,7 @@ export default function ContabilidadIndex({
                         onSeleccion={setSeleccion}
                     />
 
-                    <Paginacion paginador={paginador} />
+                    <Paginacion paginador={paginador} preservarEstado />
                 </>
             )}
         </div>

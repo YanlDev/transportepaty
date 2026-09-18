@@ -28,8 +28,7 @@ class UpdateParametroFlotaRequest extends FormRequest
             'dias_certificaciones' => ['required', 'numeric', 'min:0'],
             'dias_sincronizacion' => ['required', 'numeric', 'min:0'],
             'igv_pct' => ['required', 'numeric', 'min:0', 'max:1'],
-            'margen_pct_default' => ['required', 'numeric', 'min:0', 'max:1'],
-            'viatico_dia' => ['required', 'numeric', 'min:0'],
+            'margen_pct_default' => ['required', 'numeric', 'min:0', 'max:0.9'],
         ];
     }
 
