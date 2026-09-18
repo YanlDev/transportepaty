@@ -37,8 +37,9 @@ it('derives the driver day cost from the payroll', function (): void {
 });
 
 it('derives the fuel cost per km from the price mix and the mileage', function (): void {
-    // (0.5×22.30 + 0.2×22.05 + 0.3×22.68) sin IGV ÷ 7.49 km/galón, más la UREA.
-    expect(tasaCalculada('Consumo de combustible'))->toEqualWithDelta(2.6321, 0.0001);
+    // (0.5×25.49 + 0.2×25.29 + 0.3×25.09) sin IGV ÷ 7.49 km/galón, más la UREA,
+    // con los precios de grifo de Osinergmin al 18/09/2026.
+    expect(tasaCalculada('Consumo de combustible'))->toEqualWithDelta(2.9677, 0.0001);
 });
 
 it('derives the tyre cost from the whole retread cycle', function (): void {
