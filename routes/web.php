@@ -16,6 +16,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
 use App\Http\Controllers\ViajeController;
+use App\Http\Controllers\WhatsappController;
 use Illuminate\Support\Facades\Route;
 
 // La raíz no muestra landing: siempre redirige al login (los usuarios ya
@@ -138,6 +139,11 @@ Route::middleware('auth')->group(function () {
         ->except(['show']);
     Route::put('usuarios/{user}/password', [UserController::class, 'updatePassword'])
         ->name('usuarios.password.update');
+
+    Route::get('whatsapp', [WhatsappController::class, 'index'])->name('whatsapp.index');
+    Route::post('whatsapp/vincular', [WhatsappController::class, 'vincular'])->name('whatsapp.vincular');
+    Route::post('whatsapp/probar', [WhatsappController::class, 'probar'])->name('whatsapp.probar');
+    Route::post('whatsapp/desvincular', [WhatsappController::class, 'desvincular'])->name('whatsapp.desvincular');
 
     Route::get('tractos', [VehiculoController::class, 'tractos'])->name('tractos.index');
     Route::get('carretas', [VehiculoController::class, 'carretas'])->name('carretas.index');

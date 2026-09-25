@@ -103,6 +103,17 @@ export default [
         },
     },
     {
+        // El servicio de WhatsApp es Node, no el frontend: tiene `process` y
+        // `Buffer`, y `useMultiFileAuthState` es de Baileys, no un hook de React.
+        files: ['whatsapp/**/*.js'],
+        languageOptions: {
+            globals: globals.node,
+        },
+        rules: {
+            'react-hooks/rules-of-hooks': 'off',
+        },
+    },
+    {
         ignores: [
             'vendor',
             'node_modules',

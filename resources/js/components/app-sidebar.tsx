@@ -11,6 +11,7 @@ import {
     Truck,
     TruckTrailer,
     UsersThree,
+    WhatsappLogo,
 } from '@phosphor-icons/react';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
@@ -22,6 +23,7 @@ import programacion from '@/actions/App/Http/Controllers/ProgramacionController'
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
+import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -113,6 +115,11 @@ const adminNavItems: NavItem[] = [
         title: 'Usuarios',
         href: usuarios.index(),
         icon: UsersThree,
+    },
+    {
+        title: 'WhatsApp',
+        href: whatsapp.index(),
+        icon: WhatsappLogo,
     },
 ];
 

@@ -46,6 +46,10 @@ class AppServiceProvider extends ServiceProvider
         // factura, el mismo criterio con el que `ViajePolicy` lo deja leer el
         // listado.
         Gate::define('ver-tablero', fn (User $user): bool => $user->hasAnyRole(['admin', 'visor', 'contador']));
+
+        // Vincular el número de la empresa y probarlo: solo admin, porque ese
+        // número habla en nombre de Transportes Paty.
+        Gate::define('administrar-whatsapp', fn (User $user): bool => $user->hasRole('admin'));
     }
 
     /**

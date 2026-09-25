@@ -66,4 +66,20 @@ return [
         'telefono_oficina' => env('TRANSPATY_TELEFONO_OFICINA'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Servicio de WhatsApp
+    |--------------------------------------------------------------------------
+    |
+    | El proceso Node de `whatsapp/` (Baileys) que manda los mensajes con el
+    | número de la empresa. Escucha solo en el propio servidor y exige el
+    | mismo token que tiene en su entorno.
+    |
+    */
+
+    'whatsapp' => [
+        'url' => env('WHATSAPP_SERVICIO_URL', 'http://127.0.0.1:3100'),
+        'token' => env('WHATSAPP_SERVICIO_TOKEN'),
+    ],
+
 ];

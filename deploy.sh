@@ -37,6 +37,9 @@ echo "→ Dependencias Node y build de assets"
 npm ci
 npm run build
 
+echo "→ Dependencias del servicio de WhatsApp"
+(cd whatsapp && npm ci --omit=dev)
+
 echo "→ Migraciones"
 php artisan migrate --force
 
@@ -58,6 +61,13 @@ sudo chmod -R 775 "$APP_DIR/storage" "$APP_DIR/bootstrap/cache"
 
 echo "→ Recargando PHP-FPM (limpia OPcache)"
 sudo systemctl reload php8.4-fpm
+
+# El servicio de WhatsApp retoma la sesión guardada al arrancar: reiniciarlo
+# solo corta la conexión unos segundos. Si todavía no está dado de alta en
+# supervisor (ver whatsapp/instalar-servidor.sh), el deploy sigue igual.
+echo "→ Reiniciando el servicio de WhatsApp"
+sudo -n /usr/bin/supervisorctl restart transpaty-whatsapp \
+    || echo "  (aviso: transpaty-whatsapp no está en supervisor todavía)"
 
 php artisan up
 echo "✓ Deploy completado: $(git log -1 --pretty=format:'%h - %s')"
