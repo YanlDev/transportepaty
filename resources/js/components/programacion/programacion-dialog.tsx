@@ -272,7 +272,10 @@ export function ProgramacionDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-lg">
+            {/* Con tope de alto y scroll adentro: el buscador de clientes
+                tiene sesenta filas y sin esto el panel crecía más que la
+                ventana y se salía del recuadro. */}
+            <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-lg">
                 {buscador !== null ? (
                     <>
                         <DialogHeader className="sr-only">
@@ -307,7 +310,10 @@ export function ProgramacionDialog({
                             </DialogDescription>
                         </DialogHeader>
 
-                        <form onSubmit={enviar} className="flex flex-col gap-4">
+                        <form
+                            onSubmit={enviar}
+                            className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1"
+                        >
                             <div className="grid gap-4 sm:grid-cols-2">
                                 {/* Editable y no fijo al día que se está viendo: se
                             programa mirando hoy para cargar mañana. */}

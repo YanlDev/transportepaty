@@ -98,7 +98,7 @@ export function PanelBuscador({
     const escrito = busqueda.trim();
 
     return (
-        <div className="flex flex-col gap-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3">
             <div className="flex items-center gap-2">
                 <button
                     type="button"
@@ -111,14 +111,14 @@ export function PanelBuscador({
                 <p className="text-sm font-medium">{titulo}</p>
             </div>
 
-            <Command className="rounded-md border">
+            <Command className="flex min-h-0 flex-1 flex-col rounded-md border">
                 <CommandInput
                     autoFocus
                     value={busqueda}
                     onValueChange={setBusqueda}
                     placeholder={`Buscar ${titulo.toLowerCase()}...`}
                 />
-                <CommandList className="max-h-[min(24rem,50vh)]">
+                <CommandList className="max-h-none min-h-0 flex-1">
                     <CommandEmpty>Sin coincidencias.</CommandEmpty>
 
                     <CommandGroup>
@@ -141,7 +141,7 @@ export function PanelBuscador({
                                     {opcion.etiqueta}
                                 </span>
                                 {opcion.detalle && (
-                                    <span className="shrink-0 text-xs text-muted-foreground">
+                                    <span className="ml-3 shrink-0 font-mono text-xs text-muted-foreground">
                                         {opcion.detalle}
                                     </span>
                                 )}

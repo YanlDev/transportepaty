@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Programacion;
+use App\Models\Viaje;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 
@@ -16,6 +17,18 @@ use Illuminate\Support\Collection;
  */
 class AvisoDeSalida
 {
+    /** Cuántas GR del cliente se miran para deducir de dónde carga. */
+    private const GR_PARA_DEDUCIR = 12;
+
+    /**
+     * El lugar de carga ya deducido por cliente. La programación del día
+     * suele repetir clientes, y sin esto se consultarían las mismas GR una
+     * vez por unidad.
+     *
+     * @var array<int, string|null>
+     */
+    private array $lugaresDeCarga = [];
+
     /**
      * El aviso para una salida concreta, con su unidad, su conductor y su
      * destino, tal como se le manda al conductor.
@@ -74,30 +87,33 @@ class AvisoDeSalida
         return $avisos;
     }
 
-    /** Lo que abastecimiento necesita para preparar: qué unidad sale y a dónde. */
+    /** Lo que abastecimiento necesita para preparar: qué unidad sale, de dónde carga y a dónde va. */
     public function mensajeParaAbastecimiento(Programacion $programacion): string
     {
-        return implode("\n", [
-            '*UNIDAD PROGRAMADA — CARGA PARTICULAR*',
-            "Fecha: {$programacion->fecha->format('d/m/Y')}",
-            "Unidad: *{$programacion->vehiculo->placa}*",
-            "Conductor: {$programacion->conductor->nombres} {$programacion->conductor->apellidos}",
-            "Destino: {$programacion->destino}",
-        ]);
-    }
-
-    /** Lo mismo para facturación, con el cliente y el flete acordado. */
-    public function mensajeParaFacturacion(Programacion $programacion): string
-    {
-        return implode("\n", [
+        return implode("\n", array_filter([
             '*UNIDAD PROGRAMADA — CARGA PARTICULAR*',
             "Fecha: {$programacion->fecha->format('d/m/Y')}",
             "Unidad: *{$programacion->vehiculo->placa}*",
             "Conductor: {$programacion->conductor->nombres} {$programacion->conductor->apellidos}",
             "Cliente: {$programacion->cliente->alias}",
+            $this->lineaDeCarga($programacion),
+            "Destino: {$programacion->destino}",
+        ]));
+    }
+
+    /** Lo mismo para facturación, con el cliente y el flete acordado. */
+    public function mensajeParaFacturacion(Programacion $programacion): string
+    {
+        return implode("\n", array_filter([
+            '*UNIDAD PROGRAMADA — CARGA PARTICULAR*',
+            "Fecha: {$programacion->fecha->format('d/m/Y')}",
+            "Unidad: *{$programacion->vehiculo->placa}*",
+            "Conductor: {$programacion->conductor->nombres} {$programacion->conductor->apellidos}",
+            "Cliente: {$programacion->cliente->alias}",
+            $this->lineaDeCarga($programacion),
             "Destino: {$programacion->destino}",
             $this->lineaDelFlete($programacion),
-        ]);
+        ]));
     }
 
     /**
@@ -221,6 +237,46 @@ class AvisoDeSalida
         ];
 
         return implode("\n", $lineas);
+    }
+
+    /**
+     * De dónde carga ese cliente, según sus últimas GR. Nadie lo escribe al
+     * programar: el dato ya está en los viajes anteriores —Crisar carga en
+     * Huaral, Porcelanato en Chilca— y abastecimiento necesita saberlo para
+     * mandar la unidad al sitio correcto.
+     *
+     * Devuelve null para un cliente sin historial, y ahí la línea no sale:
+     * inventar un lugar de carga es peor que no ponerlo.
+     */
+    public function lugarDeCarga(Programacion $programacion): ?string
+    {
+        $clienteId = $programacion->cliente_id;
+
+        if (array_key_exists($clienteId, $this->lugaresDeCarga)) {
+            return $this->lugaresDeCarga[$clienteId];
+        }
+
+        $ciudad = Viaje::query()
+            ->where('cliente_id', $clienteId)
+            ->orderByDesc('fecha_traslado')
+            ->limit(self::GR_PARA_DEDUCIR)
+            ->get(['origen'])
+            ->map(fn (Viaje $viaje): string => trim($viaje->ciudadOrigen(), " -\t\n"))
+            ->filter()
+            ->countBy()
+            ->sortDesc()
+            ->keys()
+            ->first();
+
+        return $this->lugaresDeCarga[$clienteId] = $ciudad;
+    }
+
+    /** La línea del lugar de carga, vacía si no se pudo deducir. */
+    private function lineaDeCarga(Programacion $programacion): string
+    {
+        $lugar = $this->lugarDeCarga($programacion);
+
+        return $lugar === null ? '' : "Carga en: *{$lugar}*";
     }
 
     /**

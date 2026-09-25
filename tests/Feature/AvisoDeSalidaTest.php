@@ -4,6 +4,7 @@ use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Programacion;
 use App\Models\Vehiculo;
+use App\Models\Viaje;
 use App\Services\AvisoDeSalida;
 
 /**
@@ -271,4 +272,54 @@ it('leaves out an area that has no whatsapp configured', function (): void {
         ->toHaveCount(1)
         ->and(app(AvisoDeSalida::class)->avisosDeArea(Programacion::factory()->create())[0]['area'])
         ->toBe('Abastecimiento');
+});
+
+/**
+ * De dónde carga cada cliente no se escribe al programar: sale de sus GR
+ * anteriores, que es donde ya está el dato.
+ */
+it('deduces where the cliente loads from its past GRs', function (): void {
+    $cliente = Cliente::factory()->create(['alias' => 'CRISAR']);
+
+    Viaje::factory()->count(3)->create([
+        'cliente_id' => $cliente->id,
+        'origen' => 'PARCELA NRO 55 ZONA CAMPO GRAN - HUARAL - HUARAL - LIMA',
+        'fecha_traslado' => '2026-09-20',
+    ]);
+
+    $programacion = Programacion::factory()->create(['cliente_id' => $cliente->id]);
+
+    expect(app(AvisoDeSalida::class)->lugarDeCarga($programacion))->toBe('HUARAL')
+        ->and(app(AvisoDeSalida::class)->mensajeParaAbastecimiento($programacion->fresh()))
+        ->toContain('Carga en: *HUARAL*')
+        ->toContain('CRISAR');
+});
+
+/** Con dos orígenes gana el que más se repite en las últimas guías. */
+it('takes the most repeated origen when the cliente loads in two places', function (): void {
+    $cliente = Cliente::factory()->create();
+
+    Viaje::factory()->count(3)->create([
+        'cliente_id' => $cliente->id,
+        'origen' => 'AV. INDUSTRIAL - CHILCA - CAÑETE - LIMA',
+    ]);
+    Viaje::factory()->create([
+        'cliente_id' => $cliente->id,
+        'origen' => 'AV. NESTOR GAMBETA - CALLAO - PROV. CONST. DEL CALLAO',
+    ]);
+
+    $programacion = Programacion::factory()->create(['cliente_id' => $cliente->id]);
+
+    expect(app(AvisoDeSalida::class)->lugarDeCarga($programacion))->toBe('CHILCA');
+});
+
+/** Sin historial no se inventa un lugar: la línea simplemente no sale. */
+it('leaves the carga line out for a cliente with no GRs yet', function (): void {
+    $programacion = Programacion::factory()->create([
+        'cliente_id' => Cliente::factory()->create()->id,
+    ]);
+
+    expect(app(AvisoDeSalida::class)->lugarDeCarga($programacion))->toBeNull()
+        ->and(app(AvisoDeSalida::class)->mensajeParaAbastecimiento($programacion->fresh()))
+        ->not->toContain('Carga en');
 });
