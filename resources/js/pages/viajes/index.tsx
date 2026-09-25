@@ -10,6 +10,7 @@ import { Paginacion } from '@/components/ui/paginacion';
 import {
     ReintentarCoincidencias,
     SubirGuias,
+    ZonaSoltarGuias,
 } from '@/components/viajes/acciones-guias';
 import { TablaViajes } from '@/components/viajes/tabla-viajes';
 import { ViajeDetalleDialog } from '@/components/viajes/viaje-detalle-dialog';
@@ -53,14 +54,21 @@ export default function ViajesIndex({
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Viajes" />
 
+            {/* Arrastrar el PDF desde la carpeta de la GR y soltarlo en la
+                pantalla. Solo para quien puede importar: al visor no le sirve
+                un cartel que no lleva a nada. */}
+            {puedeEditar && <ZonaSoltarGuias />}
+
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <p className="text-sm text-muted-foreground">
-                        {paginador.total}{' '}
-                        {paginador.total === 1
-                            ? 'viaje registrado a partir de las GR emitidas'
-                            : 'viajes registrados a partir de las GR emitidas'}
-                    </p>
+                    {/* El total ya lo dice el paginador, así que acá queda
+                        solo lo que no se ve en ninguna otra parte. */}
+                    {puedeEditar && (
+                        <p className="hidden text-sm text-muted-foreground md:block">
+                            También puedes arrastrar los PDF de las GR a esta
+                            pantalla.
+                        </p>
+                    )}
                 </div>
 
                 {puedeEditar && (
