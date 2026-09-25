@@ -11,6 +11,7 @@ use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
 use App\Models\Viaje;
+use Carbon\CarbonImmutable;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -369,5 +370,54 @@ it('keeps persona natural clients in the same viajesPorCliente list as empresas'
             ->where('viajesPorCliente', fn ($clientes) => collect($clientes)
                 ->firstWhere('cliente', 'GUZMAN REVILLA CHRISTOPHER CHRISTIAN')['valor'] === 1
                 && collect($clientes)->firstWhere('cliente', 'CRISAR LOGISTICA S.A.C.')['valor'] === 1)
+        );
+});
+
+/**
+ * Los bordes del semáforo, contados sobre la fecha de Lima: vence hoy es «por
+ * vencer» (vale hasta la medianoche), el día 15 del aviso todavía es ámbar y
+ * el 16 ya es vigente. Los papeles de un vehículo dado de baja no cuentan.
+ */
+it('counts document expiry boundaries the same way the fichas do', function (): void {
+    $this->travelTo(CarbonImmutable::parse('2026-09-25 22:00', 'America/Lima'));
+
+    $vencimientos = [
+        '2026-09-24' => 'vencido',
+        '2026-09-25' => 'hoy',
+        '2026-10-10' => 'día 15',
+        '2026-10-11' => 'día 16',
+    ];
+
+    foreach (array_keys($vencimientos) as $fecha) {
+        VehiculoDocumento::create([
+            'vehiculo_id' => Vehiculo::factory()->create()->id,
+            'tipo' => TipoDocumento::Soat,
+            'fecha_vencimiento' => $fecha,
+        ]);
+    }
+
+    $deBaja = Vehiculo::factory()->create();
+    VehiculoDocumento::create([
+        'vehiculo_id' => $deBaja->id,
+        'tipo' => TipoDocumento::Soat,
+        'fecha_vencimiento' => '2026-09-01',
+    ]);
+    $deBaja->delete();
+
+    ConductorDocumento::create([
+        'conductor_id' => Conductor::factory()->create()->id,
+        'tipo' => TipoDocumentoConductor::LicenciaConducir,
+        'fecha_vencimiento' => '2026-10-10',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('documentos.vencidos', 1)
+            ->where('documentos.por_vencer', 3)
+            ->where('documentos.vigentes', 1)
+            ->where('documentos.sin_fecha', 0)
+            ->where('documentos.total', 5)
+            ->where('resumen.documentosVencidos', 1)
         );
 });

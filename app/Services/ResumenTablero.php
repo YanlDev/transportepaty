@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Enums\EstadoDocumento;
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
@@ -159,32 +158,40 @@ class ResumenTablero
      */
     private function documentosPorEstado(): array
     {
-        $documentos = VehiculoDocumento::query()
-            ->whereHas('vehiculo')
-            ->get(['fecha_vencimiento'])
-            ->concat(
-                ConductorDocumento::query()
-                    ->whereHas('conductor')
-                    ->get(['fecha_vencimiento'])
-            );
+        // Se cuenta en SQL y no hidratando cada documento para preguntarle
+        // `estado()`: son cientos de filas y el tablero es la primera
+        // pantalla después del login. Los cortes son los mismos del trait
+        // —vencido antes de hoy, ámbar hasta el día del aviso inclusive—,
+        // escritos como «menor que el día siguiente» para que comparen bien
+        // también cuando la fecha viene guardada con hora (SQLite).
+        $hoy = RelojOperativo::fechaDeHoy();
+        $finDelAviso = $hoy->addDays(VehiculoDocumento::DIAS_AVISO_VENCIMIENTO + 1)->toDateString();
 
-        $porEstado = $documentos->countBy(
-            fn (VehiculoDocumento|ConductorDocumento $documento): string => $documento->estado()->value
-        );
+        $conteos = collect([
+            VehiculoDocumento::query()->whereHas('vehiculo'),
+            ConductorDocumento::query()->whereHas('conductor'),
+        ])->map(fn (Builder $query): object => $query->toBase()->selectRaw(
+            'count(*) as total, '
+            .'count(case when fecha_vencimiento is null then 1 end) as sin_fecha, '
+            .'count(case when fecha_vencimiento < ? then 1 end) as vencidos, '
+            .'count(case when fecha_vencimiento < ? then 1 end) as hasta_el_aviso',
+            [$hoy->toDateString(), $finDelAviso],
+        )->first());
+
+        $total = (int) $conteos->sum('total');
+        $sinFecha = (int) $conteos->sum('sin_fecha');
+        $vencidos = (int) $conteos->sum('vencidos');
+        $porVencer = (int) $conteos->sum('hasta_el_aviso') - $vencidos;
 
         // Un documento sin fecha cuenta como vigente en las fichas —basta
         // con tenerlo cargado—, pero acá se separa: no es lo mismo un
         // papel con vigencia comprobada que uno del que no se sabe.
-        $sinFecha = $documentos
-            ->filter(fn (VehiculoDocumento|ConductorDocumento $documento): bool => $documento->fecha_vencimiento === null)
-            ->count();
-
         return [
-            'vigentes' => $porEstado->get(EstadoDocumento::Vigente->value, 0) - $sinFecha,
-            'vencidos' => $porEstado->get(EstadoDocumento::Vencido->value, 0),
-            'por_vencer' => $porEstado->get(EstadoDocumento::PorVencer->value, 0),
+            'vigentes' => $total - $sinFecha - $vencidos - $porVencer,
+            'vencidos' => $vencidos,
+            'por_vencer' => $porVencer,
             'sin_fecha' => $sinFecha,
-            'total' => $documentos->count(),
+            'total' => $total,
         ];
     }
 
