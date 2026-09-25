@@ -9,5 +9,7 @@ export type FiltrosViaje = {
 };
 
 export function useViajeFiltros(filtros: FiltrosViaje) {
-    return useFiltros(filtros, index().url);
+    return useFiltros(filtros, index().url, {
+        conservar: ['tiposCarga', 'clientes', 'ciudadesDestino'],
+    });
 }

@@ -1,12 +1,14 @@
 <?php
 
 use App\Enums\TipoCarga;
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Services\ImportadorViaje;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
@@ -613,4 +615,35 @@ it('orders by fecha and then by the GR correlativo, not by import order', functi
             ->where('viajes.data.1.numero_gr', 'EG03-00012410')
             ->where('viajes.data.2.numero_gr', 'EG03-00012409')
         );
+});
+
+/**
+ * El buscador del listado recarga todo menos los catálogos de los selectores:
+ * esos no dependen de lo que se escribe y armarlos en cada búsqueda era
+ * recorrer los destinos de todos los viajes por cada tecla.
+ */
+it('filters the list without rebuilding the selector catalogs on a search reload', function (): void {
+    Viaje::factory()->create(['placa_tracto' => 'ABC123']);
+    Viaje::factory()->create(['placa_tracto' => 'XYZ999']);
+
+    $consultas = [];
+    DB::listen(function ($query) use (&$consultas): void {
+        $consultas[] = $query->sql;
+    });
+
+    actingAs(actorConRol('admin'))
+        ->withHeaders([
+            'X-Inertia' => 'true',
+            'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request()),
+            'X-Inertia-Partial-Component' => 'viajes/index',
+            'X-Inertia-Partial-Except' => 'tiposCarga,clientes,ciudadesDestino',
+        ])
+        ->get(route('viajes.index', ['buscar' => 'abc']))
+        ->assertSuccessful()
+        ->assertJsonPath('props.viajes.total', 1)
+        ->assertJsonPath('props.filtros.buscar', 'abc')
+        ->assertJsonMissingPath('props.clientes')
+        ->assertJsonMissingPath('props.ciudadesDestino');
+
+    expect(collect($consultas)->filter(fn (string $sql): bool => str_contains($sql, 'distinct')))->toBeEmpty();
 });

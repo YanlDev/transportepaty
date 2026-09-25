@@ -12,5 +12,7 @@ export type FiltrosVehiculo = {
  * hook y solo se diferencian en a dónde navegan.
  */
 export function useVehiculoFiltros(filtros: FiltrosVehiculo, url: string) {
-    return useFiltros(filtros, url);
+    return useFiltros(filtros, url, {
+        conservar: ['estados', 'marcas', 'cajas'],
+    });
 }

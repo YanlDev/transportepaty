@@ -92,9 +92,11 @@ class VehiculoController extends Controller
             'vehiculos' => $vehiculos,
             'filtros' => $filtros,
             'seccion' => $tipo->value,
-            'estados' => EstadoVehiculo::options(),
-            'marcas' => $this->opcionesMarca($tipo),
-            'cajas' => $esTracto ? TipoCaja::options() : [],
+            // Los catálogos de los selectores no dependen de los filtros: van
+            // en closures para que una búsqueda que no los pide no los arme.
+            'estados' => fn (): array => EstadoVehiculo::options(),
+            'marcas' => fn (): array => $this->opcionesMarca($tipo),
+            'cajas' => fn (): array => $esTracto ? TipoCaja::options() : [],
         ]);
     }
 

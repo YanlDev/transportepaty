@@ -77,9 +77,11 @@ class ViajeController extends Controller
             'viajes' => $viajes,
             'filtros' => $filtros,
             'pendientes' => $this->pendientes()->count(),
-            'tiposCarga' => TipoCarga::opcionesDeViaje(),
-            'clientes' => Viaje::opcionesDeCliente(),
-            'ciudadesDestino' => $this->opcionesCiudadesDestino(),
+            // Los catálogos de los selectores no dependen de los filtros: van
+            // en closures para que una búsqueda que no los pide no los arme.
+            'tiposCarga' => fn (): array => TipoCarga::opcionesDeViaje(),
+            'clientes' => fn (): array => Viaje::opcionesDeCliente(),
+            'ciudadesDestino' => fn (): array => $this->opcionesCiudadesDestino(),
         ]);
     }
 

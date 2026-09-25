@@ -70,11 +70,13 @@ class ContabilidadController extends Controller
             'viajes' => $viajes,
             'filtros' => $filtros,
             'resumen' => $this->cobranza->totales($filtros),
-            'estados' => EstadoCobranza::options(),
-            'monedas' => Moneda::options(),
-            'clientes' => Viaje::opcionesDeCliente(),
-            'meses' => $this->cobranza->opcionesDeMes(),
-            'cuentas' => $this->opcionesCuentas(),
+            // Los catálogos de los selectores no dependen de los filtros: van
+            // en closures para que una búsqueda que no los pide no los arme.
+            'estados' => fn (): array => EstadoCobranza::options(),
+            'monedas' => fn (): array => Moneda::options(),
+            'clientes' => fn (): array => Viaje::opcionesDeCliente(),
+            'meses' => fn (): array => $this->cobranza->opcionesDeMes(),
+            'cuentas' => fn (): array => $this->opcionesCuentas(),
         ]);
     }
 

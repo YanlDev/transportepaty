@@ -7,9 +7,27 @@ export type FiltrosBase = Record<string, string | null> & {
 };
 
 /**
+ * Con menos letras que esto la búsqueda no sale: una sola letra calza con casi
+ * todo el listado y solo suma una petición mientras se sigue escribiendo.
+ * Borrar el texto sí aplica de una, para volver al listado completo.
+ */
+const MINIMO_LETRAS = 2;
+
+type Opciones = {
+    /** Cuánto se espera después de la última tecla antes de buscar. */
+    espera?: number;
+    /**
+     * Props que no dependen de los filtros (los catálogos de los selectores):
+     * no se vuelven a pedir en cada búsqueda, se quedan las que ya hay.
+     */
+    conservar?: string[];
+};
+
+/**
  * Los filtros de un listado, contra el servidor. El texto de búsqueda queda en
  * estado local y se manda con debounce; el resto son selectores y aplican de
- * una, sin esperar.
+ * una, sin esperar. Si llega una búsqueda nueva mientras la anterior sigue en
+ * camino, Inertia cancela la anterior.
  *
  * El efecto solo navega cuando el texto difiere de lo que el servidor ya
  * tiene: sin esa comparación, paginar vuelve a montar la página con el mismo
@@ -21,7 +39,7 @@ export type FiltrosBase = Record<string, string | null> & {
 export function useFiltros<T extends FiltrosBase>(
     filtros: T,
     url: string,
-    espera = 350,
+    { espera = 450, conservar = [] }: Opciones = {},
 ) {
     const [buscar, setBuscar] = useState(filtros.buscar ?? '');
     const buscarActual = filtros.buscar ?? '';
@@ -40,11 +58,18 @@ export function useFiltros<T extends FiltrosBase>(
             preserveState: true,
             preserveScroll: true,
             replace: true,
+            except: conservar,
         });
     };
 
     useEffect(() => {
-        if (buscar === buscarActual) {
+        const texto = buscar.trim();
+
+        if (texto === buscarActual.trim()) {
+            return;
+        }
+
+        if (texto.length > 0 && texto.length < MINIMO_LETRAS) {
             return;
         }
 
