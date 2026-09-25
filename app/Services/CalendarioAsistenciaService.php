@@ -38,21 +38,23 @@ class CalendarioAsistenciaService
             ->get()
             ->keyBy(fn (DescansoDebido $descansoDebido): string => $descansoDebido->mes->toDateString());
 
+        // El año entero en una sola consulta, repartido por mes acá: antes
+        // era una consulta por cada uno de los doce meses.
+        $asistenciasPorMes = Asistencia::query()
+            ->where('conductor_id', $conductor->id)
+            ->whereBetween('fecha', [$mesInicio->toDateString(), $mesFin->toDateString()])
+            ->get()
+            ->groupBy(fn (Asistencia $asistencia): string => $asistencia->fecha->format('Y-m'));
+
         $calendarios = [];
 
         for ($i = 0; $i < 12; $i++) {
             $mes = $mesInicio->addMonths($i);
-            $finMes = $mes->endOfMonth();
-
-            $asistencias = Asistencia::query()
-                ->where('conductor_id', $conductor->id)
-                ->whereBetween('fecha', [$mes->toDateString(), $finMes->toDateString()])
-                ->get();
 
             $calendarios[] = [
                 'mes' => $mes->toDateString(),
                 'dias' => $this->diasDelMes($mes),
-                'marcas' => $this->comoMarcas($asistencias),
+                'marcas' => $this->comoMarcas($asistenciasPorMes->get($mes->format('Y-m'), new Collection)),
                 'dias_debidos' => $diasDebidos->get($mes->toDateString())->dias_debidos ?? 0,
                 'notas' => $diasDebidos->get($mes->toDateString())->notas ?? null,
             ];
