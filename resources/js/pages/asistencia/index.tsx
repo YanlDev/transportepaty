@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import type {
     AsistenciaDia,
     AsistenciaFila,
+    AsistenciaMarca,
     EstadoAsistencia,
 } from '@/types/fleet';
 
@@ -251,21 +252,50 @@ function DiaCiclo({
 }) {
     const info = marca ? estadoConfig[marca.estado] : null;
 
+    // La celda cambia apenas se elige, sin esperar al servidor; si la
+    // marca falla, Inertia la devuelve sola a como estaba. Al volver solo
+    // se recargan las filas, no los días del ciclo.
     const marcarComo = (estado: EstadoAsistencia) => {
         router.patch(
             marcar(conductorId).url,
             { fecha: dia.fecha, estado },
-            { preserveScroll: true },
+            {
+                preserveScroll: true,
+                only: ['filas'],
+                optimistic: (props) => ({
+                    filas: conMarca(
+                        props.filas as AsistenciaFila[],
+                        conductorId,
+                        dia.fecha,
+                        {
+                            // Una marca nueva todavía no tiene id: hasta que
+                            // responda el servidor no se puede quitar.
+                            asistencia_id: marca?.asistencia_id ?? 0,
+                            estado,
+                            estado_label: estadoConfig[estado].label,
+                        },
+                    ),
+                }),
+            },
         );
     };
 
     const quitarMarca = () => {
-        if (!marca) {
+        if (!marca || !marca.asistencia_id) {
             return;
         }
 
         router.delete(destroy(marca.asistencia_id).url, {
             preserveScroll: true,
+            only: ['filas'],
+            optimistic: (props) => ({
+                filas: conMarca(
+                    props.filas as AsistenciaFila[],
+                    conductorId,
+                    dia.fecha,
+                    null,
+                ),
+            }),
         });
     };
 
@@ -295,6 +325,33 @@ function DiaCiclo({
             />
         </DropdownMenu>
     );
+}
+
+/**
+ * Las filas con la marca de un día puesta, cambiada o quitada (`null`), sin
+ * tocar el resto: es lo que se muestra mientras el servidor confirma.
+ */
+function conMarca(
+    filas: AsistenciaFila[],
+    conductorId: number,
+    fecha: string,
+    marca: AsistenciaMarca | null,
+): AsistenciaFila[] {
+    return filas.map((fila) => {
+        if (fila.conductor_id !== conductorId) {
+            return fila;
+        }
+
+        const marcas = { ...fila.marcas };
+
+        if (marca) {
+            marcas[fecha] = marca;
+        } else {
+            delete marcas[fecha];
+        }
+
+        return { ...fila, marcas };
+    });
 }
 
 AsistenciaIndex.layout = {
