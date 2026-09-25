@@ -66,6 +66,9 @@ sleep 3
 supervisorctl status transpaty-whatsapp
 
 sudo -u deploy php "$APP/artisan" config:cache > /dev/null
+# OPcache no revisa si cambiaron los archivos: sin recargar FPM, la web
+# seguiría leyendo la configuración vieja, sin el token.
+systemctl reload php8.4-fpm
 
 echo "→ Respuesta del servicio:"
 curl -s -H "Authorization: Bearer $token" "http://127.0.0.1:$PUERTO/estado"
