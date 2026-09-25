@@ -51,9 +51,17 @@ export type DestinatarioAviso = {
 };
 
 /** El aviso que recibe un área de la casa por una salida programada. */
+/** Los avisos de una salida que se mandan como imagen. */
+export type TipoAvisoSalida =
+    | 'conductor'
+    | 'advertencia'
+    | 'abastecimiento'
+    | 'facturacion';
+
 export type AvisoDeArea = {
     /** `Abastecimiento` o `Facturación`. */
     area: string;
+    tipo: TipoAvisoSalida;
     numero: string;
     mensaje: string;
 };

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\TipoAvisoSalida;
 use App\Models\Programacion;
 use App\Models\Viaje;
 use Carbon\CarbonImmutable;
@@ -59,16 +60,18 @@ class AvisoDeSalida
      * la que no tenga WhatsApp configurado. El monto solo viaja al de
      * facturación: al patio no le corresponde ver precios.
      *
-     * @return array<int, array{area: string, numero: string, mensaje: string}>
+     * @return array<int, array{area: string, tipo: string, numero: string, mensaje: string}>
      */
     public function avisosDeArea(Programacion $programacion): array
     {
         $areas = [
             'Abastecimiento' => [
+                'tipo' => TipoAvisoSalida::Abastecimiento->value,
                 'numero' => $this->numeroWhatsapp(config('transpaty.areas.abastecimiento')),
                 'mensaje' => $this->mensajeParaAbastecimiento($programacion),
             ],
             'Facturación' => [
+                'tipo' => TipoAvisoSalida::Facturacion->value,
                 'numero' => $this->numeroWhatsapp(config('transpaty.areas.facturacion')),
                 'mensaje' => $this->mensajeParaFacturacion($programacion),
             ],
@@ -81,7 +84,7 @@ class AvisoDeSalida
                 continue;
             }
 
-            $avisos[] = ['area' => $area, 'numero' => $datos['numero'], 'mensaje' => $datos['mensaje']];
+            $avisos[] = ['area' => $area, 'tipo' => $datos['tipo'], 'numero' => $datos['numero'], 'mensaje' => $datos['mensaje']];
         }
 
         return $avisos;

@@ -1,4 +1,4 @@
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import {
     CaretDown,
     Package,
@@ -9,6 +9,8 @@ import {
 } from '@phosphor-icons/react';
 import { useState } from 'react';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
+import { EnviarAvisoDialog } from '@/components/programacion/enviar-aviso-dialog';
+import type { EnvioPendiente } from '@/components/programacion/enviar-aviso-dialog';
 import { NumerosDialog } from '@/components/programacion/numeros-dialog';
 import {
     DropdownMenu,
@@ -23,6 +25,7 @@ import type {
     AvisoDeArea,
     DestinatarioAviso,
     ProgramacionTarjeta,
+    TipoAvisoSalida,
 } from '@/types/programacion';
 
 /**
@@ -68,14 +71,54 @@ export function AvisoSalida({
     const avisado = tarjeta.aviso_enviado_at !== null;
     const destinatarios = tarjeta.destinatarios;
     const [editandoNumeros, setEditandoNumeros] = useState(false);
+    const [envio, setEnvio] = useState<EnvioPendiente | null>(null);
+
+    // Con el número de la empresa vinculado, el aviso sale como imagen desde
+    // la app, previa vista; si no, se abre WhatsApp con el texto, como antes.
+    const { whatsappConectado } = usePage<{ whatsappConectado?: boolean }>()
+        .props;
+
+    const dialogoEnvio = (
+        <EnviarAvisoDialog
+            programacionId={tarjeta.id}
+            envio={envio}
+            onCerrar={() => setEnvio(null)}
+        />
+    );
 
     // Las áreas no dependen del teléfono del conductor: sus botones se
     // muestran aunque a él todavía no se le pueda avisar.
     const botonesArea = tarjeta.avisos_area.map((aviso) => (
-        <BotonArea key={aviso.area} aviso={aviso} />
+        <BotonArea
+            key={aviso.area}
+            aviso={aviso}
+            onAvisar={() =>
+                whatsappConectado
+                    ? setEnvio({
+                          tipo: aviso.tipo,
+                          etiqueta: aviso.area,
+                          numero: aviso.numero,
+                      })
+                    : abrirWhatsapp(aviso.numero, aviso.mensaje)
+            }
+        />
     ));
 
-    const mandar = (destinatario: DestinatarioAviso, mensaje: string) => {
+    const mandar = (
+        destinatario: DestinatarioAviso,
+        mensaje: string,
+        tipo: TipoAvisoSalida,
+    ) => {
+        if (whatsappConectado) {
+            setEnvio({
+                tipo,
+                etiqueta: destinatario.etiqueta,
+                numero: destinatario.numero,
+            });
+
+            return;
+        }
+
         abrirWhatsapp(destinatario.numero, mensaje);
 
         router.post(
@@ -104,6 +147,7 @@ export function AvisoSalida({
                     Cargar número
                 </button>
                 {botonesArea}
+                {dialogoEnvio}
                 {editandoNumeros && (
                     <NumerosDialog
                         tarjeta={tarjeta}
@@ -152,7 +196,11 @@ export function AvisoSalida({
                         <DropdownMenuItem
                             key={destinatario.numero}
                             onSelect={() =>
-                                mandar(destinatario, tarjeta.mensaje_aviso)
+                                mandar(
+                                    destinatario,
+                                    tarjeta.mensaje_aviso,
+                                    'conductor',
+                                )
                             }
                         >
                             {destinatario.etiqueta}
@@ -170,13 +218,16 @@ export function AvisoSalida({
                 icono={<Warning weight="fill" className="size-3.5" />}
                 destacado={false}
                 destinatarios={destinatarios}
-                onElegir={(destinatario) => mandar(destinatario, advertencia)}
+                onElegir={(destinatario) =>
+                    mandar(destinatario, advertencia, 'advertencia')
+                }
             />
 
             {/* Las áreas de la casa reciben su propio texto y no marcan la
                 salida como avisada: lo que respalda ante una multa es
                 habérselo dicho al conductor. */}
             {botonesArea}
+            {dialogoEnvio}
 
             <button
                 type="button"
@@ -272,12 +323,18 @@ const ICONOS_AREA: Record<string, React.ReactNode> = {
     Facturación: <Receipt weight="fill" className="size-3.5" />,
 };
 
-/** Abre el chat del área con el aviso de esta salida ya escrito. */
-function BotonArea({ aviso }: { aviso: AvisoDeArea }) {
+/** Avisa al área de esta salida, como imagen o con el texto en WhatsApp. */
+function BotonArea({
+    aviso,
+    onAvisar,
+}: {
+    aviso: AvisoDeArea;
+    onAvisar: () => void;
+}) {
     return (
         <button
             type="button"
-            onClick={() => abrirWhatsapp(aviso.numero, aviso.mensaje)}
+            onClick={onAvisar}
             title={`Mandar el aviso a ${aviso.area} (${aviso.numero})`}
             className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >

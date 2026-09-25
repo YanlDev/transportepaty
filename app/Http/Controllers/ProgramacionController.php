@@ -13,6 +13,7 @@ use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Services\AvisoDeSalida;
 use App\Services\RelojOperativo;
+use App\Services\WhatsappServicio;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -30,7 +31,10 @@ use Inertia\Response;
  */
 class ProgramacionController extends Controller
 {
-    public function __construct(private readonly AvisoDeSalida $aviso) {}
+    public function __construct(
+        private readonly AvisoDeSalida $aviso,
+        private readonly WhatsappServicio $whatsapp,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -84,6 +88,9 @@ class ProgramacionController extends Controller
             'clientes' => fn (): array => $this->opcionesClientes(),
             'destinosUsados' => fn (): array => $this->destinosUsados(),
             'ultimoViajePorConductor' => fn (): array => $this->ultimoViajePorConductor(),
+            // Con el número vinculado, los avisos salen como imagen desde la
+            // app; si no, los botones abren WhatsApp con el texto, como antes.
+            'whatsappConectado' => fn (): bool => $this->whatsapp->estado()['estado'] === 'conectado',
         ]);
     }
 

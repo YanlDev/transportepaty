@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\AvisoSalidaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
@@ -125,6 +126,10 @@ Route::middleware('auth')->group(function () {
         ->name('programacion.aviso');
     Route::delete('programacion/{programacion}', [ProgramacionController::class, 'destroy'])
         ->name('programacion.destroy');
+    Route::get('programacion/{programacion}/aviso/{tipo}', [AvisoSalidaController::class, 'imagen'])
+        ->name('programacion.aviso.imagen');
+    Route::post('programacion/{programacion}/aviso/{tipo}', [AvisoSalidaController::class, 'enviar'])
+        ->name('programacion.aviso.enviar');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');
