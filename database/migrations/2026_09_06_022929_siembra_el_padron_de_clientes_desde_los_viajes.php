@@ -20,7 +20,9 @@ return new class extends Migration
 
     public function up(): void
     {
-        $porRuc = Viaje::query()
+        // Sin los filtros globales que el modelo ganó después (las GR
+        // anuladas): esta migración corre antes de que exista esa columna.
+        $porRuc = Viaje::query()->withoutGlobalScopes()
             ->whereNotNull('cliente_ruc')
             ->get(['cliente', 'cliente_ruc', 'fecha_traslado'])
             ->groupBy('cliente_ruc');
@@ -48,7 +50,7 @@ return new class extends Migration
                 ],
             );
 
-            Viaje::query()
+            Viaje::query()->withoutGlobalScopes()
                 ->where('cliente_ruc', $ruc)
                 ->update(['cliente_id' => $cliente->id]);
         }
@@ -60,6 +62,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Viaje::query()->update(['cliente_id' => null]);
+        Viaje::query()->withoutGlobalScopes()->update(['cliente_id' => null]);
     }
 };

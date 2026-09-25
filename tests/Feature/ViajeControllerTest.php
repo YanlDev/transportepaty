@@ -647,3 +647,21 @@ it('filters the list without rebuilding the selector catalogs on a search reload
 
     expect(collect($consultas)->filter(fn (string $sql): bool => str_contains($sql, 'distinct')))->toBeEmpty();
 });
+
+/**
+ * Volver a subir el PDF de una GR anulada no la registra de nuevo ni la
+ * revive: sigue siendo la misma fila, y sigue anulada.
+ */
+it('does not duplicate nor revive an anulada GR when its PDF is uploaded again', function (): void {
+    $admin = actorConRol('admin');
+
+    actingAs($admin)->post(route('viajes.store'), ['archivos' => [gr()]]);
+    $viaje = Viaje::query()->sole();
+
+    actingAs($admin)->post(route('viajes.anular', $viaje), ['motivo' => 'Reemitida']);
+    actingAs($admin)->post(route('viajes.store'), ['archivos' => [gr()]])->assertSessionHasNoErrors();
+
+    expect(Viaje::query()->conAnuladas()->count())->toBe(1)
+        ->and(Viaje::query()->count())->toBe(0)
+        ->and(Viaje::query()->conAnuladas()->sole()->estaAnulada())->toBeTrue();
+});

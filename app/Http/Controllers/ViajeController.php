@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
+use App\Http\Requests\AnularViajeRequest;
 use App\Http\Requests\StoreViajeManualRequest;
 use App\Http\Requests\StoreViajeRequest;
 use App\Http\Requests\UpdateTipoCargaViajeRequest;
@@ -34,6 +35,9 @@ class ViajeController extends Controller
         ];
 
         $viajes = Viaje::query()
+            // Las GR anuladas se listan igual —en gris— para que se vea que
+            // existieron y por qué no cuentan; en el resto del sistema no están.
+            ->conAnuladas()
             // `media` va acá también: sin precargarla, `getFirstMediaUrl()` de
             // más abajo dispara una consulta por viaje de la página (N+1).
             ->with([
@@ -42,6 +46,7 @@ class ViajeController extends Controller
                 'conductor:id,nombres,apellidos',
                 'clienteDelPadron:id,alias',
                 'media',
+                'anuladaPor:id,name',
             ])
             ->when($filtros['buscar'], function ($query, string $buscar): void {
                 $query->where(function ($query) use ($buscar): void {
@@ -71,7 +76,17 @@ class ViajeController extends Controller
             ->orderByDesc('numero_gr')
             ->paginate(25)
             ->withQueryString()
-            ->through(fn (Viaje $viaje): array => $viaje->datosDeListado());
+            ->through(fn (Viaje $viaje): array => [
+                ...$viaje->datosDeListado(),
+                // Una anulada no se agrupa con la GR que la reemplazó: tiene
+                // su propia clave, así no comparten el borde de «mismo viaje».
+                'grupo_viaje' => $viaje->estaAnulada() ? "anulada:{$viaje->id}" : $viaje->claveGrupoViaje(),
+                'anulacion' => $viaje->estaAnulada() ? [
+                    'fecha' => $viaje->anulada_at?->toIso8601String(),
+                    'por' => $viaje->anuladaPor?->name,
+                    'motivo' => $viaje->motivo_anulacion,
+                ] : null,
+            ]);
 
         return Inertia::render('viajes/index', [
             'viajes' => $viajes,
@@ -215,6 +230,43 @@ class ViajeController extends Controller
         $viaje->update(['tipo_carga' => $request->validated('tipo_carga')]);
 
         return back();
+    }
+
+    /**
+     * Marca la GR como anulada ante SUNAT: queda en el listado, en gris, y
+     * deja de contar como viaje en todo lo demás (ver `Viaje::booted()`).
+     */
+    public function anular(AnularViajeRequest $request, Viaje $viaje): RedirectResponse
+    {
+        $this->authorize('update', $viaje);
+
+        $viaje->forceFill([
+            'anulada_at' => now(),
+            'anulada_por' => $request->user()->id,
+            'motivo_anulacion' => $request->validated('motivo') ?: null,
+        ])->save();
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => "GR {$viaje->numero_gr} marcada como anulada.",
+        ]);
+    }
+
+    /** Deshace una anulación hecha por error: la GR vuelve a contar. */
+    public function reactivar(Viaje $viaje): RedirectResponse
+    {
+        $this->authorize('update', $viaje);
+
+        $viaje->forceFill([
+            'anulada_at' => null,
+            'anulada_por' => null,
+            'motivo_anulacion' => null,
+        ])->save();
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => "GR {$viaje->numero_gr} reactivada.",
+        ]);
     }
 
     public function destroy(Viaje $viaje): RedirectResponse

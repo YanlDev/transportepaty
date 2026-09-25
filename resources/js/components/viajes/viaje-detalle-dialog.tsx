@@ -40,6 +40,23 @@ export function ViajeDetalleDialog({ viaje, onOpenChange }: Props) {
                             </p>
                         </DialogHeader>
 
+                        {viaje.anulacion && (
+                            <p className="rounded-lg border border-dashed bg-muted/50 p-3 text-sm text-muted-foreground">
+                                <span className="font-semibold text-foreground">
+                                    GR anulada
+                                </span>{' '}
+                                el {formatearFecha(viaje.anulacion.fecha)}
+                                {viaje.anulacion.por &&
+                                    ` por ${viaje.anulacion.por}`}
+                                . No cuenta como viaje.
+                                {viaje.anulacion.motivo && (
+                                    <span className="mt-1 block">
+                                        {viaje.anulacion.motivo}
+                                    </span>
+                                )}
+                            </p>
+                        )}
+
                         <div className="grid grid-cols-2 gap-x-5 gap-y-4 text-sm">
                             <Campo etiqueta="Tracto / Carreta">
                                 <span className="font-medium tabular-nums">

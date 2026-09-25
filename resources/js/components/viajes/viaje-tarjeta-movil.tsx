@@ -2,6 +2,10 @@ import { ArrowRight, Eye, Trash2 } from 'lucide-react';
 import { Copiable } from '@/components/copiable';
 import { Button } from '@/components/ui/button';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
+import {
+    AccionAnulacion,
+    EtiquetaAnulada,
+} from '@/components/viajes/anulacion-viaje';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
 import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
@@ -38,6 +42,7 @@ export function ViajeTarjetaMovil({
             className={cn(
                 'flex flex-col gap-2 border bg-card p-3',
                 colorGrupo && cn('border-l-2', colorGrupo),
+                viaje.anulacion && 'bg-muted/40 opacity-60',
             )}
         >
             <button
@@ -87,9 +92,19 @@ export function ViajeTarjetaMovil({
 
             <div className="flex items-center justify-between gap-2 border-t pt-2">
                 <div className="flex items-center gap-2">
-                    <span className="font-mono text-[11px] text-blue-950 tabular-nums dark:text-blue-300">
+                    <span
+                        className={cn(
+                            'font-mono text-[11px] tabular-nums',
+                            viaje.anulacion
+                                ? 'text-muted-foreground line-through'
+                                : 'text-blue-950 dark:text-blue-300',
+                        )}
+                    >
                         <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
                     </span>
+                    {viaje.anulacion && (
+                        <EtiquetaAnulada anulacion={viaje.anulacion} />
+                    )}
                 </div>
 
                 <div className="flex items-center gap-1">
@@ -118,6 +133,8 @@ export function ViajeTarjetaMovil({
                             </Button>
                         }
                     />
+
+                    {puedeEditar && <AccionAnulacion viaje={viaje} grande />}
 
                     {puedeEditar && (
                         <DeleteViajeDialog

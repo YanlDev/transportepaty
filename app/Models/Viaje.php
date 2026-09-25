@@ -6,6 +6,7 @@ use App\Enums\EstadoCobranza;
 use App\Enums\TipoCarga;
 use Database\Factories\ViajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -46,11 +47,15 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string|null $observaciones
  * @property int|null $factura_id
  * @property Carbon|null $gr_fisica_recibida_at
+ * @property Carbon|null $anulada_at
+ * @property int|null $anulada_por
+ * @property string|null $motivo_anulacion
  * @property-read Factura|null $factura
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
  * @property-read Cliente|null $clienteDelPadron
+ * @property-read User|null $anuladaPor
  */
 #[Fillable([
     'numero_gr',
@@ -84,6 +89,67 @@ class Viaje extends Model implements HasMedia
     use HasFactory;
 
     use InteractsWithMedia;
+
+    /**
+     * El filtro global que saca las GR anuladas de todo el sistema. Se
+     * nombra para poder levantarlo donde sí hay que verlas (el listado de
+     * viajes y el importador, ver `scopeConAnuladas()`).
+     */
+    public const SIN_ANULADAS = 'sin-anuladas';
+
+    /**
+     * Una GR anulada ante SUNAT no es un viaje: no cuenta en el tablero, no
+     * se factura y no aparece en las fichas. Se excluye acá, una sola vez,
+     * en vez de recordarlo en cada una de las consultas que leen viajes.
+     */
+    protected static function booted(): void
+    {
+        static::addGlobalScope(self::SIN_ANULADAS, function (Builder $query): void {
+            $query->whereNull($query->qualifyColumn('anulada_at'));
+        });
+    }
+
+    /**
+     * Incluye las GR anuladas. Lo usan el listado de viajes —que las
+     * muestra en gris— y el importador, que tiene que reconocer una GR ya
+     * subida aunque esté anulada para no registrarla dos veces.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeConAnuladas(Builder $query): Builder
+    {
+        return $query->withoutGlobalScope(self::SIN_ANULADAS);
+    }
+
+    /**
+     * Las rutas encuentran también las anuladas: sin esto no habría cómo
+     * reactivar una ni borrarla desde el listado.
+     *
+     * @param  Builder<self>  $query
+     * @param  mixed  $value
+     * @param  string|null  $field
+     * @return \Illuminate\Contracts\Database\Eloquent\Builder
+     */
+    public function resolveRouteBindingQuery($query, $value, $field = null)
+    {
+        return parent::resolveRouteBindingQuery($query->withoutGlobalScope(self::SIN_ANULADAS), $value, $field);
+    }
+
+    public function estaAnulada(): bool
+    {
+        return $this->anulada_at !== null;
+    }
+
+    /**
+     * Quién marcó la GR como anulada.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function anuladaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'anulada_por');
+    }
 
     /**
      * Incluye tractos y carretas dados de baja (soft delete): el historial de
@@ -370,6 +436,7 @@ class Viaje extends Model implements HasMedia
             'fecha_emision' => 'datetime',
             'fecha_traslado' => 'date:Y-m-d',
             'gr_fisica_recibida_at' => 'datetime',
+            'anulada_at' => 'datetime',
             'guias_remitente' => 'array',
             'peso' => 'decimal:3',
             'tipo_carga' => TipoCarga::class,

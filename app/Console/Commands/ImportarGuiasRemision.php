@@ -128,7 +128,7 @@ class ImportarGuiasRemision extends Command
             return ['no_reconocido', null];
         }
 
-        $yaExiste = Viaje::query()->where('numero_gr', $numeroGr)->exists();
+        $yaExiste = Viaje::query()->conAnuladas()->where('numero_gr', $numeroGr)->exists();
 
         return [$yaExiste ? 'actualizado' : 'creado', $numeroGr];
     }

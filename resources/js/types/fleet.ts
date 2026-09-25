@@ -230,8 +230,20 @@ export const cajaLabels: Record<string, string> = {
 };
 
 /** Un viaje registrado a partir de la GR-transportista subida. */
+/** Cuándo, quién y por qué se anuló una GR ante SUNAT. */
+export type AnulacionViaje = {
+    fecha: string;
+    por: string | null;
+    motivo: string | null;
+};
+
 export type ViajeListItem = {
     id: number;
+    /**
+     * Solo lo manda `/viajes`, el único listado que muestra las GR anuladas
+     * (en gris); null si la GR está vigente.
+     */
+    anulacion?: AnulacionViaje | null;
     numero_gr: string;
     /** GR(s) del remitente (cliente) referidas en la GR-transportista. Vacío si el PDF no traía ninguna. */
     guias_remitente: { numero: string; ruc: string }[] | null;

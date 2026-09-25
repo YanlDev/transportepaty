@@ -78,7 +78,7 @@ class ImportadorViaje
         // al crear: un viaje que ya existe pudo haber sido corregido a mano
         // (`TipoCarga` no se puede leer del PDF de transportista, alguien lo
         // clasifica), y resubir la misma GR no debe pisar esa corrección.
-        $yaExiste = Viaje::query()->where('numero_gr', $campos['numero_gr'])->exists();
+        $yaExiste = Viaje::query()->conAnuladas()->where('numero_gr', $campos['numero_gr'])->exists();
 
         $atributos = [
             'fecha_emision' => $fechaEmision,
@@ -110,7 +110,7 @@ class ImportadorViaje
             }
         }
 
-        $viaje = Viaje::query()->updateOrCreate(['numero_gr' => $campos['numero_gr']], $atributos);
+        $viaje = Viaje::query()->conAnuladas()->updateOrCreate(['numero_gr' => $campos['numero_gr']], $atributos);
 
         // El origen no debe borrarse: es el archivo subido por HTTP, no algo
         // desechable que MediaLibrary pueda consumir.

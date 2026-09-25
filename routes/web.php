@@ -78,6 +78,8 @@ Route::middleware('auth')->group(function () {
     Route::post('viajes/resolver', [ViajeController::class, 'resolver'])->name('viajes.resolver');
     Route::patch('viajes/{viaje}/tipo-carga', [ViajeController::class, 'actualizarTipoCarga'])
         ->name('viajes.actualizarTipoCarga');
+    Route::post('viajes/{viaje}/anulacion', [ViajeController::class, 'anular'])->name('viajes.anular');
+    Route::delete('viajes/{viaje}/anulacion', [ViajeController::class, 'reactivar'])->name('viajes.reactivar');
     Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])->name('viajes.destroy');
 
     // La cobranza: la misma tabla de viajes leída desde el dinero. Las
