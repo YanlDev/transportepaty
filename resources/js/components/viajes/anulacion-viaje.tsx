@@ -3,34 +3,8 @@ import { Ban, RotateCcw } from 'lucide-react';
 import { reactivar } from '@/actions/App/Http/Controllers/ViajeController';
 import { Button } from '@/components/ui/button';
 import { AnularViajeDialog } from '@/components/viajes/anular-viaje-dialog';
-import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { AnulacionViaje } from '@/types/fleet';
-
-/**
- * La etiqueta de una GR anulada. Al pasar el mouse dice cuándo, quién y por
- * qué: es lo que explica por qué la fila está en gris y no cuenta.
- */
-export function EtiquetaAnulada({ anulacion }: { anulacion: AnulacionViaje }) {
-    const detalle = [
-        `Anulada el ${formatearFecha(anulacion.fecha)}`,
-        anulacion.por && `por ${anulacion.por}`,
-    ]
-        .filter(Boolean)
-        .join(' ');
-
-    return (
-        <span
-            title={
-                anulacion.motivo ? `${detalle}. ${anulacion.motivo}` : detalle
-            }
-            className="inline-flex items-center gap-1 rounded-full border border-muted-foreground/30 bg-muted px-1.5 py-0.5 font-sans text-[10px] font-semibold tracking-wide text-muted-foreground uppercase"
-        >
-            <Ban className="size-3" />
-            Anulada
-        </span>
-    );
-}
 
 /**
  * Anular una GR vigente o reactivar una anulada, según cómo esté. Reactivar

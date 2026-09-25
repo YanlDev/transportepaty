@@ -11,10 +11,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
-import {
-    AccionAnulacion,
-    EtiquetaAnulada,
-} from '@/components/viajes/anulacion-viaje';
+import { AccionAnulacion } from '@/components/viajes/anulacion-viaje';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { ConductorCelda } from '@/components/viajes/conductor-celda';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
@@ -40,8 +37,7 @@ type Props = {
  * La fila entera abre el detalle, menos donde hay un control propio: sin ese
  * chequeo, borrar un viaje abriría además el panel del viaje que se borró.
  *
- * Una GR anulada se ve apagada y con el número tachado: existió, pero no
- * cuenta como viaje.
+ * Una GR anulada se ve apagada: existió, pero no cuenta como viaje.
  */
 export function TablaViajes({
     filas,
@@ -98,28 +94,14 @@ export function TablaViajes({
                             <TableCell
                                 className={cn(
                                     'font-mono text-[11px] whitespace-nowrap tabular-nums',
-                                    viaje.anulacion
-                                        ? 'text-muted-foreground'
-                                        : 'text-blue-950 dark:text-blue-300',
+                                    !viaje.anulacion &&
+                                        'text-blue-950 dark:text-blue-300',
                                 )}
                             >
-                                <div className="flex items-center gap-1.5">
-                                    <span
-                                        className={cn(
-                                            viaje.anulacion && 'line-through',
-                                        )}
-                                    >
-                                        <Copiable
-                                            valor={viaje.numero_gr}
-                                            etiqueta="N° GR"
-                                        />
-                                    </span>
-                                    {viaje.anulacion && (
-                                        <EtiquetaAnulada
-                                            anulacion={viaje.anulacion}
-                                        />
-                                    )}
-                                </div>
+                                <Copiable
+                                    valor={viaje.numero_gr}
+                                    etiqueta="N° GR"
+                                />
                             </TableCell>
                             <TableCell className="font-mono text-[11px] whitespace-nowrap text-marca-600 tabular-nums dark:text-marca-400">
                                 <GuiasRemitenteCelda

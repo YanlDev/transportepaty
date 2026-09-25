@@ -2,10 +2,7 @@ import { ArrowRight, Eye, Trash2 } from 'lucide-react';
 import { Copiable } from '@/components/copiable';
 import { Button } from '@/components/ui/button';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
-import {
-    AccionAnulacion,
-    EtiquetaAnulada,
-} from '@/components/viajes/anulacion-viaje';
+import { AccionAnulacion } from '@/components/viajes/anulacion-viaje';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
 import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
@@ -95,16 +92,12 @@ export function ViajeTarjetaMovil({
                     <span
                         className={cn(
                             'font-mono text-[11px] tabular-nums',
-                            viaje.anulacion
-                                ? 'text-muted-foreground line-through'
-                                : 'text-blue-950 dark:text-blue-300',
+                            !viaje.anulacion &&
+                                'text-blue-950 dark:text-blue-300',
                         )}
                     >
                         <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
                     </span>
-                    {viaje.anulacion && (
-                        <EtiquetaAnulada anulacion={viaje.anulacion} />
-                    )}
                 </div>
 
                 <div className="flex items-center gap-1">
