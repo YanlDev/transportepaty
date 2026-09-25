@@ -81,3 +81,14 @@ it('contarViajesReales cuenta por separado unidades distintas aunque compartan f
 
     expect(Viaje::contarViajesReales($viajes))->toBe(2);
 });
+
+it('contarViajesReales encadena días seguidos y cruza el fin de mes sin cortar', function (): void {
+    $viajes = collect([
+        viajeParaAgrupar(['fecha_traslado' => '2026-08-31']),
+        viajeParaAgrupar(['fecha_traslado' => '2026-09-01']),
+        viajeParaAgrupar(['fecha_traslado' => '2026-09-02']),
+        viajeParaAgrupar(['fecha_traslado' => '2026-09-04']),
+    ]);
+
+    expect(Viaje::contarViajesReales($viajes))->toBe(2);
+});

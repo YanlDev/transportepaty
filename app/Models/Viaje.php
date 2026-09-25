@@ -253,24 +253,44 @@ class Viaje extends Model implements HasMedia
      */
     public static function contarViajesReales(Collection $viajes): int
     {
-        return $viajes
-            ->groupBy(fn (self $viaje): string => $viaje->identidadUnidad())
-            ->sum(function (Collection $porUnidad): int {
-                $fechas = $porUnidad->pluck('fecha_traslado')->unique()->sort()->values();
+        // Las fechas se comparan como número de día y no como Carbon: el
+        // tablero llama a esto varias veces sobre cientos de GR, y crear,
+        // deduplicar y restar objetos de fecha por cada una era lo que más
+        // tardaba en armar la pantalla.
+        $diasPorUnidad = [];
 
-                $grupos = 0;
-                $anterior = null;
+        foreach ($viajes as $viaje) {
+            $diasPorUnidad[$viaje->identidadUnidad()][$viaje->diaDeTraslado()] = true;
+        }
 
-                foreach ($fechas as $fecha) {
-                    if ($anterior === null || $anterior->diffInDays($fecha) > 1) {
-                        $grupos++;
-                    }
+        $grupos = 0;
 
-                    $anterior = $fecha;
+        foreach ($diasPorUnidad as $dias) {
+            $dias = array_keys($dias);
+            sort($dias);
+
+            $anterior = null;
+
+            foreach ($dias as $dia) {
+                if ($anterior === null || $dia - $anterior > 1) {
+                    $grupos++;
                 }
 
-                return $grupos;
-            });
+                $anterior = $dia;
+            }
+        }
+
+        return $grupos;
+    }
+
+    /**
+     * El día de traslado como número de días desde 1970, leído del valor
+     * crudo (`Y-m-d`, con o sin hora según el motor) sin pasar por el cast:
+     * dos días consecutivos dan números consecutivos.
+     */
+    private function diaDeTraslado(): int
+    {
+        return intdiv((int) strtotime(substr((string) $this->attributes['fecha_traslado'], 0, 10).' UTC'), 86400);
     }
 
     /**
