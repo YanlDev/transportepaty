@@ -68,7 +68,7 @@ class ProgramacionController extends Controller
             ],
             // La advertencia es la misma para todos: viaja una vez por
             // respuesta y no repetida en cada tarjeta.
-            'advertencia' => $this->aviso->advertencia(),
+            'advertencia' => fn (): string => $this->aviso->advertencia(),
             'fecha' => $fecha->toDateString(),
             'programaciones' => $programaciones
                 ->map(fn (Programacion $programacion): array => $this->tarjeta($programacion, $fecha, $guias))
@@ -76,11 +76,14 @@ class ProgramacionController extends Controller
             // El conteo por día de la semana en curso alimenta la tira de
             // navegación: se ve de un vistazo qué días ya tienen plan.
             'semana' => $this->semanaDe($fecha),
-            'unidades' => $this->opcionesUnidades(),
-            'conductores' => $this->opcionesConductores(),
-            'clientes' => $this->opcionesClientes(),
-            'destinosUsados' => $this->destinosUsados(),
-            'ultimoViajePorConductor' => $this->ultimoViajePorConductor(),
+            // Las opciones de los formularios van en closures: el poll de la
+            // página solo pide las tarjetas, la semana y el aviso, y así no
+            // se recalculan cada minuto para descartarlas.
+            'unidades' => fn (): array => $this->opcionesUnidades(),
+            'conductores' => fn (): array => $this->opcionesConductores(),
+            'clientes' => fn (): array => $this->opcionesClientes(),
+            'destinosUsados' => fn (): array => $this->destinosUsados(),
+            'ultimoViajePorConductor' => fn (): array => $this->ultimoViajePorConductor(),
         ]);
     }
 

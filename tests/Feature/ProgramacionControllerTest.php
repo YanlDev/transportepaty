@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Programacion;
@@ -7,6 +8,7 @@ use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Services\RelojOperativo;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -612,4 +614,33 @@ it('sends each card with the avisos for abastecimiento and facturacion', functio
             ->where('avisos_area.1.mensaje', fn (string $mensaje): bool => str_contains($mensaje, 'Flete acordado'))
             ->etc()
         ));
+});
+
+/**
+ * El poll de la página refresca cada minuto solo las tarjetas, la semana y el
+ * aviso: las opciones de los formularios —entre ellas el último viaje de cada
+ * conductor, que recorre la tabla de viajes— no deben calcularse para eso.
+ */
+it('only computes the polled props on the partial reload of the poll', function (): void {
+    Viaje::factory()->create();
+
+    $consultas = [];
+    DB::listen(function ($query) use (&$consultas): void {
+        $consultas[] = $query->sql;
+    });
+
+    actingAs(actorConRol('admin'))
+        ->withHeaders([
+            'X-Inertia' => 'true',
+            'X-Inertia-Partial-Component' => 'programacion/index',
+            'X-Inertia-Partial-Data' => 'programaciones,semana,avisoOperaciones',
+            'X-Inertia-Version' => (string) app(HandleInertiaRequests::class)->version(request()),
+        ])
+        ->get(route('programacion.index'))
+        ->assertSuccessful()
+        ->assertJsonMissingPath('props.unidades')
+        ->assertJsonMissingPath('props.ultimoViajePorConductor')
+        ->assertJsonPath('props.semana', fn (array $semana): bool => count($semana) === 7);
+
+    expect(collect($consultas)->filter(fn (string $sql): bool => str_contains($sql, 'from "viajes" where "conductor_id" is not null')))->toBeEmpty();
 });
