@@ -15,6 +15,7 @@ export type Conductor = {
     categoria_licencia: string | null;
     licencia_vence: string | null;
     telefono: string | null;
+    telefono_alterno: string | null;
     email: string | null;
     fecha_nacimiento: string | null;
     procedencia: string | null;

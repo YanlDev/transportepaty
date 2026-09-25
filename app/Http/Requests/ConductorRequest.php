@@ -27,6 +27,9 @@ abstract class ConductorRequest extends FormRequest
             'categoria_licencia' => ['nullable', 'string', 'max:10'],
             'licencia_vence' => ['nullable', 'date'],
             'telefono' => ['nullable', 'string', 'max:30'],
+            // El segundo celular del conductor: hay quien anda con otro
+            // número y es al que de verdad contesta.
+            'telefono_alterno' => ['nullable', 'string', 'max:30'],
             'email' => ['nullable', 'email', 'max:255'],
             'fecha_nacimiento' => ['nullable', 'date'],
             'procedencia' => ['nullable', 'string', 'max:100'],

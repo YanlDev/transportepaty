@@ -4,12 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoVehiculo;
+use App\Http\Requests\ActualizarNumerosAvisoRequest;
 use App\Http\Requests\GuardarProgramacionRequest;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Programacion;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
+use App\Services\AvisoDeSalida;
 use App\Services\RelojOperativo;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -28,15 +30,23 @@ use Inertia\Response;
  */
 class ProgramacionController extends Controller
 {
+    public function __construct(private readonly AvisoDeSalida $aviso) {}
+
     public function index(Request $request): Response
     {
         $this->authorize('viewAny', Programacion::class);
 
         $fecha = $this->fechaPedida($request);
+        $guias = $this->guiasDelDia($fecha);
 
         $programaciones = Programacion::query()
             ->delDia($fecha->toDateString())
-            ->with(['vehiculo:id,placa', 'conductor:id,nombres,apellidos', 'cliente:id,alias,razon_social'])
+            ->with([
+                'vehiculo:id,placa',
+                'conductor:id,nombres,apellidos,telefono,telefono_alterno',
+                'cliente:id,alias,razon_social',
+                'avisadoPor:id,name',
+            ])
             // Por cliente y luego por placa: abastecimiento prepara por
             // cliente, así que las unidades del mismo cliente van juntas.
             //
@@ -47,13 +57,22 @@ class ProgramacionController extends Controller
             // closures a secas se ignora en silencio.
             ->get()
             ->sortBy(fn (Programacion $programacion): string => $programacion->cliente->alias.'|'.$programacion->vehiculo->placa)
-            ->values()
-            ->map(fn (Programacion $programacion): array => $this->tarjeta($programacion))
-            ->all();
+            ->values();
 
         return Inertia::render('programacion/index', [
+            // El aviso de operaciones va armado desde acá: es el resumen del
+            // día entero, no el de una tarjeta.
+            'avisoOperaciones' => [
+                'whatsapp' => $this->aviso->whatsappOperaciones(),
+                'mensaje' => $this->aviso->resumenDelDia($fecha->toDateString(), $programaciones, $guias),
+            ],
+            // La advertencia es la misma para todos: viaja una vez por
+            // respuesta y no repetida en cada tarjeta.
+            'advertencia' => $this->aviso->advertencia(),
             'fecha' => $fecha->toDateString(),
-            'programaciones' => $programaciones,
+            'programaciones' => $programaciones
+                ->map(fn (Programacion $programacion): array => $this->tarjeta($programacion, $fecha, $guias))
+                ->all(),
             // El conteo por día de la semana en curso alimenta la tira de
             // navegación: se ve de un vistazo qué días ya tienen plan.
             'semana' => $this->semanaDe($fecha),
@@ -79,6 +98,48 @@ class ProgramacionController extends Controller
         $this->authorize('update', $programacion);
 
         $programacion->update($request->validated());
+
+        return back();
+    }
+
+    /**
+     * Corrige los números a los que se avisa, sin salir de la programación:
+     * el celular equivocado se descubre justo cuando hay que mandar el aviso.
+     *
+     * El principal y el alterno son del conductor, así que se guardan en su
+     * ficha y valen para todas sus salidas; el adicional es de esta salida.
+     * Un campo vacío borra el número.
+     */
+    public function actualizarNumeros(ActualizarNumerosAvisoRequest $request, Programacion $programacion): RedirectResponse
+    {
+        $this->authorize('update', $programacion);
+        $this->authorize('update', $programacion->conductor);
+
+        $programacion->conductor->update([
+            'telefono' => $request->validated('telefono'),
+            'telefono_alterno' => $request->validated('telefono_alterno'),
+        ]);
+
+        $programacion->update([
+            'whatsapp_adicional' => $request->validated('whatsapp_adicional'),
+        ]);
+
+        return back();
+    }
+
+    /**
+     * Deja constancia de que al conductor se le mandó el preaviso. Lo llama el
+     * botón de WhatsApp apenas abre el chat: no prueba que el conductor lo
+     * leyó —para eso está el acuse—, pero sí que la oficina avisó, y cuándo.
+     */
+    public function registrarAviso(Programacion $programacion): RedirectResponse
+    {
+        $this->authorize('update', $programacion);
+
+        $programacion->update([
+            'aviso_enviado_at' => now(),
+            'aviso_enviado_por' => request()->user()?->id,
+        ]);
 
         return back();
     }
@@ -111,9 +172,49 @@ class ProgramacionController extends Controller
     }
 
     /**
+     * Las guías que salieron el día que se está viendo, por tracto. Es lo que
+     * dice si una unidad programada ya partió: la GR es el registro de lo que
+     * la unidad hizo de verdad.
+     *
+     * @return array<int, string>
+     */
+    private function guiasDelDia(CarbonImmutable $fecha): array
+    {
+        return Viaje::query()
+            ->whereDate('fecha_traslado', $fecha->toDateString())
+            ->whereNotNull('tracto_id')
+            ->orderBy('numero_gr')
+            ->pluck('numero_gr', 'tracto_id')
+            ->all();
+    }
+
+    /**
+     * Como en una pantalla de salidas: la unidad con GR de ese día ya salió;
+     * sin GR, sigue programada mientras el día no haya pasado, y después queda
+     * marcada para que alguien revise si salió sin registrar la guía o no salió.
+     *
+     * @param  array<int, string>  $guias
+     * @return array{estado: 'despachado'|'programado'|'sin_gr', numero_gr: string|null}
+     */
+    private function estadoDeSalida(Programacion $programacion, CarbonImmutable $fecha, array $guias): array
+    {
+        $numeroGr = $guias[$programacion->vehiculo_id] ?? null;
+
+        if ($numeroGr !== null) {
+            return ['estado' => 'despachado', 'numero_gr' => $numeroGr];
+        }
+
+        return [
+            'estado' => $fecha->lt(RelojOperativo::fechaDeHoy()) ? 'sin_gr' : 'programado',
+            'numero_gr' => null,
+        ];
+    }
+
+    /**
+     * @param  array<int, string>  $guias
      * @return array<string, mixed>
      */
-    private function tarjeta(Programacion $programacion): array
+    private function tarjeta(Programacion $programacion, CarbonImmutable $fecha, array $guias): array
     {
         return [
             'id' => $programacion->id,
@@ -127,6 +228,21 @@ class ProgramacionController extends Controller
             // habla del cliente, y el que colorea la tarjeta.
             'cliente' => $programacion->cliente->alias,
             'destino' => $programacion->destino,
+            'telefono' => $programacion->conductor->telefono,
+            'telefono_alterno' => $programacion->conductor->telefono_alterno,
+            'whatsapp_adicional' => $programacion->whatsapp_adicional,
+            'precio_flete' => $programacion->precio_flete === null ? null : (float) $programacion->precio_flete,
+            'precio_incluye_igv' => $programacion->precio_incluye_igv,
+            ...$this->estadoDeSalida($programacion, $fecha, $guias),
+            // El texto viaja armado con la tarjeta: el botón de WhatsApp solo
+            // lo pone en el enlace, para que lo avisado sea siempre lo mismo.
+            'destinatarios' => $this->aviso->destinatarios($programacion),
+            // Los avisos a abastecimiento y a facturación, cada uno con su
+            // número y su texto: el monto solo viaja en el de facturación.
+            'avisos_area' => $this->aviso->avisosDeArea($programacion),
+            'mensaje_aviso' => $this->aviso->mensajeParaConductor($programacion),
+            'aviso_enviado_at' => $programacion->aviso_enviado_at?->toIso8601String(),
+            'aviso_enviado_por' => $programacion->avisadoPor?->name,
         ];
     }
 

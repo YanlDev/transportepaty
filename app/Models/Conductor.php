@@ -28,6 +28,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $categoria_licencia
  * @property Carbon|null $licencia_vence
  * @property string|null $telefono
+ * @property string|null $telefono_alterno
  * @property string|null $email
  * @property Carbon|null $fecha_nacimiento
  * @property string|null $procedencia
@@ -49,6 +50,7 @@ use Illuminate\Support\Carbon;
     'categoria_licencia',
     'licencia_vence',
     'telefono',
+    'telefono_alterno',
     'email',
     'fecha_nacimiento',
     'procedencia',

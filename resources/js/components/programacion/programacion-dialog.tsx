@@ -5,7 +5,8 @@ import {
     store,
     update,
 } from '@/actions/App/Http/Controllers/ProgramacionController';
-import { SelectorBuscable } from '@/components/selector-buscable';
+import { CampoSelector, PanelBuscador } from '@/components/selector-en-dialogo';
+import type { OpcionBuscable } from '@/components/selector-en-dialogo';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import type {
     ClienteOpcion,
     ConductorOpcion,
@@ -32,6 +34,9 @@ type FormData = {
     conductor_id: number | null;
     cliente_id: number | null;
     destino: string;
+    whatsapp_adicional: string;
+    precio_flete: string;
+    precio_incluye_igv: boolean;
 };
 
 /** El alta mínima de un cliente, sin salir de la programación. */
@@ -88,6 +93,9 @@ export function ProgramacionDialog({
             conductor_id: programacion?.conductor_id ?? null,
             cliente_id: programacion?.cliente_id ?? null,
             destino: programacion?.destino ?? '',
+            whatsapp_adicional: programacion?.whatsapp_adicional ?? '',
+            precio_flete: programacion?.precio_flete?.toString() ?? '',
+            precio_incluye_igv: programacion?.precio_incluye_igv ?? false,
         });
 
     /**
@@ -100,12 +108,38 @@ export function ProgramacionDialog({
      */
     const [altaCliente, setAltaCliente] = useState<string | null>(null);
 
+    /**
+     * Qué campo se está eligiendo. Mientras hay uno, el diálogo muestra el
+     * buscador en lugar del formulario: nada flota sobre nada.
+     */
+    const [eligiendo, setEligiendo] = useState<
+        'vehiculo_id' | 'conductor_id' | 'cliente_id' | null
+    >(null);
+
     const formCliente = useForm<FormCliente>({
         ruc: '',
         razon_social: '',
         alias: '',
         contacto: '',
     });
+
+    const opcionesUnidades: OpcionBuscable[] = unidades.map((unidad) => ({
+        valor: unidad.id,
+        etiqueta: unidad.placa,
+    }));
+
+    const opcionesConductores: OpcionBuscable[] = conductores.map(
+        (conductor) => ({
+            valor: conductor.id,
+            etiqueta: conductor.nombre,
+        }),
+    );
+
+    const opcionesClientes: OpcionBuscable[] = clientes.map((cliente) => ({
+        valor: cliente.id,
+        etiqueta: cliente.alias,
+        detalle: cliente.ruc,
+    }));
 
     const ultimoDelConductor =
         data.conductor_id === null
@@ -193,286 +227,493 @@ export function ProgramacionDialog({
             preserveScroll: true,
             // Cliente y destino se conservan a propósito: lo habitual es
             // programar varias unidades seguidas para el mismo cliente.
-            onSuccess: () => reset('vehiculo_id', 'conductor_id'),
+            onSuccess: () =>
+                reset(
+                    'vehiculo_id',
+                    'conductor_id',
+                    'whatsapp_adicional',
+                    'precio_flete',
+                ),
         });
     };
+
+    /** El buscador que ocupa el diálogo mientras se elige un campo. */
+    const buscadores = {
+        vehiculo_id: {
+            titulo: 'Unidad',
+            opciones: opcionesUnidades,
+            valor: data.vehiculo_id,
+            onElegir: (valor: number) => setData('vehiculo_id', valor),
+            crear: undefined,
+        },
+        conductor_id: {
+            titulo: 'Conductor',
+            opciones: opcionesConductores,
+            valor: data.conductor_id,
+            onElegir: elegirConductor,
+            crear: undefined,
+        },
+        cliente_id: {
+            titulo: 'Cliente',
+            opciones: opcionesClientes,
+            valor: data.cliente_id,
+            onElegir: (valor: number) => setData('cliente_id', valor),
+            crear: {
+                etiqueta: 'Crear cliente',
+                onCrear: (texto: string) => {
+                    setEligiendo(null);
+                    abrirAltaCliente(texto);
+                },
+            },
+        },
+    } as const;
+
+    const buscador = eligiendo === null ? null : buscadores[eligiendo];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-lg">
-                <DialogHeader>
-                    <DialogTitle>
-                        {programacion
-                            ? 'Editar programación'
-                            : 'Programar unidad'}
-                    </DialogTitle>
-                    <DialogDescription>
-                        Al guardar una nueva, el día, el cliente y el destino
-                        quedan puestos para seguir cargando unidades.
-                    </DialogDescription>
-                </DialogHeader>
+                {buscador !== null ? (
+                    <>
+                        <DialogHeader className="sr-only">
+                            <DialogTitle>
+                                Elegir {buscador.titulo.toLowerCase()}
+                            </DialogTitle>
+                        </DialogHeader>
+                        <PanelBuscador
+                            titulo={buscador.titulo}
+                            valor={buscador.valor}
+                            opciones={buscador.opciones}
+                            crear={buscador.crear}
+                            onElegir={(valor) => {
+                                buscador.onElegir(valor);
+                                setEligiendo(null);
+                            }}
+                            onVolver={() => setEligiendo(null)}
+                        />
+                    </>
+                ) : (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle>
+                                {programacion
+                                    ? 'Editar programación'
+                                    : 'Programar unidad'}
+                            </DialogTitle>
+                            <DialogDescription>
+                                Al guardar una nueva, el día, el cliente y el
+                                destino quedan puestos para seguir cargando
+                                unidades.
+                            </DialogDescription>
+                        </DialogHeader>
 
-                <form onSubmit={enviar} className="flex flex-col gap-4">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                        {/* Editable y no fijo al día que se está viendo: se
+                        <form onSubmit={enviar} className="flex flex-col gap-4">
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                {/* Editable y no fijo al día que se está viendo: se
                             programa mirando hoy para cargar mañana. */}
-                        <Field
-                            label="Día de carga"
-                            error={errors.fecha}
-                            required
-                        >
-                            {(id) => (
-                                <Input
-                                    id={id}
-                                    type="date"
-                                    value={data.fecha}
-                                    onChange={(evento) =>
-                                        setData('fecha', evento.target.value)
+                                <Field
+                                    label="Día de carga"
+                                    error={errors.fecha}
+                                    required
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            type="date"
+                                            value={data.fecha}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'fecha',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </Field>
+
+                                <Field
+                                    label="Unidad"
+                                    error={errors.vehiculo_id}
+                                    required
+                                >
+                                    {(id) => (
+                                        <CampoSelector
+                                            id={id}
+                                            etiqueta="Unidad"
+                                            elegida={opcionesUnidades.find(
+                                                (opcion) =>
+                                                    opcion.valor ===
+                                                    data.vehiculo_id,
+                                            )}
+                                            invalido={Boolean(
+                                                errors.vehiculo_id,
+                                            )}
+                                            onAbrir={() =>
+                                                setEligiendo('vehiculo_id')
+                                            }
+                                        />
+                                    )}
+                                </Field>
+
+                                <Field
+                                    label="Conductor"
+                                    error={errors.conductor_id}
+                                    required
+                                    ayuda={
+                                        ultimoDelConductor
+                                            ? `Última GR: ${ultimoDelConductor.placa} el ${ultimoDelConductor.fecha}.`
+                                            : undefined
                                     }
-                                />
-                            )}
-                        </Field>
+                                >
+                                    {(id) => (
+                                        <CampoSelector
+                                            id={id}
+                                            etiqueta="Conductor"
+                                            elegida={opcionesConductores.find(
+                                                (opcion) =>
+                                                    opcion.valor ===
+                                                    data.conductor_id,
+                                            )}
+                                            invalido={Boolean(
+                                                errors.conductor_id,
+                                            )}
+                                            onAbrir={() =>
+                                                setEligiendo('conductor_id')
+                                            }
+                                        />
+                                    )}
+                                </Field>
 
-                        <Field
-                            label="Unidad"
-                            error={errors.vehiculo_id}
-                            required
-                        >
-                            {(id) => (
-                                <SelectorBuscable
-                                    id={id}
-                                    etiqueta="Unidad"
-                                    valor={data.vehiculo_id}
-                                    onCambio={(valor) =>
-                                        setData('vehiculo_id', valor)
-                                    }
-                                    invalido={Boolean(errors.vehiculo_id)}
-                                    opciones={unidades.map((unidad) => ({
-                                        valor: unidad.id,
-                                        etiqueta: unidad.placa,
-                                    }))}
-                                />
-                            )}
-                        </Field>
+                                <Field
+                                    label="Cliente"
+                                    error={errors.cliente_id}
+                                    required
+                                >
+                                    {(id) => (
+                                        <CampoSelector
+                                            id={id}
+                                            etiqueta="Cliente"
+                                            elegida={opcionesClientes.find(
+                                                (opcion) =>
+                                                    opcion.valor ===
+                                                    data.cliente_id,
+                                            )}
+                                            invalido={Boolean(
+                                                errors.cliente_id,
+                                            )}
+                                            onAbrir={() =>
+                                                setEligiendo('cliente_id')
+                                            }
+                                        />
+                                    )}
+                                </Field>
 
-                        <Field
-                            label="Conductor"
-                            error={errors.conductor_id}
-                            required
-                            ayuda={
-                                ultimoDelConductor
-                                    ? `Última GR: ${ultimoDelConductor.placa} el ${ultimoDelConductor.fecha}.`
-                                    : undefined
-                            }
-                        >
-                            {(id) => (
-                                <SelectorBuscable
-                                    id={id}
-                                    etiqueta="Conductor"
-                                    valor={data.conductor_id}
-                                    onCambio={elegirConductor}
-                                    invalido={Boolean(errors.conductor_id)}
-                                    opciones={conductores.map((conductor) => ({
-                                        valor: conductor.id,
-                                        etiqueta: conductor.nombre,
-                                    }))}
-                                />
-                            )}
-                        </Field>
-
-                        <Field
-                            label="Cliente"
-                            error={errors.cliente_id}
-                            required
-                        >
-                            {(id) => (
-                                <SelectorBuscable
-                                    id={id}
-                                    etiqueta="Cliente"
-                                    valor={data.cliente_id}
-                                    onCambio={(valor) =>
-                                        setData('cliente_id', valor)
-                                    }
-                                    invalido={Boolean(errors.cliente_id)}
-                                    opciones={clientes.map((cliente) => ({
-                                        valor: cliente.id,
-                                        etiqueta: cliente.alias,
-                                    }))}
-                                    crear={{
-                                        etiqueta: 'Crear cliente',
-                                        onCrear: abrirAltaCliente,
-                                    }}
-                                />
-                            )}
-                        </Field>
-
-                        <Field
-                            label="Destino"
-                            error={errors.destino}
-                            required
-                            ayuda="Se autocompleta con los ya usados."
-                        >
-                            {(id) => (
-                                <>
-                                    <Input
-                                        id={id}
-                                        list="destinos-usados"
-                                        value={data.destino}
-                                        onChange={(evento) =>
-                                            setData(
-                                                'destino',
-                                                evento.target.value.toUpperCase(),
-                                            )
-                                        }
-                                        placeholder="JULIACA"
-                                    />
-                                    <datalist id="destinos-usados">
-                                        {destinosUsados.map((destino) => (
-                                            <option
-                                                key={destino}
-                                                value={destino}
+                                <Field
+                                    label="Destino"
+                                    error={errors.destino}
+                                    required
+                                    ayuda="Se autocompleta con los ya usados."
+                                >
+                                    {(id) => (
+                                        <>
+                                            <Input
+                                                id={id}
+                                                list="destinos-usados"
+                                                value={data.destino}
+                                                onChange={(evento) =>
+                                                    setData(
+                                                        'destino',
+                                                        evento.target.value.toUpperCase(),
+                                                    )
+                                                }
+                                                placeholder="JULIACA"
                                             />
-                                        ))}
-                                    </datalist>
-                                </>
-                            )}
-                        </Field>
-                    </div>
+                                            <datalist id="destinos-usados">
+                                                {destinosUsados.map(
+                                                    (destino) => (
+                                                        <option
+                                                            key={destino}
+                                                            value={destino}
+                                                        />
+                                                    ),
+                                                )}
+                                            </datalist>
+                                        </>
+                                    )}
+                                </Field>
 
-                    {/* No es un `<form>`: iría anidado dentro del de la
+                                {/* El flete acordado: no siempre está cerrado al
+                            programar, así que es opcional. Va al aviso de
+                            facturación, no al del conductor. */}
+                                <Field
+                                    label="Precio del flete (S/)"
+                                    error={errors.precio_flete}
+                                    ayuda={desgloseDelFlete(
+                                        data.precio_flete,
+                                        data.precio_incluye_igv,
+                                    )}
+                                >
+                                    {(id) => (
+                                        <div className="flex gap-2">
+                                            <Input
+                                                id={id}
+                                                type="number"
+                                                inputMode="decimal"
+                                                step="0.01"
+                                                min="0"
+                                                value={data.precio_flete}
+                                                onChange={(evento) =>
+                                                    setData(
+                                                        'precio_flete',
+                                                        evento.target.value,
+                                                    )
+                                                }
+                                                placeholder="1850.00"
+                                            />
+                                            {/* Dos botones y no una casilla: así se ve
+                                        de un vistazo cómo se pactó, sin tener
+                                        que leer el texto de una etiqueta. */}
+                                            <div className="flex shrink-0 rounded-md border p-0.5">
+                                                {[
+                                                    {
+                                                        igv: false,
+                                                        texto: '+ IGV',
+                                                    },
+                                                    {
+                                                        igv: true,
+                                                        texto: 'Incluido',
+                                                    },
+                                                ].map(({ igv, texto }) => (
+                                                    <button
+                                                        key={texto}
+                                                        type="button"
+                                                        aria-pressed={
+                                                            data.precio_incluye_igv ===
+                                                            igv
+                                                        }
+                                                        onClick={() =>
+                                                            setData(
+                                                                'precio_incluye_igv',
+                                                                igv,
+                                                            )
+                                                        }
+                                                        className={cn(
+                                                            'rounded px-2 text-xs font-medium transition-colors',
+                                                            data.precio_incluye_igv ===
+                                                                igv
+                                                                ? 'bg-primary text-primary-foreground'
+                                                                : 'text-muted-foreground hover:bg-accent',
+                                                        )}
+                                                    >
+                                                        {texto}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </Field>
+
+                                {/* A quién más avisar de esta salida: el dueño de la
+                            unidad, un apoyo. El segundo celular del propio
+                            conductor va en su ficha, no acá: ese sirve para
+                            todas sus salidas, no solo para esta. */}
+                                <Field
+                                    label="WhatsApp adicional"
+                                    error={errors.whatsapp_adicional}
+                                    ayuda="Opcional. Otro número al que mandar el aviso de esta salida."
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            type="tel"
+                                            inputMode="tel"
+                                            value={data.whatsapp_adicional}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'whatsapp_adicional',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                            placeholder="999888777"
+                                        />
+                                    )}
+                                </Field>
+                            </div>
+
+                            {/* No es un `<form>`: iría anidado dentro del de la
                         programación, que el HTML no permite. Envía con un
                         botón normal. */}
-                    {altaCliente !== null && (
-                        <div className="flex flex-col gap-4 rounded-md border border-dashed bg-muted/30 p-4">
-                            <p className="text-sm font-medium">
-                                Cliente nuevo
-                                <span className="ml-1 font-normal text-muted-foreground">
-                                    — el resto de la ficha se completa después
-                                    en el padrón.
-                                </span>
-                            </p>
+                            {altaCliente !== null && (
+                                <div className="flex flex-col gap-4 rounded-md border border-dashed bg-muted/30 p-4">
+                                    <p className="text-sm font-medium">
+                                        Cliente nuevo
+                                        <span className="ml-1 font-normal text-muted-foreground">
+                                            — el resto de la ficha se completa
+                                            después en el padrón.
+                                        </span>
+                                    </p>
 
-                            <div className="grid gap-4 sm:grid-cols-2">
-                                <Field
-                                    label="RUC"
-                                    error={formCliente.errors.ruc}
-                                    required
-                                    ayuda="Con él se enlazan sus GR ya importadas."
-                                >
-                                    {(id) => (
-                                        <Input
-                                            id={id}
-                                            inputMode="numeric"
-                                            maxLength={11}
-                                            value={formCliente.data.ruc}
-                                            onChange={(evento) =>
-                                                formCliente.setData(
-                                                    'ruc',
-                                                    evento.target.value.replace(
-                                                        /\D/g,
-                                                        '',
-                                                    ),
-                                                )
-                                            }
-                                            placeholder="20123456789"
-                                        />
-                                    )}
-                                </Field>
+                                    <div className="grid gap-4 sm:grid-cols-2">
+                                        <Field
+                                            label="RUC"
+                                            error={formCliente.errors.ruc}
+                                            required
+                                            ayuda="Con él se enlazan sus GR ya importadas."
+                                        >
+                                            {(id) => (
+                                                <Input
+                                                    id={id}
+                                                    inputMode="numeric"
+                                                    maxLength={11}
+                                                    value={formCliente.data.ruc}
+                                                    onChange={(evento) =>
+                                                        formCliente.setData(
+                                                            'ruc',
+                                                            evento.target.value.replace(
+                                                                /\D/g,
+                                                                '',
+                                                            ),
+                                                        )
+                                                    }
+                                                    placeholder="20123456789"
+                                                />
+                                            )}
+                                        </Field>
 
-                                <Field
-                                    label="Alias"
-                                    error={formCliente.errors.alias}
-                                    required
-                                    ayuda="El nombre corto que se ve en la tarjeta."
-                                >
-                                    {(id) => (
-                                        <Input
-                                            id={id}
-                                            maxLength={60}
-                                            value={formCliente.data.alias}
-                                            onChange={(evento) =>
-                                                formCliente.setData(
-                                                    'alias',
-                                                    evento.target.value,
-                                                )
-                                            }
-                                        />
-                                    )}
-                                </Field>
+                                        <Field
+                                            label="Alias"
+                                            error={formCliente.errors.alias}
+                                            required
+                                            ayuda="El nombre corto que se ve en la tarjeta."
+                                        >
+                                            {(id) => (
+                                                <Input
+                                                    id={id}
+                                                    maxLength={60}
+                                                    value={
+                                                        formCliente.data.alias
+                                                    }
+                                                    onChange={(evento) =>
+                                                        formCliente.setData(
+                                                            'alias',
+                                                            evento.target.value,
+                                                        )
+                                                    }
+                                                />
+                                            )}
+                                        </Field>
 
-                                <Field
-                                    label="Razón social"
-                                    error={formCliente.errors.razon_social}
-                                    required
-                                >
-                                    {(id) => (
-                                        <Input
-                                            id={id}
-                                            value={
-                                                formCliente.data.razon_social
+                                        <Field
+                                            label="Razón social"
+                                            error={
+                                                formCliente.errors.razon_social
                                             }
-                                            onChange={(evento) =>
-                                                formCliente.setData(
-                                                    'razon_social',
-                                                    evento.target.value,
-                                                )
-                                            }
-                                        />
-                                    )}
-                                </Field>
+                                            required
+                                        >
+                                            {(id) => (
+                                                <Input
+                                                    id={id}
+                                                    value={
+                                                        formCliente.data
+                                                            .razon_social
+                                                    }
+                                                    onChange={(evento) =>
+                                                        formCliente.setData(
+                                                            'razon_social',
+                                                            evento.target.value,
+                                                        )
+                                                    }
+                                                />
+                                            )}
+                                        </Field>
 
-                                <Field
-                                    label="Contacto"
-                                    error={formCliente.errors.contacto}
-                                >
-                                    {(id) => (
-                                        <Input
-                                            id={id}
-                                            value={formCliente.data.contacto}
-                                            onChange={(evento) =>
-                                                formCliente.setData(
-                                                    'contacto',
-                                                    evento.target.value,
-                                                )
-                                            }
-                                            placeholder="Nombre y teléfono"
-                                        />
-                                    )}
-                                </Field>
-                            </div>
+                                        <Field
+                                            label="Contacto"
+                                            error={formCliente.errors.contacto}
+                                        >
+                                            {(id) => (
+                                                <Input
+                                                    id={id}
+                                                    value={
+                                                        formCliente.data
+                                                            .contacto
+                                                    }
+                                                    onChange={(evento) =>
+                                                        formCliente.setData(
+                                                            'contacto',
+                                                            evento.target.value,
+                                                        )
+                                                    }
+                                                    placeholder="Nombre y teléfono"
+                                                />
+                                            )}
+                                        </Field>
+                                    </div>
 
-                            <div className="flex justify-end gap-2">
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={cerrarAltaCliente}
-                                >
-                                    Cancelar
+                                    <div className="flex justify-end gap-2">
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            onClick={cerrarAltaCliente}
+                                        >
+                                            Cancelar
+                                        </Button>
+                                        <Button
+                                            type="button"
+                                            variant="secondary"
+                                            onClick={crearCliente}
+                                            disabled={formCliente.processing}
+                                        >
+                                            Crear y elegir
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            <DialogFooter>
+                                <DialogClose asChild>
+                                    <Button type="button" variant="outline">
+                                        {programacion ? 'Cancelar' : 'Listo'}
+                                    </Button>
+                                </DialogClose>
+                                <Button type="submit" disabled={processing}>
+                                    {programacion ? 'Guardar' : 'Programar'}
                                 </Button>
-                                <Button
-                                    type="button"
-                                    variant="secondary"
-                                    onClick={crearCliente}
-                                    disabled={formCliente.processing}
-                                >
-                                    Crear y elegir
-                                </Button>
-                            </div>
-                        </div>
-                    )}
-
-                    <DialogFooter>
-                        <DialogClose asChild>
-                            <Button type="button" variant="outline">
-                                {programacion ? 'Cancelar' : 'Listo'}
-                            </Button>
-                        </DialogClose>
-                        <Button type="submit" disabled={processing}>
-                            {programacion ? 'Guardar' : 'Programar'}
-                        </Button>
-                    </DialogFooter>
-                </form>
+                            </DialogFooter>
+                        </form>
+                    </>
+                )}
             </DialogContent>
         </Dialog>
     );
+}
+
+/** La tasa del IGV, la misma que usa el servidor para el aviso a facturación. */
+const IGV = 0.18;
+
+/**
+ * El otro importe del flete, para verlo mientras se escribe: si se pactó sin
+ * IGV, cuánto es con IGV, y al revés. Es la cuenta que de otro modo alguien
+ * hace a mano antes de mandarle el mensaje a facturación.
+ */
+function desgloseDelFlete(
+    precio: string,
+    incluyeIgv: boolean,
+): string | undefined {
+    const monto = Number(precio);
+
+    if (precio.trim() === '' || Number.isNaN(monto) || monto <= 0) {
+        return 'Opcional. Lo recibe facturación en su aviso.';
+    }
+
+    const soles = (valor: number) =>
+        valor.toLocaleString('es-PE', {
+            style: 'currency',
+            currency: 'PEN',
+            minimumFractionDigits: 2,
+        });
+
+    return incluyeIgv
+        ? `Neto sin IGV: ${soles(monto / (1 + IGV))}`
+        : `Total con IGV: ${soles(monto * (1 + IGV))}`;
 }

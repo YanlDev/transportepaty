@@ -1,16 +1,17 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePoll } from '@inertiajs/react';
 import { Plus, Truck } from '@phosphor-icons/react';
 import { useMemo, useState } from 'react';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import { EmptyState } from '@/components/empty-state';
 import { ProgramacionDialog } from '@/components/programacion/programacion-dialog';
-import { TarjetaProgramacion } from '@/components/programacion/tarjeta-programacion';
+import { TableroSalidas } from '@/components/programacion/tablero-salidas';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePermisos } from '@/hooks/use-permisos';
 import { avisarError } from '@/lib/aviso-error';
 import { cn } from '@/lib/utils';
 import type {
+    AvisoOperaciones,
     ClienteOpcion,
     ConductorOpcion,
     DiaDeSemana,
@@ -22,6 +23,8 @@ import type {
 type Props = {
     fecha: string;
     programaciones: ProgramacionTarjeta[];
+    avisoOperaciones: AvisoOperaciones;
+    advertencia: string;
     semana: DiaDeSemana[];
     unidades: UnidadOpcion[];
     conductores: ConductorOpcion[];
@@ -33,17 +36,19 @@ type Props = {
 const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const;
 
 /**
- * Qué unidades salen con carga particular cada día.
+ * Qué unidades salen con carga particular cada día, como la pantalla de
+ * salidas de un aeropuerto: una fila por unidad, con su cliente, destino,
+ * conductor y si ya salió.
  *
- * Es una grilla de tarjetas y no una tabla porque quien la lee —
- * abastecimiento— no compara columnas: busca una unidad y necesita ver de
- * golpe su cliente, su destino y su conductor. El color de la franja sale
- * del cliente, así que las unidades de un mismo cliente se agrupan solas a
- * la vista aunque estén en filas distintas.
+ * Quien la lee —abastecimiento, o el televisor del patio— la mira de lejos,
+ * así que el tablero se refresca solo cada minuto: cuando se registra la GR
+ * de una unidad, su fila pasa a «SALIÓ» sin que nadie recargue.
  */
 export default function ProgramacionIndex({
     fecha,
     programaciones,
+    avisoOperaciones,
+    advertencia,
     semana,
     unidades,
     conductores,
@@ -52,6 +57,10 @@ export default function ProgramacionIndex({
     ultimoViajePorConductor,
 }: Props) {
     const { puedeEditar } = usePermisos();
+
+    usePoll(60_000, {
+        only: ['programaciones', 'semana', 'avisoOperaciones'],
+    });
 
     const [dialogoAbierto, setDialogoAbierto] = useState(false);
     const [enEdicion, setEnEdicion] = useState<ProgramacionTarjeta | null>(
@@ -183,25 +192,18 @@ export default function ProgramacionIndex({
             {programaciones.length === 0 ? (
                 <EmptyState
                     icono={<Truck className="size-7" />}
-                    titulo="Nada programado para este día"
-                    descripcion={
-                        puedeEditar
-                            ? 'Agrega la primera unidad con «Programar unidad».'
-                            : 'Todavía no se cargó la programación de este día.'
-                    }
+                    titulo="Sin salidas programadas"
+                    descripcion="Programa una unidad para este día."
                 />
             ) : (
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {programaciones.map((tarjeta) => (
-                        <TarjetaProgramacion
-                            key={tarjeta.id}
-                            programacion={tarjeta}
-                            editable={puedeEditar}
-                            onEditar={() => abrirEdicion(tarjeta)}
-                            onBorrar={() => borrar(tarjeta)}
-                        />
-                    ))}
-                </div>
+                <TableroSalidas
+                    programaciones={programaciones}
+                    avisoOperaciones={avisoOperaciones}
+                    advertencia={advertencia}
+                    editable={puedeEditar}
+                    onEditar={abrirEdicion}
+                    onBorrar={borrar}
+                />
             )}
 
             {puedeEditar && (

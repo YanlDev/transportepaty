@@ -114,6 +114,12 @@ Route::middleware('auth')->group(function () {
     Route::post('programacion', [ProgramacionController::class, 'store'])->name('programacion.store');
     Route::put('programacion/{programacion}', [ProgramacionController::class, 'update'])
         ->name('programacion.update');
+    // Corregir los números a los que se avisa, desde la misma fila.
+    Route::patch('programacion/{programacion}/numeros', [ProgramacionController::class, 'actualizarNumeros'])
+        ->name('programacion.numeros');
+    // El preaviso al conductor: queda registrado que se mandó.
+    Route::post('programacion/{programacion}/aviso', [ProgramacionController::class, 'registrarAviso'])
+        ->name('programacion.aviso');
     Route::delete('programacion/{programacion}', [ProgramacionController::class, 'destroy'])
         ->name('programacion.destroy');
 

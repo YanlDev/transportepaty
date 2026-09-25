@@ -27,6 +27,12 @@ use Illuminate\Support\Carbon;
  * @property int $conductor_id
  * @property int $cliente_id
  * @property string $destino
+ * @property string|null $whatsapp_adicional
+ * @property float|null $precio_flete
+ * @property bool $precio_incluye_igv
+ * @property Carbon|null $aviso_enviado_at
+ * @property int|null $aviso_enviado_por
+ * @property-read User|null $avisadoPor
  * @property-read Vehiculo $vehiculo
  * @property-read Conductor $conductor
  * @property-read Cliente $cliente
@@ -37,6 +43,11 @@ use Illuminate\Support\Carbon;
     'conductor_id',
     'cliente_id',
     'destino',
+    'whatsapp_adicional',
+    'precio_flete',
+    'precio_incluye_igv',
+    'aviso_enviado_at',
+    'aviso_enviado_por',
 ])]
 class Programacion extends Model
 {
@@ -62,6 +73,17 @@ class Programacion extends Model
     }
 
     /**
+     * Quién le mandó el preaviso al conductor. Null si todavía no se avisó, o
+     * si el usuario que avisó ya no existe.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function avisadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'aviso_enviado_por');
+    }
+
+    /**
      * @return BelongsTo<Cliente, $this>
      */
     public function cliente(): BelongsTo
@@ -84,6 +106,9 @@ class Programacion extends Model
     {
         return [
             'fecha' => 'date:Y-m-d',
+            'precio_flete' => 'decimal:2',
+            'precio_incluye_igv' => 'boolean',
+            'aviso_enviado_at' => 'datetime',
         ];
     }
 }

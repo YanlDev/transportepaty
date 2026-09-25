@@ -41,6 +41,7 @@ type FormData = {
     categoria_licencia: string;
     licencia_vence: string;
     telefono: string;
+    telefono_alterno: string;
     email: string;
     fecha_nacimiento: string;
     procedencia: string;
@@ -59,6 +60,7 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
         categoria_licencia: conductor?.categoria_licencia ?? '',
         licencia_vence: conductor?.licencia_vence ?? '',
         telefono: conductor?.telefono ?? '',
+        telefono_alterno: conductor?.telefono_alterno ?? '',
         email: conductor?.email ?? '',
         fecha_nacimiento: conductor?.fecha_nacimiento ?? '',
         procedencia: conductor?.procedencia ?? '',
@@ -173,6 +175,24 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                                 value={data.telefono}
                                 onChange={(e) =>
                                     setData('telefono', e.target.value)
+                                }
+                                placeholder="999888777"
+                            />
+                        )}
+                    </Field>
+                    <Field
+                        label="Teléfono alterno"
+                        error={errors.telefono_alterno}
+                        ayuda="El otro celular que usa, si tiene."
+                    >
+                        {(id) => (
+                            <Input
+                                id={id}
+                                type="tel"
+                                inputMode="tel"
+                                value={data.telefono_alterno}
+                                onChange={(e) =>
+                                    setData('telefono_alterno', e.target.value)
                                 }
                                 placeholder="999888777"
                             />

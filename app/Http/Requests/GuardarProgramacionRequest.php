@@ -31,6 +31,14 @@ class GuardarProgramacionRequest extends FormRequest
             'conductor_id' => ['required', Rule::exists('conductores', 'id')],
             'cliente_id' => ['required', Rule::exists('clientes', 'id')],
             'destino' => ['required', 'string', 'max:255'],
+            // A quién más avisar de esta salida: el dueño de la unidad, un
+            // apoyo. Es de la salida, no de la persona.
+            'whatsapp_adicional' => ['nullable', 'string', 'max:30'],
+            // El flete acordado, en soles. Opcional: no siempre hay precio
+            // cerrado cuando se programa la unidad.
+            'precio_flete' => ['nullable', 'numeric', 'min:0', 'max:99999999.99'],
+            // Cómo leer ese monto: si ya trae el IGV o hay que sumárselo.
+            'precio_incluye_igv' => ['boolean'],
         ];
     }
 
@@ -43,6 +51,8 @@ class GuardarProgramacionRequest extends FormRequest
             'vehiculo_id' => 'unidad',
             'conductor_id' => 'conductor',
             'cliente_id' => 'cliente',
+            'whatsapp_adicional' => 'WhatsApp adicional',
+            'precio_flete' => 'precio del flete',
         ];
     }
 }
