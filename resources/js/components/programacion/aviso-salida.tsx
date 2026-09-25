@@ -1,5 +1,12 @@
 import { router } from '@inertiajs/react';
-import { CaretDown, Phone, Warning, WhatsappLogo } from '@phosphor-icons/react';
+import {
+    CaretDown,
+    Package,
+    Phone,
+    Receipt,
+    Warning,
+    WhatsappLogo,
+} from '@phosphor-icons/react';
 import { useState } from 'react';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import { NumerosDialog } from '@/components/programacion/numeros-dialog';
@@ -8,12 +15,12 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
-    DropdownMenuSeparator,
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { avisarError } from '@/lib/aviso-error';
 import { cn } from '@/lib/utils';
 import type {
+    AvisoDeArea,
     DestinatarioAviso,
     ProgramacionTarjeta,
 } from '@/types/programacion';
@@ -44,10 +51,10 @@ export function abrirWhatsapp(numero: string, mensaje: string): void {
  * y quién lo mandó: es lo que respalda a la empresa si la unidad sale igual.
  *
  * El botón «Avisar» abre el menú con los números del conductor —el suyo, su
- * alterno, el adicional de esta salida— y, debajo, abastecimiento y
- * facturación, que reciben su propio texto: abastecimiento, qué unidad sale y
- * a dónde; facturación, además, el flete acordado. Solo lo que se le manda al
- * conductor marca la salida como avisada.
+ * alterno, el adicional de esta salida—. Abastecimiento y facturación tienen
+ * cada uno su botón a la vista, con su propio texto: abastecimiento, qué
+ * unidad sale y a dónde; facturación, además, el flete acordado. Solo lo que
+ * se le manda al conductor marca la salida como avisada.
  */
 export function AvisoSalida({
     tarjeta,
@@ -61,6 +68,12 @@ export function AvisoSalida({
     const avisado = tarjeta.aviso_enviado_at !== null;
     const destinatarios = tarjeta.destinatarios;
     const [editandoNumeros, setEditandoNumeros] = useState(false);
+
+    // Las áreas no dependen del teléfono del conductor: sus botones se
+    // muestran aunque a él todavía no se le pueda avisar.
+    const botonesArea = tarjeta.avisos_area.map((aviso) => (
+        <BotonArea key={aviso.area} aviso={aviso} />
+    ));
 
     const mandar = (destinatario: DestinatarioAviso, mensaje: string) => {
         abrirWhatsapp(destinatario.numero, mensaje);
@@ -80,7 +93,7 @@ export function AvisoSalida({
     // es cargarlo.
     if (destinatarios.length === 0) {
         return editable ? (
-            <>
+            <div className="flex flex-wrap items-center gap-1.5">
                 <button
                     type="button"
                     onClick={() => setEditandoNumeros(true)}
@@ -90,6 +103,7 @@ export function AvisoSalida({
                     <Phone className="size-3.5" />
                     Cargar número
                 </button>
+                {botonesArea}
                 {editandoNumeros && (
                     <NumerosDialog
                         tarjeta={tarjeta}
@@ -97,7 +111,7 @@ export function AvisoSalida({
                         onOpenChange={setEditandoNumeros}
                     />
                 )}
-            </>
+            </div>
         ) : (
             <p className="text-xs text-muted-foreground">Sin teléfono</p>
         );
@@ -147,32 +161,6 @@ export function AvisoSalida({
                             </span>
                         </DropdownMenuItem>
                     ))}
-
-                    {/* Las áreas de la casa reciben su propio texto y no
-                        marcan la salida como avisada: lo que respalda ante
-                        una multa es habérselo dicho al conductor. */}
-                    {tarjeta.avisos_area.length > 0 && (
-                        <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuLabel>Áreas</DropdownMenuLabel>
-                            {tarjeta.avisos_area.map((aviso) => (
-                                <DropdownMenuItem
-                                    key={aviso.area}
-                                    onSelect={() =>
-                                        abrirWhatsapp(
-                                            aviso.numero,
-                                            aviso.mensaje,
-                                        )
-                                    }
-                                >
-                                    {aviso.area}
-                                    <span className="ml-2 font-mono text-xs text-muted-foreground">
-                                        {aviso.numero}
-                                    </span>
-                                </DropdownMenuItem>
-                            ))}
-                        </>
-                    )}
                 </DropdownMenuContent>
             </DropdownMenu>
 
@@ -184,6 +172,11 @@ export function AvisoSalida({
                 destinatarios={destinatarios}
                 onElegir={(destinatario) => mandar(destinatario, advertencia)}
             />
+
+            {/* Las áreas de la casa reciben su propio texto y no marcan la
+                salida como avisada: lo que respalda ante una multa es
+                habérselo dicho al conductor. */}
+            {botonesArea}
 
             <button
                 type="button"
@@ -271,6 +264,28 @@ function BotonWhatsapp({
                 ))}
             </DropdownMenuContent>
         </DropdownMenu>
+    );
+}
+
+const ICONOS_AREA: Record<string, React.ReactNode> = {
+    Abastecimiento: <Package weight="fill" className="size-3.5" />,
+    Facturación: <Receipt weight="fill" className="size-3.5" />,
+};
+
+/** Abre el chat del área con el aviso de esta salida ya escrito. */
+function BotonArea({ aviso }: { aviso: AvisoDeArea }) {
+    return (
+        <button
+            type="button"
+            onClick={() => abrirWhatsapp(aviso.numero, aviso.mensaje)}
+            title={`Mandar el aviso a ${aviso.area} (${aviso.numero})`}
+            className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+        >
+            {ICONOS_AREA[aviso.area] ?? (
+                <WhatsappLogo weight="fill" className="size-3.5" />
+            )}
+            {aviso.area}
+        </button>
     );
 }
 
