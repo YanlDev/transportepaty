@@ -5,6 +5,7 @@ namespace App\Services;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
@@ -17,6 +18,11 @@ use RuntimeException;
  */
 class WhatsappServicio
 {
+    /** Cuánto se recuerda si el número está conectado, en segundos. */
+    private const SEGUNDOS_EN_CACHE = 15;
+
+    private const CLAVE_CACHE = 'whatsapp.conectado';
+
     /**
      * Si el servicio responde y en qué punto está la vinculación. Nunca
      * falla: con el proceso caído devuelve `sin_servicio`, que la pantalla
@@ -27,20 +33,43 @@ class WhatsappServicio
     public function estado(): array
     {
         try {
-            $respuesta = $this->cliente()->get('/estado');
+            // Es una consulta local que tarda milisegundos: si no responde
+            // en un par de segundos, el proceso está trabado y se trata
+            // como caído en vez de colgar la página.
+            $respuesta = $this->cliente(timeout: 2)->get('/estado');
         } catch (ConnectionException) {
-            return ['estado' => 'sin_servicio', 'qr' => null, 'numero' => null];
+            return $this->sinServicio();
         }
 
         if ($respuesta->failed()) {
-            return ['estado' => 'sin_servicio', 'qr' => null, 'numero' => null];
+            return $this->sinServicio();
         }
 
-        return [
+        $estado = [
             'estado' => $respuesta->json('estado'),
             'qr' => $respuesta->json('qr'),
             'numero' => $respuesta->json('numero'),
         ];
+
+        // Cada lectura fresca (la del panel, que se refresca sola mientras
+        // se vincula) deja al día lo que recuerda `conectado()`.
+        Cache::put(self::CLAVE_CACHE, $estado['estado'] === 'conectado', self::SEGUNDOS_EN_CACHE);
+
+        return $estado;
+    }
+
+    /**
+     * Si el número está listo para mandar. Lo pregunta Programación en cada
+     * carga, así que se recuerda unos segundos: un proceso trabado cuesta a
+     * lo sumo una espera corta cada tanto, no una por visita.
+     */
+    public function conectado(): bool
+    {
+        return Cache::remember(
+            self::CLAVE_CACHE,
+            self::SEGUNDOS_EN_CACHE,
+            fn (): bool => $this->estado()['estado'] === 'conectado',
+        );
     }
 
     /**
@@ -50,6 +79,8 @@ class WhatsappServicio
      */
     public function vincular(?string $telefono = null): ?string
     {
+        Cache::forget(self::CLAVE_CACHE);
+
         return $this->pedir('post', '/vincular', ['telefono' => $telefono])->json('codigo');
     }
 
@@ -69,6 +100,7 @@ class WhatsappServicio
     /** Cierra la sesión del número en WhatsApp y la borra del servidor. */
     public function desvincular(): void
     {
+        Cache::forget(self::CLAVE_CACHE);
         $this->pedir('post', '/desvincular');
     }
 
@@ -91,15 +123,25 @@ class WhatsappServicio
         return $respuesta;
     }
 
-    private function cliente(): PendingRequest
+    /**
+     * @return array{estado: 'sin_servicio', qr: null, numero: null}
+     */
+    private function sinServicio(): array
+    {
+        Cache::put(self::CLAVE_CACHE, false, self::SEGUNDOS_EN_CACHE);
+
+        return ['estado' => 'sin_servicio', 'qr' => null, 'numero' => null];
+    }
+
+    private function cliente(int $timeout = 25): PendingRequest
     {
         return Http::baseUrl((string) config('transpaty.whatsapp.url'))
             ->withToken((string) config('transpaty.whatsapp.token'))
             ->acceptJson()
             ->asJson()
-            ->connectTimeout(3)
+            ->connectTimeout(min(3, $timeout))
             // Vincular por código espera a que WhatsApp negocie; mandar
             // espera la confirmación del envío.
-            ->timeout(25);
+            ->timeout($timeout);
     }
 }

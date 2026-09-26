@@ -3,6 +3,7 @@
 use App\Models\Ajuste;
 use App\Models\AreaAviso;
 use App\Services\AvisoDeSalida;
+use App\Services\WhatsappServicio;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -152,4 +153,21 @@ it('saves the oficina phone that goes into the advertencia', function (): void {
 
     expect(Ajuste::valor(Ajuste::TELEFONO_OFICINA))->toBe('923-275-353')
         ->and(app(AvisoDeSalida::class)->advertencia())->toContain('Oficina: 923-275-353');
+});
+
+it('remembers for a few seconds whether the number is linked, instead of asking on every page load', function (): void {
+    Http::fake(['whatsapp.test/estado' => Http::response(['estado' => 'conectado', 'qr' => null, 'numero' => '51950301881'])]);
+
+    $whatsapp = app(WhatsappServicio::class);
+
+    expect($whatsapp->conectado())->toBeTrue()
+        ->and($whatsapp->conectado())->toBeTrue();
+
+    Http::assertSentCount(1);
+});
+
+it('treats a service that does not answer as not linked', function (): void {
+    Http::fake(fn () => throw new ConnectionException('Operation timed out after 2000 milliseconds'));
+
+    expect(app(WhatsappServicio::class)->conectado())->toBeFalse();
 });

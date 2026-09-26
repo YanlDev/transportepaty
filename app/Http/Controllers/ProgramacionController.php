@@ -90,7 +90,7 @@ class ProgramacionController extends Controller
             'ultimoViajePorConductor' => fn (): array => $this->ultimoViajePorConductor(),
             // Con el número vinculado, los avisos salen como imagen desde la
             // app; si no, los botones abren WhatsApp con el texto, como antes.
-            'whatsappConectado' => fn (): bool => $this->whatsapp->estado()['estado'] === 'conectado',
+            'whatsappConectado' => fn (): bool => $this->whatsapp->conectado(),
         ]);
     }
 
