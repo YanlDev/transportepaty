@@ -54,6 +54,24 @@ CONF
 # Lleva el token: que no lo lea cualquier usuario del servidor.
 chmod 600 "$CONF"
 
+echo "→ Supervisor: worker de la cola (manda los avisos por WhatsApp)"
+cat > /etc/supervisor/conf.d/transpaty-worker.conf <<CONF
+[program:transpaty-worker]
+command=/usr/bin/php $APP/artisan queue:work database --queue=whatsapp,default --sleep=3 --tries=3 --max-time=3600
+directory=$APP
+user=transpaty
+numprocs=1
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+stopwaitsecs=60
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/transpaty-worker.log
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=3
+CONF
+
 echo "→ Permiso para que deploy.sh reinicie el servicio"
 echo 'deploy ALL=(root) NOPASSWD: /usr/bin/supervisorctl restart transpaty-whatsapp' > "$SUDOERS.tmp"
 visudo -cf "$SUDOERS.tmp"
@@ -61,9 +79,9 @@ install -m 440 "$SUDOERS.tmp" "$SUDOERS"
 rm -f "$SUDOERS.tmp"
 
 supervisorctl reread
-supervisorctl update transpaty-whatsapp
+supervisorctl update transpaty-whatsapp transpaty-worker
 sleep 3
-supervisorctl status transpaty-whatsapp
+supervisorctl status transpaty-whatsapp transpaty-worker
 
 sudo -u deploy php "$APP/artisan" config:cache > /dev/null
 # OPcache no revisa si cambiaron los archivos: sin recargar FPM, la web

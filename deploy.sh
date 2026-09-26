@@ -65,6 +65,12 @@ sudo systemctl reload php8.4-fpm
 # El servicio de WhatsApp retoma la sesión guardada al arrancar: reiniciarlo
 # solo corta la conexión unos segundos. Si todavía no está dado de alta en
 # supervisor (ver whatsapp/instalar-servidor.sh), el deploy sigue igual.
+# El worker de la cola (supervisor lo levanta de nuevo) tiene el código
+# viejo en memoria: queue:restart le pide que termine lo que está haciendo y
+# salga, y así arranca con el código recién desplegado.
+echo "→ Reiniciando el worker de la cola"
+php artisan queue:restart
+
 echo "→ Reiniciando el servicio de WhatsApp"
 sudo -n /usr/bin/supervisorctl restart transpaty-whatsapp \
     || echo "  (aviso: transpaty-whatsapp no está en supervisor todavía)"
