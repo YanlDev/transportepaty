@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Programacion;
@@ -595,10 +596,8 @@ it('refuses a negative precio', function (): void {
 });
 
 it('sends each card with the avisos for abastecimiento and facturacion', function (): void {
-    config([
-        'transpaty.areas.abastecimiento' => '950301881',
-        'transpaty.areas.facturacion' => '950301882',
-    ]);
+    AreaAviso::factory()->create(['nombre' => 'Abastecimiento', 'numero' => '950301881', 'orden' => 1]);
+    AreaAviso::factory()->veFlete()->create(['numero' => '950301882', 'orden' => 2]);
 
     Programacion::factory()->create([
         'fecha' => RelojOperativo::hoy(),

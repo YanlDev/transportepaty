@@ -2,6 +2,7 @@
 
 namespace App\Services\Imagenes;
 
+use App\Models\AreaAviso;
 use App\Models\Programacion;
 use App\Services\AvisoDeSalida;
 use Carbon\CarbonImmutable;
@@ -36,57 +37,48 @@ class ImagenesDeAviso
     }
 
     /**
-     * La advertencia de documentación, armada del mismo texto que ya se
-     * mandaba: la primera línea es el título, las que empiezan con «•» son
-     * la lista y la última (la oficina) va al pie.
+     * La advertencia de documentación, en bloques cortos.
+     *
+     * No se arma del texto largo que se manda por chat: ese se lee de corrido
+     * y como imagen quedaba un muro de párrafos. Acá cada regla es un bloque
+     * que se entiende de un vistazo, que es como se mira una foto en el
+     * celular antes de subirse a la unidad.
      */
     public function advertencia(): string
     {
-        $lineas = explode("\n", $this->aviso->advertencia());
-        $titulo = trim(array_shift($lineas), '* ');
-        $pie = str_starts_with((string) end($lineas), 'Oficina:') ? array_pop($lineas) : null;
+        $lienzo = $this->lienzo()
+            ->banda('PROHIBIDO INICIAR EL VIAJE SIN DOCUMENTACIÓN VALIDADA', self::ROJO)
+            ->parrafo('ANTES DE SALIR DEBES TENER:', 18, '#64748b', Peso::SemiBold, espacioAntes: 40)
+            ->vinetas([
+                'Guía de Remisión del Remitente (GR)',
+                'Guía de Remisión del Transportista (GRT)',
+                'Placas, tu nombre, tu DNI y el destino, correctos en la guía',
+            ], 24)
+            ->recuadro('Si falta un documento', 'Llama y espera', 'Esperar no es falta; salir sin documentos sí lo es.', '#fee2e2', self::ROJO)
+            ->recuadro('¿No corresponde GRT?', 'Lo valida Programación', 'No lo determines por tu cuenta.', '#fef3c7', '#92400e')
+            ->recuadro('Multa SUNAT', 'Hasta 4 UIT', 'Más retención del vehículo y de la carga. Si igual inicias el viaje, la paga el conductor.', '#f1f5f9', '#334155')
+            ->espacio(48);
 
-        $lienzo = $this->lienzo()->banda($titulo, self::ROJO)->espacio(16);
-        $vinetas = [];
+        $oficina = $this->aviso->telefonoOficina();
 
-        foreach ($lineas as $linea) {
-            if (str_starts_with($linea, '• ')) {
-                $vinetas[] = mb_substr($linea, 2);
-
-                continue;
-            }
-
-            if ($vinetas !== []) {
-                $lienzo->vinetas($vinetas);
-                $vinetas = [];
-            }
-
-            if (trim($linea) !== '') {
-                $lienzo->parrafo($linea);
-            }
-        }
-
-        $lienzo->espacio(48);
-
-        if ($pie !== null) {
-            $lienzo->banda($pie, self::AZUL, tamano: 24);
+        if ($oficina) {
+            $lienzo->banda("Oficina: {$oficina}", self::AZUL, tamano: 26);
         }
 
         return $lienzo->png();
     }
 
-    /** Lo que abastecimiento necesita para preparar la unidad. */
-    public function abastecimiento(Programacion $programacion): string
+    /**
+     * El aviso a un área de la casa: la salida con lo que hace falta para
+     * prepararla y, si el área lo ve, el flete acordado.
+     */
+    public function area(Programacion $programacion, AreaAviso $area): string
     {
-        return $this->datosDeSalida($programacion, 'UNIDAD PROGRAMADA · ABASTECIMIENTO')
-            ->espacio(48)
-            ->png();
-    }
+        $lienzo = $this->datosDeSalida($programacion, 'UNIDAD PROGRAMADA · '.mb_strtoupper($area->nombre));
 
-    /** Lo mismo para facturación, con el flete acordado. */
-    public function facturacion(Programacion $programacion): string
-    {
-        $lienzo = $this->datosDeSalida($programacion, 'UNIDAD PROGRAMADA · FACTURACIÓN');
+        if (! $area->ve_flete) {
+            return $lienzo->espacio(48)->png();
+        }
 
         if ($programacion->precio_flete === null) {
             $lienzo->recuadro('Flete', 'Sin precio acordado', null, '#fef3c7', '#92400e');

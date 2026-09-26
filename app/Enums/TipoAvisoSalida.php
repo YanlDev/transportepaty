@@ -5,21 +5,14 @@ namespace App\Enums;
 use App\Models\Programacion;
 
 /**
- * Los avisos que se mandan por una salida programada, cada uno como imagen.
- * Los dos que van al conductor son los que respaldan a la empresa ante una
- * multa, y por eso son los únicos que marcan la salida como avisada.
+ * Los avisos al conductor de una salida programada, cada uno como imagen. Son
+ * los que respaldan a la empresa ante una multa, y por eso marcan la salida
+ * como avisada. Los de las áreas de la casa van aparte (ver `AreaAviso`).
  */
 enum TipoAvisoSalida: string
 {
     case Conductor = 'conductor';
     case Advertencia = 'advertencia';
-    case Abastecimiento = 'abastecimiento';
-    case Facturacion = 'facturacion';
-
-    public function marcaComoAvisado(): bool
-    {
-        return in_array($this, [self::Conductor, self::Advertencia], true);
-    }
 
     /**
      * La leyenda corta que acompaña a la imagen: es lo que se lee en la
@@ -33,8 +26,6 @@ enum TipoAvisoSalida: string
         return match ($this) {
             self::Conductor => "Programación {$fecha} · {$placa}",
             self::Advertencia => 'Documentación obligatoria antes de salir',
-            self::Abastecimiento => "Unidad programada {$fecha} · {$placa}",
-            self::Facturacion => "Unidad programada {$fecha} · {$placa} · flete",
         };
     }
 }

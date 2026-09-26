@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { AreasAviso, TelefonoOficina } from '@/components/whatsapp/areas-aviso';
+import type { AreaAviso } from '@/components/whatsapp/areas-aviso';
 import { cn } from '@/lib/utils';
 
 type EstadoWhatsapp = {
@@ -20,6 +22,8 @@ type Props = {
     estado: EstadoWhatsapp;
     /** El código de 8 caracteres, si se pidió vincular por número. */
     codigoVinculacion: string | null;
+    areas: AreaAviso[];
+    telefonoOficina: string | null;
 };
 
 const ETIQUETAS: Record<
@@ -40,7 +44,12 @@ const ETIQUETAS: Record<
  * (igual que WhatsApp Web). Desde acá se vincula, se prueba y se desvincula;
  * los avisos de verdad salen desde cada módulo.
  */
-export default function WhatsappIndex({ estado, codigoVinculacion }: Props) {
+export default function WhatsappIndex({
+    estado,
+    codigoVinculacion,
+    areas,
+    telefonoOficina,
+}: Props) {
     // Mientras se espera que escaneen el QR o escriban el código, la página
     // se refresca sola para mostrar el QR nuevo y enterarse de cuándo quedó.
     const { start, stop } = usePoll(
@@ -106,6 +115,10 @@ export default function WhatsappIndex({ estado, codigoVinculacion }: Props) {
 
                 {estado.estado === 'conectado' && <Conectado />}
             </section>
+
+            <AreasAviso areas={areas} />
+
+            <TelefonoOficina telefono={telefonoOficina} />
         </div>
     );
 }

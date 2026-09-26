@@ -1,5 +1,7 @@
 <?php
 
+use App\Models\Ajuste;
+use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Programacion;
@@ -34,7 +36,7 @@ it('names the unit, the trip and the prohibition in the aviso', function (): voi
 });
 
 it('puts the oficina phone in the advertencia when it is configured', function (): void {
-    config(['transpaty.operaciones.telefono_oficina' => '998 877 665']);
+    Ajuste::guardar(Ajuste::TELEFONO_OFICINA, '998 877 665');
 
     $aviso = app(AvisoDeSalida::class);
 
@@ -45,7 +47,7 @@ it('puts the oficina phone in the advertencia when it is configured', function (
 });
 
 it('leaves out the oficina line when there is no phone configured', function (): void {
-    config(['transpaty.operaciones.telefono_oficina' => null]);
+    Ajuste::guardar(Ajuste::TELEFONO_OFICINA, null);
 
     expect(app(AvisoDeSalida::class)->advertencia())->not->toContain('Oficina:');
 });
@@ -190,7 +192,7 @@ it('tells abastecimiento the unit, the conductor and the destino, without money'
         'precio_flete' => 1850,
     ]);
 
-    $mensaje = app(AvisoDeSalida::class)->mensajeParaAbastecimiento($programacion->fresh());
+    $mensaje = app(AvisoDeSalida::class)->mensajeParaArea($programacion->fresh(), AreaAviso::factory()->make());
 
     expect($mensaje)
         ->toContain('VEP-897')
@@ -208,7 +210,7 @@ it('gives facturacion the cliente and the flete acordado', function (): void {
         'precio_incluye_igv' => false,
     ]);
 
-    expect(app(AvisoDeSalida::class)->mensajeParaFacturacion($programacion->fresh()))
+    expect(app(AvisoDeSalida::class)->mensajeParaArea($programacion->fresh(), AreaAviso::factory()->veFlete()->make()))
         ->toContain('MINSUR')
         ->toContain('Flete acordado: *S/ 1,850.00* + IGV')
         ->toContain('Total con IGV: S/ 2,183.00');
@@ -224,7 +226,7 @@ it('shows the neto when the flete was agreed with IGV inside', function (): void
         'precio_incluye_igv' => true,
     ]);
 
-    expect(app(AvisoDeSalida::class)->mensajeParaFacturacion($programacion->fresh()))
+    expect(app(AvisoDeSalida::class)->mensajeParaArea($programacion->fresh(), AreaAviso::factory()->veFlete()->make()))
         ->toContain('Flete acordado: *S/ 2,183.00* (IGV incluido)')
         ->toContain('Neto: S/ 1,850.00');
 });
@@ -246,15 +248,13 @@ it('breaks down the flete both ways', function (): void {
 it('says out loud when a salida has no precio yet', function (): void {
     $programacion = Programacion::factory()->create(['precio_flete' => null]);
 
-    expect(app(AvisoDeSalida::class)->mensajeParaFacturacion($programacion))
+    expect(app(AvisoDeSalida::class)->mensajeParaArea($programacion, AreaAviso::factory()->veFlete()->make()))
         ->toContain('Flete: *sin precio acordado*');
 });
 
-it('offers both areas with their configured numbers', function (): void {
-    config([
-        'transpaty.areas.abastecimiento' => '950301881',
-        'transpaty.areas.facturacion' => '950301882',
-    ]);
+it('offers the active areas with their numbers, in order', function (): void {
+    AreaAviso::factory()->veFlete()->create(['numero' => '950301882', 'orden' => 2]);
+    AreaAviso::factory()->create(['nombre' => 'Abastecimiento', 'numero' => '950301881', 'orden' => 1]);
 
     $avisos = app(AvisoDeSalida::class)->avisosDeArea(Programacion::factory()->create());
 
@@ -262,11 +262,10 @@ it('offers both areas with their configured numbers', function (): void {
         ->and(array_column($avisos, 'numero'))->toBe(['51950301881', '51950301882']);
 });
 
-it('leaves out an area that has no whatsapp configured', function (): void {
-    config([
-        'transpaty.areas.abastecimiento' => '950301881',
-        'transpaty.areas.facturacion' => null,
-    ]);
+it('leaves out an area that is turned off or has no valid number', function (): void {
+    AreaAviso::factory()->create(['nombre' => 'Abastecimiento', 'numero' => '950301881']);
+    AreaAviso::factory()->inactiva()->create(['nombre' => 'Facturación']);
+    AreaAviso::factory()->create(['nombre' => 'Centro de Control', 'numero' => '123']);
 
     expect(app(AvisoDeSalida::class)->avisosDeArea(Programacion::factory()->create()))
         ->toHaveCount(1)
@@ -290,7 +289,7 @@ it('deduces where the cliente loads from its past GRs', function (): void {
     $programacion = Programacion::factory()->create(['cliente_id' => $cliente->id]);
 
     expect(app(AvisoDeSalida::class)->lugarDeCarga($programacion))->toBe('HUARAL')
-        ->and(app(AvisoDeSalida::class)->mensajeParaAbastecimiento($programacion->fresh()))
+        ->and(app(AvisoDeSalida::class)->mensajeParaArea($programacion->fresh(), AreaAviso::factory()->make()))
         ->toContain('Carga en: *HUARAL*')
         ->toContain('CRISAR');
 });
@@ -320,6 +319,6 @@ it('leaves the carga line out for a cliente with no GRs yet', function (): void 
     ]);
 
     expect(app(AvisoDeSalida::class)->lugarDeCarga($programacion))->toBeNull()
-        ->and(app(AvisoDeSalida::class)->mensajeParaAbastecimiento($programacion->fresh()))
+        ->and(app(AvisoDeSalida::class)->mensajeParaArea($programacion->fresh(), AreaAviso::factory()->make()))
         ->not->toContain('Carga en');
 });

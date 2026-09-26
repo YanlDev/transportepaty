@@ -51,17 +51,14 @@ export type DestinatarioAviso = {
 };
 
 /** El aviso que recibe un área de la casa por una salida programada. */
-/** Los avisos de una salida que se mandan como imagen. */
-export type TipoAvisoSalida =
-    | 'conductor'
-    | 'advertencia'
-    | 'abastecimiento'
-    | 'facturacion';
+/** Los avisos al conductor, que se mandan como imagen. */
+export type TipoAvisoSalida = 'conductor' | 'advertencia';
 
+/** El aviso a un área de la casa; las áreas se administran en el panel de WhatsApp. */
 export type AvisoDeArea = {
-    /** `Abastecimiento` o `Facturación`. */
+    id: number;
+    /** Abastecimiento, Facturación, Centro de Control… */
     area: string;
-    tipo: TipoAvisoSalida;
     numero: string;
     mensaje: string;
 };

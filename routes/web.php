@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AvisoSalidaController;
 use App\Http\Controllers\ClienteController;
@@ -130,6 +131,10 @@ Route::middleware('auth')->group(function () {
         ->name('programacion.aviso.imagen');
     Route::post('programacion/{programacion}/aviso/{tipo}', [AvisoSalidaController::class, 'enviar'])
         ->name('programacion.aviso.enviar');
+    Route::get('programacion/{programacion}/aviso-area/{area}', [AvisoSalidaController::class, 'imagenArea'])
+        ->name('programacion.avisoArea.imagen');
+    Route::post('programacion/{programacion}/aviso-area/{area}', [AvisoSalidaController::class, 'enviarArea'])
+        ->name('programacion.avisoArea.enviar');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');
@@ -149,6 +154,10 @@ Route::middleware('auth')->group(function () {
     Route::post('whatsapp/vincular', [WhatsappController::class, 'vincular'])->name('whatsapp.vincular');
     Route::post('whatsapp/probar', [WhatsappController::class, 'probar'])->name('whatsapp.probar');
     Route::post('whatsapp/desvincular', [WhatsappController::class, 'desvincular'])->name('whatsapp.desvincular');
+    Route::put('whatsapp/oficina', [WhatsappController::class, 'actualizarOficina'])->name('whatsapp.oficina');
+    Route::post('whatsapp/areas', [AreaAvisoController::class, 'store'])->name('whatsapp.areas.store');
+    Route::put('whatsapp/areas/{area}', [AreaAvisoController::class, 'update'])->name('whatsapp.areas.update');
+    Route::delete('whatsapp/areas/{area}', [AreaAvisoController::class, 'destroy'])->name('whatsapp.areas.destroy');
 
     Route::get('tractos', [VehiculoController::class, 'tractos'])->name('tractos.index');
     Route::get('carretas', [VehiculoController::class, 'carretas'])->name('carretas.index');

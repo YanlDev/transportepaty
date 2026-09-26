@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Ajuste;
+use App\Models\AreaAviso;
 use App\Services\AvisoDeSalida;
 use App\Services\RelojOperativo;
 use App\Services\WhatsappServicio;
@@ -31,6 +33,11 @@ class WhatsappController extends Controller
             // En closure: la página lo refresca sola mientras se vincula.
             'estado' => fn (): array => $this->whatsapp->estado(),
             'codigoVinculacion' => fn (): ?string => $request->session()->get('codigo_vinculacion'),
+            'areas' => fn () => AreaAviso::query()
+                ->orderBy('orden')
+                ->orderBy('id')
+                ->get(['id', 'nombre', 'numero', 've_flete', 'activa']),
+            'telefonoOficina' => fn (): ?string => $this->aviso->telefonoOficina(),
         ]);
     }
 
@@ -77,6 +84,20 @@ class WhatsappController extends Controller
         }
 
         return back()->with('toast', ['type' => 'success', 'message' => "Mensaje de prueba enviado a {$numero}."]);
+    }
+
+    /** El teléfono de la oficina, que va al pie de la advertencia. */
+    public function actualizarOficina(Request $request): RedirectResponse
+    {
+        $this->authorize('administrar-whatsapp');
+
+        $datos = $request->validate([
+            'telefono_oficina' => ['nullable', 'string', 'max:80'],
+        ]);
+
+        Ajuste::guardar(Ajuste::TELEFONO_OFICINA, $datos['telefono_oficina'] ?? null);
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Teléfono de la oficina actualizado.']);
     }
 
     public function desvincular(): RedirectResponse

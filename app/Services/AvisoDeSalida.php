@@ -2,7 +2,8 @@
 
 namespace App\Services;
 
-use App\Enums\TipoAvisoSalida;
+use App\Models\Ajuste;
+use App\Models\AreaAviso;
 use App\Models\Programacion;
 use App\Models\Viaje;
 use Carbon\CarbonImmutable;
@@ -30,6 +31,9 @@ class AvisoDeSalida
      */
     private array $lugaresDeCarga = [];
 
+    /** @var Collection<int, AreaAviso>|null */
+    private ?Collection $areas = null;
+
     /**
      * El aviso para una salida concreta, con su unidad, su conductor y su
      * destino, tal como se le manda al conductor.
@@ -53,45 +57,41 @@ class AvisoDeSalida
     }
 
     /**
-     * Los avisos a las áreas de la casa por esta salida: abastecimiento
-     * prepara la carga y facturación registra el flete acordado.
+     * Los avisos a las áreas de la casa por esta salida (abastecimiento,
+     * facturación, centro de control…), cada una con su número ya resuelto.
+     * Las áreas se administran desde el panel de WhatsApp; se omiten las
+     * desactivadas y las que no tienen un número válido.
      *
-     * Van con el número que corresponde a cada una, ya resuelto, y se omite
-     * la que no tenga WhatsApp configurado. El monto solo viaja al de
-     * facturación: al patio no le corresponde ver precios.
-     *
-     * @return array<int, array{area: string, tipo: string, numero: string, mensaje: string}>
+     * @return array<int, array{id: int, area: string, numero: string, mensaje: string}>
      */
     public function avisosDeArea(Programacion $programacion): array
     {
-        $areas = [
-            'Abastecimiento' => [
-                'tipo' => TipoAvisoSalida::Abastecimiento->value,
-                'numero' => $this->numeroWhatsapp(config('transpaty.areas.abastecimiento')),
-                'mensaje' => $this->mensajeParaAbastecimiento($programacion),
-            ],
-            'Facturación' => [
-                'tipo' => TipoAvisoSalida::Facturacion->value,
-                'numero' => $this->numeroWhatsapp(config('transpaty.areas.facturacion')),
-                'mensaje' => $this->mensajeParaFacturacion($programacion),
-            ],
-        ];
-
         $avisos = [];
 
-        foreach ($areas as $area => $datos) {
-            if ($datos['numero'] === null) {
+        foreach ($this->areasActivas() as $area) {
+            $numero = $this->numeroWhatsapp($area->numero);
+
+            if ($numero === null) {
                 continue;
             }
 
-            $avisos[] = ['area' => $area, 'tipo' => $datos['tipo'], 'numero' => $datos['numero'], 'mensaje' => $datos['mensaje']];
+            $avisos[] = [
+                'id' => $area->id,
+                'area' => $area->nombre,
+                'numero' => $numero,
+                'mensaje' => $this->mensajeParaArea($programacion, $area),
+            ];
         }
 
         return $avisos;
     }
 
-    /** Lo que abastecimiento necesita para preparar: qué unidad sale, de dónde carga y a dónde va. */
-    public function mensajeParaAbastecimiento(Programacion $programacion): string
+    /**
+     * Lo que un área necesita para preparar la salida: qué unidad sale, de
+     * dónde carga y a dónde va. El flete solo va a las áreas que lo ven: al
+     * patio no le corresponde ver precios.
+     */
+    public function mensajeParaArea(Programacion $programacion, AreaAviso $area): string
     {
         return implode("\n", array_filter([
             '*UNIDAD PROGRAMADA — CARGA PARTICULAR*',
@@ -101,22 +101,19 @@ class AvisoDeSalida
             "Cliente: {$programacion->cliente->alias}",
             $this->lineaDeCarga($programacion),
             "Destino: {$programacion->destino}",
+            $area->ve_flete ? $this->lineaDelFlete($programacion) : '',
         ]));
     }
 
-    /** Lo mismo para facturación, con el cliente y el flete acordado. */
-    public function mensajeParaFacturacion(Programacion $programacion): string
+    /**
+     * Las áreas se leen una sola vez por petición: el tablero arma una
+     * tarjeta por unidad y todas llevan las mismas áreas.
+     *
+     * @return Collection<int, AreaAviso>
+     */
+    private function areasActivas(): Collection
     {
-        return implode("\n", array_filter([
-            '*UNIDAD PROGRAMADA — CARGA PARTICULAR*',
-            "Fecha: {$programacion->fecha->format('d/m/Y')}",
-            "Unidad: *{$programacion->vehiculo->placa}*",
-            "Conductor: {$programacion->conductor->nombres} {$programacion->conductor->apellidos}",
-            "Cliente: {$programacion->cliente->alias}",
-            $this->lineaDeCarga($programacion),
-            "Destino: {$programacion->destino}",
-            $this->lineaDelFlete($programacion),
-        ]));
+        return $this->areas ??= AreaAviso::query()->activas()->get();
     }
 
     /**
@@ -335,9 +332,15 @@ class AvisoDeSalida
      * programación se deja corto— y se omite si no hay ninguno configurado:
      * media frase con un teléfono en blanco es peor que no ponerla.
      */
+    /** El teléfono de la oficina, tal como se cargó en el panel de WhatsApp. */
+    public function telefonoOficina(): ?string
+    {
+        return Ajuste::valor(Ajuste::TELEFONO_OFICINA);
+    }
+
     private function lineaDeOficina(): string
     {
-        $oficina = config('transpaty.operaciones.telefono_oficina');
+        $oficina = $this->telefonoOficina();
 
         return $oficina ? "Oficina: {$oficina}" : '';
     }

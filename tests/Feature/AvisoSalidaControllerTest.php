@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\AreaAviso;
 use App\Models\Programacion;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
@@ -29,7 +30,7 @@ it('renders every notice of a salida as a PNG preview', function (string $tipo):
 
     expect(substr($respuesta->getContent(), 0, 8))->toBe("\x89PNG\r\n\x1a\n")
         ->and(getimagesizefromstring($respuesta->getContent())[0])->toBe(1080);
-})->with(['conductor', 'advertencia', 'abastecimiento', 'facturacion']);
+})->with(['conductor', 'advertencia']);
 
 it('returns 404 for an unknown kind of notice', function (): void {
     actingAs(actorConRol('admin'))
@@ -62,15 +63,48 @@ it('sends the driver notice as an image and marks the salida as avisada', functi
     expect($programacion->fresh()->aviso_enviado_at)->not->toBeNull();
 });
 
-it('does not mark the salida as avisada for an area notice', function (): void {
+it('renders the area notice, with the flete only for areas that see it', function (): void {
+    $programacion = Programacion::factory()->create(['precio_flete' => 1500]);
+    $conFlete = AreaAviso::factory()->veFlete()->create();
+    $sinFlete = AreaAviso::factory()->create();
+
+    $alto = fn (AreaAviso $area): int => getimagesizefromstring(
+        actingAs(actorConRol('admin'))
+            ->get(route('programacion.avisoArea.imagen', [$programacion, $area]))
+            ->assertSuccessful()
+            ->assertHeader('Content-Type', 'image/png')
+            ->getContent()
+    )[1];
+
+    // El recuadro del flete hace más alta la imagen de quien lo ve.
+    expect($alto($conFlete))->toBeGreaterThan($alto($sinFlete));
+});
+
+it('sends an area notice to the saved number of the area, not to one in the request', function (): void {
     Http::fake(['whatsapp.test/enviar' => Http::response(['id' => 'ABC'])]);
     $programacion = Programacion::factory()->create();
+    $area = AreaAviso::factory()->create(['nombre' => 'Centro de Control', 'numero' => '950301883']);
 
     actingAs(actorConRol('admin'))
-        ->post(route('programacion.aviso.enviar', [$programacion, 'abastecimiento']), ['numero' => '950301881'])
-        ->assertSessionHas('toast.type', 'success');
+        ->post(route('programacion.avisoArea.enviar', [$programacion, $area]), ['numero' => '999999999'])
+        ->assertSessionHas('toast', ['type' => 'success', 'message' => 'Aviso enviado a Centro de Control.']);
 
+    Http::assertSent(fn (Request $request): bool => $request['numero'] === '51950301883'
+        && str_starts_with(base64_decode($request['imagen']), "\x89PNG"));
+
+    // Solo lo que va al conductor deja la salida como avisada.
     expect($programacion->fresh()->aviso_enviado_at)->toBeNull();
+});
+
+it('does not send to an area that is turned off', function (): void {
+    Http::fake();
+    $area = AreaAviso::factory()->inactiva()->create();
+
+    actingAs(actorConRol('admin'))
+        ->post(route('programacion.avisoArea.enviar', [Programacion::factory()->create(), $area]))
+        ->assertSessionHas('toast.type', 'error');
+
+    Http::assertNothingSent();
 });
 
 it('shows the error and does not mark as avisada when WhatsApp fails', function (): void {

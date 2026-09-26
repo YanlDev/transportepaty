@@ -171,7 +171,16 @@ class Lienzo
     {
         $this->y += 36;
         $relleno = 32;
-        $alto = 2 * $relleno + $this->altoDeLinea(17) + 6 + $this->altoDeLinea(44) + ($detalle ? $this->altoDeLinea(20) + 4 : 0);
+
+        // El detalle se parte al ancho del recuadro —no al del lienzo— y el
+        // alto se calcula con las líneas que ocupe: una frase larga se salía
+        // por el borde derecho.
+        $lineas = $detalle === null
+            ? []
+            : $this->partir($detalle, 20, Peso::Regular, $this->ancho - 2 * $this->margen - 2 * $relleno);
+
+        $alto = 2 * $relleno + $this->altoDeLinea(17) + 6 + $this->altoDeLinea(44)
+            + ($lineas === [] ? 0 : count($lineas) * $this->altoDeLinea(20) + 4);
 
         $this->rectanguloRedondeado($this->margen, $this->y, $this->ancho - $this->margen, $this->y + $alto, 24, $fondo);
 
@@ -180,9 +189,11 @@ class Lienzo
         $y += $this->altoDeLinea(17) + 6;
         $this->escribir($valor, $this->margen + $relleno, $y, 44, '#0f172a', Peso::Bold);
 
-        if ($detalle) {
-            $y += $this->altoDeLinea(44) + 4;
-            $this->escribir($detalle, $this->margen + $relleno, $y, 20, '#475569');
+        $y += $this->altoDeLinea(44) + 4;
+
+        foreach ($lineas as $linea) {
+            $this->escribirLinea($linea, $this->margen + $relleno, $y, 20, '#475569');
+            $y += $this->altoDeLinea(20);
         }
 
         $this->y += $alto;

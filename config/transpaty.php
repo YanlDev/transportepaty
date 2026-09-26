@@ -56,6 +56,17 @@ return [
 
     'igv' => (float) env('TRANSPATY_IGV', 0.18),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Áreas y teléfono de la oficina (solo valores iniciales)
+    |--------------------------------------------------------------------------
+    |
+    | Ahora viven en la base (`areas_aviso` y `ajustes`) y se editan desde el
+    | panel de WhatsApp. Estos valores solo sembraron esas tablas la primera
+    | vez que corrió la migración; cambiarlos acá ya no tiene efecto.
+    |
+    */
+
     'areas' => [
         'abastecimiento' => env('TRANSPATY_WHATSAPP_ABASTECIMIENTO'),
         'facturacion' => env('TRANSPATY_WHATSAPP_FACTURACION'),

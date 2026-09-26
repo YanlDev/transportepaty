@@ -1,10 +1,6 @@
 import { router } from '@inertiajs/react';
 import { WhatsappLogo } from '@phosphor-icons/react';
 import { useState } from 'react';
-import {
-    enviar,
-    imagen,
-} from '@/actions/App/Http/Controllers/AvisoSalidaController';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -15,13 +11,14 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Spinner } from '@/components/ui/spinner';
-import type { TipoAvisoSalida } from '@/types/programacion';
 
 export type EnvioPendiente = {
-    tipo: TipoAvisoSalida;
     /** A quién va: «Conductor», «Abastecimiento»… */
     etiqueta: string;
     numero: string;
+    /** La vista previa: la misma imagen que se va a mandar. */
+    imagenUrl: string;
+    enviarUrl: string;
 };
 
 /**
@@ -30,11 +27,9 @@ export type EnvioPendiente = {
  * no hay cómo corregirla.
  */
 export function EnviarAvisoDialog({
-    programacionId,
     envio,
     onCerrar,
 }: {
-    programacionId: number;
     envio: EnvioPendiente | null;
     onCerrar: () => void;
 }) {
@@ -47,13 +42,16 @@ export function EnviarAvisoDialog({
         }
 
         router.post(
-            enviar([programacionId, envio.tipo]).url,
+            envio.enviarUrl,
             { numero: envio.numero },
             {
                 preserveScroll: true,
                 onStart: () => setEnviando(true),
                 onFinish: () => setEnviando(false),
-                onSuccess: onCerrar,
+                onSuccess: () => {
+                    setCargada(false);
+                    onCerrar();
+                },
             },
         );
     };
@@ -82,7 +80,7 @@ export function EnviarAvisoDialog({
                             <div className="aspect-square w-full animate-pulse bg-muted" />
                         )}
                         <img
-                            src={imagen([programacionId, envio.tipo]).url}
+                            src={envio.imagenUrl}
                             alt={`Vista previa del aviso a ${envio.etiqueta}`}
                             onLoad={() => setCargada(true)}
                             className={cargada ? 'w-full' : 'hidden'}

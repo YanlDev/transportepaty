@@ -1,5 +1,8 @@
 <?php
 
+use App\Models\Ajuste;
+use App\Models\AreaAviso;
+use App\Services\AvisoDeSalida;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -91,4 +94,62 @@ it('asks the service for a pairing code when linking by phone number', function 
         ->assertSessionHas('codigo_vinculacion', 'ABCD1234');
 
     Http::assertSent(fn (Request $request): bool => $request['telefono'] === '51950301881');
+});
+
+it('lets the admin add, change and remove the areas that get notices', function (): void {
+    Http::fake();
+    $admin = actorConRol('admin');
+
+    actingAs($admin)
+        ->post(route('whatsapp.areas.store'), ['nombre' => 'Centro de Control', 'numero' => '950 301 883'])
+        ->assertSessionHasNoErrors();
+
+    $area = AreaAviso::query()->sole();
+
+    expect($area->numero)->toBe('950301883')
+        ->and($area->activa)->toBeTrue()
+        ->and($area->ve_flete)->toBeFalse();
+
+    actingAs($admin)
+        ->put(route('whatsapp.areas.update', $area), ['nombre' => 'Centro de Control', 'numero' => '950301884', 've_flete' => true, 'activa' => false])
+        ->assertSessionHasNoErrors();
+
+    expect($area->fresh())
+        ->numero->toBe('950301884')
+        ->ve_flete->toBeTrue()
+        ->activa->toBeFalse();
+
+    actingAs($admin)->delete(route('whatsapp.areas.destroy', $area));
+
+    expect(AreaAviso::query()->count())->toBe(0);
+});
+
+it('rejects an area without a valid phone number', function (): void {
+    Http::fake();
+
+    actingAs(actorConRol('admin'))
+        ->post(route('whatsapp.areas.store'), ['nombre' => 'Centro de Control', 'numero' => '123'])
+        ->assertSessionHasErrors('numero');
+
+    expect(AreaAviso::query()->count())->toBe(0);
+});
+
+it('keeps everyone but the admin from managing the areas or the oficina phone', function (string $rol): void {
+    $area = AreaAviso::factory()->create();
+
+    actingAs(actorConRol($rol))->post(route('whatsapp.areas.store'), ['nombre' => 'X', 'numero' => '950301883'])->assertForbidden();
+    actingAs(actorConRol($rol))->put(route('whatsapp.areas.update', $area), ['nombre' => 'X', 'numero' => '950301883'])->assertForbidden();
+    actingAs(actorConRol($rol))->delete(route('whatsapp.areas.destroy', $area))->assertForbidden();
+    actingAs(actorConRol($rol))->put(route('whatsapp.oficina'), ['telefono_oficina' => '1'])->assertForbidden();
+})->with(['visor', 'contador']);
+
+it('saves the oficina phone that goes into the advertencia', function (): void {
+    Http::fake();
+
+    actingAs(actorConRol('admin'))
+        ->put(route('whatsapp.oficina'), ['telefono_oficina' => ' 923-275-353 '])
+        ->assertSessionHasNoErrors();
+
+    expect(Ajuste::valor(Ajuste::TELEFONO_OFICINA))->toBe('923-275-353')
+        ->and(app(AvisoDeSalida::class)->advertencia())->toContain('Oficina: 923-275-353');
 });

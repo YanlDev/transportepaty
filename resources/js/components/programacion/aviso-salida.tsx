@@ -1,6 +1,7 @@
 import { router, usePage } from '@inertiajs/react';
 import {
     CaretDown,
+    Headset,
     Package,
     Phone,
     Receipt,
@@ -8,6 +9,7 @@ import {
     WhatsappLogo,
 } from '@phosphor-icons/react';
 import { useState } from 'react';
+import avisoSalida from '@/actions/App/Http/Controllers/AvisoSalidaController';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import { EnviarAvisoDialog } from '@/components/programacion/enviar-aviso-dialog';
 import type { EnvioPendiente } from '@/components/programacion/enviar-aviso-dialog';
@@ -79,11 +81,7 @@ export function AvisoSalida({
         .props;
 
     const dialogoEnvio = (
-        <EnviarAvisoDialog
-            programacionId={tarjeta.id}
-            envio={envio}
-            onCerrar={() => setEnvio(null)}
-        />
+        <EnviarAvisoDialog envio={envio} onCerrar={() => setEnvio(null)} />
     );
 
     // Las áreas no dependen del teléfono del conductor: sus botones se
@@ -95,9 +93,16 @@ export function AvisoSalida({
             onAvisar={() =>
                 whatsappConectado
                     ? setEnvio({
-                          tipo: aviso.tipo,
                           etiqueta: aviso.area,
                           numero: aviso.numero,
+                          imagenUrl: avisoSalida.imagenArea([
+                              tarjeta.id,
+                              aviso.id,
+                          ]).url,
+                          enviarUrl: avisoSalida.enviarArea([
+                              tarjeta.id,
+                              aviso.id,
+                          ]).url,
                       })
                     : abrirWhatsapp(aviso.numero, aviso.mensaje)
             }
@@ -111,9 +116,10 @@ export function AvisoSalida({
     ) => {
         if (whatsappConectado) {
             setEnvio({
-                tipo,
                 etiqueta: destinatario.etiqueta,
                 numero: destinatario.numero,
+                imagenUrl: avisoSalida.imagen([tarjeta.id, tipo]).url,
+                enviarUrl: avisoSalida.enviar([tarjeta.id, tipo]).url,
             });
 
             return;
@@ -321,6 +327,7 @@ function BotonWhatsapp({
 const ICONOS_AREA: Record<string, React.ReactNode> = {
     Abastecimiento: <Package weight="fill" className="size-3.5" />,
     Facturación: <Receipt weight="fill" className="size-3.5" />,
+    'Centro de Control': <Headset weight="fill" className="size-3.5" />,
 };
 
 /** Avisa al área de esta salida, como imagen o con el texto en WhatsApp. */
