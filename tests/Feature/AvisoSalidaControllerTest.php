@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Ajuste;
 use App\Models\AreaAviso;
 use App\Models\Programacion;
 use Illuminate\Http\Client\ConnectionException;
@@ -124,4 +125,21 @@ it('tells the programación page whether WhatsApp is linked', function (): void 
     actingAs(actorConRol('admin'))
         ->get(route('programacion.index'))
         ->assertInertia(fn ($page) => $page->where('whatsappConectado', false));
+});
+
+it('draws the advertencia once and redraws it when the oficina phone changes', function (): void {
+    $programacion = Programacion::factory()->create();
+    $admin = actorConRol('admin');
+    $pedir = fn (): string => actingAs($admin)
+        ->get(route('programacion.aviso.imagen', [$programacion, 'advertencia']))
+        ->getContent();
+
+    Ajuste::guardar(Ajuste::TELEFONO_OFICINA, '923-275-353');
+    $primera = $pedir();
+
+    expect($pedir())->toBe($primera);
+
+    Ajuste::guardar(Ajuste::TELEFONO_OFICINA, '999-888-777');
+
+    expect($pedir())->not->toBe($primera);
 });

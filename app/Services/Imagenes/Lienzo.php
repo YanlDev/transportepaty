@@ -15,8 +15,12 @@ use RuntimeException;
  */
 class Lienzo
 {
-    /** Tope de alto antes de recortar; un aviso nunca llega ni cerca. */
-    private const ALTO_MAXIMO = 5000;
+    /**
+     * El alto con el que arranca el lienzo: entra un aviso completo. Si un
+     * texto largo lo pasa, crece (ver `reservar()`); arrancar de una con un
+     * lienzo enorme costaba más en pintarlo de blanco que en dibujar todo.
+     */
+    private const ALTO_INICIAL = 1800;
 
     /** GD mide la letra en puntos a 96 ppp: esto la pasa a píxeles. */
     private const PUNTOS_A_PIXELES = 96 / 72;
@@ -35,15 +39,7 @@ class Lienzo
         private readonly int $ancho = 1080,
         private readonly int $margen = 64,
     ) {
-        $imagen = imagecreatetruecolor($ancho, self::ALTO_MAXIMO);
-
-        if ($imagen === false) {
-            throw new RuntimeException('No se pudo crear la imagen.');
-        }
-
-        $this->imagen = $imagen;
-        imagealphablending($this->imagen, true);
-        imagefilledrectangle($this->imagen, 0, 0, $ancho, self::ALTO_MAXIMO, $this->color('#ffffff'));
+        $this->imagen = $this->lienzoEnBlanco(self::ALTO_INICIAL);
     }
 
     /**
@@ -52,6 +48,7 @@ class Lienzo
     public function encabezado(string $logo, ?string $derecha = null): static
     {
         $alto = 76;
+        $this->reservar(48 + $alto + 40);
         $this->y += 48;
 
         $origen = @imagecreatefrompng($logo);
@@ -85,6 +82,7 @@ class Lienzo
         $relleno = 34;
         $lineas = $this->partir($titulo, $tamano, Peso::Bold, $this->ancho - 2 * $this->margen);
         $alto = 2 * $relleno + count($lineas) * $this->altoDeLinea($tamano);
+        $this->reservar($alto);
 
         imagefilledrectangle($this->imagen, 0, $this->y, $this->ancho, $this->y + $alto, $this->color($fondo));
 
@@ -106,6 +104,7 @@ class Lienzo
      */
     public function destacado(string $etiqueta, string $valor, string $acento = '#285b9f'): static
     {
+        $this->reservar(44 + 190);
         $this->y += 44;
         $alto = 190;
 
@@ -123,6 +122,7 @@ class Lienzo
     /** Etiqueta chica arriba y el valor abajo; el valor se parte si no entra. */
     public function fila(string $etiqueta, string $valor): static
     {
+        $this->reservar(30 + $this->altoDeLinea(16) + 4);
         $this->y += 30;
         $this->escribir(mb_strtoupper($etiqueta), $this->margen, $this->y, 16, '#64748b', Peso::SemiBold);
         $this->y += $this->altoDeLinea(16) + 4;
@@ -141,10 +141,13 @@ class Lienzo
         int $sangria = 0,
         int $espacioAntes = 18,
     ): static {
-        $this->y += $espacioAntes;
         $anchoUtil = $this->ancho - 2 * $this->margen - $sangria;
+        $lineas = $this->partir($texto, $tamano, $peso, $anchoUtil);
 
-        foreach ($this->partir($texto, $tamano, $peso, $anchoUtil) as $linea) {
+        $this->reservar($espacioAntes + count($lineas) * $this->altoDeLinea($tamano));
+        $this->y += $espacioAntes;
+
+        foreach ($lineas as $linea) {
             $this->escribirLinea($linea, $this->margen + $sangria, $this->y, $tamano, $color);
             $this->y += $this->altoDeLinea($tamano);
         }
@@ -156,6 +159,7 @@ class Lienzo
     public function vinetas(array $items, int $tamano = 22): static
     {
         foreach ($items as $item) {
+            $this->reservar(12 + $this->altoDeLinea($tamano));
             $this->y += 12;
             $radio = 6;
             $centroY = $this->y + (int) ($this->altoDeLinea($tamano) / 2);
@@ -169,7 +173,6 @@ class Lienzo
     /** Un recuadro de color claro con un texto adentro (el flete, un aviso). */
     public function recuadro(string $titulo, string $valor, ?string $detalle, string $fondo, string $color): static
     {
-        $this->y += 36;
         $relleno = 32;
 
         // El detalle se parte al ancho del recuadro —no al del lienzo— y el
@@ -181,6 +184,9 @@ class Lienzo
 
         $alto = 2 * $relleno + $this->altoDeLinea(17) + 6 + $this->altoDeLinea(44)
             + ($lineas === [] ? 0 : count($lineas) * $this->altoDeLinea(20) + 4);
+
+        $this->reservar(36 + $alto);
+        $this->y += 36;
 
         $this->rectanguloRedondeado($this->margen, $this->y, $this->ancho - $this->margen, $this->y + $alto, 24, $fondo);
 
@@ -203,6 +209,7 @@ class Lienzo
 
     public function espacio(int $pixeles): static
     {
+        $this->reservar($pixeles);
         $this->y += $pixeles;
 
         return $this;
@@ -211,15 +218,16 @@ class Lienzo
     /** El PNG recortado a lo que se dibujó. */
     public function png(): string
     {
-        $alto = min($this->y, self::ALTO_MAXIMO);
-        $final = imagecrop($this->imagen, ['x' => 0, 'y' => 0, 'width' => $this->ancho, 'height' => $alto]);
+        $final = imagecrop($this->imagen, ['x' => 0, 'y' => 0, 'width' => $this->ancho, 'height' => max(1, $this->y)]);
 
         if ($final === false) {
             throw new RuntimeException('No se pudo recortar la imagen.');
         }
 
         ob_start();
-        imagepng($final, null, 6);
+        // Compresión 3: casi el mismo peso que la 6 en la mitad de tiempo,
+        // y WhatsApp igual la vuelve a comprimir al mandarla.
+        imagepng($final, null, 3);
 
         return (string) ob_get_clean();
     }
@@ -313,6 +321,38 @@ class Lienzo
         $base = $y + (int) round($tamano * self::PUNTOS_A_PIXELES);
 
         imagettftext($this->imagen, $tamano, 0, $x, $base, $this->color($color), $peso->archivo(), $texto);
+    }
+
+    /**
+     * Se asegura de que entre un bloque de `$alto` píxeles desde el cursor;
+     * si no, agranda el lienzo copiando lo ya dibujado.
+     */
+    private function reservar(int $alto): void
+    {
+        $necesario = $this->y + $alto;
+
+        if ($necesario <= imagesy($this->imagen)) {
+            return;
+        }
+
+        $nuevo = $this->lienzoEnBlanco(max($necesario, 2 * imagesy($this->imagen)));
+        imagecopy($nuevo, $this->imagen, 0, 0, 0, 0, $this->ancho, imagesy($this->imagen));
+        $this->imagen = $nuevo;
+    }
+
+    /** @param  positive-int  $alto */
+    private function lienzoEnBlanco(int $alto): GdImage
+    {
+        $imagen = imagecreatetruecolor($this->ancho, $alto);
+
+        if ($imagen === false) {
+            throw new RuntimeException('No se pudo crear la imagen.');
+        }
+
+        imagealphablending($imagen, true);
+        imagefilledrectangle($imagen, 0, 0, $this->ancho, $alto, (int) imagecolorallocate($imagen, 255, 255, 255));
+
+        return $imagen;
     }
 
     private function anchoDe(string $texto, int $tamano, Peso $peso): int

@@ -11,6 +11,7 @@ use App\Services\WhatsappServicio;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Cache;
 use RuntimeException;
 
 /**
@@ -106,7 +107,7 @@ class AvisoSalidaController extends Controller
 
         return match ($tipo) {
             TipoAvisoSalida::Conductor => $this->imagenes->conductor($programacion),
-            TipoAvisoSalida::Advertencia => $this->imagenes->advertencia(),
+            TipoAvisoSalida::Advertencia => $this->advertencia(),
         };
     }
 
@@ -115,6 +116,23 @@ class AvisoSalidaController extends Controller
         $programacion->loadMissing(['vehiculo', 'conductor', 'cliente']);
 
         return $this->imagenes->area($programacion, $area);
+    }
+
+    /**
+     * La advertencia es la misma para todas las salidas: se dibuja una vez y
+     * se reusa. La clave lleva el teléfono de la oficina (lo único que cambia)
+     * y una huella del código de las plantillas, así un cambio de diseño la
+     * rehace sin tener que limpiar nada a mano.
+     */
+    private function advertencia(): string
+    {
+        $huella = sha1(implode('|', [
+            $this->aviso->telefonoOficina(),
+            md5_file(app_path('Services/Imagenes/ImagenesDeAviso.php')),
+            md5_file(app_path('Services/Imagenes/Lienzo.php')),
+        ]));
+
+        return Cache::rememberForever("aviso-png:advertencia:{$huella}", fn (): string => $this->imagenes->advertencia());
     }
 
     private function png(string $imagen): Response
