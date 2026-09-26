@@ -109,6 +109,38 @@ class ImagenesDeAviso
         return $lienzo->espacio(48)->png();
     }
 
+    /**
+     * Las unidades programadas para hoy que todavía no tienen GR, para que
+     * alguien la gestione antes de que el conductor se quede esperando o,
+     * peor, salga sin documentos.
+     *
+     * @param  iterable<Programacion>  $sinGr
+     */
+    public function recordatorioSinGr(\DateTimeInterface $fecha, iterable $sinGr): string
+    {
+        $lienzo = $this->lienzo($fecha)->banda('UNIDADES SIN GR', self::ROJO);
+        $cantidad = 0;
+
+        foreach ($sinGr as $programacion) {
+            $cantidad++;
+            $lienzo->filaUnidad(
+                $programacion->vehiculo->placa,
+                "{$programacion->cliente->alias} · {$programacion->destino} · {$this->nombreConductor($programacion)}",
+            );
+        }
+
+        return $lienzo
+            ->espacio(40)
+            ->banda(
+                $cantidad === 1
+                    ? '1 unidad programada para hoy sigue sin GR: no puede salir hasta emitirla.'
+                    : "{$cantidad} unidades programadas para hoy siguen sin GR: ninguna puede salir hasta emitirla.",
+                self::AZUL,
+                tamano: 22,
+            )
+            ->png();
+    }
+
     private function datosDeSalida(Programacion $programacion, string $titulo): Lienzo
     {
         $lienzo = $this->lienzo($programacion->fecha)

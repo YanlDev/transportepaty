@@ -669,3 +669,21 @@ it('shows on each card how far the last notice to each destination got', functio
             ->etc()
         ));
 });
+
+it('flags the card when the salida changed after the driver was notified', function (): void {
+    $programacion = Programacion::factory()->create([
+        'fecha' => RelojOperativo::hoy(),
+        'aviso_enviado_at' => now()->subHour(),
+    ]);
+
+    $pedir = fn () => actingAs(actorConRol('admin'))->get(route('programacion.index'));
+
+    $pedir()->assertInertia(fn ($page) => $page->where('programaciones.0.cambio_tras_aviso', false));
+
+    // Cambiar el número adicional no cambia lo que dice el aviso.
+    $programacion->update(['whatsapp_adicional' => '987654321']);
+    $pedir()->assertInertia(fn ($page) => $page->where('programaciones.0.cambio_tras_aviso', false));
+
+    $programacion->update(['destino' => 'PUNO']);
+    $pedir()->assertInertia(fn ($page) => $page->where('programaciones.0.cambio_tras_aviso', true));
+});

@@ -42,6 +42,11 @@ export type ProgramacionTarjeta = {
     destinatarios: DestinatarioAviso[];
     /** Los avisos a abastecimiento y a facturación, ya armados. */
     avisos_area: AvisoDeArea[];
+    /**
+     * Se editó la unidad, el conductor, el cliente, el destino o la fecha
+     * después de avisarle al conductor: el aviso que tiene quedó viejo.
+     */
+    cambio_tras_aviso: boolean;
     /** El último envío por WhatsApp a cada destino; null si no se mandó nada. */
     envios: {
         conductor: ResumenEnvio | null;

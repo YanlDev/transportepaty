@@ -171,3 +171,22 @@ it('treats a service that does not answer as not linked', function (): void {
 
     expect(app(WhatsappServicio::class)->conectado())->toBeFalse();
 });
+
+it('saves the reminder hour and which areas get it', function (): void {
+    Http::fake();
+    $admin = actorConRol('admin');
+    $area = AreaAviso::factory()->create();
+
+    actingAs($admin)->put(route('whatsapp.recordatorio'), ['hora' => '10:30'])->assertSessionHasNoErrors();
+    actingAs($admin)->put(route('whatsapp.recordatorio'), ['hora' => '25:00'])->assertSessionHasErrors('hora');
+    actingAs($admin)->put(route('whatsapp.areas.update', $area), [
+        'nombre' => $area->nombre, 'numero' => $area->numero, 'recibe_recordatorio' => true,
+    ])->assertSessionHasNoErrors();
+
+    expect(Ajuste::valor(Ajuste::HORA_RECORDATORIO))->toBe('10:30')
+        ->and($area->fresh()->recibe_recordatorio)->toBeTrue();
+
+    actingAs($admin)->put(route('whatsapp.recordatorio'), ['hora' => null]);
+
+    expect(Ajuste::valor(Ajuste::HORA_RECORDATORIO))->toBeNull();
+});

@@ -170,6 +170,36 @@ class Lienzo
         return $this;
     }
 
+    /**
+     * Una unidad de una lista (el recordatorio sin GR): un punto de color, la
+     * placa en negrita y, debajo, el detalle partido en las líneas que haga
+     * falta; una raya fina la separa de la siguiente.
+     */
+    public function filaUnidad(string $titulo, string $detalle, string $color = '#dc2626'): static
+    {
+        $sangria = 44;
+        $lineas = $this->partir($detalle, 20, Peso::Regular, $this->ancho - 2 * $this->margen - $sangria);
+        $alto = $this->altoDeLinea(28) + 6 + count($lineas) * $this->altoDeLinea(20);
+
+        $this->reservar(22 + $alto + 18);
+        $this->y += 22;
+
+        imagefilledellipse($this->imagen, $this->margen + 14, $this->y + 22, 22, 22, $this->color($color));
+        $this->escribir($titulo, $this->margen + $sangria, $this->y, 28, '#0f172a', Peso::Bold);
+
+        $y = $this->y + $this->altoDeLinea(28) + 6;
+
+        foreach ($lineas as $linea) {
+            $this->escribirLinea($linea, $this->margen + $sangria, $y, 20, '#475569');
+            $y += $this->altoDeLinea(20);
+        }
+
+        $this->y += $alto + 18;
+        imageline($this->imagen, $this->margen, $this->y, $this->ancho - $this->margen, $this->y, $this->color('#e2e8f0'));
+
+        return $this;
+    }
+
     /** Un recuadro de color claro con un texto adentro (el flete, un aviso). */
     public function recuadro(string $titulo, string $valor, ?string $detalle, string $fondo, string $color): static
     {

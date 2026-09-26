@@ -221,6 +221,14 @@ export function AvisoSalida({
                 </DropdownMenuContent>
             </DropdownMenu>
             <EstadoEnvio envio={tarjeta.envios.conductor} />
+            {tarjeta.cambio_tras_aviso && (
+                <span
+                    title="Se editó la unidad, el conductor, el cliente, el destino o la fecha después de avisar. El conductor tiene el aviso viejo: reenvíalo."
+                    className="rounded-md border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[11px] font-medium text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
+                >
+                    Cambió · reenviar
+                </span>
+            )}
 
             <BotonWhatsapp
                 etiqueta="Advertencia"

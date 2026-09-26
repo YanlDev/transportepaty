@@ -10,6 +10,7 @@ use App\Models\EnvioWhatsapp;
 use App\Models\Programacion;
 use App\Models\User;
 use App\Services\Imagenes\ImagenesDeAviso;
+use Illuminate\Support\Collection;
 use RuntimeException;
 
 /**
@@ -49,6 +50,36 @@ class AvisosPorWhatsapp
         ]);
     }
 
+    /** Anota el recordatorio de las unidades sin GR a un área y lo encola. */
+    public function encolarRecordatorio(AreaAviso $area, string $numero): EnvioWhatsapp
+    {
+        return $this->encolar([
+            'area_aviso_id' => $area->id,
+            'tipo' => EnvioWhatsapp::TIPO_RECORDATORIO,
+            'destino' => $area->nombre,
+            'numero' => $numero,
+        ]);
+    }
+
+    /**
+     * Las unidades programadas para un día que todavía no tienen GR,
+     * ordenadas por placa.
+     *
+     * @return Collection<int, Programacion>
+     */
+    public function unidadesSinGr(string $fecha): Collection
+    {
+        $guias = Programacion::guiasDelDia($fecha);
+
+        return Programacion::query()
+            ->delDia($fecha)
+            ->with(['vehiculo:id,placa', 'conductor:id,nombres,apellidos', 'cliente:id,alias'])
+            ->get()
+            ->reject(fn (Programacion $programacion): bool => isset($guias[$programacion->vehiculo_id]))
+            ->sortBy(fn (Programacion $programacion): string => $programacion->vehiculo->placa)
+            ->values();
+    }
+
     /**
      * Lo que hace el worker: arma la imagen con los datos de ese momento, la
      * manda y anota el id que le dio WhatsApp. Si falla, la excepción sube
@@ -56,6 +87,12 @@ class AvisosPorWhatsapp
      */
     public function mandar(EnvioWhatsapp $envio): void
     {
+        if ($envio->tipo === EnvioWhatsapp::TIPO_RECORDATORIO) {
+            $this->mandarRecordatorio($envio);
+
+            return;
+        }
+
         $programacion = $envio->programacion;
 
         if ($programacion === null) {
@@ -81,6 +118,30 @@ class AvisosPorWhatsapp
                 'aviso_enviado_por' => $envio->enviado_por,
             ]);
         }
+    }
+
+    /**
+     * Las unidades se vuelven a mirar al mandar: si justo se cargó una GR,
+     * esa unidad ya no va; si ya no queda ninguna, no se manda nada.
+     */
+    private function mandarRecordatorio(EnvioWhatsapp $envio): void
+    {
+        $hoy = RelojOperativo::fechaDeHoy();
+        $sinGr = $this->unidadesSinGr($hoy->toDateString());
+
+        if ($sinGr->isEmpty()) {
+            $envio->update(['estado' => EstadoEnvio::Fallido, 'error' => 'No hizo falta: ya todas las unidades tienen GR.']);
+
+            return;
+        }
+
+        $mensajeId = $this->whatsapp->enviar(
+            $envio->numero,
+            sprintf('%d %s sin GR', $sinGr->count(), $sinGr->count() === 1 ? 'unidad' : 'unidades'),
+            $this->imagenes->recordatorioSinGr($hoy, $sinGr),
+        );
+
+        $envio->update(['estado' => EstadoEnvio::Enviado, 'mensaje_id' => $mensajeId, 'error' => null, 'enviado_at' => now()]);
     }
 
     /** Cuando la cola se rinde después de los reintentos. */

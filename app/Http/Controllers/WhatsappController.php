@@ -36,8 +36,9 @@ class WhatsappController extends Controller
             'areas' => fn () => AreaAviso::query()
                 ->orderBy('orden')
                 ->orderBy('id')
-                ->get(['id', 'nombre', 'numero', 've_flete', 'activa']),
+                ->get(['id', 'nombre', 'numero', 've_flete', 'activa', 'recibe_recordatorio']),
             'telefonoOficina' => fn (): ?string => $this->aviso->telefonoOficina(),
+            'horaRecordatorio' => fn (): ?string => Ajuste::valor(Ajuste::HORA_RECORDATORIO),
         ]);
     }
 
@@ -98,6 +99,26 @@ class WhatsappController extends Controller
         Ajuste::guardar(Ajuste::TELEFONO_OFICINA, $datos['telefono_oficina'] ?? null);
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Teléfono de la oficina actualizado.']);
+    }
+
+    /**
+     * A qué hora se avisa de las unidades sin GR. Vacío apaga el
+     * recordatorio sin tener que desmarcar las áreas.
+     */
+    public function actualizarRecordatorio(Request $request): RedirectResponse
+    {
+        $this->authorize('administrar-whatsapp');
+
+        $datos = $request->validate([
+            'hora' => ['nullable', 'date_format:H:i'],
+        ]);
+
+        Ajuste::guardar(Ajuste::HORA_RECORDATORIO, $datos['hora'] ?? null);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => filled($datos['hora'] ?? null) ? "Recordatorio sin GR a las {$datos['hora']}." : 'Recordatorio sin GR apagado.',
+        ]);
     }
 
     public function desvincular(): RedirectResponse

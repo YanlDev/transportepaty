@@ -16,6 +16,8 @@ export type AreaAviso = {
     numero: string;
     ve_flete: boolean;
     activa: boolean;
+    /** Recibe el aviso de las unidades de hoy que siguen sin GR. */
+    recibe_recordatorio: boolean;
 };
 
 type DatosArea = Omit<AreaAviso, 'id'>;
@@ -64,6 +66,7 @@ function FilaArea({ area }: { area?: AreaAviso }) {
         numero: area?.numero ?? '',
         ve_flete: area?.ve_flete ?? false,
         activa: area?.activa ?? true,
+        recibe_recordatorio: area?.recibe_recordatorio ?? false,
     });
 
     const guardar = (evento: React.FormEvent) => {
@@ -172,6 +175,15 @@ function FilaArea({ area }: { area?: AreaAviso }) {
                     />
                     Ve el flete
                 </Label>
+                <Label className="flex items-center gap-2 font-normal">
+                    <Checkbox
+                        checked={data.recibe_recordatorio}
+                        onCheckedChange={(valor) =>
+                            setData('recibe_recordatorio', valor === true)
+                        }
+                    />
+                    Recordatorio sin GR
+                </Label>
                 {!nueva && (
                     <Label className="flex items-center gap-2 font-normal">
                         <Checkbox
@@ -185,6 +197,57 @@ function FilaArea({ area }: { area?: AreaAviso }) {
                 )}
             </div>
         </form>
+    );
+}
+
+/**
+ * A qué hora se avisa de las unidades de hoy que siguen sin GR, a las áreas
+ * marcadas con «Recordatorio sin GR». Vacío lo apaga.
+ */
+export function HoraRecordatorio({ hora }: { hora: string | null }) {
+    const { data, setData, put, processing, errors, isDirty, setDefaults } =
+        useForm({ hora: hora ?? '' });
+
+    return (
+        <section className="flex max-w-2xl flex-col gap-3 rounded-xl border bg-card p-5">
+            <div>
+                <h2 className="font-semibold">
+                    Recordatorio de unidades sin GR
+                </h2>
+                <p className="text-sm text-muted-foreground">
+                    A esta hora, si alguna unidad programada para hoy sigue sin
+                    GR, les llega la lista a las áreas marcadas. Una vez por
+                    día. Vacío lo apaga.
+                </p>
+            </div>
+            <form
+                className="flex flex-wrap items-center gap-2"
+                onSubmit={(evento) => {
+                    evento.preventDefault();
+                    put(whatsapp.actualizarRecordatorio().url, {
+                        preserveScroll: true,
+                        onSuccess: () => setDefaults(),
+                    });
+                }}
+            >
+                <Input
+                    type="time"
+                    value={data.hora}
+                    onChange={(evento) => setData('hora', evento.target.value)}
+                    aria-label="Hora del recordatorio"
+                    className="w-36"
+                />
+                <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={processing || !isDirty}
+                >
+                    {processing && <Spinner />}
+                    Guardar
+                </Button>
+                <InputError message={errors.hora} />
+            </form>
+        </section>
     );
 }
 

@@ -7,7 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { AreasAviso, TelefonoOficina } from '@/components/whatsapp/areas-aviso';
+import {
+    AreasAviso,
+    HoraRecordatorio,
+    TelefonoOficina,
+} from '@/components/whatsapp/areas-aviso';
 import type { AreaAviso } from '@/components/whatsapp/areas-aviso';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +28,7 @@ type Props = {
     codigoVinculacion: string | null;
     areas: AreaAviso[];
     telefonoOficina: string | null;
+    horaRecordatorio: string | null;
 };
 
 const ETIQUETAS: Record<
@@ -49,6 +54,7 @@ export default function WhatsappIndex({
     codigoVinculacion,
     areas,
     telefonoOficina,
+    horaRecordatorio,
 }: Props) {
     // Mientras se espera que escaneen el QR o escriban el código, la página
     // se refresca sola para mostrar el QR nuevo y enterarse de cuándo quedó.
@@ -117,6 +123,8 @@ export default function WhatsappIndex({
             </section>
 
             <AreasAviso areas={areas} />
+
+            <HoraRecordatorio hora={horaRecordatorio} />
 
             <TelefonoOficina telefono={telefonoOficina} />
         </div>

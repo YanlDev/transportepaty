@@ -72,6 +72,25 @@ stdout_logfile_maxbytes=10MB
 stdout_logfile_backups=3
 CONF
 
+echo "→ Supervisor: tareas programadas (recordatorio de unidades sin GR)"
+# schedule:work en vez de cron: corre como transpaty (el mismo usuario de la
+# web, así los logs y la caché quedan con los mismos permisos) y lanza un
+# proceso nuevo cada minuto, que ya toma el código recién desplegado.
+cat > /etc/supervisor/conf.d/transpaty-scheduler.conf <<CONF
+[program:transpaty-scheduler]
+command=/usr/bin/php $APP/artisan schedule:work
+directory=$APP
+user=transpaty
+autostart=true
+autorestart=true
+stopasgroup=true
+killasgroup=true
+redirect_stderr=true
+stdout_logfile=/var/log/supervisor/transpaty-scheduler.log
+stdout_logfile_maxbytes=10MB
+stdout_logfile_backups=3
+CONF
+
 echo "→ Permiso para que deploy.sh reinicie el servicio"
 echo 'deploy ALL=(root) NOPASSWD: /usr/bin/supervisorctl restart transpaty-whatsapp' > "$SUDOERS.tmp"
 visudo -cf "$SUDOERS.tmp"
@@ -79,9 +98,9 @@ install -m 440 "$SUDOERS.tmp" "$SUDOERS"
 rm -f "$SUDOERS.tmp"
 
 supervisorctl reread
-supervisorctl update transpaty-whatsapp transpaty-worker
+supervisorctl update transpaty-whatsapp transpaty-worker transpaty-scheduler
 sleep 3
-supervisorctl status transpaty-whatsapp transpaty-worker
+supervisorctl status transpaty-whatsapp transpaty-worker transpaty-scheduler
 
 sudo -u deploy php "$APP/artisan" config:cache > /dev/null
 # OPcache no revisa si cambiaron los archivos: sin recargar FPM, la web

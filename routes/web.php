@@ -163,6 +163,7 @@ Route::middleware('auth')->group(function () {
     Route::post('whatsapp/probar', [WhatsappController::class, 'probar'])->name('whatsapp.probar');
     Route::post('whatsapp/desvincular', [WhatsappController::class, 'desvincular'])->name('whatsapp.desvincular');
     Route::put('whatsapp/oficina', [WhatsappController::class, 'actualizarOficina'])->name('whatsapp.oficina');
+    Route::put('whatsapp/recordatorio', [WhatsappController::class, 'actualizarRecordatorio'])->name('whatsapp.recordatorio');
     Route::post('whatsapp/areas', [AreaAvisoController::class, 'store'])->name('whatsapp.areas.store');
     Route::put('whatsapp/areas/{area}', [AreaAvisoController::class, 'update'])->name('whatsapp.areas.update');
     Route::delete('whatsapp/areas/{area}', [AreaAvisoController::class, 'destroy'])->name('whatsapp.areas.destroy');

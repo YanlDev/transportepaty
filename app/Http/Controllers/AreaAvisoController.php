@@ -46,7 +46,7 @@ class AreaAvisoController extends Controller
     }
 
     /**
-     * @return array{nombre: string, numero: string, ve_flete: bool, activa: bool}
+     * @return array{nombre: string, numero: string, ve_flete: bool, activa: bool, recibe_recordatorio: bool}
      */
     private function datos(Request $request): array
     {
@@ -59,6 +59,7 @@ class AreaAvisoController extends Controller
             }],
             've_flete' => ['boolean'],
             'activa' => ['boolean'],
+            'recibe_recordatorio' => ['boolean'],
         ]);
 
         return [
@@ -66,6 +67,7 @@ class AreaAvisoController extends Controller
             'numero' => preg_replace('/\D/', '', $datos['numero']) ?? '',
             've_flete' => (bool) ($datos['ve_flete'] ?? false),
             'activa' => (bool) ($datos['activa'] ?? true),
+            'recibe_recordatorio' => (bool) ($datos['recibe_recordatorio'] ?? false),
         ];
     }
 }

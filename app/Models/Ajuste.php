@@ -18,6 +18,12 @@ class Ajuste extends Model
 {
     public const TELEFONO_OFICINA = 'telefono_oficina';
 
+    /**
+     * A qué hora (HH:MM, hora de Lima) se avisa de las unidades que siguen
+     * sin GR. Vacío: no se manda.
+     */
+    public const HORA_RECORDATORIO = 'hora_recordatorio_sin_gr';
+
     protected $primaryKey = 'clave';
 
     protected $keyType = 'string';

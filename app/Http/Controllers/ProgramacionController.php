@@ -42,7 +42,7 @@ class ProgramacionController extends Controller
         $this->authorize('viewAny', Programacion::class);
 
         $fecha = $this->fechaPedida($request);
-        $guias = $this->guiasDelDia($fecha);
+        $guias = Programacion::guiasDelDia($fecha->toDateString());
 
         $programaciones = Programacion::query()
             ->delDia($fecha->toDateString())
@@ -186,23 +186,6 @@ class ProgramacionController extends Controller
     }
 
     /**
-     * Las guías que salieron el día que se está viendo, por tracto. Es lo que
-     * dice si una unidad programada ya partió: la GR es el registro de lo que
-     * la unidad hizo de verdad.
-     *
-     * @return array<int, string>
-     */
-    private function guiasDelDia(CarbonImmutable $fecha): array
-    {
-        return Viaje::query()
-            ->whereDate('fecha_traslado', $fecha->toDateString())
-            ->whereNotNull('tracto_id')
-            ->orderBy('numero_gr')
-            ->pluck('numero_gr', 'tracto_id')
-            ->all();
-    }
-
-    /**
      * Como en una pantalla de salidas: la unidad con GR de ese día ya salió;
      * sin GR, sigue programada mientras el día no haya pasado, y después queda
      * marcada para que alguien revise si salió sin registrar la guía o no salió.
@@ -258,6 +241,7 @@ class ProgramacionController extends Controller
             'aviso_enviado_at' => $programacion->aviso_enviado_at?->toIso8601String(),
             'aviso_enviado_por' => $programacion->avisadoPor?->name,
             'envios' => $this->ultimosEnvios($programacion),
+            'cambio_tras_aviso' => $programacion->cambioTrasElAviso(),
         ];
     }
 

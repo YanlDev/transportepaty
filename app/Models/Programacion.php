@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Database\Factories\ProgramacionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -34,6 +35,7 @@ use Illuminate\Support\Carbon;
  * @property bool $precio_incluye_igv
  * @property Carbon|null $aviso_enviado_at
  * @property int|null $aviso_enviado_por
+ * @property CarbonImmutable|null $datos_cambiados_at
  * @property-read User|null $avisadoPor
  * @property-read Vehiculo $vehiculo
  * @property-read Conductor $conductor
@@ -58,6 +60,49 @@ class Programacion extends Model
     use HasFactory;
 
     protected $table = 'programaciones';
+
+    /**
+     * Lo que dice el aviso al conductor: si cambia después de avisarle, el
+     * aviso que tiene en el celular quedó viejo.
+     */
+    private const DATOS_DEL_AVISO = ['fecha', 'vehiculo_id', 'conductor_id', 'cliente_id', 'destino'];
+
+    protected static function booted(): void
+    {
+        static::saving(function (Programacion $programacion): void {
+            if ($programacion->exists && $programacion->isDirty(self::DATOS_DEL_AVISO)) {
+                $programacion->datos_cambiados_at = now();
+            }
+        });
+    }
+
+    /**
+     * Se editó la unidad, el conductor, el cliente, el destino o la fecha
+     * después de mandarle el aviso al conductor: hay que reenviarlo.
+     */
+    public function cambioTrasElAviso(): bool
+    {
+        return $this->aviso_enviado_at !== null
+            && $this->datos_cambiados_at !== null
+            && $this->datos_cambiados_at->gt($this->aviso_enviado_at);
+    }
+
+    /**
+     * Las guías que salieron un día, por tracto. Es lo que dice si una
+     * unidad programada ya partió: la GR es el registro de lo que la unidad
+     * hizo de verdad.
+     *
+     * @return array<int, string>
+     */
+    public static function guiasDelDia(string $fecha): array
+    {
+        return Viaje::query()
+            ->whereDate('fecha_traslado', $fecha)
+            ->whereNotNull('tracto_id')
+            ->orderBy('numero_gr')
+            ->pluck('numero_gr', 'tracto_id')
+            ->all();
+    }
 
     /**
      * @return BelongsTo<Vehiculo, $this>
@@ -123,6 +168,7 @@ class Programacion extends Model
             'precio_flete' => 'decimal:2',
             'precio_incluye_igv' => 'boolean',
             'aviso_enviado_at' => 'datetime',
+            'datos_cambiados_at' => 'datetime',
         ];
     }
 }

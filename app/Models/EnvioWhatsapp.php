@@ -55,6 +55,9 @@ class EnvioWhatsapp extends Model
 
     public const TIPO_AREA = 'area';
 
+    /** Las unidades de hoy que siguen sin GR, a un área (sin salida propia). */
+    public const TIPO_RECORDATORIO = 'recordatorio';
+
     protected $table = 'envios_whatsapp';
 
     /**

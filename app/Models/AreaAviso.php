@@ -22,9 +22,10 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $numero
  * @property bool $ve_flete
  * @property bool $activa
+ * @property bool $recibe_recordatorio
  * @property int $orden
  */
-#[Fillable(['nombre', 'numero', 've_flete', 'activa', 'orden'])]
+#[Fillable(['nombre', 'numero', 've_flete', 'activa', 'recibe_recordatorio', 'orden'])]
 class AreaAviso extends Model
 {
     /** @use HasFactory<AreaAvisoFactory> */
@@ -51,6 +52,7 @@ class AreaAviso extends Model
         return [
             've_flete' => 'boolean',
             'activa' => 'boolean',
+            'recibe_recordatorio' => 'boolean',
             'orden' => 'integer',
         ];
     }
