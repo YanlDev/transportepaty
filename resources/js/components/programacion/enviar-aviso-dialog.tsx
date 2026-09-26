@@ -43,7 +43,7 @@ export function EnviarAvisoDialog({
 
         router.post(
             envio.enviarUrl,
-            { numero: envio.numero },
+            { numero: envio.numero, destino: envio.etiqueta },
             {
                 preserveScroll: true,
                 onStart: () => setEnviando(true),

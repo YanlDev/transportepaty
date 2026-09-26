@@ -13,6 +13,7 @@ import avisoSalida from '@/actions/App/Http/Controllers/AvisoSalidaController';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import { EnviarAvisoDialog } from '@/components/programacion/enviar-aviso-dialog';
 import type { EnvioPendiente } from '@/components/programacion/enviar-aviso-dialog';
+import { EstadoEnvio } from '@/components/programacion/estado-envio';
 import { NumerosDialog } from '@/components/programacion/numeros-dialog';
 import {
     DropdownMenu,
@@ -27,6 +28,7 @@ import type {
     AvisoDeArea,
     DestinatarioAviso,
     ProgramacionTarjeta,
+    ResumenEnvio,
     TipoAvisoSalida,
 } from '@/types/programacion';
 
@@ -90,6 +92,7 @@ export function AvisoSalida({
         <BotonArea
             key={aviso.area}
             aviso={aviso}
+            envio={tarjeta.envios.areas[aviso.id]}
             onAvisar={() =>
                 whatsappConectado
                     ? setEnvio({
@@ -217,6 +220,7 @@ export function AvisoSalida({
                     ))}
                 </DropdownMenuContent>
             </DropdownMenu>
+            <EstadoEnvio envio={tarjeta.envios.conductor} />
 
             <BotonWhatsapp
                 etiqueta="Advertencia"
@@ -228,6 +232,7 @@ export function AvisoSalida({
                     mandar(destinatario, advertencia, 'advertencia')
                 }
             />
+            <EstadoEnvio envio={tarjeta.envios.advertencia} />
 
             {/* Las áreas de la casa reciben su propio texto y no marcan la
                 salida como avisada: lo que respalda ante una multa es
@@ -333,9 +338,11 @@ const ICONOS_AREA: Record<string, React.ReactNode> = {
 /** Avisa al área de esta salida, como imagen o con el texto en WhatsApp. */
 function BotonArea({
     aviso,
+    envio,
     onAvisar,
 }: {
     aviso: AvisoDeArea;
+    envio: ResumenEnvio | undefined;
     onAvisar: () => void;
 }) {
     return (
@@ -349,6 +356,7 @@ function BotonArea({
                 <WhatsappLogo weight="fill" className="size-3.5" />
             )}
             {aviso.area}
+            <EstadoEnvio envio={envio} />
         </button>
     );
 }

@@ -1,9 +1,11 @@
 <?php
 
+use App\Enums\EstadoEnvio;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
+use App\Models\EnvioWhatsapp;
 use App\Models\Programacion;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -642,4 +644,28 @@ it('only computes the polled props on the partial reload of the poll', function 
         ->assertJsonPath('props.semana', fn (array $semana): bool => count($semana) === 7);
 
     expect(collect($consultas)->filter(fn (string $sql): bool => str_contains($sql, 'from "viajes" where "conductor_id" is not null')))->toBeEmpty();
+});
+
+it('shows on each card how far the last notice to each destination got', function (): void {
+    $programacion = Programacion::factory()->create(['fecha' => RelojOperativo::hoy()]);
+    $area = AreaAviso::factory()->create();
+
+    EnvioWhatsapp::factory()->for($programacion)->create(['estado' => EstadoEnvio::Fallido, 'error' => 'Sin conexión']);
+    EnvioWhatsapp::factory()->for($programacion)->create(['estado' => EstadoEnvio::Leido, 'leido_at' => now()]);
+    EnvioWhatsapp::factory()->for($programacion)->create([
+        'tipo' => EnvioWhatsapp::TIPO_AREA,
+        'area_aviso_id' => $area->id,
+        'destino' => $area->nombre,
+        'estado' => EstadoEnvio::Entregado,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('programacion.index'))
+        ->assertInertia(fn ($page) => $page->has('programaciones.0', fn ($tarjeta) => $tarjeta
+            // El más reciente al conductor gana: el reintento que llegó a leído.
+            ->where('envios.conductor.estado', 'leido')
+            ->where('envios.advertencia', null)
+            ->where("envios.areas.{$area->id}.estado", 'entregado')
+            ->etc()
+        ));
 });

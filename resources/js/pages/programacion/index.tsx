@@ -1,7 +1,8 @@
-import { Head, router, usePoll } from '@inertiajs/react';
-import { Plus, Truck } from '@phosphor-icons/react';
-import { useMemo, useState } from 'react';
+import { Head, Link, router, usePoll } from '@inertiajs/react';
+import { Plus, Truck, WhatsappLogo } from '@phosphor-icons/react';
+import { useEffect, useMemo, useState } from 'react';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
+import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
 import { EmptyState } from '@/components/empty-state';
 import { ProgramacionDialog } from '@/components/programacion/programacion-dialog';
 import { TableroSalidas } from '@/components/programacion/tablero-salidas';
@@ -31,7 +32,31 @@ type Props = {
     clientes: ClienteOpcion[];
     destinosUsados: string[];
     ultimoViajePorConductor: Record<number, UltimoViaje>;
+    /** Con el número vinculado, los avisos salen como imagen desde la app. */
+    whatsappConectado: boolean;
 };
+
+/**
+ * Si algún aviso está en camino: en la cola, o enviado hace poco y todavía
+ * sin ✓✓. Mientras tanto la página se refresca más seguido para mostrarlo.
+ */
+function hayEnviosEnCamino(programaciones: ProgramacionTarjeta[]): boolean {
+    const hace5Minutos = Date.now() - 5 * 60_000;
+
+    return programaciones.some((tarjeta) =>
+        [
+            tarjeta.envios.conductor,
+            tarjeta.envios.advertencia,
+            ...Object.values(tarjeta.envios.areas),
+        ].some(
+            (envio) =>
+                envio !== null &&
+                (envio.estado === 'pendiente' ||
+                    (envio.estado === 'enviado' &&
+                        new Date(envio.hora).getTime() > hace5Minutos)),
+        ),
+    );
+}
 
 const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'] as const;
 
@@ -55,12 +80,30 @@ export default function ProgramacionIndex({
     clientes,
     destinosUsados,
     ultimoViajePorConductor,
+    whatsappConectado,
 }: Props) {
     const { puedeEditar } = usePermisos();
 
     usePoll(60_000, {
         only: ['programaciones', 'semana', 'avisoOperaciones'],
     });
+
+    // Mientras un aviso va en camino, cada 4 segundos: así el ✓✓ aparece
+    // al rato de enviarlo, sin esperar al refresco de cada minuto.
+    const enCamino = hayEnviosEnCamino(programaciones);
+    const { start: seguirEnvios, stop: soltarEnvios } = usePoll(
+        4_000,
+        { only: ['programaciones'] },
+        { autoStart: false },
+    );
+
+    useEffect(() => {
+        if (enCamino) {
+            seguirEnvios();
+        } else {
+            soltarEnvios();
+        }
+    }, [enCamino, seguirEnvios, soltarEnvios]);
 
     const [dialogoAbierto, setDialogoAbierto] = useState(false);
     const [enEdicion, setEnEdicion] = useState<ProgramacionTarjeta | null>(
@@ -148,6 +191,20 @@ export default function ProgramacionIndex({
                     )}
                 </div>
             </div>
+
+            {puedeEditar && !whatsappConectado && (
+                <p className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                    <WhatsappLogo weight="fill" className="size-4" />
+                    El número de WhatsApp de la empresa no está vinculado: los
+                    avisos se abren como texto en tu WhatsApp.
+                    <Link
+                        href={whatsapp.index()}
+                        className="font-medium underline underline-offset-2"
+                    >
+                        Vincularlo
+                    </Link>
+                </p>
+            )}
 
             {/* La semana del día que se está viendo, con cuántas unidades
                 tiene cada uno: se ve de un vistazo qué días ya tienen plan. */}

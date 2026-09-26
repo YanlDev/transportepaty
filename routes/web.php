@@ -20,7 +20,7 @@ use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
 use App\Http\Controllers\ViajeController;
 use App\Http\Controllers\WhatsappController;
-use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
 
 // La raíz no muestra landing: siempre redirige al login (los usuarios ya
@@ -30,7 +30,7 @@ Route::redirect('/', '/login')->name('home');
 // Los ✓✓ de WhatsApp: los manda el servicio Node del mismo servidor, con su
 // token (ver ReciboWhatsappController), no una persona con sesión.
 Route::post('whatsapp/recibos', ReciboWhatsappController::class)
-    ->withoutMiddleware(ValidateCsrfToken::class)
+    ->withoutMiddleware(PreventRequestForgery::class)
     ->name('whatsapp.recibos');
 
 Route::middleware('auth')->group(function () {

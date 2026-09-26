@@ -7,7 +7,11 @@ import type { ResumenEnvio } from '@/types/programacion';
  * enviado, entregado al celular o leído. Al pasar el mouse dice a quién,
  * cuándo y, si falló, por qué.
  */
-export function EstadoEnvio({ envio }: { envio: ResumenEnvio | null | undefined }) {
+export function EstadoEnvio({
+    envio,
+}: {
+    envio: ResumenEnvio | null | undefined;
+}) {
     if (!envio) {
         return null;
     }

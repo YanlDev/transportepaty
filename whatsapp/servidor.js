@@ -11,11 +11,15 @@
  *   POST /enviar        → { numero, texto, imagen? }   → { id }
  *   POST /desvincular   → cierra la sesión y la borra del disco
  *
+ * Cuando un aviso llega al celular o lo leen, le avisa a Laravel en
+ * POST {APP_URL}/whatsapp/recibos, con el mismo token (los ✓✓ del chat).
+ *
  * Variables: WHATSAPP_SERVICIO_TOKEN (obligatoria), WHATSAPP_PUERTO (3100),
- * WHATSAPP_SESION_DIR (storage/app/private/whatsapp), WHATSAPP_LOG (warn).
+ * WHATSAPP_SESION_DIR (storage/app/private/whatsapp), WHATSAPP_LOG (warn),
+ * WHATSAPP_RECIBOS_URL (por defecto, APP_URL del .env de Laravel).
  */
 import { timingSafeEqual } from 'node:crypto';
-import { access, mkdir, rm } from 'node:fs/promises';
+import { access, mkdir, readFile, rm } from 'node:fs/promises';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import makeWASocket, {
@@ -47,6 +51,15 @@ if (TOKEN.length < 32) {
 }
 
 const logger = pino({ level: process.env.WHATSAPP_LOG ?? 'warn' });
+
+/**
+ * Los recibos de WhatsApp que importan: 3 entregado, 4 leído, 5
+ * reproducido (una nota de voz; para un aviso cuenta como leído).
+ */
+const ESTADOS_RECIBO = { 3: 'entregado', 4: 'leido', 5: 'leido' };
+
+/** Recibos que todavía no se le pasaron a Laravel, por id de mensaje. */
+const recibosPendientes = new Map();
 
 /** @type {ReturnType<typeof makeWASocket> | null} */
 let sock = null;
@@ -103,6 +116,17 @@ async function conectar() {
 
     sock = socket;
     socket.ev.on('creds.update', saveCreds);
+
+    // Solo los mensajes que mandó el número: los ✓✓ de los avisos.
+    socket.ev.on('messages.update', (cambios) => {
+        for (const { key, update } of cambios) {
+            const estadoRecibo = ESTADOS_RECIBO[update?.status];
+
+            if (key?.fromMe && key.id && estadoRecibo) {
+                recibosPendientes.set(key.id, estadoRecibo);
+            }
+        }
+    });
 
     socket.ev.on(
         'connection.update',
@@ -223,6 +247,85 @@ async function desvincular() {
     estado = 'desconectado';
     await rm(SESION, { recursive: true, force: true });
 }
+
+/**
+ * A dónde mandar los recibos: WHATSAPP_RECIBOS_URL, o si no, APP_URL del
+ * .env de Laravel (el servicio vive dentro del mismo proyecto).
+ */
+async function urlDeRecibos() {
+    if (process.env.WHATSAPP_RECIBOS_URL) {
+        return process.env.WHATSAPP_RECIBOS_URL;
+    }
+
+    const env = await readFile(
+        new URL('../.env', import.meta.url),
+        'utf8',
+    ).catch(() => '');
+    const appUrl = env.match(/^APP_URL=["']?([^"'\s]+)/m)?.[1];
+
+    return appUrl ? `${appUrl.replace(/\/$/, '')}/whatsapp/recibos` : null;
+}
+
+/**
+ * Cada pocos segundos, le pasa a Laravel los recibos juntados. Si Laravel
+ * no responde, se quedan y van en la tanda siguiente; si se juntan
+ * demasiados (Laravel caído mucho rato), se descartan los más viejos.
+ */
+async function entregarRecibos() {
+    if (recibosPendientes.size === 0) {
+        return;
+    }
+
+    const url = await urlDeRecibos();
+
+    if (!url) {
+        return;
+    }
+
+    const tanda = [...recibosPendientes].slice(0, 200);
+
+    try {
+        const respuesta = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                Accept: 'application/json',
+                Authorization: `Bearer ${TOKEN}`,
+            },
+            body: JSON.stringify({
+                recibos: tanda.map(([id, estado]) => ({ id, estado })),
+            }),
+            signal: AbortSignal.timeout(5000),
+        });
+
+        if (!respuesta.ok) {
+            throw new Error(`Laravel respondió ${respuesta.status}`);
+        }
+
+        for (const [id, estado] of tanda) {
+            // Si mientras tanto llegó un recibo más nuevo, se queda.
+            if (recibosPendientes.get(id) === estado) {
+                recibosPendientes.delete(id);
+            }
+        }
+    } catch (error) {
+        logger.warn(
+            { error: String(error) },
+            'No se pudieron entregar los recibos; se reintenta',
+        );
+
+        if (recibosPendientes.size > 1000) {
+            [...recibosPendientes.keys()]
+                .slice(0, recibosPendientes.size - 1000)
+                .forEach((id) => recibosPendientes.delete(id));
+        }
+    }
+}
+
+setInterval(
+    () => entregarRecibos().catch((error) => logger.error(error)),
+    3000,
+).unref();
 
 class ErrorHttp extends Error {
     constructor(status, mensaje) {
