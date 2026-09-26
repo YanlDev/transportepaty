@@ -22,6 +22,9 @@ import makeWASocket, {
     Browsers,
     DisconnectReason,
     fetchLatestBaileysVersion,
+    isJidBroadcast,
+    isJidGroup,
+    isJidNewsletter,
     useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
@@ -53,12 +56,36 @@ let qr = null;
 let numero = null;
 /** Quien espera el primer QR para pedir el código de vinculación. */
 let esperandoQr = [];
+/** La versión de WhatsApp Web, consultada una vez por proceso. */
+let versionWhatsapp = null;
+
+/**
+ * La versión se pide a GitHub una sola vez y se reusa en cada reconexión:
+ * sin esto, cada corte del socket suma una llamada externa que puede tardar
+ * o fallar. Si falla, Baileys devuelve la que trae de fábrica.
+ */
+async function versionDeWhatsapp() {
+    versionWhatsapp ??= (await fetchLatestBaileysVersion()).version;
+
+    return versionWhatsapp;
+}
+
+/**
+ * Lo que no es un chat uno a uno no le interesa a la app: el número solo
+ * manda avisos. Sin este filtro, Baileys descifra cada mensaje de cada grupo
+ * y cada estado, gasta CPU y llena la sesión de miles de claves.
+ */
+function ignorar(jid) {
+    return Boolean(
+        isJidGroup(jid) || isJidBroadcast(jid) || isJidNewsletter(jid),
+    );
+}
 
 async function conectar() {
     await mkdir(SESION, { recursive: true });
 
     const { state, saveCreds } = await useMultiFileAuthState(SESION);
-    const { version } = await fetchLatestBaileysVersion();
+    const version = await versionDeWhatsapp();
 
     estado = 'vinculando';
 
@@ -71,6 +98,7 @@ async function conectar() {
         // se baja el historial de chats, que la app no usa.
         markOnlineOnConnect: false,
         syncFullHistory: false,
+        shouldIgnoreJid: ignorar,
     });
 
     sock = socket;
