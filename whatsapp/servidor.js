@@ -15,11 +15,11 @@
  * POST {APP_URL}/whatsapp/recibos, con el mismo token (los ✓✓ del chat).
  *
  * Variables: WHATSAPP_SERVICIO_TOKEN (obligatoria), WHATSAPP_PUERTO (3100),
- * WHATSAPP_SESION_DIR (storage/app/private/whatsapp), WHATSAPP_LOG (warn),
+ * WHATSAPP_SESION_DB (storage/app/private/whatsapp.sqlite), WHATSAPP_LOG (warn),
  * WHATSAPP_RECIBOS_URL (por defecto, APP_URL del .env de Laravel).
  */
 import { timingSafeEqual } from 'node:crypto';
-import { access, mkdir, readFile, rm } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import makeWASocket, {
@@ -29,14 +29,20 @@ import makeWASocket, {
     isJidBroadcast,
     isJidGroup,
     isJidNewsletter,
-    useMultiFileAuthState,
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import QRCode from 'qrcode';
+import { abrirSesion } from './sesion-sqlite.js';
 
 const PUERTO = Number(process.env.WHATSAPP_PUERTO ?? 3100);
 const TOKEN = process.env.WHATSAPP_SERVICIO_TOKEN ?? '';
-const SESION =
+const SESION_DB =
+    process.env.WHATSAPP_SESION_DB ??
+    fileURLToPath(
+        new URL('../storage/app/private/whatsapp.sqlite', import.meta.url),
+    );
+// Donde vivía la sesión antes, un archivo por clave: se importa una sola vez.
+const SESION_VIEJA =
     process.env.WHATSAPP_SESION_DIR ??
     fileURLToPath(new URL('../storage/app/private/whatsapp', import.meta.url));
 
@@ -51,6 +57,9 @@ if (TOKEN.length < 32) {
 }
 
 const logger = pino({ level: process.env.WHATSAPP_LOG ?? 'warn' });
+
+// Se abre antes de atender pedidos: ninguno llega con la sesión sin cargar.
+const sesion = await abrirSesion(SESION_DB, SESION_VIEJA, logger);
 
 /**
  * Los recibos de WhatsApp que importan: 3 entregado, 4 leído, 5
@@ -95,9 +104,7 @@ function ignorar(jid) {
 }
 
 async function conectar() {
-    await mkdir(SESION, { recursive: true });
-
-    const { state, saveCreds } = await useMultiFileAuthState(SESION);
+    const { state, saveCreds } = sesion.estado();
     const version = await versionDeWhatsapp();
 
     estado = 'vinculando';
@@ -156,7 +163,7 @@ async function conectar() {
                 // Cerraron la sesión desde el celular: lo guardado ya no sirve.
                 if (codigo === DisconnectReason.loggedOut) {
                     numero = null;
-                    await rm(SESION, { recursive: true, force: true });
+                    sesion.borrar();
                     logger.warn(
                         'Sesión cerrada desde el celular; hay que volver a vincular.',
                     );
@@ -245,7 +252,7 @@ async function desvincular() {
     qr = null;
     numero = null;
     estado = 'desconectado';
-    await rm(SESION, { recursive: true, force: true });
+    sesion.borrar();
 }
 
 /**
@@ -407,12 +414,7 @@ servidor.listen(PUERTO, '127.0.0.1', async () => {
     logger.warn(`Servicio de WhatsApp escuchando en 127.0.0.1:${PUERTO}`);
 
     // Si ya había un número vinculado, se retoma la sesión sin pedir QR.
-    const haySesion = await access(`${SESION}/creds.json`).then(
-        () => true,
-        () => false,
-    );
-
-    if (haySesion) {
+    if (sesion.hayCredenciales()) {
         conectar().catch((error) => logger.error(error));
     }
 });
