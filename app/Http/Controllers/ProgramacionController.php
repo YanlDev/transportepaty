@@ -8,6 +8,7 @@ use App\Http\Requests\ActualizarNumerosAvisoRequest;
 use App\Http\Requests\GuardarProgramacionRequest;
 use App\Models\Cliente;
 use App\Models\Conductor;
+use App\Models\EnvioWhatsapp;
 use App\Models\Programacion;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -50,6 +51,9 @@ class ProgramacionController extends Controller
                 'conductor:id,nombres,apellidos,telefono,telefono_alterno',
                 'cliente:id,alias,razon_social',
                 'avisadoPor:id,name',
+                // Pocos por salida: el más reciente de cada destino se elige
+                // en PHP (ver `ultimosEnvios()`).
+                'envios' => fn ($query) => $query->latest('id'),
             ])
             // Por cliente y luego por placa: abastecimiento prepara por
             // cliente, así que las unidades del mismo cliente van juntas.
@@ -253,7 +257,41 @@ class ProgramacionController extends Controller
             'mensaje_aviso' => $this->aviso->mensajeParaConductor($programacion),
             'aviso_enviado_at' => $programacion->aviso_enviado_at?->toIso8601String(),
             'aviso_enviado_por' => $programacion->avisadoPor?->name,
+            'envios' => $this->ultimosEnvios($programacion),
         ];
+    }
+
+    /**
+     * Hasta dónde llegó el último aviso a cada destino de la salida: al
+     * conductor, la advertencia y cada área. Es lo que muestra si el
+     * conductor ya lo leyó, que respalda más que haberle abierto el chat.
+     *
+     * @return array{conductor: array<string, mixed>|null, advertencia: array<string, mixed>|null, areas: array<int, array<string, mixed>>}
+     */
+    private function ultimosEnvios(Programacion $programacion): array
+    {
+        $resumen = ['conductor' => null, 'advertencia' => null, 'areas' => []];
+
+        foreach ($programacion->envios as $envio) {
+            $datos = [
+                'estado' => $envio->estado->value,
+                'estado_label' => $envio->estado->label(),
+                'destino' => $envio->destino,
+                'hora' => ($envio->leido_at ?? $envio->entregado_at ?? $envio->enviado_at ?? $envio->created_at)->toIso8601String(),
+                'error' => $envio->error,
+            ];
+
+            // Vienen del más nuevo al más viejo: el primero de cada destino gana.
+            if ($envio->tipo === EnvioWhatsapp::TIPO_CONDUCTOR) {
+                $resumen['conductor'] ??= $datos;
+            } elseif ($envio->tipo === EnvioWhatsapp::TIPO_ADVERTENCIA) {
+                $resumen['advertencia'] ??= $datos;
+            } elseif ($envio->area_aviso_id !== null) {
+                $resumen['areas'][$envio->area_aviso_id] ??= $datos;
+            }
+        }
+
+        return $resumen;
     }
 
     /**

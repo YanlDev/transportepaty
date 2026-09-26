@@ -1,11 +1,16 @@
 <?php
 
+use App\Enums\EstadoEnvio;
+use App\Jobs\EnviarAvisoWhatsapp;
 use App\Models\Ajuste;
 use App\Models\AreaAviso;
+use App\Models\EnvioWhatsapp;
 use App\Models\Programacion;
+use App\Services\AvisosPorWhatsapp;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -88,7 +93,7 @@ it('sends an area notice to the saved number of the area, not to one in the requ
 
     actingAs(actorConRol('admin'))
         ->post(route('programacion.avisoArea.enviar', [$programacion, $area]), ['numero' => '999999999'])
-        ->assertSessionHas('toast', ['type' => 'success', 'message' => 'Aviso enviado a Centro de Control.']);
+        ->assertSessionHas('toast', ['type' => 'success', 'message' => 'Enviando a Centro de Control…']);
 
     Http::assertSent(fn (Request $request): bool => $request['numero'] === '51950301883'
         && str_starts_with(base64_decode($request['imagen']), "\x89PNG"));
@@ -108,15 +113,50 @@ it('does not send to an area that is turned off', function (): void {
     Http::assertNothingSent();
 });
 
-it('shows the error and does not mark as avisada when WhatsApp fails', function (): void {
-    Http::fake(['whatsapp.test/enviar' => Http::response(['error' => 'WhatsApp no está conectado.'], 503)]);
+it('queues the notice and answers right away, without waiting for WhatsApp', function (): void {
+    Queue::fake();
     $programacion = Programacion::factory()->create();
 
     actingAs(actorConRol('admin'))
-        ->post(route('programacion.aviso.enviar', [$programacion, 'conductor']), ['numero' => '987654321'])
-        ->assertSessionHas('toast', ['type' => 'error', 'message' => 'WhatsApp no está conectado.']);
+        ->post(route('programacion.aviso.enviar', [$programacion, 'conductor']), ['numero' => '987654321', 'destino' => 'Alterno'])
+        ->assertSessionHas('toast.type', 'success');
 
-    expect($programacion->fresh()->aviso_enviado_at)->toBeNull();
+    $envio = EnvioWhatsapp::query()->sole();
+
+    expect($envio->estado)->toBe(EstadoEnvio::Pendiente)
+        ->and($envio->numero)->toBe('51987654321')
+        ->and($envio->destino)->toBe('Alterno');
+
+    Queue::assertPushedOn('whatsapp', EnviarAvisoWhatsapp::class);
+});
+
+it('marks the envío as failed, and the salida as not avisada, when WhatsApp gives up', function (): void {
+    Http::fake(['whatsapp.test/enviar' => Http::response(['error' => 'WhatsApp no está conectado.'], 503)]);
+    Queue::fake();
+    $envio = EnvioWhatsapp::factory()->create();
+
+    $trabajo = new EnviarAvisoWhatsapp($envio);
+
+    expect(fn () => $trabajo->handle(app(AvisosPorWhatsapp::class)))->toThrow(RuntimeException::class);
+
+    $trabajo->failed(new RuntimeException('WhatsApp no está conectado.'));
+
+    expect($envio->fresh())
+        ->estado->toBe(EstadoEnvio::Fallido)
+        ->error->toBe('WhatsApp no está conectado.')
+        ->and($envio->programacion->fresh()->aviso_enviado_at)->toBeNull();
+});
+
+it('records the WhatsApp message id so the receipts can find the envío', function (): void {
+    Http::fake(['whatsapp.test/enviar' => Http::response(['id' => '3EB0ABC'])]);
+    $envio = EnvioWhatsapp::factory()->create();
+
+    (new EnviarAvisoWhatsapp($envio))->handle(app(AvisosPorWhatsapp::class));
+
+    expect($envio->fresh())
+        ->estado->toBe(EstadoEnvio::Enviado)
+        ->mensaje_id->toBe('3EB0ABC')
+        ->enviado_at->not->toBeNull();
 });
 
 it('tells the programación page whether WhatsApp is linked', function (): void {

@@ -2,6 +2,23 @@
  * Una unidad programada con carga particular para un día. Se carga antes de
  * que exista la guía de remisión, así que no sale de `viajes`.
  */
+export type EstadoEnvio =
+    | 'pendiente'
+    | 'enviado'
+    | 'entregado'
+    | 'leido'
+    | 'fallido';
+
+/** Hasta dónde llegó el último aviso por WhatsApp a un destino. */
+export type ResumenEnvio = {
+    estado: EstadoEnvio;
+    estado_label: string;
+    destino: string;
+    /** La hora del último avance (enviado, entregado o leído). */
+    hora: string;
+    error: string | null;
+};
+
 export type ProgramacionTarjeta = {
     id: number;
     fecha: string;
@@ -25,6 +42,13 @@ export type ProgramacionTarjeta = {
     destinatarios: DestinatarioAviso[];
     /** Los avisos a abastecimiento y a facturación, ya armados. */
     avisos_area: AvisoDeArea[];
+    /** El último envío por WhatsApp a cada destino; null si no se mandó nada. */
+    envios: {
+        conductor: ResumenEnvio | null;
+        advertencia: ResumenEnvio | null;
+        /** Por id del área. */
+        areas: Record<number, ResumenEnvio>;
+    };
     /** El flete acordado en soles, o null si todavía no hay precio. */
     precio_flete: number | null;
     /** Si ese monto ya trae el IGV adentro o hay que sumárselo. */

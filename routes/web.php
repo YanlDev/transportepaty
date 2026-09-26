@@ -14,16 +14,24 @@ use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\ParametroCostoController;
 use App\Http\Controllers\ProgramacionController;
+use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
 use App\Http\Controllers\ViajeController;
 use App\Http\Controllers\WhatsappController;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Route;
 
 // La raíz no muestra landing: siempre redirige al login (los usuarios ya
 // autenticados son reenviados al dashboard por el middleware `guest` del login).
 Route::redirect('/', '/login')->name('home');
+
+// Los ✓✓ de WhatsApp: los manda el servicio Node del mismo servidor, con su
+// token (ver ReciboWhatsappController), no una persona con sesión.
+Route::post('whatsapp/recibos', ReciboWhatsappController::class)
+    ->withoutMiddleware(ValidateCsrfToken::class)
+    ->name('whatsapp.recibos');
 
 Route::middleware('auth')->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');

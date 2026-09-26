@@ -6,6 +6,7 @@ use App\Models\AreaAviso;
 use App\Models\Programacion;
 use App\Services\AvisoDeSalida;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Los avisos de Programación como imagen, con el logo y los colores de la
@@ -45,6 +46,21 @@ class ImagenesDeAviso
      * celular antes de subirse a la unidad.
      */
     public function advertencia(): string
+    {
+        $huella = sha1(implode('|', [
+            $this->aviso->telefonoOficina(),
+            md5_file(__FILE__),
+            md5_file(__DIR__.'/Lienzo.php'),
+        ]));
+
+        return Cache::rememberForever("aviso-png:advertencia:{$huella}", fn (): string => $this->dibujarAdvertencia());
+    }
+
+    /**
+     * Se dibuja una sola vez por teléfono de oficina y versión del diseño
+     * (ver `advertencia()`): es igual para todas las salidas.
+     */
+    private function dibujarAdvertencia(): string
     {
         $lienzo = $this->lienzo()
             ->banda('PROHIBIDO INICIAR EL VIAJE SIN DOCUMENTACIÓN VALIDADA', self::ROJO)

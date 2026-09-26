@@ -42,16 +42,26 @@ import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
 /**
- * Destinos visibles para cualquier rol. Tractos y carretas van separados —con
- * su propio ícono— para encontrar cada uno directo, en vez de filtrar por tipo
- * dentro de un listado combinado de vehículos.
+ * El menú va por secciones —Flota, Operación, Administración, Sistema— y no
+ * como una lista corrida: con doce destinos, los títulos son lo que permite
+ * saltar al bloque que se busca sin leerlos todos. Cada entrada sigue siendo
+ * de un clic; agrupar es para leer, no para esconder.
+ *
+ * Una sección cuyas entradas no le corresponden al rol no se dibuja, ni su
+ * título: `NavMain` devuelve null con la lista vacía.
  */
-const navItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: SquaresFour,
-    },
+const dashboardNavItem: NavItem = {
+    title: 'Dashboard',
+    href: dashboard(),
+    icon: SquaresFour,
+};
+
+/**
+ * Las unidades y quienes las manejan. Tractos y carretas van separados —con
+ * su propio ícono— para encontrar cada uno directo, en vez de filtrar por tipo
+ * dentro de un listado combinado.
+ */
+const flotaNavItems: NavItem[] = [
     {
         title: 'Tractos',
         href: vehiculos.tractos(),
@@ -64,6 +74,20 @@ const navItems: NavItem[] = [
     },
 ];
 
+/** Requiere admin o visor: el contador no ve el padrón de choferes. */
+const conductoresNavItem: NavItem = {
+    title: 'Conductores',
+    href: conductores.index(),
+    icon: IdentificationCard,
+};
+
+/** Los viajes: los lee también el contador, que factura contra ellos. */
+const viajesNavItem: NavItem = {
+    title: 'Viajes',
+    href: viajes.index(),
+    icon: Path,
+};
+
 /**
  * Qué unidades salen con carga particular cada día. La lee abastecimiento
  * para preparar la carga, así que entra con el mismo permiso de operación.
@@ -74,11 +98,11 @@ const programacionNavItem: NavItem = {
     icon: CalendarCheck,
 };
 
-/** Los viajes: la lee también el contador, que factura contra ellos. */
-const viajesNavItem: NavItem = {
-    title: 'Viajes',
-    href: viajes.index(),
-    icon: Path,
+/** Solo para admin: el control del personal. */
+const asistenciaNavItem: NavItem = {
+    title: 'Asistencia',
+    href: asistencia.index(),
+    icon: CalendarCheck,
 };
 
 /** Requiere rol admin o visor. */
@@ -96,21 +120,14 @@ const gestionNavItems: NavItem[] = [
 ];
 
 /** Solo para admin y contador: la cobranza y las cuentas de la empresa. */
-const contabilidadNavItems: NavItem[] = [
-    {
-        title: 'Contabilidad',
-        href: contabilidad.index(),
-        icon: Receipt,
-    },
-];
+const contabilidadNavItem: NavItem = {
+    title: 'Contabilidad',
+    href: contabilidad.index(),
+    icon: Receipt,
+};
 
-/** Solo para admin: gestión de personas y control interno, no lectura de flota. */
-const adminNavItems: NavItem[] = [
-    {
-        title: 'Asistencia',
-        href: asistencia.index(),
-        icon: CalendarCheck,
-    },
+/** Solo para admin: cuentas del sistema y el número que manda los avisos. */
+const sistemaNavItems: NavItem[] = [
     {
         title: 'Usuarios',
         href: usuarios.index(),
@@ -149,16 +166,20 @@ export function AppSidebar() {
 
     // Conductores exige admin o visor: el contador ve las unidades para
     // identificar la placa de una guía, pero no el padrón de choferes.
-    const principales = puedeVerOperacion
-        ? [
-              ...navItems,
-              {
-                  title: 'Conductores',
-                  href: conductores.index(),
-                  icon: IdentificationCard,
-              },
-          ]
-        : navItems;
+    const flota = puedeVerOperacion
+        ? [...flotaNavItems, conductoresNavItem]
+        : flotaNavItems;
+
+    const operacion = [
+        ...(puedeVerViajes ? [viajesNavItem] : []),
+        ...(puedeVerOperacion ? [programacionNavItem] : []),
+        ...(esAdmin ? [asistenciaNavItem] : []),
+    ];
+
+    const administracion = [
+        ...(puedeVerOperacion ? gestion : []),
+        ...(esAdmin || esContador ? [contabilidadNavItem] : []),
+    ];
 
     return (
         <Sidebar collapsible="icon" variant="inset">
@@ -180,16 +201,13 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <IconContext.Provider value={{ weight: 'duotone' }}>
-                    <NavMain items={principales} />
-                    {puedeVerViajes && <NavMain items={[viajesNavItem]} />}
-                    {puedeVerOperacion && (
-                        <NavMain items={[programacionNavItem]} />
+                    <NavMain items={[dashboardNavItem]} />
+                    <NavMain items={flota} label="Flota" />
+                    <NavMain items={operacion} label="Operación" />
+                    <NavMain items={administracion} label="Administración" />
+                    {esAdmin && (
+                        <NavMain items={sistemaNavItems} label="Sistema" />
                     )}
-                    {puedeVerOperacion && <NavMain items={gestion} />}
-                    {(esAdmin || esContador) && (
-                        <NavMain items={contabilidadNavItems} />
-                    )}
-                    {esAdmin && <NavMain items={adminNavItems} />}
                 </IconContext.Provider>
             </SidebarContent>
 
