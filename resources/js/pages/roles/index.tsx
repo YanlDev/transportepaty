@@ -82,7 +82,7 @@ export default function RolesIndex({ roles: lista, modulos }: Props) {
     };
 
     return (
-        <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+        <div className="flex flex-col gap-6">
             <Head title="Roles y permisos" />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -248,7 +248,7 @@ function EditorRol({
             />
 
             {!rol.bloqueado && (
-                <div className="sticky bottom-0 z-10 -mx-4 flex items-center justify-between gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
+                <div className="sticky bottom-0 z-10 flex items-center justify-between gap-3 border-t bg-background/95 py-3 backdrop-blur">
                     <ConfirmarBorradoDialog
                         url={destroy(rol.id).url}
                         titulo="Eliminar rol"

@@ -130,8 +130,10 @@ it('adds per-user permissions on top of the role', function (): void {
 
     actingAs(actorConRol('admin'))
         ->put(route('usuarios.update', $usuario), [
-            'name' => $usuario->name,
-            'username' => $usuario->username,
+            // Fijos: los que sortea la factory no siempre pasan la validación
+            // del formulario.
+            'name' => 'Visor Con Extra',
+            'username' => 'visor_extra',
             'role' => 'visor',
             'permisos' => ['viajes.anular'],
         ])
@@ -154,4 +156,14 @@ it('shares the session permissions with the frontend', function (): void {
                 && collect($permisos)->contains('cobranza.ver')
                 && ! collect($permisos)->contains('viajes.anular'))
         );
+});
+
+it('moves the system screens under settings and keeps the old urls working', function (): void {
+    expect(route('usuarios.index', absolute: false))->toBe('/settings/usuarios')
+        ->and(route('roles.index', absolute: false))->toBe('/settings/roles')
+        ->and(route('whatsapp.index', absolute: false))->toBe('/settings/whatsapp');
+
+    actingAs(actorConRol('admin'))->get('/usuarios')->assertRedirect('/settings/usuarios');
+    actingAs(actorConRol('admin'))->get('/roles')->assertRedirect('/settings/roles');
+    actingAs(actorConRol('admin'))->get('/whatsapp')->assertRedirect('/settings/whatsapp');
 });

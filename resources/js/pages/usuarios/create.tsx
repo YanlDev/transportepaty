@@ -12,7 +12,7 @@ type Props = {
 
 export default function UsuarioCreate({ roles, modulos }: Props) {
     return (
-        <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
+        <div className="flex w-full max-w-3xl flex-col gap-6">
             <Head title="Nuevo usuario" />
 
             <div>

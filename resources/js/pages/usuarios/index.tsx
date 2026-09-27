@@ -8,7 +8,6 @@ import {
     Trash2,
     Users,
 } from 'lucide-react';
-import roles from '@/actions/App/Http/Controllers/RolController';
 import usuarios, {
     create,
     edit,
@@ -58,7 +57,7 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
     const { buscar, setBuscar } = useFiltros(filtros, usuarios.index().url);
 
     return (
-        <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+        <div className="flex flex-col gap-6">
             <Head title="Usuarios" />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -71,20 +70,12 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
                     </p>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button asChild variant="outline">
-                        <Link href={roles.index()}>
-                            <ShieldCheck className="size-4" />
-                            Roles y permisos
-                        </Link>
-                    </Button>
-                    <Button asChild>
-                        <Link href={create()}>
-                            <Plus className="size-4" />
-                            Nuevo usuario
-                        </Link>
-                    </Button>
-                </div>
+                <Button asChild>
+                    <Link href={create()}>
+                        <Plus className="size-4" />
+                        Nuevo usuario
+                    </Link>
+                </Button>
             </div>
 
             <Input

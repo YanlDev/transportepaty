@@ -153,26 +153,34 @@ Route::middleware('auth')->group(function () {
         ->name('asistencia.notas');
     Route::delete('asistencia/{asistencia}', [AsistenciaController::class, 'destroy'])->name('asistencia.destroy');
 
-    Route::resource('usuarios', UserController::class)
-        ->parameters(['usuarios' => 'user'])
-        ->except(['show']);
-    Route::put('usuarios/{user}/password', [UserController::class, 'updatePassword'])
-        ->name('usuarios.password.update');
+    // Configuración del sistema: vive bajo /settings, junto a la cuenta
+    // propia. Los nombres de ruta no cambian; las URL viejas redirigen.
+    Route::prefix('settings')->group(function () {
+        Route::resource('usuarios', UserController::class)
+            ->parameters(['usuarios' => 'user'])
+            ->except(['show']);
+        Route::put('usuarios/{user}/password', [UserController::class, 'updatePassword'])
+            ->name('usuarios.password.update');
 
-    Route::get('roles', [RolController::class, 'index'])->name('roles.index');
-    Route::post('roles', [RolController::class, 'store'])->name('roles.store');
-    Route::put('roles/{rol}', [RolController::class, 'update'])->name('roles.update');
-    Route::delete('roles/{rol}', [RolController::class, 'destroy'])->name('roles.destroy');
+        Route::get('roles', [RolController::class, 'index'])->name('roles.index');
+        Route::post('roles', [RolController::class, 'store'])->name('roles.store');
+        Route::put('roles/{rol}', [RolController::class, 'update'])->name('roles.update');
+        Route::delete('roles/{rol}', [RolController::class, 'destroy'])->name('roles.destroy');
 
-    Route::get('whatsapp', [WhatsappController::class, 'index'])->name('whatsapp.index');
-    Route::post('whatsapp/vincular', [WhatsappController::class, 'vincular'])->name('whatsapp.vincular');
-    Route::post('whatsapp/probar', [WhatsappController::class, 'probar'])->name('whatsapp.probar');
-    Route::post('whatsapp/desvincular', [WhatsappController::class, 'desvincular'])->name('whatsapp.desvincular');
-    Route::put('whatsapp/oficina', [WhatsappController::class, 'actualizarOficina'])->name('whatsapp.oficina');
-    Route::put('whatsapp/recordatorio', [WhatsappController::class, 'actualizarRecordatorio'])->name('whatsapp.recordatorio');
-    Route::post('whatsapp/areas', [AreaAvisoController::class, 'store'])->name('whatsapp.areas.store');
-    Route::put('whatsapp/areas/{area}', [AreaAvisoController::class, 'update'])->name('whatsapp.areas.update');
-    Route::delete('whatsapp/areas/{area}', [AreaAvisoController::class, 'destroy'])->name('whatsapp.areas.destroy');
+        Route::get('whatsapp', [WhatsappController::class, 'index'])->name('whatsapp.index');
+        Route::post('whatsapp/vincular', [WhatsappController::class, 'vincular'])->name('whatsapp.vincular');
+        Route::post('whatsapp/probar', [WhatsappController::class, 'probar'])->name('whatsapp.probar');
+        Route::post('whatsapp/desvincular', [WhatsappController::class, 'desvincular'])->name('whatsapp.desvincular');
+        Route::put('whatsapp/oficina', [WhatsappController::class, 'actualizarOficina'])->name('whatsapp.oficina');
+        Route::put('whatsapp/recordatorio', [WhatsappController::class, 'actualizarRecordatorio'])->name('whatsapp.recordatorio');
+        Route::post('whatsapp/areas', [AreaAvisoController::class, 'store'])->name('whatsapp.areas.store');
+        Route::put('whatsapp/areas/{area}', [AreaAvisoController::class, 'update'])->name('whatsapp.areas.update');
+        Route::delete('whatsapp/areas/{area}', [AreaAvisoController::class, 'destroy'])->name('whatsapp.areas.destroy');
+    });
+
+    Route::redirect('usuarios', '/settings/usuarios');
+    Route::redirect('roles', '/settings/roles');
+    Route::redirect('whatsapp', '/settings/whatsapp');
 
     Route::get('tractos', [VehiculoController::class, 'tractos'])->name('tractos.index');
     Route::get('carretas', [VehiculoController::class, 'carretas'])->name('carretas.index');

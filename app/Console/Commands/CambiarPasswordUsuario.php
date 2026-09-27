@@ -14,7 +14,7 @@ use function Laravel\Prompts\password;
 /**
  * La única forma de reponer la contraseña del administrador.
  *
- * El resto de las cuentas las resetea el admin desde `/usuarios`, pero la suya
+ * El resto de las cuentas las resetea el admin desde `/settings/usuarios`, pero la suya
  * no tiene a quién pedírsela: no hay recuperación por correo en el sistema.
  * Este comando es esa salida, y por eso vive en el servidor y no en la web.
  */

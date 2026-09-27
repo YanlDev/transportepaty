@@ -75,7 +75,7 @@ export default function WhatsappIndex({
     const etiqueta = ETIQUETAS[estado.estado];
 
     return (
-        <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+        <div className="flex flex-col gap-6">
             <Head title="WhatsApp" />
 
             <section className="flex max-w-2xl flex-col gap-5 rounded-xl border bg-card p-5">

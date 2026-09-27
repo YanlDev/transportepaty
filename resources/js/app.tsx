@@ -14,7 +14,12 @@ createInertiaApp({
         switch (true) {
             case name.startsWith('auth/'):
                 return AuthLayout;
+            // Usuarios, roles y WhatsApp son configuración del sistema: van
+            // dentro de Configuración, junto a la cuenta propia.
             case name.startsWith('settings/'):
+            case name.startsWith('usuarios/'):
+            case name.startsWith('roles/'):
+            case name.startsWith('whatsapp/'):
                 return [AppLayout, SettingsLayout];
             default:
                 return AppLayout;

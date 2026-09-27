@@ -7,12 +7,9 @@ import {
     Path,
     Buildings,
     Receipt,
-    ShieldCheck,
     SquaresFour,
     Truck,
     TruckTrailer,
-    UsersThree,
-    WhatsappLogo,
 } from '@phosphor-icons/react';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
@@ -21,11 +18,8 @@ import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController'
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
-import roles from '@/actions/App/Http/Controllers/RolController';
-import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
-import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -128,29 +122,8 @@ const contabilidadNavItem: NavItem = {
     icon: Receipt,
 };
 
-/** Solo para admin: las cuentas y lo que puede hacer cada una. */
-const sistemaNavItems: NavItem[] = [
-    {
-        title: 'Usuarios',
-        href: usuarios.index(),
-        icon: UsersThree,
-    },
-    {
-        title: 'Roles y permisos',
-        href: roles.index(),
-        icon: ShieldCheck,
-    },
-];
-
-/** El número que manda los avisos. */
-const whatsappNavItem: NavItem = {
-    title: 'WhatsApp',
-    href: whatsapp.index(),
-    icon: WhatsappLogo,
-};
-
 export function AppSidebar() {
-    const { puede, esAdmin } = usePermisos();
+    const { puede } = usePermisos();
     const { isCurrentUrl } = useCurrentUrl();
 
     // Cotizaciones es un solo módulo con pestañas (cotizador, emitidas,
@@ -196,18 +169,12 @@ export function AppSidebar() {
         ...(puede('cobranza.ver') ? [contabilidadNavItem] : []),
     ];
 
-    const sistema = [
-        ...(esAdmin ? sistemaNavItems : []),
-        ...(puede('whatsapp.administrar') ? [whatsappNavItem] : []),
-    ];
-
     // Con roles armados a mano una sección puede quedar vacía: no se pinta
     // el título solo.
     const secciones = [
         { label: 'Flota', items: flota },
         { label: 'Operación', items: operacion },
         { label: 'Administración', items: administracion },
-        { label: 'Sistema', items: sistema },
     ];
 
     return (
