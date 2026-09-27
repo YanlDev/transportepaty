@@ -47,7 +47,8 @@ export default function VehiculoShow({
     ranuras,
     tiposDocumento,
 }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeEditar = puede('vehiculos.editar');
     const esTracto = vehiculo.tipo === 'tracto';
 
     const obligatorias = ranuras.filter((ranura) => ranura.obligatorio);
@@ -82,6 +83,7 @@ export default function VehiculoShow({
                     vehiculo={vehiculo}
                     esTracto={esTracto}
                     puedeEditar={puedeEditar}
+                    puedeEliminar={puede('vehiculos.eliminar')}
                 />
 
                 <div className="flex min-w-0 flex-col gap-4">

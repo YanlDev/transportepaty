@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permiso;
 use App\Models\Asistencia;
 use App\Models\User;
 
@@ -9,17 +10,17 @@ class AsistenciaPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::AsistenciaVer);
     }
 
     public function create(User $user): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::AsistenciaMarcar);
     }
 
     public function update(User $user, Asistencia $asistencia): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::AsistenciaMarcar);
     }
 
     /**
@@ -29,6 +30,6 @@ class AsistenciaPolicy
      */
     public function delete(User $user, Asistencia $asistencia): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::AsistenciaMarcar);
     }
 }

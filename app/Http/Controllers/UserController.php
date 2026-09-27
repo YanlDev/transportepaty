@@ -76,6 +76,7 @@ class UserController extends Controller
         $user->forceFill(['email_verified_at' => now()])->save();
 
         $user->assignRole($validated['role']);
+        $user->load('permissions')->syncPermissions($validated['permisos'] ?? []);
 
         return to_route('usuarios.index')
             ->with('toast', ['type' => 'success', 'message' => 'Usuario creado correctamente.']);
@@ -95,6 +96,7 @@ class UserController extends Controller
                 'username' => $user->username,
                 'email' => $user->email,
                 'role' => $user->getRoleNames()->first(),
+                'permisos' => $user->getDirectPermissions()->pluck('name')->values(),
             ],
             ...$this->datosFormulario(),
         ]);
@@ -116,6 +118,7 @@ class UserController extends Controller
         ]);
 
         $user->syncRoles([$validated['role']]);
+        $user->load('permissions')->syncPermissions($validated['permisos'] ?? []);
 
         return to_route('usuarios.index')
             ->with('toast', ['type' => 'success', 'message' => 'Usuario actualizado correctamente.']);
@@ -162,7 +165,15 @@ class UserController extends Controller
     private function datosFormulario(): array
     {
         return [
-            'roles' => Role::query()->orderBy('name')->pluck('name'),
+            'roles' => Role::query()
+                ->with('permissions:id,name')
+                ->orderBy('name')
+                ->get()
+                ->map(fn (Role $rol): array => [
+                    'name' => $rol->name,
+                    'permisos' => $rol->permissions->pluck('name')->values(),
+                ]),
+            'modulos' => RolController::modulos(),
         ];
     }
 }

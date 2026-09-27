@@ -14,6 +14,7 @@ import {
     DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { usePermisos } from '@/hooks/use-permisos';
 import { diasSemana, estadoConfig } from '@/lib/asistencia';
 import { cn } from '@/lib/utils';
 import type {
@@ -250,6 +251,7 @@ function DiaCiclo({
     dia: AsistenciaDia;
     marca: AsistenciaFila['marcas'][string] | undefined;
 }) {
+    const { puede } = usePermisos();
     const info = marca ? estadoConfig[marca.estado] : null;
 
     // La celda cambia apenas se elige, sin esperar al servidor; si la
@@ -302,10 +304,11 @@ function DiaCiclo({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger
+                disabled={!puede('asistencia.marcar')}
                 // En móvil la celda es de 40px: se marca con el pulgar sin
                 // errarle al día de al lado. En escritorio se compacta.
                 className={cn(
-                    'grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-xs font-bold tabular-nums hover:ring-1 hover:ring-foreground/30 hover:ring-inset sm:size-7 sm:text-[10px]',
+                    'grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-xs font-bold tabular-nums hover:ring-1 hover:ring-foreground/30 hover:ring-inset disabled:cursor-default sm:size-7 sm:text-[10px]',
                     info
                         ? info.badge
                         : cn(

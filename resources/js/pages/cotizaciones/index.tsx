@@ -38,7 +38,7 @@ export default function CotizacionesIndex({
     filtros,
     estados,
 }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
 
     const { buscar, setBuscar, aplicar } = useFiltros(
         filtros,
@@ -106,7 +106,7 @@ export default function CotizacionesIndex({
                     descripcion={
                         <>
                             Ajusta la búsqueda
-                            {puedeEditar &&
+                            {puede('cotizaciones.crear') &&
                                 ' o calcula una ruta en el Cotizador y emítela'}
                             .
                         </>

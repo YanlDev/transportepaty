@@ -18,6 +18,7 @@ import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
 import { GuiasRemitenteCelda } from '@/components/viajes/guias-remitente-celda';
 import { PlacaCelda } from '@/components/viajes/placa-celda';
 import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
+import { usePermisos } from '@/hooks/use-permisos';
 import type { FilaAgrupada } from '@/lib/agrupar-viajes';
 import { formatearFecha, formatearPeso } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -45,6 +46,8 @@ export function TablaViajes({
     puedeEditar,
     onVerDetalle,
 }: Props) {
+    const { puede } = usePermisos();
+
     return (
         <div className="hidden overflow-x-auto rounded-xl border shadow-sm sm:block">
             <Table>
@@ -176,10 +179,10 @@ export function TablaViajes({
                                             </Button>
                                         }
                                     />
-                                    {puedeEditar && (
+                                    {puede('viajes.anular') && (
                                         <AccionAnulacion viaje={viaje} />
                                     )}
-                                    {puedeEditar && (
+                                    {puede('viajes.eliminar') && (
                                         <DeleteViajeDialog
                                             viaje={viaje}
                                             trigger={

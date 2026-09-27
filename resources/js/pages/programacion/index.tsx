@@ -82,7 +82,9 @@ export default function ProgramacionIndex({
     ultimoViajePorConductor,
     whatsappConectado,
 }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeProgramar = puede('programacion.crear');
+    const puedeEditar = puede('programacion.editar');
 
     usePoll(60_000, {
         only: ['programaciones', 'semana', 'avisoOperaciones'],
@@ -183,7 +185,7 @@ export default function ProgramacionIndex({
                         }
                     />
 
-                    {puedeEditar && (
+                    {puedeProgramar && (
                         <Button onClick={abrirNueva}>
                             <Plus className="size-4" />
                             Programar unidad
@@ -192,7 +194,7 @@ export default function ProgramacionIndex({
                 </div>
             </div>
 
-            {puedeEditar && !whatsappConectado && (
+            {puede('programacion.avisar') && !whatsappConectado && (
                 <p className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
                     <WhatsappLogo weight="fill" className="size-4" />
                     El número de WhatsApp de la empresa no está vinculado: los
@@ -257,13 +259,12 @@ export default function ProgramacionIndex({
                     programaciones={programaciones}
                     avisoOperaciones={avisoOperaciones}
                     advertencia={advertencia}
-                    editable={puedeEditar}
                     onEditar={abrirEdicion}
                     onBorrar={borrar}
                 />
             )}
 
-            {puedeEditar && (
+            {(puedeProgramar || puedeEditar) && (
                 <ProgramacionDialog
                     // Remonta el formulario al cambiar de tarjeta, para que
                     // los valores iniciales de `useForm` sean los correctos.

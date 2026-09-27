@@ -39,7 +39,9 @@ export default function ViajesIndex({
     clientes,
     ciudadesDestino,
 }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeRegistrar = puede('viajes.registrar');
+    const puedeEditar = puede('viajes.editar');
     const { buscar, setBuscar, aplicar } = useViajeFiltros(filtros);
     const filtrosActivos = [
         filtros.cliente,
@@ -57,13 +59,13 @@ export default function ViajesIndex({
             {/* Arrastrar el PDF desde la carpeta de la GR y soltarlo en la
                 pantalla. Solo para quien puede importar: al visor no le sirve
                 un cartel que no lleva a nada. */}
-            {puedeEditar && <ZonaSoltarGuias />}
+            {puedeRegistrar && <ZonaSoltarGuias />}
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     {/* El total ya lo dice el paginador, así que acá queda
                         solo lo que no se ve en ninguna otra parte. */}
-                    {puedeEditar && (
+                    {puedeRegistrar && (
                         <p className="hidden text-sm text-muted-foreground md:block">
                             También puedes arrastrar los PDF de las GR a esta
                             pantalla.
@@ -71,7 +73,7 @@ export default function ViajesIndex({
                     )}
                 </div>
 
-                {puedeEditar && (
+                {puedeRegistrar && (
                     <div className="flex flex-wrap items-center gap-2">
                         {pendientes > 0 && (
                             <ReintentarCoincidencias pendientes={pendientes} />
@@ -131,7 +133,7 @@ export default function ViajesIndex({
                     descripcion={
                         filtros.buscar
                             ? 'Ajusta la búsqueda.'
-                            : puedeEditar
+                            : puedeRegistrar
                               ? 'Sube tus primeras GR para empezar el historial.'
                               : 'Todavía no se ha subido ninguna GR.'
                     }

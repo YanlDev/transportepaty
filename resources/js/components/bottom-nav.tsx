@@ -30,16 +30,20 @@ import type { NavItem } from '@/types';
  * de cinco destinos acá y ninguno se puede tocar sin errarle.
  */
 export function BottomNav() {
-    const { esAdmin, esContador, puedeVerOperacion } = usePermisos();
+    const { puede } = usePermisos();
     const { isCurrentOrParentUrl } = useCurrentUrl();
 
     const items: NavItem[] = [
-        { title: 'Inicio', href: dashboard(), icon: SquaresFour },
-        { title: 'Tractos', href: vehiculos.tractos(), icon: Truck },
-        ...(puedeVerOperacion || esContador
+        ...(puede('tablero.ver')
+            ? [{ title: 'Inicio', href: dashboard(), icon: SquaresFour }]
+            : []),
+        ...(puede('vehiculos.ver')
+            ? [{ title: 'Tractos', href: vehiculos.tractos(), icon: Truck }]
+            : []),
+        ...(puede('viajes.ver')
             ? [{ title: 'Viajes', href: viajes.index(), icon: Path }]
             : []),
-        ...(puedeVerOperacion
+        ...(puede('conductores.ver')
             ? [
                   {
                       title: 'Conductores',
@@ -48,9 +52,9 @@ export function BottomNav() {
                   },
               ]
             : []),
-        // Para el contador la cobranza es su pantalla, no una más: por eso
-        // entra al pulgar aunque el admin ya tenga cinco destinos acá.
-        ...(esContador
+        // Para quien cobra, la cobranza es su pantalla, no una más; quien
+        // además opera la ve en el menú lateral, así no pasan de cinco.
+        ...(puede('cobranza.ver') && !puede('programacion.ver')
             ? [
                   {
                       title: 'Cobranza',
@@ -59,7 +63,7 @@ export function BottomNav() {
                   },
               ]
             : []),
-        ...(esAdmin
+        ...(puede('asistencia.ver')
             ? [
                   {
                       title: 'Asistencia',

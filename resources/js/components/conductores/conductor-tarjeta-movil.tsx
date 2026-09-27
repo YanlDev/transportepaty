@@ -10,6 +10,7 @@ import type { ConductorListItem } from '@/types/fleet';
 type Props = {
     conductor: ConductorListItem;
     puedeEditar: boolean;
+    puedeEliminar: boolean;
 };
 
 /**
@@ -17,7 +18,11 @@ type Props = {
  * se usan en la calle: nombre, celular —para llamar— y licencia con su
  * revalidación. DNI y procedencia quedan en el detalle.
  */
-export function ConductorTarjetaMovil({ conductor, puedeEditar }: Props) {
+export function ConductorTarjetaMovil({
+    conductor,
+    puedeEditar,
+    puedeEliminar,
+}: Props) {
     return (
         <div
             className={cn(
@@ -67,34 +72,38 @@ export function ConductorTarjetaMovil({ conductor, puedeEditar }: Props) {
                     ` · vence ${conductor.licencia_vence}`}
             </p>
 
-            {puedeEditar && (
+            {(puedeEditar || puedeEliminar) && (
                 <div className="flex items-center justify-end gap-1 border-t pt-2">
-                    <Button
-                        asChild
-                        variant="ghost"
-                        size="sm"
-                        className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
-                    >
-                        <Link
-                            href={edit(conductor.id)}
-                            aria-label={`Editar ${conductor.nombre_completo}`}
+                    {puedeEditar && (
+                        <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
                         >
-                            <Pencil className="size-4" />
-                        </Link>
-                    </Button>
-                    <DeleteConductorDialog
-                        conductor={conductor}
-                        trigger={
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
-                                aria-label={`Eliminar ${conductor.nombre_completo}`}
+                            <Link
+                                href={edit(conductor.id)}
+                                aria-label={`Editar ${conductor.nombre_completo}`}
                             >
-                                <Trash2 className="size-4" />
-                            </Button>
-                        }
-                    />
+                                <Pencil className="size-4" />
+                            </Link>
+                        </Button>
+                    )}
+                    {puedeEliminar && (
+                        <DeleteConductorDialog
+                            conductor={conductor}
+                            trigger={
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-destructive hover:text-destructive"
+                                    aria-label={`Eliminar ${conductor.nombre_completo}`}
+                                >
+                                    <Trash2 className="size-4" />
+                                </Button>
+                            }
+                        />
+                    )}
                 </div>
             )}
         </div>

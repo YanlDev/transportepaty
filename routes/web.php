@@ -15,6 +15,7 @@ use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\ParametroCostoController;
 use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\ReciboWhatsappController;
+use App\Http\Controllers\RolController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
@@ -157,6 +158,11 @@ Route::middleware('auth')->group(function () {
         ->except(['show']);
     Route::put('usuarios/{user}/password', [UserController::class, 'updatePassword'])
         ->name('usuarios.password.update');
+
+    Route::get('roles', [RolController::class, 'index'])->name('roles.index');
+    Route::post('roles', [RolController::class, 'store'])->name('roles.store');
+    Route::put('roles/{rol}', [RolController::class, 'update'])->name('roles.update');
+    Route::delete('roles/{rol}', [RolController::class, 'destroy'])->name('roles.destroy');
 
     Route::get('whatsapp', [WhatsappController::class, 'index'])->name('whatsapp.index');
     Route::post('whatsapp/vincular', [WhatsappController::class, 'vincular'])->name('whatsapp.vincular');

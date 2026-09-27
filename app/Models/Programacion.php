@@ -62,6 +62,12 @@ class Programacion extends Model
     protected $table = 'programaciones';
 
     /**
+     * Hasta qué hora (de Lima) una GR emitida al día siguiente todavía cuenta
+     * como la salida de la programación del día anterior.
+     */
+    public const HORA_FIN_MADRUGADA = 8;
+
+    /**
      * Lo que dice el aviso al conductor: si cambia después de avisarle, el
      * aviso que tiene en el celular quedó viejo.
      */
@@ -92,16 +98,36 @@ class Programacion extends Model
      * unidad programada ya partió: la GR es el registro de lo que la unidad
      * hizo de verdad.
      *
+     * También cuenta la GR emitida en la madrugada del día siguiente (antes de
+     * `HORA_FIN_MADRUGADA`): la unidad programada para un día a veces parte
+     * pasada la medianoche y la guía sale con esa fecha. Solo si ese tracto no
+     * tiene programación propia el día siguiente, para que la GR no se la
+     * disputen dos salidas. `fecha_emision` guarda la hora de Lima que trae
+     * el PDF, así que se compara tal cual.
+     *
      * @return array<int, string>
      */
     public static function guiasDelDia(string $fecha): array
     {
-        return Viaje::query()
+        $delDia = Viaje::query()
             ->whereDate('fecha_traslado', $fecha)
             ->whereNotNull('tracto_id')
             ->orderBy('numero_gr')
             ->pluck('numero_gr', 'tracto_id')
             ->all();
+
+        $diaSiguiente = CarbonImmutable::parse($fecha)->addDay()->toDateString();
+
+        $deMadrugada = Viaje::query()
+            ->whereDate('fecha_traslado', $diaSiguiente)
+            ->whereNotNull('tracto_id')
+            ->where('fecha_emision', '<', sprintf('%s %02d:00:00', $diaSiguiente, self::HORA_FIN_MADRUGADA))
+            ->whereNotIn('tracto_id', self::query()->delDia($diaSiguiente)->select('vehiculo_id'))
+            ->orderBy('numero_gr')
+            ->pluck('numero_gr', 'tracto_id')
+            ->all();
+
+        return $delDia + $deMadrugada;
     }
 
     /**

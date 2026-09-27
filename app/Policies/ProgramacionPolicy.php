@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permiso;
 use App\Models\Programacion;
 use App\Models\User;
 
@@ -14,21 +15,30 @@ class ProgramacionPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'visor']);
+        return $user->checkPermissionTo(Permiso::ProgramacionVer);
     }
 
     public function create(User $user): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::ProgramacionCrear);
     }
 
     public function update(User $user, Programacion $programacion): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::ProgramacionEditar);
     }
 
     public function delete(User $user, Programacion $programacion): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::ProgramacionEliminar);
+    }
+
+    /**
+     * Mandar el aviso de salida habla en nombre de la empresa por WhatsApp,
+     * así que no va atado a poder editar la salida.
+     */
+    public function avisar(User $user, Programacion $programacion): bool
+    {
+        return $user->checkPermissionTo(Permiso::ProgramacionAvisar);
     }
 }

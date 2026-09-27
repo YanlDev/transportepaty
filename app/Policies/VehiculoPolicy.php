@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permiso;
 use App\Models\User;
 use App\Models\Vehiculo;
 
@@ -16,7 +17,7 @@ class VehiculoPolicy
      */
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'visor', 'contador']);
+        return $user->checkPermissionTo(Permiso::VehiculosVer);
     }
 
     /**
@@ -27,7 +28,7 @@ class VehiculoPolicy
      */
     public function view(User $user, Vehiculo $vehiculo): bool
     {
-        return $user->hasAnyRole(['admin', 'visor', 'contador']);
+        return $user->checkPermissionTo(Permiso::VehiculosVer);
     }
 
     /**
@@ -35,7 +36,7 @@ class VehiculoPolicy
      */
     public function create(User $user): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::VehiculosCrear);
     }
 
     /**
@@ -43,7 +44,7 @@ class VehiculoPolicy
      */
     public function update(User $user, Vehiculo $vehiculo): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::VehiculosEditar);
     }
 
     /**
@@ -51,7 +52,7 @@ class VehiculoPolicy
      */
     public function delete(User $user, Vehiculo $vehiculo): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::VehiculosEliminar);
     }
 
     /**
@@ -59,7 +60,7 @@ class VehiculoPolicy
      */
     public function restore(User $user, Vehiculo $vehiculo): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::VehiculosEliminar);
     }
 
     /**
@@ -67,6 +68,6 @@ class VehiculoPolicy
      */
     public function forceDelete(User $user, Vehiculo $vehiculo): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::VehiculosEliminar);
     }
 }

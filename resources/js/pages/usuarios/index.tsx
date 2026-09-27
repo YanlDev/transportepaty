@@ -8,6 +8,7 @@ import {
     Trash2,
     Users,
 } from 'lucide-react';
+import roles from '@/actions/App/Http/Controllers/RolController';
 import usuarios, {
     create,
     edit,
@@ -70,12 +71,20 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
                     </p>
                 </div>
 
-                <Button asChild>
-                    <Link href={create()}>
-                        <Plus className="size-4" />
-                        Nuevo usuario
-                    </Link>
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Button asChild variant="outline">
+                        <Link href={roles.index()}>
+                            <ShieldCheck className="size-4" />
+                            Roles y permisos
+                        </Link>
+                    </Button>
+                    <Button asChild>
+                        <Link href={create()}>
+                            <Plus className="size-4" />
+                            Nuevo usuario
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <Input
@@ -162,7 +171,14 @@ function UsuarioCard({
     esActual: boolean;
 }) {
     const rol = usuario.roles[0]?.name;
-    const badge = rol ? ROLE_BADGES[rol] : undefined;
+    // Los roles creados desde el panel no tienen color propio: van en gris.
+    const badge = rol
+        ? (ROLE_BADGES[rol] ?? {
+              label: rol.charAt(0).toUpperCase() + rol.slice(1),
+              className:
+                  'bg-muted text-foreground ring-1 ring-border dark:bg-muted',
+          })
+        : undefined;
 
     return (
         <article className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">

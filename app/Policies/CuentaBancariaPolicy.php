@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permiso;
 use App\Models\CuentaBancaria;
 use App\Models\User;
 
@@ -13,22 +14,22 @@ class CuentaBancariaPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CuentasVer);
     }
 
     public function view(User $user, CuentaBancaria $cuenta): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CuentasVer);
     }
 
     public function create(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CuentasGestionar);
     }
 
     public function update(User $user, CuentaBancaria $cuenta): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CuentasGestionar);
     }
 
     /**
@@ -37,7 +38,7 @@ class CuentaBancariaPolicy
      */
     public function delete(User $user, CuentaBancaria $cuenta): bool
     {
-        return $user->hasAnyRole(['admin', 'contador'])
+        return $user->checkPermissionTo(Permiso::CuentasGestionar)
             && ! $cuenta->facturas()->exists();
     }
 }

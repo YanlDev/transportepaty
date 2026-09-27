@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { usePermisos } from '@/hooks/use-permisos';
 import { estadoConfig } from '@/lib/asistencia';
 import { cn } from '@/lib/utils';
 import type {
@@ -201,6 +202,7 @@ function NotasMesInput({
     mes: string;
     notas: string | null;
 }) {
+    const { puede } = usePermisos();
     const [valor, setValor] = useState(notas ?? '');
 
     const guardar = () => {
@@ -221,6 +223,7 @@ function NotasMesInput({
             onChange={(evento) => setValor(evento.target.value)}
             onBlur={guardar}
             placeholder="Notas del mes..."
+            readOnly={!puede('asistencia.ajustar')}
             rows={2}
             className="mt-2 resize-none text-xs"
         />
@@ -236,6 +239,7 @@ function DiaCelda({
     dia: AsistenciaCalendarioDia;
     marca: AsistenciaMarca | undefined;
 }) {
+    const { puede } = usePermisos();
     const info = marca ? estadoConfig[marca.estado] : null;
 
     const marcarComo = (estado: EstadoAsistencia) => {
@@ -272,9 +276,10 @@ function DiaCelda({
     return (
         <DropdownMenu>
             <DropdownMenuTrigger
+                disabled={!puede('asistencia.marcar')}
                 className={cn(
                     CELDA_CON_BORDE,
-                    'flex min-h-14 w-full cursor-pointer flex-col items-start gap-1 p-1.5 text-left hover:bg-muted/40',
+                    'flex min-h-14 w-full cursor-pointer flex-col items-start gap-1 p-1.5 text-left hover:bg-muted/40 disabled:cursor-default',
                     dia.es_domingo && 'bg-muted/20',
                 )}
                 title={info ? info.label : 'Sin marcar'}
@@ -321,6 +326,7 @@ function DiasDebidosInput({
     mes: string;
     diasDebidos: number;
 }) {
+    const { puede } = usePermisos();
     const [valor, setValor] = useState(String(diasDebidos));
 
     const guardar = () => {
@@ -362,6 +368,7 @@ function DiasDebidosInput({
                 value={valor}
                 onChange={(evento) => setValor(evento.target.value)}
                 onBlur={guardar}
+                readOnly={!puede('asistencia.ajustar')}
                 onKeyDown={(evento) => {
                     if (evento.key === 'Enter') {
                         evento.currentTarget.blur();

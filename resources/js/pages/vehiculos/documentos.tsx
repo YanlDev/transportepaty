@@ -31,7 +31,8 @@ export default function VehiculoDocumentos({
     ranuras,
     tiposDocumento,
 }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeEditar = puede('vehiculos.editar');
     const esTracto = vehiculo.tipo === 'tracto';
 
     setLayoutProps({

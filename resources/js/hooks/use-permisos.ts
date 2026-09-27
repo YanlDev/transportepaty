@@ -1,12 +1,13 @@
 import { usePage } from '@inertiajs/react';
+import type { Permiso } from '@/types';
 
 /**
- * Los permisos de la sesión, derivados de los roles que manda el backend.
+ * Los permisos de la sesión: los del rol más los que se le dieron sueltos al
+ * usuario, tal como los resuelve el backend.
  *
- * Están separados a propósito en «ver» y «editar»: el visor entra a los
- * módulos de operación pero no toca nada, así que un solo `puedeGestionar`
- * significaba cosas distintas en el menú y en las páginas. Cada permiso de
- * acá dice qué habilita, no quién es.
+ * Cada pantalla pregunta por la acción concreta —`puede('viajes.anular')`— y
+ * no por el rol, porque los roles ahora se arman desde el panel y un nombre
+ * de rol ya no dice qué habilita.
  *
  * Esto es comodidad de la interfaz, no seguridad: quien autoriza de verdad
  * son las policies del backend.
@@ -14,19 +15,9 @@ import { usePage } from '@inertiajs/react';
 export function usePermisos() {
     const { auth } = usePage().props;
 
-    const esAdmin = auth.roles.includes('admin');
-    const esVisor = auth.roles.includes('visor');
-    const esContador = auth.roles.includes('contador');
-
     return {
-        esAdmin,
-        esVisor,
-        esContador,
-        /** Alta, edición y baja de cualquier entidad de la flota. */
-        puedeEditar: esAdmin,
-        /** Entrar a los módulos de operación, aunque sea de solo lectura. */
-        puedeVerOperacion: esAdmin || esVisor,
-        /** Emitir facturas y marcar cobranza. */
-        puedeFacturar: esAdmin || esContador,
+        puede: (permiso: Permiso): boolean => auth.permisos.includes(permiso),
+        /** Usuarios y roles no se delegan: siguen siendo solo del admin. */
+        esAdmin: auth.roles.includes('admin'),
     };
 }

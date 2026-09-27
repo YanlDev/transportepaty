@@ -27,7 +27,7 @@ class AvisoSalidaController extends Controller
 
     public function imagen(Programacion $programacion, TipoAvisoSalida $tipo): Response
     {
-        $this->authorize('update', $programacion);
+        $this->authorize('avisar', $programacion);
 
         $programacion->loadMissing(['vehiculo', 'conductor', 'cliente']);
 
@@ -39,7 +39,7 @@ class AvisoSalidaController extends Controller
 
     public function enviar(Request $request, Programacion $programacion, TipoAvisoSalida $tipo): RedirectResponse
     {
-        $this->authorize('update', $programacion);
+        $this->authorize('avisar', $programacion);
 
         $datos = $request->validate([
             'numero' => ['required', 'string', 'max:20'],
@@ -60,7 +60,7 @@ class AvisoSalidaController extends Controller
 
     public function imagenArea(Programacion $programacion, AreaAviso $area): Response
     {
-        $this->authorize('update', $programacion);
+        $this->authorize('avisar', $programacion);
 
         $programacion->loadMissing(['vehiculo', 'conductor', 'cliente']);
 
@@ -73,7 +73,7 @@ class AvisoSalidaController extends Controller
      */
     public function enviarArea(Request $request, Programacion $programacion, AreaAviso $area): RedirectResponse
     {
-        $this->authorize('update', $programacion);
+        $this->authorize('avisar', $programacion);
 
         $numero = $this->aviso->numeroWhatsapp($area->numero);
 

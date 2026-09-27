@@ -9,33 +9,40 @@ import { cn } from '@/lib/utils';
  * trámite —se calcula, se emite, queda en la lista—, así que van como pestañas
  * de una misma entrada del menú y no como módulos sueltos.
  *
- * Solo el admin las ve: el visor entra directo a las emitidas, que es lo único
- * que puede abrir.
+ * Cada pestaña aparece con su permiso; con una sola no hay entre qué elegir y
+ * la barra no se muestra.
  */
 export function CotizacionesTabs({
     actual,
 }: {
     actual: 'cotizador' | 'emitidas' | 'tarifario';
 }) {
-    const { puedeEditar } = usePermisos();
-
-    if (!puedeEditar) {
-        return null;
-    }
+    const { puede } = usePermisos();
 
     const pestanas = [
         {
             clave: 'cotizador',
             titulo: 'Cotizador',
             href: cotizaciones.cotizador(),
+            visible: puede('cotizaciones.crear'),
         },
-        { clave: 'emitidas', titulo: 'Emitidas', href: cotizaciones.index() },
+        {
+            clave: 'emitidas',
+            titulo: 'Emitidas',
+            href: cotizaciones.index(),
+            visible: puede('cotizaciones.ver'),
+        },
         {
             clave: 'tarifario',
             titulo: 'Tarifario',
             href: parametrosCosto.edit(),
+            visible: puede('costos.editar'),
         },
-    ] as const;
+    ].filter((pestana) => pestana.visible);
+
+    if (pestanas.length < 2) {
+        return null;
+    }
 
     return (
         <nav

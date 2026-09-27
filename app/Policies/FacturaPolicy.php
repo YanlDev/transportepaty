@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permiso;
 use App\Models\Factura;
 use App\Models\User;
 
@@ -14,26 +15,26 @@ class FacturaPolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CobranzaVer);
     }
 
     public function view(User $user, Factura $factura): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CobranzaVer);
     }
 
     public function create(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CobranzaGestionar);
     }
 
     public function update(User $user, Factura $factura): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CobranzaGestionar);
     }
 
     public function delete(User $user, Factura $factura): bool
     {
-        return $user->hasAnyRole(['admin', 'contador']);
+        return $user->checkPermissionTo(Permiso::CobranzaGestionar);
     }
 }

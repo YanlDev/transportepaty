@@ -15,6 +15,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
+import { usePermisos } from '@/hooks/use-permisos';
 import type {
     AvisoOperaciones,
     EstadoSalida,
@@ -38,7 +39,6 @@ export function TableroSalidas({
     programaciones,
     avisoOperaciones,
     advertencia,
-    editable,
     onEditar,
     onBorrar,
 }: {
@@ -46,7 +46,6 @@ export function TableroSalidas({
     avisoOperaciones: AvisoOperaciones;
     /** La advertencia de documentación, igual para todas las salidas. */
     advertencia: string;
-    editable: boolean;
     onEditar: (programacion: ProgramacionTarjeta) => void;
     onBorrar: (programacion: ProgramacionTarjeta) => void;
 }) {
@@ -54,8 +53,13 @@ export function TableroSalidas({
         (programacion) => programacion.estado === 'despachado',
     ).length;
 
+    const { puede } = usePermisos();
+    const puedeAvisar = puede('programacion.avisar');
+    const hayAcciones =
+        puede('programacion.editar') || puede('programacion.eliminar');
+
     const puedeAvisarOperaciones =
-        editable &&
+        puedeAvisar &&
         avisoOperaciones.whatsapp !== null &&
         programaciones.length > 0;
 
@@ -117,9 +121,9 @@ export function TableroSalidas({
                             <AvisoSalida
                                 tarjeta={programacion}
                                 advertencia={advertencia}
-                                editable={editable}
+                                editable={puedeAvisar}
                             />
-                            {editable && (
+                            {hayAcciones && (
                                 <Acciones
                                     programacion={programacion}
                                     onEditar={() => onEditar(programacion)}
@@ -172,14 +176,14 @@ export function TableroSalidas({
                                     <AvisoSalida
                                         tarjeta={programacion}
                                         advertencia={advertencia}
-                                        editable={editable}
+                                        editable={puedeAvisar}
                                     />
                                 </TableCell>
                                 <TableCell className="whitespace-nowrap">
                                     <Estado programacion={programacion} />
                                 </TableCell>
                                 <TableCell className="w-0">
-                                    {editable && (
+                                    {hayAcciones && (
                                         <Acciones
                                             programacion={programacion}
                                             onEditar={() =>
@@ -225,25 +229,31 @@ function Acciones({
     onEditar: () => void;
     onBorrar: () => void;
 }) {
+    const { puede } = usePermisos();
+
     return (
         <div className="flex justify-end gap-1">
-            <Button
-                variant="ghost"
-                size="icon"
-                onClick={onEditar}
-                aria-label={`Editar la programación de ${programacion.placa}`}
-            >
-                <PencilSimple className="size-4" />
-            </Button>
-            <Button
-                variant="ghost"
-                size="icon"
-                onClick={onBorrar}
-                aria-label={`Quitar la programación de ${programacion.placa}`}
-                className="text-muted-foreground hover:text-destructive"
-            >
-                <Trash className="size-4" />
-            </Button>
+            {puede('programacion.editar') && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onEditar}
+                    aria-label={`Editar la programación de ${programacion.placa}`}
+                >
+                    <PencilSimple className="size-4" />
+                </Button>
+            )}
+            {puede('programacion.eliminar') && (
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={onBorrar}
+                    aria-label={`Quitar la programación de ${programacion.placa}`}
+                    className="text-muted-foreground hover:text-destructive"
+                >
+                    <Trash className="size-4" />
+                </Button>
+            )}
         </div>
     );
 }

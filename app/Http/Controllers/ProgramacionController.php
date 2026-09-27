@@ -148,7 +148,7 @@ class ProgramacionController extends Controller
      */
     public function registrarAviso(Programacion $programacion): RedirectResponse
     {
-        $this->authorize('update', $programacion);
+        $this->authorize('avisar', $programacion);
 
         $programacion->update([
             'aviso_enviado_at' => now(),

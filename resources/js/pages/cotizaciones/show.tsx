@@ -23,7 +23,7 @@ function soles(monto: number): string {
 }
 
 export default function CotizacionShow({ cotizacion }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
 
     setLayoutProps({
         breadcrumbs: [
@@ -61,7 +61,7 @@ export default function CotizacionShow({ cotizacion }: Props) {
                             Descargar proforma
                         </a>
                     </Button>
-                    {puedeEditar && (
+                    {puede('cotizaciones.editar') && (
                         <Button asChild>
                             <Link href={edit(cotizacion.id)}>
                                 <Pencil className="size-4" />

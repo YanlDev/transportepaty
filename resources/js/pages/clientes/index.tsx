@@ -28,7 +28,8 @@ export default function ClientesIndex({
     maxViajes,
 }: Props) {
     const { url } = usePage();
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeCrear = puede('clientes.crear');
     const query = url.includes('?') ? url.slice(url.indexOf('?')) : '';
 
     const { buscar, setBuscar } = useFiltros(filtros, clientes.index().url);
@@ -50,7 +51,7 @@ export default function ClientesIndex({
                     </p>
                 </div>
 
-                {puedeEditar && (
+                {puedeCrear && (
                     <Button asChild>
                         <Link href={create()}>
                             <Plus className="size-4" />
@@ -74,7 +75,7 @@ export default function ClientesIndex({
                     descripcion={
                         <>
                             Ajusta la búsqueda
-                            {puedeEditar && ' o registra un cliente nuevo'}.
+                            {puedeCrear && ' o registra un cliente nuevo'}.
                         </>
                     }
                 />
@@ -93,7 +94,7 @@ export default function ClientesIndex({
                     <TablaClientes
                         paginador={paginador}
                         maxViajes={maxViajes}
-                        puedeEditar={puedeEditar}
+                        puedeEditar={puede('clientes.editar')}
                         query={query}
                     />
 

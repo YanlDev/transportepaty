@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Services\SincronizadorPermisos;
 use Illuminate\Database\Seeder;
 use Spatie\Permission\Models\Role;
 
@@ -26,5 +27,7 @@ class RoleSeeder extends Seeder
         foreach (['admin', 'visor', 'contador'] as $role) {
             Role::findOrCreate($role, 'web');
         }
+
+        app(SincronizadorPermisos::class)->sincronizar();
     }
 }

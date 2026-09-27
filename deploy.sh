@@ -42,6 +42,7 @@ echo "→ Dependencias del servicio de WhatsApp"
 
 echo "→ Migraciones"
 php artisan migrate --force
+php artisan permisos:sincronizar
 
 echo "→ Limpiando y regenerando cachés"
 php artisan optimize:clear

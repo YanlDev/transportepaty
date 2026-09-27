@@ -45,7 +45,8 @@ export default function ContabilidadIndex({
     meses,
     cuentas: cuentasBancarias,
 }: Props) {
-    const { puedeFacturar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeFacturar = puede('cobranza.gestionar');
     const { buscar, setBuscar, aplicar } = useContabilidadFiltros(filtros);
 
     // Solo id y N° de GR, no el viaje entero: la fila se re-renderiza en cada

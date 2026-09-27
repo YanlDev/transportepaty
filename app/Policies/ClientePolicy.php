@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permiso;
 use App\Models\Cliente;
 use App\Models\User;
 
@@ -13,26 +14,26 @@ class ClientePolicy
 {
     public function viewAny(User $user): bool
     {
-        return $user->hasAnyRole(['admin', 'visor']);
+        return $user->checkPermissionTo(Permiso::ClientesVer);
     }
 
     public function view(User $user, Cliente $cliente): bool
     {
-        return $user->hasAnyRole(['admin', 'visor']);
+        return $user->checkPermissionTo(Permiso::ClientesVer);
     }
 
     public function create(User $user): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::ClientesCrear);
     }
 
     public function update(User $user, Cliente $cliente): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::ClientesEditar);
     }
 
     public function delete(User $user, Cliente $cliente): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::ClientesEliminar);
     }
 }

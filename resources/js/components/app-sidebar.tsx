@@ -7,6 +7,7 @@ import {
     Path,
     Buildings,
     Receipt,
+    ShieldCheck,
     SquaresFour,
     Truck,
     TruckTrailer,
@@ -20,6 +21,7 @@ import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController'
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
+import roles from '@/actions/App/Http/Controllers/RolController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
@@ -98,14 +100,14 @@ const programacionNavItem: NavItem = {
     icon: CalendarCheck,
 };
 
-/** Solo para admin: el control del personal. */
+/** El control del personal. */
 const asistenciaNavItem: NavItem = {
     title: 'Asistencia',
     href: asistencia.index(),
     icon: CalendarCheck,
 };
 
-/** Requiere rol admin o visor. */
+/** Cada uno aparece con su permiso de lectura. */
 const gestionNavItems: NavItem[] = [
     {
         title: 'Clientes',
@@ -119,14 +121,14 @@ const gestionNavItems: NavItem[] = [
     },
 ];
 
-/** Solo para admin y contador: la cobranza y las cuentas de la empresa. */
+/** La cobranza y las cuentas de la empresa. */
 const contabilidadNavItem: NavItem = {
     title: 'Contabilidad',
     href: contabilidad.index(),
     icon: Receipt,
 };
 
-/** Solo para admin: cuentas del sistema y el número que manda los avisos. */
+/** Solo para admin: las cuentas y lo que puede hacer cada una. */
 const sistemaNavItems: NavItem[] = [
     {
         title: 'Usuarios',
@@ -134,51 +136,78 @@ const sistemaNavItems: NavItem[] = [
         icon: UsersThree,
     },
     {
-        title: 'WhatsApp',
-        href: whatsapp.index(),
-        icon: WhatsappLogo,
+        title: 'Roles y permisos',
+        href: roles.index(),
+        icon: ShieldCheck,
     },
 ];
 
+/** El número que manda los avisos. */
+const whatsappNavItem: NavItem = {
+    title: 'WhatsApp',
+    href: whatsapp.index(),
+    icon: WhatsappLogo,
+};
+
 export function AppSidebar() {
-    const { esAdmin, esContador, puedeVerOperacion } = usePermisos();
+    const { puede, esAdmin } = usePermisos();
     const { isCurrentUrl } = useCurrentUrl();
-    // El contador no gestiona la operación, pero sí lee los viajes: son la
-    // contrapartida de lo que factura.
-    const puedeVerViajes = puedeVerOperacion || esContador;
 
     // Cotizaciones es un solo módulo con pestañas (cotizador, emitidas,
-    // tarifario). El admin entra por el cotizador, que es para lo que viene;
-    // el visor solo puede leer las emitidas.
-    const gestion = gestionNavItems.map((item) =>
-        item.title === 'Cotizaciones'
-            ? {
-                  ...item,
-                  href: esAdmin
-                      ? cotizaciones.cotizador()
-                      : cotizaciones.index(),
-                  isActive:
-                      isCurrentUrl(cotizaciones.index(), undefined, true) ||
-                      isCurrentUrl(parametrosCosto.edit(), undefined, true),
-              }
-            : item,
-    );
+    // tarifario). Quien puede cotizar entra por el cotizador, que es para lo
+    // que viene; el resto solo puede leer las emitidas.
+    const gestion = gestionNavItems
+        .filter((item) =>
+            item.title === 'Cotizaciones'
+                ? puede('cotizaciones.ver') ||
+                  puede('cotizaciones.crear') ||
+                  puede('costos.editar')
+                : puede('clientes.ver'),
+        )
+        .map((item) =>
+            item.title === 'Cotizaciones'
+                ? {
+                      ...item,
+                      href: puede('cotizaciones.crear')
+                          ? cotizaciones.cotizador()
+                          : puede('cotizaciones.ver')
+                            ? cotizaciones.index()
+                            : parametrosCosto.edit(),
+                      isActive:
+                          isCurrentUrl(cotizaciones.index(), undefined, true) ||
+                          isCurrentUrl(parametrosCosto.edit(), undefined, true),
+                  }
+                : item,
+        );
 
-    // Conductores exige admin o visor: el contador ve las unidades para
-    // identificar la placa de una guía, pero no el padrón de choferes.
-    const flota = puedeVerOperacion
-        ? [...flotaNavItems, conductoresNavItem]
-        : flotaNavItems;
+    const flota = [
+        ...(puede('vehiculos.ver') ? flotaNavItems : []),
+        ...(puede('conductores.ver') ? [conductoresNavItem] : []),
+    ];
 
     const operacion = [
-        ...(puedeVerViajes ? [viajesNavItem] : []),
-        ...(puedeVerOperacion ? [programacionNavItem] : []),
-        ...(esAdmin ? [asistenciaNavItem] : []),
+        ...(puede('viajes.ver') ? [viajesNavItem] : []),
+        ...(puede('programacion.ver') ? [programacionNavItem] : []),
+        ...(puede('asistencia.ver') ? [asistenciaNavItem] : []),
     ];
 
     const administracion = [
-        ...(puedeVerOperacion ? gestion : []),
-        ...(esAdmin || esContador ? [contabilidadNavItem] : []),
+        ...gestion,
+        ...(puede('cobranza.ver') ? [contabilidadNavItem] : []),
+    ];
+
+    const sistema = [
+        ...(esAdmin ? sistemaNavItems : []),
+        ...(puede('whatsapp.administrar') ? [whatsappNavItem] : []),
+    ];
+
+    // Con roles armados a mano una sección puede quedar vacía: no se pinta
+    // el título solo.
+    const secciones = [
+        { label: 'Flota', items: flota },
+        { label: 'Operación', items: operacion },
+        { label: 'Administración', items: administracion },
+        { label: 'Sistema', items: sistema },
     ];
 
     return (
@@ -201,12 +230,18 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <IconContext.Provider value={{ weight: 'duotone' }}>
-                    <NavMain items={[dashboardNavItem]} />
-                    <NavMain items={flota} label="Flota" />
-                    <NavMain items={operacion} label="Operación" />
-                    <NavMain items={administracion} label="Administración" />
-                    {esAdmin && (
-                        <NavMain items={sistemaNavItems} label="Sistema" />
+                    {puede('tablero.ver') && (
+                        <NavMain items={[dashboardNavItem]} />
+                    )}
+                    {secciones.map(
+                        ({ label, items }) =>
+                            items.length > 0 && (
+                                <NavMain
+                                    key={label}
+                                    items={items}
+                                    label={label}
+                                />
+                            ),
                     )}
                 </IconContext.Provider>
             </SidebarContent>

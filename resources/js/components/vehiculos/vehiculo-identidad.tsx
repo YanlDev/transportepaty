@@ -20,10 +20,12 @@ export function VehiculoIdentidad({
     vehiculo,
     esTracto,
     puedeEditar,
+    puedeEliminar,
 }: {
     vehiculo: Vehiculo;
     esTracto: boolean;
     puedeEditar: boolean;
+    puedeEliminar: boolean;
 }) {
     return (
         <section className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5 lg:sticky lg:top-4 lg:self-start">
@@ -46,32 +48,36 @@ export function VehiculoIdentidad({
                     )}
                 </div>
 
-                {puedeEditar && (
+                {(puedeEditar || puedeEliminar) && (
                     <div className="flex gap-2">
-                        <Button
-                            asChild
-                            variant="outline"
-                            size="sm"
-                            className="flex-1"
-                        >
-                            <Link href={edit(vehiculo.id)}>
-                                <Pencil className="size-4" />
-                                Editar
-                            </Link>
-                        </Button>
-                        <DeleteVehiculoDialog
-                            vehiculo={vehiculo}
-                            trigger={
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="text-muted-foreground hover:text-destructive"
-                                    aria-label="Eliminar vehículo"
-                                >
-                                    <Trash2 className="size-4" />
-                                </Button>
-                            }
-                        />
+                        {puedeEditar && (
+                            <Button
+                                asChild
+                                variant="outline"
+                                size="sm"
+                                className="flex-1"
+                            >
+                                <Link href={edit(vehiculo.id)}>
+                                    <Pencil className="size-4" />
+                                    Editar
+                                </Link>
+                            </Button>
+                        )}
+                        {puedeEliminar && (
+                            <DeleteVehiculoDialog
+                                vehiculo={vehiculo}
+                                trigger={
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="text-muted-foreground hover:text-destructive"
+                                        aria-label="Eliminar vehículo"
+                                    >
+                                        <Trash2 className="size-4" />
+                                    </Button>
+                                }
+                            />
+                        )}
                     </div>
                 )}
             </div>

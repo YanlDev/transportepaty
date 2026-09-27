@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Concerns\ProfileValidationRules;
 use App\Concerns\UsernameCanonicalizado;
+use App\Enums\Permiso;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -36,6 +37,10 @@ class StoreUserRequest extends FormRequest
             'email' => $this->emailRules(requerido: false),
             'password' => ['required', 'confirmed', Password::defaults()],
             'role' => ['required', Rule::in(Role::pluck('name'))],
+            // Sueltos, además de los del rol: para darle a una persona algo
+            // puntual sin inventar un rol entero para ella.
+            'permisos' => ['array'],
+            'permisos.*' => ['string', Rule::in(Permiso::valores())],
         ];
     }
 }

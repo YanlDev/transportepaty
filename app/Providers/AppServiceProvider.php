@@ -2,7 +2,9 @@
 
 namespace App\Providers;
 
+use App\Enums\Permiso;
 use App\Models\User;
+use App\Services\SincronizadorPermisos;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
@@ -45,11 +47,15 @@ class AppServiceProvider extends ServiceProvider
         // El contador sí entra: los viajes son la contrapartida de lo que
         // factura, el mismo criterio con el que `ViajePolicy` lo deja leer el
         // listado.
-        Gate::define('ver-tablero', fn (User $user): bool => $user->hasAnyRole(['admin', 'visor', 'contador']));
+        Gate::define('ver-tablero', fn (User $user): bool => $user->checkPermissionTo(Permiso::TableroVer));
 
         // Vincular el número de la empresa y probarlo: solo admin, porque ese
         // número habla en nombre de Transportes Paty.
-        Gate::define('administrar-whatsapp', fn (User $user): bool => $user->hasRole('admin'));
+        Gate::define('administrar-whatsapp', fn (User $user): bool => $user->checkPermissionTo(Permiso::WhatsappAdministrar));
+
+        // Quién puede qué no se delega: quien pudiera repartir permisos podría
+        // darse cualquiera a sí mismo. Queda en el admin, igual que los usuarios.
+        Gate::define('administrar-roles', fn (User $user): bool => $user->hasRole(SincronizadorPermisos::ROL_ADMIN));
     }
 
     /**

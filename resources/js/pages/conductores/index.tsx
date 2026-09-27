@@ -34,7 +34,11 @@ export default function ConductoresIndex({
     filtros,
 }: Props) {
     const { url } = usePage();
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeCrear = puede('conductores.crear');
+    const puedeEditar = puede('conductores.editar');
+    const puedeEliminar = puede('conductores.eliminar');
+    const hayAcciones = puedeEditar || puedeEliminar;
     const query = url.includes('?') ? url.slice(url.indexOf('?')) : '';
 
     const { buscar, setBuscar } = useFiltros(filtros, conductores.index().url);
@@ -53,7 +57,7 @@ export default function ConductoresIndex({
                     </p>
                 </div>
 
-                {puedeEditar && (
+                {puedeCrear && (
                     <Button asChild>
                         <Link href={create()}>
                             <Plus className="size-4" />
@@ -77,11 +81,11 @@ export default function ConductoresIndex({
                     descripcion={
                         <>
                             Ajusta la búsqueda
-                            {puedeEditar && ' o registra tu primer conductor'}.
+                            {puedeCrear && ' o registra tu primer conductor'}.
                         </>
                     }
                     accion={
-                        puedeEditar && (
+                        puedeCrear && (
                             <Button asChild variant="outline">
                                 <Link href={create()}>
                                     <Plus className="size-4" />
@@ -99,6 +103,7 @@ export default function ConductoresIndex({
                                 key={conductor.id}
                                 conductor={conductor}
                                 puedeEditar={puedeEditar}
+                                puedeEliminar={puedeEliminar}
                             />
                         ))}
                     </div>
@@ -116,7 +121,7 @@ export default function ConductoresIndex({
                                     <TableHead>Celular</TableHead>
                                     <TableHead>Procedencia</TableHead>
                                     <TableHead>Estado</TableHead>
-                                    {puedeEditar && (
+                                    {hayAcciones && (
                                         <TableHead className="text-right">
                                             Acciones
                                         </TableHead>
@@ -190,35 +195,41 @@ export default function ConductoresIndex({
                                                 />
                                             </span>
                                         </TableCell>
-                                        {puedeEditar && (
+                                        {hayAcciones && (
                                             <TableCell className="text-right">
                                                 <div className="flex items-center justify-end gap-1">
-                                                    <Button
-                                                        asChild
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
-                                                    >
-                                                        <Link
-                                                            href={`${edit(conductor.id).url}${query}`}
-                                                            aria-label={`Editar ${conductor.nombre_completo}`}
+                                                    {puedeEditar && (
+                                                        <Button
+                                                            asChild
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            className="text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-950"
                                                         >
-                                                            <Pencil className="size-4" />
-                                                        </Link>
-                                                    </Button>
-                                                    <DeleteConductorDialog
-                                                        conductor={conductor}
-                                                        trigger={
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="text-destructive hover:text-destructive"
-                                                                aria-label={`Eliminar ${conductor.nombre_completo}`}
+                                                            <Link
+                                                                href={`${edit(conductor.id).url}${query}`}
+                                                                aria-label={`Editar ${conductor.nombre_completo}`}
                                                             >
-                                                                <Trash2 className="size-4" />
-                                                            </Button>
-                                                        }
-                                                    />
+                                                                <Pencil className="size-4" />
+                                                            </Link>
+                                                        </Button>
+                                                    )}
+                                                    {puedeEliminar && (
+                                                        <DeleteConductorDialog
+                                                            conductor={
+                                                                conductor
+                                                            }
+                                                            trigger={
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-destructive hover:text-destructive"
+                                                                    aria-label={`Eliminar ${conductor.nombre_completo}`}
+                                                                >
+                                                                    <Trash2 className="size-4" />
+                                                                </Button>
+                                                            }
+                                                        />
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         )}

@@ -3,12 +3,14 @@ import usuarios, {
     create,
 } from '@/actions/App/Http/Controllers/UserController';
 import { UserForm } from '@/components/usuarios/user-form';
+import type { ModuloPermisos, RolConPermisos } from '@/types';
 
 type Props = {
-    roles: string[];
+    roles: RolConPermisos[];
+    modulos: ModuloPermisos[];
 };
 
-export default function UsuarioCreate({ roles }: Props) {
+export default function UsuarioCreate({ roles, modulos }: Props) {
     return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
             <Head title="Nuevo usuario" />
@@ -19,7 +21,7 @@ export default function UsuarioCreate({ roles }: Props) {
                 </p>
             </div>
 
-            <UserForm mode="create" roles={roles} />
+            <UserForm mode="create" roles={roles} modulos={modulos} />
         </div>
     );
 }

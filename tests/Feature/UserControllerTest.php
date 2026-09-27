@@ -78,7 +78,8 @@ it('only offers the roles that exist', function (): void {
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('usuarios/create')
-            ->where('roles', ['admin', 'contador', 'visor'])
+            ->where('roles', fn ($roles): bool => collect($roles)->pluck('name')->all() === ['admin', 'contador', 'visor'])
+            ->where('roles.2.permisos', fn ($permisos): bool => collect($permisos)->contains('viajes.ver'))
         );
 });
 

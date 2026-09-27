@@ -4,6 +4,7 @@ import usuarios, { edit } from '@/actions/App/Http/Controllers/UserController';
 import { Button } from '@/components/ui/button';
 import { ResetPasswordDialog } from '@/components/usuarios/reset-password-dialog';
 import { UserForm } from '@/components/usuarios/user-form';
+import type { ModuloPermisos, Permiso, RolConPermisos } from '@/types';
 
 type Usuario = {
     id: number;
@@ -11,14 +12,16 @@ type Usuario = {
     username: string;
     email: string | null;
     role: string | null;
+    permisos: Permiso[];
 };
 
 type Props = {
     usuario: Usuario;
-    roles: string[];
+    roles: RolConPermisos[];
+    modulos: ModuloPermisos[];
 };
 
-export default function UsuarioEdit({ usuario, roles }: Props) {
+export default function UsuarioEdit({ usuario, roles, modulos }: Props) {
     setLayoutProps({
         breadcrumbs: [
             { title: 'Usuarios', href: usuarios.index().url },
@@ -48,7 +51,12 @@ export default function UsuarioEdit({ usuario, roles }: Props) {
                 />
             </div>
 
-            <UserForm mode="edit" usuario={usuario} roles={roles} />
+            <UserForm
+                mode="edit"
+                usuario={usuario}
+                roles={roles}
+                modulos={modulos}
+            />
         </div>
     );
 }

@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Concerns\ProfileValidationRules;
 use App\Concerns\UsernameCanonicalizado;
+use App\Enums\Permiso;
 use App\Models\User;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -38,6 +39,10 @@ class UpdateUserRequest extends FormRequest
             // Dato de contacto, nada más: nadie entra al sistema con el correo.
             'email' => $this->emailRules($usuarioId, requerido: false),
             'role' => ['required', Rule::in(Role::pluck('name'))],
+            // Sueltos, además de los del rol: para darle a una persona algo
+            // puntual sin inventar un rol entero para ella.
+            'permisos' => ['array'],
+            'permisos.*' => ['string', Rule::in(Permiso::valores())],
         ];
     }
 }

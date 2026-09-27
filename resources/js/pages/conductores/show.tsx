@@ -42,7 +42,8 @@ export default function ConductorShow({
     estadisticas,
     viajes: viajesRecientes,
 }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeEditar = puede('conductores.editar');
 
     const obligatorias = ranuras.filter((ranura) => ranura.obligatorio);
     const sueltas = ranuras.filter((ranura) => !ranura.obligatorio);

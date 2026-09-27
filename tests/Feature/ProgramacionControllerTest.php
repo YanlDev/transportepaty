@@ -365,6 +365,56 @@ it('tells each programmed unit whether it already left, from the GRs of the day'
         );
 });
 
+it('counts a GR issued in the early morning of the next day as the departure of the previous day', function (): void {
+    $this->travelTo(Carbon::parse('2026-09-27 15:00:00', 'America/Lima'));
+
+    $deMadrugada = Vehiculo::factory()->create(['placa' => 'MADRU11']);
+    $deManana = Vehiculo::factory()->create(['placa' => 'MANAN22']);
+    $programadoAmbos = Vehiculo::factory()->create(['placa' => 'AMBOS33']);
+
+    foreach ([$deMadrugada, $deManana, $programadoAmbos] as $vehiculo) {
+        Programacion::factory()->elDia('2026-09-26')->create(['vehiculo_id' => $vehiculo->id]);
+    }
+    Programacion::factory()->elDia('2026-09-27')->create(['vehiculo_id' => $programadoAmbos->id]);
+
+    Viaje::factory()->create([
+        'tracto_id' => $deMadrugada->id,
+        'fecha_emision' => '2026-09-27 05:29:00',
+        'fecha_traslado' => '2026-09-27',
+        'numero_gr' => 'EG03-00012609',
+    ]);
+    // Emitida ya de día: es una salida del 27, no la del 26.
+    Viaje::factory()->create([
+        'tracto_id' => $deManana->id,
+        'fecha_emision' => '2026-09-27 10:15:00',
+        'fecha_traslado' => '2026-09-27',
+    ]);
+    // De madrugada, pero ese tracto tiene su propia programación el 27.
+    Viaje::factory()->create([
+        'tracto_id' => $programadoAmbos->id,
+        'fecha_emision' => '2026-09-27 04:00:00',
+        'fecha_traslado' => '2026-09-27',
+        'numero_gr' => 'EG03-00012610',
+    ]);
+
+    actingAs(actorConRol('visor'))
+        ->get(route('programacion.index', ['fecha' => '2026-09-26']))
+        ->assertInertia(fn ($page) => $page
+            ->where('programaciones', fn ($tarjetas): bool => collect($tarjetas)->pluck('estado', 'placa')->sortKeys()->all() === [
+                'AMBOS33' => 'sin_gr',
+                'MADRU11' => 'despachado',
+                'MANAN22' => 'sin_gr',
+            ])
+        );
+
+    actingAs(actorConRol('visor'))
+        ->get(route('programacion.index', ['fecha' => '2026-09-27']))
+        ->assertInertia(fn ($page) => $page
+            ->where('programaciones.0.estado', 'despachado')
+            ->where('programaciones.0.numero_gr', 'EG03-00012610')
+        );
+});
+
 /**
  * El preaviso es la constancia de que se le dijo al conductor que no avance
  * sin guía: una unidad que sale sin GR es multa de hasta 4 UIT.
@@ -673,6 +723,9 @@ it('shows on each card how far the last notice to each destination got', functio
 it('flags the card when the salida changed after the driver was notified', function (): void {
     $programacion = Programacion::factory()->create([
         'fecha' => RelojOperativo::hoy(),
+        // Fijo: la factory lo sortea y a veces salía justo PUNO, con lo que el
+        // cambio de abajo no cambiaba nada.
+        'destino' => 'JULIACA',
         'aviso_enviado_at' => now()->subHour(),
     ]);
 

@@ -6,6 +6,7 @@ import { AccionAnulacion } from '@/components/viajes/anulacion-viaje';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
 import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha, formatearPeso, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption, ViajeListItem } from '@/types/fleet';
@@ -34,6 +35,8 @@ export function ViajeTarjetaMovil({
     colorGrupo: string | null;
     onVerDetalle: () => void;
 }) {
+    const { puede } = usePermisos();
+
     return (
         <div
             className={cn(
@@ -127,9 +130,11 @@ export function ViajeTarjetaMovil({
                         }
                     />
 
-                    {puedeEditar && <AccionAnulacion viaje={viaje} grande />}
+                    {puede('viajes.anular') && (
+                        <AccionAnulacion viaje={viaje} grande />
+                    )}
 
-                    {puedeEditar && (
+                    {puede('viajes.eliminar') && (
                         <DeleteViajeDialog
                             viaje={viaje}
                             trigger={

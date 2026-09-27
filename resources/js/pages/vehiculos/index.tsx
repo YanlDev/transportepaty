@@ -74,7 +74,8 @@ export default function VehiculosIndex({
     marcas,
     cajas,
 }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
+    const puedeCrear = puede('vehiculos.crear');
     const textos = TEXTOS[seccion];
     const url = (
         seccion === 'tracto' ? vehiculos.tractos() : vehiculos.carretas()
@@ -99,7 +100,7 @@ export default function VehiculosIndex({
                     </p>
                 </div>
 
-                {puedeEditar && (
+                {puedeCrear && (
                     <Button asChild>
                         <Link href={create({ query: { tipo: seccion } })}>
                             <Plus className="size-4" />
@@ -124,13 +125,13 @@ export default function VehiculosIndex({
                     descripcion={
                         <>
                             Ajusta los filtros de búsqueda
-                            {puedeEditar &&
+                            {puedeCrear &&
                                 ` o registra tu primer${seccion === 'carreta' ? 'a' : ''} ${seccion}`}
                             .
                         </>
                     }
                     accion={
-                        puedeEditar && (
+                        puedeCrear && (
                             <Button asChild variant="outline">
                                 <Link
                                     href={create({ query: { tipo: seccion } })}

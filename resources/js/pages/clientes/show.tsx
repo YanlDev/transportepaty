@@ -24,7 +24,7 @@ export default function ClienteShow({
     estadisticas,
     viajes: ultimosViajes,
 }: Props) {
-    const { puedeEditar } = usePermisos();
+    const { puede } = usePermisos();
 
     setLayoutProps({
         breadcrumbs: [
@@ -37,7 +37,10 @@ export default function ClienteShow({
         <div className="mx-auto flex h-full w-full max-w-[1500px] flex-1 flex-col gap-4 p-4 md:p-6">
             <Head title={cliente.alias} />
 
-            <ClienteCabecera cliente={cliente} puedeEditar={puedeEditar} />
+            <ClienteCabecera
+                cliente={cliente}
+                puedeEditar={puede('clientes.editar')}
+            />
 
             <ClienteIndicadores estadisticas={estadisticas} />
 

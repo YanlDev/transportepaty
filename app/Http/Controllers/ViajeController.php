@@ -238,7 +238,7 @@ class ViajeController extends Controller
      */
     public function anular(AnularViajeRequest $request, Viaje $viaje): RedirectResponse
     {
-        $this->authorize('update', $viaje);
+        $this->authorize('anular', $viaje);
 
         $viaje->forceFill([
             'anulada_at' => now(),
@@ -255,7 +255,7 @@ class ViajeController extends Controller
     /** Deshace una anulación hecha por error: la GR vuelve a contar. */
     public function reactivar(Viaje $viaje): RedirectResponse
     {
-        $this->authorize('update', $viaje);
+        $this->authorize('anular', $viaje);
 
         $viaje->forceFill([
             'anulada_at' => null,

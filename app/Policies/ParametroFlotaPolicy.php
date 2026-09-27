@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\Permiso;
 use App\Models\User;
 
 /**
@@ -24,6 +25,6 @@ class ParametroFlotaPolicy
      */
     public function update(User $user): bool
     {
-        return $user->hasRole('admin');
+        return $user->checkPermissionTo(Permiso::CostosEditar);
     }
 }
