@@ -15,6 +15,7 @@ use App\Services\Sunat\EmisionEnDuda;
 use App\Services\Sunat\EmisionGre;
 use App\Services\Sunat\EmisionRechazada;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -59,6 +60,7 @@ class EmisionGreController extends Controller
                 ->get(['ruc', 'alias']),
             'sunatConfigurado' => filled(config('services.sunat_sol.clave')),
             'puedeEmitir' => request()->user()?->can('emitir', Viaje::class) ?? false,
+            'rucPaty' => (string) config('services.sunat_sol.ruc'),
         ]);
     }
 
@@ -88,6 +90,10 @@ class EmisionGreController extends Controller
                 $request->string('fecha_traslado')->value(),
                 $pagador,
                 $pagador === EmisionGre::PAGADOR_REMITENTE ? null : $request->string('ruc_pagador')->value(),
+                array_filter([
+                    $request->integer('tracto_id') => $request->string('tuce_tracto')->trim()->value(),
+                    $request->integer('carreta_id') => $request->string('tuce_carreta')->trim()->value(),
+                ]),
             );
         } catch (EmisionEnDuda $duda) {
             return response()->json([
@@ -166,6 +172,25 @@ class EmisionGreController extends Controller
             'transportistaRuc' => $transportista ?: null,
             'avisos' => $avisos,
         ]);
+    }
+
+    /**
+     * Vuelve a intentar registrar como viaje una GR ya emitida cuyo PDF no
+     * llegó al emitir. Solo lee de SUNAT: no emite nada.
+     */
+    public function registrar(Request $request): JsonResponse
+    {
+        $this->authorize('emitir', Viaje::class);
+
+        $numeroGr = (string) $request->validate(['numero_gr' => ['required', 'string', 'regex:/^[A-Za-z0-9]{4}-\d{1,8}$/']])['numero_gr'];
+
+        try {
+            $viaje = $this->emision->registrarEmitida($numeroGr);
+        } catch (RuntimeException $error) {
+            return response()->json(['mensaje' => $error->getMessage()], 502);
+        }
+
+        return response()->json(['viajeRegistrado' => $viaje !== null]);
     }
 
     /**

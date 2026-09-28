@@ -77,6 +77,17 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Cada emisión de GR en SUNAT, aparte y siempre en nivel info: el log
+        // general de producción solo guarda errores, y una GR emitida es un
+        // documento tributario del que tiene que quedar rastro.
+        'sunat' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/sunat.log'),
+            'level' => 'info',
+            'days' => 365,
+            'replace_placeholders' => true,
+        ],
+
         'slack' => [
             'driver' => 'slack',
             'url' => env('LOG_SLACK_WEBHOOK_URL'),

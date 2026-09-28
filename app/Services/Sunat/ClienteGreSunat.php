@@ -6,6 +6,7 @@ use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use RuntimeException;
 
 /**
@@ -156,13 +157,36 @@ class ClienteGreSunat
         ];
     }
 
-    /** El PDF de una GR-transportista de Paty ya emitida, en binario. */
-    public function pdf(string $ruc, string $serie, int $numero): ?string
+    /**
+     * El PDF de una GR-transportista de Paty ya emitida, en binario. Es una
+     * lectura, así que se reintenta: recién emitida, SUNAT a veces tarda en
+     * tenerlo listo o corta la primera conexión.
+     */
+    public function pdf(string $ruc, string $serie, int $numero, int $intentos = 3): ?string
     {
-        $respuesta = $this->pedir("/gre/comprobantes/{$ruc}-31-{$serie}-{$numero}/descarga/pdf");
-        $pdf = $respuesta->successful() ? $respuesta->json('pdf') : null;
+        $ruta = "/gre/comprobantes/{$ruc}-31-{$serie}-{$numero}/descarga/pdf";
 
-        return is_string($pdf) ? (base64_decode($pdf, true) ?: null) : null;
+        for ($intento = 1; ; $intento++) {
+            try {
+                $respuesta = $this->pedir($ruta);
+                $pdf = $respuesta->successful() ? $respuesta->json('pdf') : null;
+                $binario = is_string($pdf) ? base64_decode($pdf, true) : false;
+
+                if (is_string($binario) && str_starts_with($binario, '%PDF')) {
+                    return $binario;
+                }
+            } catch (RuntimeException $error) {
+                if ($intento >= $intentos) {
+                    throw $error;
+                }
+            }
+
+            if ($intento >= $intentos) {
+                return null;
+            }
+
+            Sleep::for(2)->seconds();
+        }
     }
 
     /**
@@ -194,14 +218,26 @@ class ClienteGreSunat
         }
     }
 
+    /**
+     * Con los encabezados que manda el navegador. No son decorativos: el
+     * firewall de SUNAT corta la conexión («Empty reply from server») a la
+     * descarga del PDF si faltan, aunque el token sea válido. Se probó
+     * 4 de 4 con el juego completo y 0 de 4 con el mínimo (28-09-2026).
+     */
     private function solicitud(int $segundos): PendingRequest
     {
         return Http::withToken($this->sesion->token())
-            ->acceptJson()
             ->withHeaders([
+                'Accept' => 'application/json, text/plain, */*',
+                'Content-Type' => 'application/json',
+                'Accept-Language' => 'es-PE,es;q=0.9',
                 'Origin' => 'https://e-factura.sunat.gob.pe',
                 'Referer' => 'https://e-factura.sunat.gob.pe/',
+                'Sec-Fetch-Dest' => 'empty',
+                'Sec-Fetch-Mode' => 'cors',
+                'Sec-Fetch-Site' => 'same-site',
             ])
+            ->withUserAgent(SesionSol::AGENTE)
             ->timeout($segundos);
     }
 

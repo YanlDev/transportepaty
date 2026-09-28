@@ -93,6 +93,8 @@ Route::middleware('auth')->group(function () {
     // Armar una GR-transportista con los datos que SUNAT confirma en vivo.
     Route::get('viajes/emitir', [EmisionGreController::class, 'create'])->name('viajes.emitir');
     Route::post('viajes/emitir', [EmisionGreController::class, 'emitir'])->name('viajes.emitir.store');
+    Route::post('viajes/emitir/registrar', [EmisionGreController::class, 'registrar'])
+        ->name('viajes.emitir.registrar');
     Route::get('viajes/emitir/guia', [EmisionGreController::class, 'guia'])->name('viajes.emitir.guia');
     Route::get('viajes/emitir/vehiculos/{vehiculo}', [EmisionGreController::class, 'vehiculo'])
         ->name('viajes.emitir.vehiculo');

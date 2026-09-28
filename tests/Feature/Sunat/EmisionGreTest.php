@@ -6,11 +6,14 @@ use App\Enums\TipoVehiculo;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
+use App\Services\ImportadorViaje;
+use App\Services\Sunat\ClienteGreSunat;
 use App\Services\Sunat\EmisionEnDuda;
 use App\Services\Sunat\EmisionGre;
 use App\Services\Sunat\EmisionRechazada;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Sleep;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
@@ -210,4 +213,43 @@ it('avisa que la emisión quedó en duda y no la da por emitida', function () us
         ])
         ->assertStatus(504)
         ->assertJsonPath('estado', 'en_duda');
+});
+
+it('manda el TUCE escrito a mano, por ejemplo el RUC de Paty', function () use ($guias): void {
+    fingirSunatDeLaEmision();
+    [$tracto, $carreta, $conductor] = unidadDeLaEmision();
+
+    $vehiculos = app(EmisionGre::class)->armar($guias, $tracto, $carreta, $conductor, '2026-09-28', EmisionGre::PAGADOR_TERCERO, '20601239079', [
+        $carreta->id => '20364000643',
+    ])['traslado']['vehiculo'];
+
+    expect($vehiculos[0]['numTucChv'])->toBe('21M24000099E')
+        ->and($vehiculos[1])->toMatchArray(['numTucChv' => '20364000643', 'indEncSunNumTucChv' => '0', 'indEncSunNumPlaca' => '1']);
+});
+
+it('reintenta la descarga del PDF cuando SUNAT corta la conexión', function (): void {
+    Sleep::fake();
+    $respuestas = [
+        fn () => Http::failedConnection(),
+        fn () => Http::failedConnection(),
+        fn () => Http::response(['pdf' => base64_encode('%PDF-1.5 prueba')]),
+    ];
+    fingirSol(tokenSol(), api: ['/descarga/pdf' => function () use (&$respuestas) {
+        return array_shift($respuestas)();
+    }]);
+
+    $pdf = app(ClienteGreSunat::class)->pdf('20364000643', 'EG03', 12624);
+
+    expect($pdf)->toBe('%PDF-1.5 prueba');
+    Sleep::assertSleptTimes(2);
+});
+
+it('registra una GR ya emitida a partir de su número', function (): void {
+    Sleep::fake();
+    fingirSol(tokenSol(), api: ['/20364000643-31-EG03-12624/descarga/pdf' => Http::response(['pdf' => base64_encode('%PDF-1.5 prueba')])]);
+    $importador = Mockery::mock(ImportadorViaje::class);
+    $importador->shouldReceive('importar')->once()->andReturn(['viaje' => $viaje = Viaje::factory()->create(), 'reconocido' => true]);
+    app()->instance(ImportadorViaje::class, $importador);
+
+    expect(app(EmisionGre::class)->registrarEmitida('EG03-00012624')?->id)->toBe($viaje->id);
 });

@@ -38,6 +38,7 @@ class EmisionGre
 
     /**
      * @param  list<array{ruc: string, serie: string, numero: int}>  $guias
+     * @param  array<int, string>  $tuces  TUCE elegido a mano por id de vehículo (p. ej. el RUC de Paty)
      * @return array{numero_gr: string, viaje: Viaje|null}
      *
      * @throws RuntimeException un dato no permite emitir (no se envió nada)
@@ -52,29 +53,31 @@ class EmisionGre
         string $fechaTraslado,
         string $pagador,
         ?string $rucPagador,
+        array $tuces = [],
     ): array {
         $clave = 'sunat.emision.'.md5(json_encode($guias) ?: '');
 
         // Doble clic o dos personas con la misma GR-remitente: la segunda
         // espera y, al entrar, ya encuentra la GR-transportista registrada.
-        return Cache::lock($clave, 180)->block(60, function () use ($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador): array {
-            $cuerpo = $this->armar($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador);
+        return Cache::lock($clave, 180)->block(60, function () use ($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador, $tuces): array {
+            $cuerpo = $this->armar($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador, $tuces);
             $serie = (string) config('services.sunat_sol.serie_gre');
 
-            Log::info('SUNAT GRE: emitiendo GR-transportista.', ['guias' => $guias, 'tracto' => $tracto->placa]);
+            Log::channel('sunat')->info('SUNAT GRE: emitiendo GR-transportista.', ['guias' => $guias, 'tracto' => $tracto->placa]);
 
             try {
                 $emitida = $this->sunat->emitir($cuerpo, $serie);
             } catch (EmisionEnDuda $duda) {
-                Log::error('SUNAT GRE: emisión EN DUDA, revisar en SOL antes de reintentar.', ['guias' => $guias, 'motivo' => $duda->getMessage()]);
+                Log::channel('sunat')->error('SUNAT GRE: emisión EN DUDA, revisar en SOL antes de reintentar.', ['guias' => $guias, 'motivo' => $duda->getMessage()]);
+                Log::error('SUNAT GRE: emisión EN DUDA, revisar en SOL antes de reintentar.', ['guias' => $guias]);
 
                 throw $duda;
             }
 
             $numeroGr = sprintf('%s-%08d', $emitida['serie'], $emitida['numero']);
-            Log::info("SUNAT GRE: emitida {$numeroGr}.");
+            Log::channel('sunat')->info("SUNAT GRE: emitida {$numeroGr}.");
 
-            return ['numero_gr' => $numeroGr, 'viaje' => $this->registrarViaje($emitida['serie'], $emitida['numero'])];
+            return ['numero_gr' => $numeroGr, 'viaje' => $this->registrarEmitida($numeroGr)];
         });
     }
 
@@ -83,6 +86,7 @@ class EmisionGre
      * con el que envió SOL en la emisión grabada.
      *
      * @param  list<array{ruc: string, serie: string, numero: int}>  $guias
+     * @param  array<int, string>  $tuces  TUCE elegido a mano por id de vehículo
      * @return array<string, mixed>
      */
     public function armar(
@@ -93,6 +97,7 @@ class EmisionGre
         string $fechaTraslado,
         string $pagador,
         ?string $rucPagador,
+        array $tuces = [],
     ): array {
         if ($guias === []) {
             throw new RuntimeException('Falta la GR-remitente.');
@@ -113,10 +118,10 @@ class EmisionGre
             throw new RuntimeException('SUNAT no devolvió la razón social de Paty.');
         }
 
-        $vehiculos = [$this->vehiculo($tracto, '1')];
+        $vehiculos = [$this->vehiculo($tracto, '1', $tuces[$tracto->id] ?? null)];
 
         if ($carreta !== null) {
-            $vehiculos[] = $this->vehiculo($carreta, '2');
+            $vehiculos[] = $this->vehiculo($carreta, '2', $tuces[$carreta->id] ?? null);
         }
 
         return [
@@ -266,10 +271,20 @@ class EmisionGre
         ];
     }
 
-    /** @return array<string, string> */
-    private function vehiculo(Vehiculo $vehiculo, string $tipo): array
+    /**
+     * @param  string|null  $elegido  TUCE escrito a mano en la pantalla (o el RUC de Paty); manda sobre la ficha y el MTC
+     * @return array<string, string>
+     */
+    private function vehiculo(Vehiculo $vehiculo, string $tipo, ?string $elegido = null): array
     {
         $tuce = $this->tuce($vehiculo);
+        $elegido = $elegido === null ? null : Str::upper(trim($elegido));
+
+        if ($elegido !== null && $elegido !== '' && $elegido !== $tuce['numero']) {
+            $mtc = $this->sunat->placa($this->placaSunat($vehiculo));
+            $tuce['numero'] = $elegido;
+            $tuce['tuceEnSunat'] = ($mtc['numTucChv'] ?? null) === $elegido;
+        }
 
         return [
             'indTipoVehiculo' => $tipo,
@@ -374,21 +389,31 @@ class EmisionGre
     }
 
     /**
-     * Baja el PDF que acaba de emitir SUNAT y lo pasa por el importador de
-     * siempre, así el viaje queda igual que uno subido a mano. Si el PDF no
-     * llega, la GR igual está emitida: entra después con la carpeta de GR.
+     * Baja de SUNAT el PDF de una GR-transportista de Paty ya emitida y la
+     * pasa por el importador de siempre, así el viaje queda igual que uno
+     * subido a mano. Se usa al emitir y para recuperar una emitida cuyo PDF no
+     * llegó. Devuelve null si el PDF no llega: la GR igual está emitida.
      */
-    private function registrarViaje(string $serie, int $numero): ?Viaje
+    public function registrarEmitida(string $numeroGr): ?Viaje
     {
+        if (! preg_match('/^([A-Z0-9]{4})-0*(\d+)$/', Str::upper(trim($numeroGr)), $partes)) {
+            throw new RuntimeException("«{$numeroGr}» no es un número de GR (ej. EG03-00012624).");
+        }
+
+        [, $serie, $numero] = $partes;
+        $ruc = (string) config('services.sunat_sol.ruc');
+
         try {
-            $pdf = $this->sunat->pdf((string) config('services.sunat_sol.ruc'), $serie, $numero);
+            $pdf = $this->sunat->pdf($ruc, $serie, (int) $numero);
         } catch (RuntimeException $error) {
-            Log::warning("SUNAT GRE: no se pudo bajar el PDF de {$serie}-{$numero}.", ['motivo' => $error->getMessage()]);
+            Log::channel('sunat')->warning("SUNAT GRE: no se pudo bajar el PDF de {$numeroGr}.", ['motivo' => $error->getMessage()]);
 
             return null;
         }
 
         if ($pdf === null) {
+            Log::channel('sunat')->warning("SUNAT GRE: SUNAT no devolvió el PDF de {$numeroGr}.");
+
             return null;
         }
 
@@ -396,11 +421,18 @@ class EmisionGre
         file_put_contents($ruta, $pdf);
 
         try {
-            $nombre = sprintf('%s-31-%s-%d.pdf', config('services.sunat_sol.ruc'), $serie, $numero);
-
-            return $this->importador->importar(new UploadedFile($ruta, $nombre, 'application/pdf', null, true))['viaje'];
+            $nombre = sprintf('%s-31-%s-%d.pdf', $ruc, $serie, $numero);
+            $viaje = $this->importador->importar(new UploadedFile($ruta, $nombre, 'application/pdf', null, true))['viaje'];
         } finally {
             @unlink($ruta);
         }
+
+        if ($viaje === null) {
+            Log::channel('sunat')->warning("SUNAT GRE: el importador no reconoció el PDF de {$numeroGr}.");
+        } else {
+            Log::channel('sunat')->info("SUNAT GRE: viaje registrado para {$numeroGr}.", ['viaje_id' => $viaje->id]);
+        }
+
+        return $viaje;
     }
 }

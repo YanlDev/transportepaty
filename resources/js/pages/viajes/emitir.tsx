@@ -10,6 +10,7 @@ import {
 import { useState } from 'react';
 import emision, {
     emitir as emitirGr,
+    registrar as registrarGr,
     conductor as consultarConductor,
     guia as consultarGuia,
     vehiculo as consultarVehiculo,
@@ -56,6 +57,7 @@ type Props = {
     clientes: ClienteOpcion[];
     sunatConfigurado: boolean;
     puedeEmitir: boolean;
+    rucPaty: string;
 };
 
 type ResultadoEmision =
@@ -158,6 +160,7 @@ export default function EmitirGr({
     clientes,
     sunatConfigurado,
     puedeEmitir,
+    rucPaty,
 }: Props) {
     const [ruc, setRuc] = useState('');
     const [serie, setSerie] = useState('');
@@ -169,6 +172,9 @@ export default function EmitirGr({
     const [tractoId, setTractoId] = useState<number | null>(null);
     const [carretaId, setCarretaId] = useState<number | null>(null);
     const [mtc, setMtc] = useState<Record<number, Consulta<Mtc>>>({});
+    // TUCE escrito a mano (o el RUC de Paty) por id de vehículo; si no hay,
+    // va el que propone el servidor.
+    const [tuces, setTuces] = useState<Record<number, string>>({});
 
     const [conductorId, setConductorId] = useState<number | null>(null);
     const [verificacion, setVerificacion] =
@@ -308,6 +314,8 @@ export default function EmitirGr({
                     fecha_traslado: fechaTraslado,
                     pagador: PAGADORES.find((p) => p.value === pagador)?.codigo,
                     ruc_pagador: pagador === 'remitente' ? null : rucPagador,
+                    tuce_tracto: tractoId ? (tuces[tractoId] ?? null) : null,
+                    tuce_carreta: carretaId ? (tuces[carretaId] ?? null) : null,
                 }),
             });
             const cuerpo = await respuesta.json().catch(() => null);
@@ -511,7 +519,17 @@ export default function EmitirGr({
                                     }))}
                                 />
                                 {tractoId && (
-                                    <EstadoMtc consulta={mtc[tractoId]} />
+                                    <TuceDeVehiculo
+                                        consulta={mtc[tractoId]}
+                                        elegido={tuces[tractoId]}
+                                        rucPaty={rucPaty}
+                                        onCambio={(valor) =>
+                                            setTuces((actual) => ({
+                                                ...actual,
+                                                [tractoId]: valor,
+                                            }))
+                                        }
+                                    />
                                 )}
                             </>
                         )}
@@ -533,7 +551,17 @@ export default function EmitirGr({
                                     }))}
                                 />
                                 {carretaId && (
-                                    <EstadoMtc consulta={mtc[carretaId]} />
+                                    <TuceDeVehiculo
+                                        consulta={mtc[carretaId]}
+                                        elegido={tuces[carretaId]}
+                                        rucPaty={rucPaty}
+                                        onCambio={(valor) =>
+                                            setTuces((actual) => ({
+                                                ...actual,
+                                                [carretaId]: valor,
+                                            }))
+                                        }
+                                    />
                                 )}
                             </>
                         )}
@@ -819,15 +847,54 @@ export default function EmitirGr({
 }
 
 function ResultadoDeEmision({ resultado }: { resultado: ResultadoEmision }) {
+    const [registrando, setRegistrando] = useState(false);
+    const [registrado, setRegistrado] = useState(
+        resultado.estado === 'emitida' && resultado.viajeRegistrado,
+    );
+    const [errorRegistro, setErrorRegistro] = useState<string | null>(null);
+
+    const registrarViaje = async (numeroGr: string) => {
+        setRegistrando(true);
+        setErrorRegistro(null);
+
+        try {
+            const respuesta = await fetch(registrarGr.url(), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-XSRF-TOKEN': tokenXsrf(),
+                },
+                body: JSON.stringify({ numero_gr: numeroGr }),
+            });
+            const cuerpo = await respuesta.json().catch(() => ({}));
+
+            if (respuesta.ok && cuerpo.viajeRegistrado) {
+                setRegistrado(true);
+            } else {
+                setErrorRegistro(
+                    cuerpo.mensaje ??
+                        'SUNAT todavía no entrega el PDF. Prueba en un minuto.',
+                );
+            }
+        } catch {
+            setErrorRegistro('No se pudo conectar. Prueba en un minuto.');
+        } finally {
+            setRegistrando(false);
+        }
+    };
+
     if (resultado.estado === 'emitida') {
         return (
             <Alert className="mt-4 border-emerald-600/40">
                 <CheckCircle2 className="size-4 text-emerald-600" />
                 <AlertTitle>Emitida {resultado.numeroGr}</AlertTitle>
                 <AlertDescription>
-                    {resultado.viajeRegistrado
+                    {registrado
                         ? 'El viaje ya está registrado en Viajes con el PDF de SUNAT.'
-                        : 'SUNAT la emitió, pero no se pudo bajar el PDF: el viaje entra cuando se suba la GR.'}{' '}
+                        : 'SUNAT la emitió, pero todavía no entregó el PDF, así que el viaje no se registró.'}{' '}
                     <a
                         className="underline"
                         href={viajes.index.url({
@@ -836,6 +903,26 @@ function ResultadoDeEmision({ resultado }: { resultado: ResultadoEmision }) {
                     >
                         Ver en Viajes
                     </a>
+                    {!registrado && (
+                        <div className="mt-2 flex flex-col items-start gap-1">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={registrando}
+                                onClick={() =>
+                                    registrarViaje(resultado.numeroGr)
+                                }
+                            >
+                                {registrando && <Spinner />}
+                                Registrar el viaje
+                            </Button>
+                            {errorRegistro && (
+                                <span className="text-xs text-destructive">
+                                    {errorRegistro}
+                                </span>
+                            )}
+                        </div>
+                    )}
                 </AlertDescription>
             </Alert>
         );
@@ -951,7 +1038,17 @@ function TarjetaGuia({
     );
 }
 
-function EstadoMtc({ consulta }: { consulta?: Consulta<Mtc> }) {
+function TuceDeVehiculo({
+    consulta,
+    elegido,
+    rucPaty,
+    onCambio,
+}: {
+    consulta?: Consulta<Mtc>;
+    elegido?: string;
+    rucPaty: string;
+    onCambio: (valor: string) => void;
+}) {
     if (!consulta || consulta.estado === 'cargando') {
         return (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -965,30 +1062,58 @@ function EstadoMtc({ consulta }: { consulta?: Consulta<Mtc> }) {
     }
 
     const { numero, origen, vence, placaEnSunat } = consulta.datos;
-
-    if (origen === 'ruc') {
-        return (
-            <p className="text-xs text-amber-600">
-                Sin TUCE vigente en la ficha ni en el MTC: va el RUC de Paty (
-                {numero}).
-            </p>
-        );
-    }
+    const valor = elegido ?? numero;
+    const esRuc = valor === rucPaty;
 
     return (
-        <p className="flex flex-wrap items-center gap-1 text-xs text-emerald-600">
-            <CheckCircle2 className="size-3.5" />
-            TUCE {numero}
-            {origen === 'transpaty'
-                ? ` · de la ficha${vence ? `, vence ${vence}` : ''}`
-                : ' · del MTC'}
-            {!placaEnSunat && (
-                <span className="text-muted-foreground">
-                    {' '}
-                    (SUNAT aún no tiene registrada la placa)
-                </span>
-            )}
-        </p>
+        <div className="grid gap-1">
+            <div className="flex gap-2">
+                <Input
+                    aria-label="TUCE o certificado de habilitación"
+                    className="h-8 text-xs"
+                    value={valor}
+                    onChange={(e) => onCambio(e.target.value.toUpperCase())}
+                />
+                <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-8 shrink-0 text-xs"
+                    disabled={esRuc}
+                    onClick={() => onCambio(rucPaty)}
+                >
+                    Usar RUC de Paty
+                </Button>
+            </div>
+            <p
+                className={
+                    esRuc
+                        ? 'text-xs text-amber-600'
+                        : 'flex flex-wrap items-center gap-1 text-xs text-emerald-600'
+                }
+            >
+                {esRuc ? (
+                    'Va el RUC de Paty en lugar del TUCE.'
+                ) : elegido !== undefined && elegido !== numero ? (
+                    <span className="text-muted-foreground">
+                        TUCE escrito a mano.
+                    </span>
+                ) : (
+                    <>
+                        <CheckCircle2 className="size-3.5" />
+                        {origen === 'transpaty'
+                            ? `De la ficha${vence ? `, vence ${vence}` : ''}`
+                            : 'Del MTC'}
+                    </>
+                )}
+                {!placaEnSunat && (
+                    <span className="text-muted-foreground">
+                        {' '}
+                        (SUNAT aún no tiene registrada la placa)
+                    </span>
+                )}
+            </p>
+        </div>
     );
 }
 

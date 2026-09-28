@@ -37,6 +37,8 @@ class EmitirGreRequest extends FormRequest
             'conductor_id' => ['required', Rule::exists('conductores', 'id')],
             'fecha_traslado' => ['required', 'date_format:Y-m-d'],
             'pagador' => ['required', Rule::in([EmisionGre::PAGADOR_REMITENTE, EmisionGre::PAGADOR_SUBCONTRATADOR, EmisionGre::PAGADOR_TERCERO])],
+            'tuce_tracto' => ['nullable', 'string', 'max:20'],
+            'tuce_carreta' => ['nullable', 'string', 'max:20'],
             'ruc_pagador' => ['nullable', 'required_unless:pagador,'.EmisionGre::PAGADOR_REMITENTE, 'digits:11'],
         ];
     }

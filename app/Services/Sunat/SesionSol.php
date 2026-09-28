@@ -38,7 +38,7 @@ class SesionSol
     /** Código de la opción Empresas → GRE → Emisión de GRE → Emisión de GRE. */
     private const OPCION_EMISION_GRE = '62.1.1.1.1';
 
-    private const AGENTE = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+    public const AGENTE = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 
     /**
      * Cookies de la sesión en curso, por nombre. Los dominios de SUNAT no
@@ -145,7 +145,7 @@ class SesionSol
         }
 
         Cache::put(self::CLAVE_CACHE, $token, $this->segundosDeVida($token));
-        Log::info('SUNAT SOL: sesión iniciada para la emisión de GRE.');
+        Log::channel('sunat')->info('SUNAT SOL: sesión iniciada para la emisión de GRE.');
 
         return $token;
     }
