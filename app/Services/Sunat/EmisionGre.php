@@ -2,6 +2,7 @@
 
 namespace App\Services\Sunat;
 
+use App\Enums\TipoDocumento;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -222,25 +223,68 @@ class EmisionGre
         return $consulta['datos'];
     }
 
+    /**
+     * El TUCE que va en la GR, en este orden:
+     *
+     * 1. el del documento «Habilitación MTC» de la ficha en Transpaty, si
+     *    tiene número y no venció;
+     * 2. el que da el MTC por la placa;
+     * 3. el RUC de Paty, cuando no hay ninguno de los dos (decisión del
+     *    usuario, 28-09-2026).
+     *
+     * El MTC se consulta siempre, porque la GR declara si SUNAT tiene la placa
+     * y el TUCE registrados (`indEncSun…`): hay placas con habilitación nueva
+     * que SUNAT todavía no conoce (VJS-982, 21M26000149E).
+     *
+     * @return array{numero: string, origen: 'transpaty'|'mtc'|'ruc', vence: string|null, placaEnSunat: bool, tuceEnSunat: bool, indTucChv: string}
+     */
+    public function tuce(Vehiculo $vehiculo): array
+    {
+        $mtc = $this->sunat->placa($this->placaSunat($vehiculo));
+        $tuceMtc = is_string($mtc['numTucChv'] ?? null) && $mtc['numTucChv'] !== '' ? $mtc['numTucChv'] : null;
+
+        $documento = $vehiculo->documentos()
+            ->where('tipo', TipoDocumento::HabilitacionMtc)
+            ->whereNotNull('numero')
+            ->where('numero', '!=', '')
+            ->where(fn ($query) => $query->whereNull('fecha_vencimiento')->orWhereDate('fecha_vencimiento', '>=', now('America/Lima')->toDateString()))
+            ->first();
+
+        [$numero, $origen, $vence] = match (true) {
+            $documento !== null => [Str::upper(trim((string) $documento->numero)), 'transpaty', $documento->fecha_vencimiento?->toDateString()],
+            $tuceMtc !== null => [$tuceMtc, 'mtc', null],
+            default => [(string) config('services.sunat_sol.ruc'), 'ruc', null],
+        };
+
+        return [
+            'numero' => $numero,
+            'origen' => $origen,
+            'vence' => $vence,
+            'placaEnSunat' => $mtc !== null,
+            'tuceEnSunat' => $tuceMtc !== null && $tuceMtc === $numero,
+            'indTucChv' => is_string($mtc['indTucChv'] ?? null) ? $mtc['indTucChv'] : '2',
+        ];
+    }
+
     /** @return array<string, string> */
     private function vehiculo(Vehiculo $vehiculo, string $tipo): array
     {
-        $placa = strtoupper(str_replace(['-', ' '], '', $vehiculo->placa));
-        $mtc = $this->sunat->placa($placa);
-
-        if (! is_string($mtc['numTucChv'] ?? null) || $mtc['numTucChv'] === '') {
-            throw new RuntimeException("El MTC no tiene TUCE para la placa {$placa}.");
-        }
+        $tuce = $this->tuce($vehiculo);
 
         return [
             'indTipoVehiculo' => $tipo,
-            'numPlaca' => $placa,
-            'numTucChv' => $mtc['numTucChv'],
-            'indTucChv' => $mtc['indTucChv'],
-            'indEncSunNumTucChv' => '1',
-            'indEncSunNumPlaca' => '1',
+            'numPlaca' => $this->placaSunat($vehiculo),
+            'numTucChv' => $tuce['numero'],
+            'indTucChv' => $tuce['indTucChv'],
+            'indEncSunNumTucChv' => $tuce['tuceEnSunat'] ? '1' : '0',
+            'indEncSunNumPlaca' => $tuce['placaEnSunat'] ? '1' : '0',
             'indFrecuente' => '0',
         ];
+    }
+
+    private function placaSunat(Vehiculo $vehiculo): string
+    {
+        return strtoupper(str_replace(['-', ' '], '', $vehiculo->placa));
     }
 
     /** @return array<string, string> */

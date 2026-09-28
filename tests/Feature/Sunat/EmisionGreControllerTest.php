@@ -136,7 +136,7 @@ it('trae el TUCE de la placa y verifica el DNI del conductor en RENIEC', functio
     actingAs($admin)
         ->getJson(route('viajes.emitir.vehiculo', $tracto))
         ->assertOk()
-        ->assertExactJson(['placa' => 'TCK-922', 'tuce' => '21M22000519E', 'vigente' => true]);
+        ->assertExactJson(['placa' => 'TCK-922', 'numero' => '21M22000519E', 'origen' => 'mtc', 'vence' => null, 'placaEnSunat' => true]);
 
     actingAs($admin)
         ->getJson(route('viajes.emitir.conductor', $conductor))

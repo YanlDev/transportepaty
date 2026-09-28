@@ -168,22 +168,21 @@ class EmisionGreController extends Controller
         ]);
     }
 
-    /** El TUCE o certificado de habilitación de la placa según el MTC. */
+    /**
+     * El TUCE que irá en la GR para esa placa y de dónde sale (la ficha, el
+     * MTC o, sin ninguno, el RUC de Paty): ver {@see EmisionGre::tuce()}.
+     */
     public function vehiculo(Vehiculo $vehiculo): JsonResponse
     {
         $this->authorize('create', Viaje::class);
 
         try {
-            $mtc = $this->sunat->placa($vehiculo->placa);
+            $tuce = $this->emision->tuce($vehiculo);
         } catch (RuntimeException $error) {
             return response()->json(['mensaje' => $error->getMessage()], 502);
         }
 
-        return response()->json([
-            'placa' => $vehiculo->placa,
-            'tuce' => $mtc['numTucChv'] ?? null,
-            'vigente' => ($mtc['indVigencia'] ?? null) === '1',
-        ]);
+        return response()->json(['placa' => $vehiculo->placa] + Arr::only($tuce, ['numero', 'origen', 'vence', 'placaEnSunat']));
     }
 
     /**

@@ -81,7 +81,13 @@ type GuiaRemitente = {
     avisos: string[];
 };
 
-type Mtc = { placa: string; tuce: string | null; vigente: boolean };
+type Mtc = {
+    placa: string;
+    numero: string;
+    origen: 'transpaty' | 'mtc' | 'ruc';
+    vence: string | null;
+    placaEnSunat: boolean;
+};
 
 type VerificacionConductor = {
     dni: { encontrado: boolean; nombre: string | null; coincide: boolean };
@@ -485,7 +491,7 @@ export default function EmitirGr({
 
             <Seccion
                 titulo="2. Unidad"
-                descripcion="El TUCE lo trae el MTC a partir de la placa."
+                descripcion="El TUCE sale de la ficha del vehículo; si no tiene, del MTC."
             >
                 <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Tracto" required>
@@ -949,7 +955,7 @@ function EstadoMtc({ consulta }: { consulta?: Consulta<Mtc> }) {
     if (!consulta || consulta.estado === 'cargando') {
         return (
             <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Spinner /> Consultando el MTC…
+                <Spinner /> Buscando el TUCE…
             </p>
         );
     }
@@ -958,25 +964,30 @@ function EstadoMtc({ consulta }: { consulta?: Consulta<Mtc> }) {
         return <p className="text-xs text-destructive">{consulta.mensaje}</p>;
     }
 
-    if (!consulta.datos.tuce) {
+    const { numero, origen, vence, placaEnSunat } = consulta.datos;
+
+    if (origen === 'ruc') {
         return (
-            <p className="text-xs text-destructive">
-                El MTC no tiene TUCE para esta placa.
+            <p className="text-xs text-amber-600">
+                Sin TUCE vigente en la ficha ni en el MTC: va el RUC de Paty (
+                {numero}).
             </p>
         );
     }
 
     return (
-        <p
-            className={
-                consulta.datos.vigente
-                    ? 'flex items-center gap-1 text-xs text-emerald-600'
-                    : 'text-xs text-destructive'
-            }
-        >
-            {consulta.datos.vigente && <CheckCircle2 className="size-3.5" />}
-            TUCE {consulta.datos.tuce}
-            {consulta.datos.vigente ? ' · vigente' : ' · NO vigente'}
+        <p className="flex flex-wrap items-center gap-1 text-xs text-emerald-600">
+            <CheckCircle2 className="size-3.5" />
+            TUCE {numero}
+            {origen === 'transpaty'
+                ? ` · de la ficha${vence ? `, vence ${vence}` : ''}`
+                : ' · del MTC'}
+            {!placaEnSunat && (
+                <span className="text-muted-foreground">
+                    {' '}
+                    (SUNAT aún no tiene registrada la placa)
+                </span>
+            )}
         </p>
     );
 }

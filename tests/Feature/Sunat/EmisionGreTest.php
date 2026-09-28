@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\Permiso;
+use App\Enums\TipoDocumento;
 use App\Enums\TipoVehiculo;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
@@ -100,14 +101,36 @@ it('no emite si la GR-remitente ya tiene GR-transportista en Transpaty', functio
     Http::assertNotSent(fn (Request $request) => $request->method() === 'POST' && str_contains($request->url(), '/emision'));
 });
 
-it('no emite si el MTC no tiene TUCE para la placa', function () use ($guias): void {
-    fingirSunatDeLaEmision(['/BYM852/numPlaca' => Http::response(['errors' => [['cod' => 1, 'msg' => 'no']]], 422)]);
+it('usa el TUCE de la ficha antes que el del MTC, aunque SUNAT no conozca la placa', function () use ($guias): void {
+    // Caso real: VJS-982 tiene habilitación nueva (21M26000149E) que el MTC
+    // de SUNAT todavía no registra.
+    fingirSunatDeLaEmision(['/VES982/numPlaca' => Http::response(['errors' => [['cod' => 2036, 'msg' => 'No encontramos en nuestros sistemas el número de placa ingresado']]], 422)]);
+    [$tracto, $carreta, $conductor] = unidadDeLaEmision();
+    $carreta->documentos()->create(['tipo' => TipoDocumento::HabilitacionMtc, 'numero' => '21m26000149e', 'fecha_vencimiento' => now()->addYear()]);
+
+    $vehiculos = app(EmisionGre::class)->armar($guias, $tracto, $carreta, $conductor, '2026-09-28', EmisionGre::PAGADOR_TERCERO, '20601239079')['traslado']['vehiculo'];
+
+    expect($vehiculos[0])->toMatchArray(['numPlaca' => 'BYM852', 'numTucChv' => '21M24000099E', 'indEncSunNumTucChv' => '1', 'indEncSunNumPlaca' => '1'])
+        ->and($vehiculos[1])->toMatchArray(['numPlaca' => 'VES982', 'numTucChv' => '21M26000149E', 'indEncSunNumTucChv' => '0', 'indEncSunNumPlaca' => '0']);
+});
+
+it('ignora el TUCE vencido de la ficha y usa el del MTC', function () use ($guias): void {
+    fingirSunatDeLaEmision();
+    [$tracto, $carreta, $conductor] = unidadDeLaEmision();
+    $tracto->documentos()->create(['tipo' => TipoDocumento::HabilitacionMtc, 'numero' => '21M10000001E', 'fecha_vencimiento' => now()->subDay()]);
+
+    $vehiculos = app(EmisionGre::class)->armar($guias, $tracto, $carreta, $conductor, '2026-09-28', EmisionGre::PAGADOR_TERCERO, '20601239079')['traslado']['vehiculo'];
+
+    expect($vehiculos[0]['numTucChv'])->toBe('21M24000099E');
+});
+
+it('usa el RUC de Paty cuando no hay TUCE en la ficha ni en el MTC', function () use ($guias): void {
+    fingirSunatDeLaEmision(['/VES982/numPlaca' => Http::response(['errors' => [['cod' => 2036, 'msg' => 'No encontramos']]], 422)]);
     [$tracto, $carreta, $conductor] = unidadDeLaEmision();
 
-    expect(fn () => app(EmisionGre::class)->emitir($guias, $tracto, $carreta, $conductor, '2026-09-28', EmisionGre::PAGADOR_TERCERO, '20601239079'))
-        ->toThrow(RuntimeException::class, 'no tiene TUCE para la placa BYM852');
+    $vehiculos = app(EmisionGre::class)->armar($guias, $tracto, $carreta, $conductor, '2026-09-28', EmisionGre::PAGADOR_TERCERO, '20601239079')['traslado']['vehiculo'];
 
-    Http::assertNotSent(fn (Request $request) => str_contains($request->url(), '/emision'));
+    expect($vehiculos[1])->toMatchArray(['numTucChv' => '20364000643', 'indEncSunNumTucChv' => '0', 'indEncSunNumPlaca' => '0']);
 });
 
 it('devuelve el motivo cuando SUNAT rechaza la GR', function () use ($guias): void {
