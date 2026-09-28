@@ -51,4 +51,15 @@ return [
         'password' => env('TRACKSOLID_PASSWORD'),
     ],
 
+    /*
+    | Usuario SOL con el que Transpaty consulta y emite GRE por el mismo camino
+    | que el formulario de SOL (App\Services\Sunat\SesionSol). Idealmente un
+    | usuario secundario con permiso solo para GRE.
+    */
+    'sunat_sol' => [
+        'ruc' => env('SUNAT_SOL_RUC'),
+        'usuario' => env('SUNAT_SOL_USUARIO'),
+        'clave' => env('SUNAT_SOL_CLAVE'),
+    ],
+
 ];

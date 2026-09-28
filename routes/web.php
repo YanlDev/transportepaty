@@ -10,6 +10,7 @@ use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\CuentaBancariaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\EmisionGreController;
 use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\ParametroCostoController;
@@ -88,6 +89,14 @@ Route::middleware('auth')->group(function () {
     Route::get('viajes/manual', [ViajeController::class, 'create'])->name('viajes.manual.create');
     Route::post('viajes/manual', [ViajeController::class, 'storeManual'])->name('viajes.manual.store');
     Route::post('viajes/resolver', [ViajeController::class, 'resolver'])->name('viajes.resolver');
+
+    // Armar una GR-transportista con los datos que SUNAT confirma en vivo.
+    Route::get('viajes/emitir', [EmisionGreController::class, 'create'])->name('viajes.emitir');
+    Route::get('viajes/emitir/guia', [EmisionGreController::class, 'guia'])->name('viajes.emitir.guia');
+    Route::get('viajes/emitir/vehiculos/{vehiculo}', [EmisionGreController::class, 'vehiculo'])
+        ->name('viajes.emitir.vehiculo');
+    Route::get('viajes/emitir/conductores/{conductor}', [EmisionGreController::class, 'conductor'])
+        ->name('viajes.emitir.conductor');
     Route::patch('viajes/{viaje}/tipo-carga', [ViajeController::class, 'actualizarTipoCarga'])
         ->name('viajes.actualizarTipoCarga');
     Route::post('viajes/{viaje}/anulacion', [ViajeController::class, 'anular'])->name('viajes.anular');

@@ -2,6 +2,8 @@
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 /*
@@ -71,4 +73,56 @@ expect()->extend('toBeOne', function () {
 function actorConRol(string $rol): User
 {
     return User::factory()->create()->assignRole($rol);
+}
+
+/** Un JWT con forma real (SUNAT no se verifica acá, solo se lee su `exp`). */
+function tokenSol(int $venceEn = 3600): string
+{
+    $parte = fn (array $datos): string => rtrim(strtr(base64_encode(json_encode($datos)), '+/', '-_'), '=');
+
+    return $parte(['alg' => 'RS256']).'.'.$parte(['exp' => time() + $venceEn, 'sub' => '20364000643']).'.firma';
+}
+
+/**
+ * Simula el recorrido de login de SOL tal como quedó en la grabación.
+ *
+ * @param  array<string, mixed>  $api  respuestas de api-cpe por fragmento de ruta
+ */
+function fingirSol(string $token, bool $loginAcepta = true, array $api = []): void
+{
+    $seguridad = 'https://api-seguridad.sunat.gob.pe/v1/clientessol/abc/oauth2';
+
+    Http::fake(function (Request $request) use ($token, $loginAcepta, $api, $seguridad) {
+        $url = $request->url();
+
+        return match (true) {
+            str_contains($url, 'api-cpe.sunat.gob.pe') => (function () use ($url, $api) {
+                foreach ($api as $fragmento => $respuesta) {
+                    if (str_contains($url, $fragmento)) {
+                        return is_callable($respuesta) ? $respuesta() : $respuesta;
+                    }
+                }
+
+                return Http::response(['errors' => [['cod' => 404, 'msg' => 'no']]], 422);
+            })(),
+            str_contains($url, '/oauth2/authen') => Http::response('', 302, [
+                'Location' => "{$seguridad}/loginMenuSol?lang=es-PE&state=ESTADO123",
+                'Set-Cookie' => 'TS019e7fc2=seg; Path=/',
+            ]),
+            str_contains($url, '/loginMenuSol') => Http::response('<form name="LoginForm"></form>'),
+            str_contains($url, '/j_security_check') => $loginAcepta
+                ? Http::response('', 302, ['Location' => 'https://e-menu.sunat.gob.pe/cl-ti-itmenu/AutenticaMenuInternet.htm?state=x&code=CODIGO'])
+                : Http::response('<form name="LoginForm">Usuario o clave incorrectos</form>'),
+            str_contains($url, 'AutenticaMenuInternet') => Http::response('', 302, [
+                'Location' => 'https://e-menu.sunat.gob.pe/cl-ti-itmenu/MenuInternet.htm?pestana=*&agrupacion=*',
+                'Set-Cookie' => 'ITMENUSESSION=sesion; Path=/',
+            ]),
+            str_contains($url, 'action=execute') => Http::response('', 302, [
+                'Location' => "https://e-factura.sunat.gob.pe/app/emitirgre.html?token={$token}",
+            ]),
+            str_contains($url, 'MenuInternet.htm') => Http::response(
+                "<script>redirect(\"{$seguridad}/authen?redirect_uri=x&state=ESTADO123\");</script>",
+            ),
+        };
+    });
 }

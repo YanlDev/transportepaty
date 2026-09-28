@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react';
-import { FilePenLine, Route as RouteIcon } from 'lucide-react';
+import { FilePenLine, Route as RouteIcon, Send } from 'lucide-react';
 import { useState } from 'react';
+import emisionGre from '@/actions/App/Http/Controllers/EmisionGreController';
 import viajes, { create } from '@/actions/App/Http/Controllers/ViajeController';
 import { EmptyState } from '@/components/empty-state';
 import { FiltroSelect } from '@/components/filtro-select';
@@ -78,6 +79,12 @@ export default function ViajesIndex({
                         {pendientes > 0 && (
                             <ReintentarCoincidencias pendientes={pendientes} />
                         )}
+                        <Button asChild variant="outline">
+                            <Link href={emisionGre.create()}>
+                                <Send className="size-4" />
+                                Emitir GR
+                            </Link>
+                        </Button>
                         <Button asChild variant="outline">
                             <Link href={create()}>
                                 <FilePenLine className="size-4" />
