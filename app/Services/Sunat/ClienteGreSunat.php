@@ -3,14 +3,15 @@
 namespace App\Services\Sunat;
 
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
 
 /**
  * Las consultas que hace el formulario «Emisión de GRE» de SOL contra
- * `api-cpe.sunat.gob.pe`, con el token de {@see SesionSol}. Solo lectura: la
- * emisión se suma cuando se grabe una real.
+ * `api-cpe.sunat.gob.pe`, con el token de {@see SesionSol}: las consultas, la
+ * emisión y la descarga del PDF, copiadas de una emisión real (EG03-12623).
  *
  * Los errores de validación de SUNAT (HTTP 422) no se lanzan: vuelven como
  * `null` o con su mensaje, porque en la pantalla son información («no
@@ -92,6 +93,79 @@ class ClienteGreSunat
     }
 
     /**
+     * Razón social y domicilio de un RUC (lo que autocompleta SOL).
+     *
+     * @return array<string, mixed>|null
+     */
+    public function contribuyente(string $ruc): ?array
+    {
+        $respuesta = $this->pedir("/parametros/contribuyentes/{$ruc}");
+
+        return $respuesta->successful() ? $respuesta->json('datosContribuyente') : null;
+    }
+
+    /**
+     * Emite la GR-transportista con el cuerpo que arma {@see EmisionGre}.
+     * Devuelve el número que asignó SUNAT.
+     *
+     * No se reintenta NUNCA salvo un 401, que SUNAT responde sin procesar
+     * nada (token vencido). Cualquier otro problema después de enviar —corte,
+     * timeout, 5xx— deja la emisión en duda: pudo haber salido, y repetirla
+     * emitiría una GR duplicada que después hay que dar de baja.
+     *
+     * @param  array<string, mixed>  $cuerpo
+     * @return array{serie: string, numero: int, qr: string|null}
+     *
+     * @throws EmisionRechazada SUNAT validó y no emitió (es seguro corregir y volver a intentar)
+     * @throws EmisionEnDuda no se sabe si se emitió
+     */
+    public function emitir(array $cuerpo, string $serie): array
+    {
+        $ruta = "/gre/comprobantes/31-{$serie}/emision";
+
+        try {
+            $respuesta = $this->solicitud(60)->post(self::BASE.$ruta, $cuerpo);
+
+            if ($respuesta->status() === 401) {
+                $this->sesion->olvidar();
+                $respuesta = $this->solicitud(60)->post(self::BASE.$ruta, $cuerpo);
+            }
+        } catch (ConnectionException) {
+            throw new EmisionEnDuda('Se cortó la conexión con SUNAT mientras emitía.');
+        }
+
+        if (in_array($respuesta->status(), [400, 422], true)) {
+            $errores = $respuesta->json('errors');
+            $mensajes = is_array($errores)
+                ? implode(' · ', array_filter(array_map(fn (mixed $error): string => is_array($error) ? (string) ($error['msg'] ?? '') : '', $errores)))
+                : '';
+
+            throw new EmisionRechazada($mensajes !== '' ? $mensajes : (string) $respuesta->json('msg', 'SUNAT rechazó la GR.'));
+        }
+
+        $numero = $respuesta->json('data.pkComprobante.numCpe');
+
+        if (! $respuesta->successful() || ! is_numeric($numero)) {
+            throw new EmisionEnDuda("SUNAT respondió {$respuesta->status()} sin el número de la GR.");
+        }
+
+        return [
+            'serie' => (string) $respuesta->json('data.pkComprobante.numSerieCpe', $serie),
+            'numero' => (int) $numero,
+            'qr' => $respuesta->json('data.qr'),
+        ];
+    }
+
+    /** El PDF de una GR-transportista de Paty ya emitida, en binario. */
+    public function pdf(string $ruc, string $serie, int $numero): ?string
+    {
+        $respuesta = $this->pedir("/gre/comprobantes/{$ruc}-31-{$serie}-{$numero}/descarga/pdf");
+        $pdf = $respuesta->successful() ? $respuesta->json('pdf') : null;
+
+        return is_string($pdf) ? (base64_decode($pdf, true) ?: null) : null;
+    }
+
+    /**
      * GET con el token. Si SUNAT lo da por vencido (401) se inicia sesión de
      * nuevo UNA vez: es una lectura, repetirla no tiene efectos.
      */
@@ -114,17 +188,21 @@ class ClienteGreSunat
     private function enviar(string $ruta): Response
     {
         try {
-            return Http::withToken($this->sesion->token())
-                ->acceptJson()
-                ->withHeaders([
-                    'Origin' => 'https://e-factura.sunat.gob.pe',
-                    'Referer' => 'https://e-factura.sunat.gob.pe/',
-                ])
-                ->timeout(20)
-                ->get(self::BASE.$ruta);
+            return $this->solicitud(20)->get(self::BASE.$ruta);
         } catch (ConnectionException) {
             throw new RuntimeException('No se pudo conectar con la API de SUNAT.');
         }
+    }
+
+    private function solicitud(int $segundos): PendingRequest
+    {
+        return Http::withToken($this->sesion->token())
+            ->acceptJson()
+            ->withHeaders([
+                'Origin' => 'https://e-factura.sunat.gob.pe',
+                'Referer' => 'https://e-factura.sunat.gob.pe/',
+            ])
+            ->timeout($segundos);
     }
 
     private function codigoError(Response $respuesta): ?int

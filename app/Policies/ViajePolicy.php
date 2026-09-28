@@ -45,4 +45,14 @@ class ViajePolicy
     {
         return $user->checkPermissionTo(Permiso::ViajesAnular);
     }
+
+    /**
+     * Emitir una GR-transportista en SUNAT desde Transpaty. Aparte de
+     * registrar viajes porque crea un documento tributario real, que no se
+     * edita: si sale mal, hay que darlo de baja en SOL.
+     */
+    public function emitir(User $user): bool
+    {
+        return $user->checkPermissionTo(Permiso::ViajesEmitir);
+    }
 }

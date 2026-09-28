@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use App\Enums\EstadoVehiculo;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\ConsultarGuiaRemitenteRequest;
+use App\Http\Requests\EmitirGreRequest;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Services\Sunat\ClienteGreSunat;
+use App\Services\Sunat\EmisionEnDuda;
+use App\Services\Sunat\EmisionGre;
+use App\Services\Sunat\EmisionRechazada;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
@@ -22,12 +26,15 @@ use RuntimeException;
 /**
  * La pantalla para armar una GR-transportista desde Transpaty: se elige la
  * GR-remitente, la unidad y el conductor, y SUNAT confirma cada dato antes de
- * emitir. Las consultas van por {@see ClienteGreSunat}, con la sesión SOL de
- * Paty; la emisión en sí se suma cuando se grabe una real.
+ * emitir. Las consultas van por {@see ClienteGreSunat} y la emisión por
+ * {@see EmisionGre}, las dos con la sesión SOL de Paty.
  */
 class EmisionGreController extends Controller
 {
-    public function __construct(private readonly ClienteGreSunat $sunat) {}
+    public function __construct(
+        private readonly ClienteGreSunat $sunat,
+        private readonly EmisionGre $emision,
+    ) {}
 
     public function create(): Response
     {
@@ -51,6 +58,52 @@ class EmisionGreController extends Controller
                 ->orderBy('alias')
                 ->get(['ruc', 'alias']),
             'sunatConfigurado' => filled(config('services.sunat_sol.clave')),
+            'puedeEmitir' => request()->user()?->can('emitir', Viaje::class) ?? false,
+        ]);
+    }
+
+    /**
+     * Emite la GR-transportista en SUNAT y registra el viaje. Responde con el
+     * número emitido; si SUNAT la rechaza, con su motivo (no se emitió nada);
+     * si queda en duda, lo dice claro para que nadie la vuelva a mandar a
+     * ciegas.
+     */
+    public function emitir(EmitirGreRequest $request): JsonResponse
+    {
+        $this->authorize('emitir', Viaje::class);
+
+        $guias = array_values(array_map(fn (array $guia): array => [
+            'ruc' => (string) $guia['ruc'],
+            'serie' => Str::upper((string) $guia['serie']),
+            'numero' => (int) $guia['numero'],
+        ], $request->array('guias')));
+        $pagador = $request->string('pagador')->value();
+
+        try {
+            $resultado = $this->emision->emitir(
+                $guias,
+                Vehiculo::query()->findOrFail($request->integer('tracto_id')),
+                $request->filled('carreta_id') ? Vehiculo::query()->findOrFail($request->integer('carreta_id')) : null,
+                Conductor::query()->findOrFail($request->integer('conductor_id')),
+                $request->string('fecha_traslado')->value(),
+                $pagador,
+                $pagador === EmisionGre::PAGADOR_REMITENTE ? null : $request->string('ruc_pagador')->value(),
+            );
+        } catch (EmisionEnDuda $duda) {
+            return response()->json([
+                'estado' => 'en_duda',
+                'mensaje' => $duda->getMessage().' La GR pudo haberse emitido: revisa «Consulta de GRE» en SOL antes de volver a intentar.',
+            ], 504);
+        } catch (EmisionRechazada $rechazo) {
+            return response()->json(['estado' => 'rechazada', 'mensaje' => 'SUNAT no emitió la GR: '.$rechazo->getMessage()], 422);
+        } catch (RuntimeException $error) {
+            return response()->json(['estado' => 'no_enviada', 'mensaje' => $error->getMessage()], 422);
+        }
+
+        return response()->json([
+            'estado' => 'emitida',
+            'numeroGr' => $resultado['numero_gr'],
+            'viajeRegistrado' => $resultado['viaje'] !== null,
         ]);
     }
 
@@ -80,7 +133,7 @@ class EmisionGreController extends Controller
         $datos = $guia['datos'];
         $transportista = (string) data_get($datos, 'traslado.transportista.numDocIdentidad', '');
         $fechaTraslado = data_get($datos, 'traslado.fecInicioTraslado');
-        $yaEmitida = $this->grTransportistaExistente($ruc, $serie, $numero);
+        $yaEmitida = $this->emision->grTransportistaExistente($ruc, $serie, $numero);
 
         $avisos = array_values(array_filter([
             $yaEmitida !== null ? "Ya tiene GR-transportista en Transpaty: {$yaEmitida}." : null,
@@ -182,31 +235,6 @@ class EmisionGreController extends Controller
             ->all();
 
         return $palabras($uno) === $palabras($otro);
-    }
-
-    /**
-     * El número de la GR-transportista que ya ampara esa GR-remitente, si
-     * existe. `guias_remitente` guarda el número tal como venía impreso
-     * («T007 - 10088», a veces con ceros), así que se compara normalizado.
-     */
-    private function grTransportistaExistente(string $ruc, string $serie, int $numero): ?string
-    {
-        $buscado = "{$serie}-{$numero}";
-
-        return Viaje::query()
-            ->whereRaw('upper(cast(guias_remitente as text)) like ?', ["%{$serie}%"])
-            ->get(['numero_gr', 'guias_remitente'])
-            ->first(function (Viaje $viaje) use ($ruc, $buscado): bool {
-                foreach ($viaje->guias_remitente ?? [] as $guia) {
-                    [$serieGuardada, $numeroGuardado] = array_pad(explode('-', str_replace(' ', '', strtoupper($guia['numero'])), 2), 2, '');
-
-                    if ($serieGuardada.'-'.ltrim($numeroGuardado, '0') === $buscado && $guia['ruc'] === $ruc) {
-                        return true;
-                    }
-                }
-
-                return false;
-            })?->numero_gr;
     }
 
     private function direccion(mixed $direccion): ?string

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import emision, {
+    emitir as emitirGr,
     conductor as consultarConductor,
     guia as consultarGuia,
     vehiculo as consultarVehiculo,
@@ -17,6 +18,14 @@ import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import { SelectorBuscable } from '@/components/selector-buscable';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -46,7 +55,12 @@ type Props = {
     conductores: ConductorOpcion[];
     clientes: ClienteOpcion[];
     sunatConfigurado: boolean;
+    puedeEmitir: boolean;
 };
+
+type ResultadoEmision =
+    | { estado: 'emitida'; numeroGr: string; viajeRegistrado: boolean }
+    | { estado: 'en_duda' | 'rechazada' | 'no_enviada'; mensaje: string };
 
 type GuiaRemitente = {
     ruc: string;
@@ -79,10 +93,11 @@ type Consulta<T> =
     | { estado: 'ok'; datos: T }
     | { estado: 'error'; mensaje: string };
 
+/** `codigo` es el de SUNAT (parámetro 1024 del formulario de SOL). */
 const PAGADORES = [
-    { value: 'remitente', label: 'El remitente' },
-    { value: 'subcontratador', label: 'Un subcontratador' },
-    { value: 'tercero', label: 'Un tercero' },
+    { value: 'remitente', label: 'El remitente', codigo: '01' },
+    { value: 'subcontratador', label: 'Un subcontratador', codigo: '02' },
+    { value: 'tercero', label: 'Un tercero', codigo: '03' },
 ] as const;
 
 /**
@@ -114,6 +129,15 @@ async function consultar<T>(url: string): Promise<T> {
     return cuerpo as T;
 }
 
+/** El token CSRF que Laravel deja en la cookie XSRF-TOKEN. */
+function tokenXsrf(): string {
+    const cookie = document.cookie
+        .split('; ')
+        .find((par) => par.startsWith('XSRF-TOKEN='));
+
+    return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
+}
+
 function hoy(): string {
     const fecha = new Date();
     fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
@@ -127,6 +151,7 @@ export default function EmitirGr({
     conductores,
     clientes,
     sunatConfigurado,
+    puedeEmitir,
 }: Props) {
     const [ruc, setRuc] = useState('');
     const [serie, setSerie] = useState('');
@@ -239,7 +264,79 @@ export default function EmitirGr({
         }
     };
 
+    const [confirmando, setConfirmando] = useState(false);
+    const [emitiendo, setEmitiendo] = useState(false);
+    const [resultado, setResultado] = useState<ResultadoEmision | null>(null);
+
     const avisosBloqueantes = guias.flatMap((g) => g.avisos);
+    // Estos no se emiten ni confirmando: el servidor también los frena.
+    const bloqueos = avisosBloqueantes.filter(
+        (aviso) =>
+            aviso.startsWith('Ya tiene GR-transportista') ||
+            aviso.includes('no está vigente'),
+    );
+
+    const emitir = async () => {
+        setEmitiendo(true);
+        setResultado(null);
+
+        try {
+            const respuesta = await fetch(emitirGr.url(), {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-XSRF-TOKEN': tokenXsrf(),
+                },
+                body: JSON.stringify({
+                    guias: guias.map((g) => ({
+                        ruc: g.ruc,
+                        serie: g.serie,
+                        numero: g.numero,
+                    })),
+                    tracto_id: tractoId,
+                    carreta_id: carretaId,
+                    conductor_id: conductorId,
+                    fecha_traslado: fechaTraslado,
+                    pagador: PAGADORES.find((p) => p.value === pagador)?.codigo,
+                    ruc_pagador: pagador === 'remitente' ? null : rucPagador,
+                }),
+            });
+            const cuerpo = await respuesta.json().catch(() => null);
+
+            setResultado(
+                cuerpo?.estado
+                    ? (cuerpo as ResultadoEmision)
+                    : {
+                          // Sin respuesta legible no se sabe qué pasó en SUNAT.
+                          estado: 'en_duda',
+                          mensaje: `El servidor respondió ${respuesta.status} sin detalle. La GR pudo haberse emitido: revisa «Consulta de GRE» en SOL antes de volver a intentar.`,
+                      },
+            );
+        } catch {
+            setResultado({
+                estado: 'en_duda',
+                mensaje:
+                    'Se perdió la conexión mientras se emitía. La GR pudo haberse emitido: revisa «Consulta de GRE» en SOL antes de volver a intentar.',
+            });
+        } finally {
+            setEmitiendo(false);
+            setConfirmando(false);
+        }
+    };
+
+    // Emitida o en duda: el botón no vuelve a habilitarse sin recargar, para
+    // que nadie mande la misma GR dos veces.
+    const cerrada =
+        resultado?.estado === 'emitida' || resultado?.estado === 'en_duda';
+    const listaParaEmitir =
+        puedeEmitir &&
+        sunatConfigurado &&
+        bloqueos.length === 0 &&
+        !emitiendo &&
+        !cerrada;
     const faltantes = [
         guias.length === 0 && 'al menos una GR-remitente',
         !tractoId && 'el tracto',
@@ -255,8 +352,8 @@ export default function EmitirGr({
 
             <p className="text-sm text-muted-foreground">
                 Arma la GR-transportista con los datos que SUNAT confirma en
-                vivo: la GR-remitente, el TUCE de cada placa y la licencia del
-                conductor.
+                vivo: la GR-remitente, el TUCE de cada placa y el DNI del
+                conductor, y la emite en SUNAT.
             </p>
 
             {!sunatConfigurado && (
@@ -620,18 +717,134 @@ export default function EmitirGr({
                 )}
 
                 <div className="mt-4 flex flex-col gap-2">
-                    <Button disabled className="w-full sm:w-auto">
-                        <Send className="size-4" />
-                        Emitir GR en SUNAT
+                    <Button
+                        className="w-full sm:w-auto"
+                        disabled={!listaParaEmitir || faltantes.length > 0}
+                        onClick={() => setConfirmando(true)}
+                    >
+                        {emitiendo ? <Spinner /> : <Send className="size-4" />}
+                        {emitiendo
+                            ? 'Emitiendo en SUNAT…'
+                            : 'Emitir GR en SUNAT'}
                     </Button>
-                    <p className="text-xs text-muted-foreground">
-                        La emisión desde Transpaty se habilita después de grabar
-                        una emisión real en SOL. Mientras tanto, estos datos ya
-                        están verificados con SUNAT para cargarlos en SOL.
-                    </p>
+                    {!puedeEmitir && (
+                        <p className="text-xs text-muted-foreground">
+                            Tu usuario no tiene el permiso «Emitir GR en SUNAT».
+                        </p>
+                    )}
+                    {bloqueos.length > 0 && (
+                        <p className="text-xs text-destructive">
+                            No se puede emitir: {bloqueos.join(' ')}
+                        </p>
+                    )}
                 </div>
+
+                {resultado && <ResultadoDeEmision resultado={resultado} />}
             </Seccion>
+
+            <Dialog open={confirmando} onOpenChange={setConfirmando}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>¿Emitir la GR en SUNAT?</DialogTitle>
+                        <DialogDescription>
+                            Se emite una GR-transportista real. No se puede
+                            editar: si sale mal, hay que darla de baja en SOL.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-1 text-sm">
+                        <p>
+                            <span className="text-muted-foreground">
+                                GR-remitente:
+                            </span>{' '}
+                            {guias
+                                .map((g) => `${g.serie}-${g.numero}`)
+                                .join(', ')}
+                        </p>
+                        <p>
+                            <span className="text-muted-foreground">
+                                Unidad:
+                            </span>{' '}
+                            {tracto ? formatearPlaca(tracto.placa) : '—'}
+                            {carreta
+                                ? ` / ${formatearPlaca(carreta.placa)}`
+                                : ''}
+                        </p>
+                        <p>
+                            <span className="text-muted-foreground">
+                                Conductor:
+                            </span>{' '}
+                            {conductorElegido?.nombre}
+                        </p>
+                        <p>
+                            <span className="text-muted-foreground">
+                                Traslado:
+                            </span>{' '}
+                            {fechaTraslado}
+                        </p>
+                        {avisosBloqueantes.length > 0 && (
+                            <ul className="mt-2 grid gap-1 text-destructive">
+                                {avisosBloqueantes.map((aviso) => (
+                                    <li key={aviso}>⚠ {aviso}</li>
+                                ))}
+                            </ul>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            disabled={emitiendo}
+                            onClick={() => setConfirmando(false)}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button disabled={emitiendo} onClick={emitir}>
+                            {emitiendo ? (
+                                <Spinner />
+                            ) : (
+                                <Send className="size-4" />
+                            )}
+                            Sí, emitir
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
+    );
+}
+
+function ResultadoDeEmision({ resultado }: { resultado: ResultadoEmision }) {
+    if (resultado.estado === 'emitida') {
+        return (
+            <Alert className="mt-4 border-emerald-600/40">
+                <CheckCircle2 className="size-4 text-emerald-600" />
+                <AlertTitle>Emitida {resultado.numeroGr}</AlertTitle>
+                <AlertDescription>
+                    {resultado.viajeRegistrado
+                        ? 'El viaje ya está registrado en Viajes con el PDF de SUNAT.'
+                        : 'SUNAT la emitió, pero no se pudo bajar el PDF: el viaje entra cuando se suba la GR.'}{' '}
+                    <a
+                        className="underline"
+                        href={viajes.index.url({
+                            query: { buscar: resultado.numeroGr },
+                        })}
+                    >
+                        Ver en Viajes
+                    </a>
+                </AlertDescription>
+            </Alert>
+        );
+    }
+
+    return (
+        <Alert variant="destructive" className="mt-4">
+            <AlertTriangle className="size-4" />
+            <AlertTitle>
+                {resultado.estado === 'en_duda'
+                    ? 'No se sabe si se emitió'
+                    : 'No se emitió'}
+            </AlertTitle>
+            <AlertDescription>{resultado.mensaje}</AlertDescription>
+        </Alert>
     );
 }
 

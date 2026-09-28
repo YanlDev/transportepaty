@@ -1,0 +1,362 @@
+<?php
+
+namespace App\Services\Sunat;
+
+use App\Models\Conductor;
+use App\Models\Vehiculo;
+use App\Models\Viaje;
+use App\Services\ImportadorViaje;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+use RuntimeException;
+
+/**
+ * Arma y emite una GR-transportista de Paty con el mismo cuerpo que envía el
+ * formulario de SOL (copiado de la emisión real EG03-12623, 28-09-2026), y
+ * deja el viaje creado con el PDF que devuelve SUNAT.
+ *
+ * Todo dato que va a SUNAT se vuelve a consultar acá, en el servidor: la
+ * GR-remitente, el TUCE de cada placa, el nombre del conductor en RENIEC y la
+ * razón social del pagador. Lo que mandó el navegador solo dice QUÉ se eligió.
+ */
+class EmisionGre
+{
+    public const PAGADOR_REMITENTE = '01';
+
+    public const PAGADOR_SUBCONTRATADOR = '02';
+
+    public const PAGADOR_TERCERO = '03';
+
+    public function __construct(
+        private readonly ClienteGreSunat $sunat,
+        private readonly ImportadorViaje $importador,
+    ) {}
+
+    /**
+     * @param  list<array{ruc: string, serie: string, numero: int}>  $guias
+     * @return array{numero_gr: string, viaje: Viaje|null}
+     *
+     * @throws RuntimeException un dato no permite emitir (no se envió nada)
+     * @throws EmisionRechazada
+     * @throws EmisionEnDuda
+     */
+    public function emitir(
+        array $guias,
+        Vehiculo $tracto,
+        ?Vehiculo $carreta,
+        Conductor $conductor,
+        string $fechaTraslado,
+        string $pagador,
+        ?string $rucPagador,
+    ): array {
+        $clave = 'sunat.emision.'.md5(json_encode($guias) ?: '');
+
+        // Doble clic o dos personas con la misma GR-remitente: la segunda
+        // espera y, al entrar, ya encuentra la GR-transportista registrada.
+        return Cache::lock($clave, 180)->block(60, function () use ($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador): array {
+            $cuerpo = $this->armar($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador);
+            $serie = (string) config('services.sunat_sol.serie_gre');
+
+            Log::info('SUNAT GRE: emitiendo GR-transportista.', ['guias' => $guias, 'tracto' => $tracto->placa]);
+
+            try {
+                $emitida = $this->sunat->emitir($cuerpo, $serie);
+            } catch (EmisionEnDuda $duda) {
+                Log::error('SUNAT GRE: emisión EN DUDA, revisar en SOL antes de reintentar.', ['guias' => $guias, 'motivo' => $duda->getMessage()]);
+
+                throw $duda;
+            }
+
+            $numeroGr = sprintf('%s-%08d', $emitida['serie'], $emitida['numero']);
+            Log::info("SUNAT GRE: emitida {$numeroGr}.");
+
+            return ['numero_gr' => $numeroGr, 'viaje' => $this->registrarViaje($emitida['serie'], $emitida['numero'])];
+        });
+    }
+
+    /**
+     * El cuerpo de la emisión. Público para poder compararlo, campo por campo,
+     * con el que envió SOL en la emisión grabada.
+     *
+     * @param  list<array{ruc: string, serie: string, numero: int}>  $guias
+     * @return array<string, mixed>
+     */
+    public function armar(
+        array $guias,
+        Vehiculo $tracto,
+        ?Vehiculo $carreta,
+        Conductor $conductor,
+        string $fechaTraslado,
+        string $pagador,
+        ?string $rucPagador,
+    ): array {
+        if ($guias === []) {
+            throw new RuntimeException('Falta la GR-remitente.');
+        }
+
+        $datosGuias = array_map(fn (array $guia): array => $this->guiaVerificada($guia), $guias);
+        $principal = $datosGuias[0];
+        $remitente = [
+            'codTipoDocIdentidad' => '6',
+            'desNombre' => (string) data_get($principal, 'emisor.desNombre'),
+            'numDocIdentidad' => $guias[0]['ruc'],
+            'indFrecuente' => '0',
+        ];
+        $ruc = (string) config('services.sunat_sol.ruc');
+        $nombrePaty = (string) ($this->sunat->contribuyente($ruc)['desRazonSocial'] ?? '');
+
+        if ($nombrePaty === '') {
+            throw new RuntimeException('SUNAT no devolvió la razón social de Paty.');
+        }
+
+        $vehiculos = [$this->vehiculo($tracto, '1')];
+
+        if ($carreta !== null) {
+            $vehiculos[] = $this->vehiculo($carreta, '2');
+        }
+
+        return [
+            'codCpe' => '31',
+            'codTipoCpe' => '00',
+            'numSerie' => (string) config('services.sunat_sol.serie_gre'),
+            'codEstado' => '01',
+            'emision' => ['indSEE' => '1', 'indOrigen' => '1'],
+            'emisor' => [
+                'indEncSunNumAutorizacionMtc' => '1',
+                'numAutorizacionMtc' => (string) config('services.sunat_sol.registro_mtc'),
+                'desNombre' => $nombrePaty,
+                'indSubContratacion' => '0',
+            ],
+            'receptor' => [
+                'codTipoDocIdentidad' => (string) data_get($principal, 'receptor.codTipoDocIdentidad', '6'),
+                'desNombre' => (string) data_get($principal, 'receptor.desNombre'),
+                'numDocIdentidad' => (string) data_get($principal, 'receptor.numDocIdentidad'),
+                'indFrecuente' => '0',
+            ],
+            'traslado' => [
+                'fecInicioTraslado' => Carbon::parse($fechaTraslado, 'America/Lima')->startOfDay()->format('Y-m-d\TH:i:s.vP'),
+                'indTransbordo' => '0',
+                'indRetornoVehicEnvEmbVacio' => '0',
+                'indRetornoVehicVacio' => '0',
+                'indPagadorFlete' => $pagador,
+                'codUnidadMedidaPb' => (string) data_get($principal, 'traslado.codUnidadMedidaPb'),
+                'numPesoBruto' => $this->pesoTotal($datosGuias),
+                'bien' => [],
+                'vehiculo' => $vehiculos,
+                'conductor' => [$this->conductor($conductor)],
+                'transportista' => [
+                    'codTipoDocIdentidad' => '6',
+                    'numDocIdentidad' => $ruc,
+                    'desNombre' => $nombrePaty,
+                    'indFrecuente' => '0',
+                ],
+                'partida' => $this->punto(data_get($principal, 'traslado.partida.direccion'), 'partida'),
+                'llegada' => $this->punto(data_get($principal, 'traslado.llegada.direccion'), 'llegada'),
+                'pagadorFlete' => $this->pagador($pagador, $rucPagador, $remitente),
+            ],
+            'docRelacionado' => array_map(fn (array $guia): array => [
+                'codTipoDocumento' => '09',
+                'desTipoDocumento' => 'Guía de Remisión Remitente',
+                'numSerie' => $guia['serie'],
+                'numDocumento' => (string) $guia['numero'],
+                'numRuc' => $guia['ruc'],
+                'indEncSunDocRelacionado' => '1',
+                'esVisible' => true,
+            ], $guias),
+            'numRuc' => $ruc,
+            'remitente' => $remitente,
+        ];
+    }
+
+    /**
+     * El número de la GR-transportista que ya ampara esa GR-remitente, si
+     * existe. `guias_remitente` guarda el número tal como venía impreso
+     * («T007 - 10088», a veces con ceros), así que se compara normalizado.
+     */
+    public function grTransportistaExistente(string $ruc, string $serie, int $numero): ?string
+    {
+        $buscado = "{$serie}-{$numero}";
+
+        return Viaje::query()
+            ->whereRaw('upper(cast(guias_remitente as text)) like ?', ["%{$serie}%"])
+            ->get(['numero_gr', 'guias_remitente'])
+            ->first(function (Viaje $viaje) use ($ruc, $buscado): bool {
+                foreach ($viaje->guias_remitente ?? [] as $guia) {
+                    [$serieGuardada, $numeroGuardado] = array_pad(explode('-', str_replace(' ', '', strtoupper($guia['numero'])), 2), 2, '');
+
+                    if ($serieGuardada.'-'.ltrim($numeroGuardado, '0') === $buscado && $guia['ruc'] === $ruc) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })?->numero_gr;
+    }
+
+    /**
+     * @param  array{ruc: string, serie: string, numero: int}  $guia
+     * @return array<string, mixed>
+     */
+    private function guiaVerificada(array $guia): array
+    {
+        $nombre = "{$guia['serie']}-{$guia['numero']}";
+        $existente = $this->grTransportistaExistente($guia['ruc'], $guia['serie'], $guia['numero']);
+
+        if ($existente !== null) {
+            throw new RuntimeException("La GR-remitente {$nombre} ya tiene GR-transportista: {$existente}.");
+        }
+
+        $consulta = $this->sunat->guiaRemitente($guia['ruc'], $guia['serie'], $guia['numero']);
+
+        if ($consulta === null) {
+            throw new RuntimeException("SUNAT no encontró la GR-remitente {$nombre}.");
+        }
+
+        if (data_get($consulta['datos'], 'codEstado') !== '01') {
+            throw new RuntimeException("La GR-remitente {$nombre} no está vigente en SUNAT.");
+        }
+
+        return $consulta['datos'];
+    }
+
+    /** @return array<string, string> */
+    private function vehiculo(Vehiculo $vehiculo, string $tipo): array
+    {
+        $placa = strtoupper(str_replace(['-', ' '], '', $vehiculo->placa));
+        $mtc = $this->sunat->placa($placa);
+
+        if (! is_string($mtc['numTucChv'] ?? null) || $mtc['numTucChv'] === '') {
+            throw new RuntimeException("El MTC no tiene TUCE para la placa {$placa}.");
+        }
+
+        return [
+            'indTipoVehiculo' => $tipo,
+            'numPlaca' => $placa,
+            'numTucChv' => $mtc['numTucChv'],
+            'indTucChv' => $mtc['indTucChv'],
+            'indEncSunNumTucChv' => '1',
+            'indEncSunNumPlaca' => '1',
+            'indFrecuente' => '0',
+        ];
+    }
+
+    /** @return array<string, string> */
+    private function conductor(Conductor $conductor): array
+    {
+        if (blank($conductor->licencia)) {
+            throw new RuntimeException("{$conductor->nombre_completo} no tiene licencia registrada.");
+        }
+
+        $persona = $this->sunat->persona($conductor->documento);
+        $nombre = trim(implode(' ', array_filter([
+            $persona['apePaterno'] ?? null,
+            $persona['apeMaterno'] ?? null,
+            $persona['nomPerNat'] ?? null,
+        ])));
+
+        if ($nombre === '') {
+            throw new RuntimeException("RENIEC no encontró el DNI {$conductor->documento}.");
+        }
+
+        $licencia = Str::upper((string) $conductor->licencia);
+
+        return [
+            'indTipoOrden' => '1',
+            'codTipoDocIdentidad' => '1',
+            'numDocIdentidad' => $conductor->documento,
+            'numLicencia' => $licencia,
+            'desNombre' => $nombre,
+            'indEncSunNumLicencia' => $this->sunat->licencia($licencia)['encontrada'] ? '1' : '0',
+            'desTipoDocIdentidad' => 'DOCUMENTO NACIONAL DE IDENTIDAD',
+            'indFrecuente' => '0',
+        ];
+    }
+
+    /**
+     * Quién paga el flete. Para el remitente se manda su propio RUC: es la
+     * única variante que no está en la emisión grabada (que fue «tercero»);
+     * si SUNAT la rechazara, responde 422 y no se emite nada.
+     *
+     * @param  array{codTipoDocIdentidad: string, desNombre: string, numDocIdentidad: string, indFrecuente: string}  $remitente
+     * @return array{codTipoDocIdentidad: string, numDocIdentidad: string, desNombre: string}
+     */
+    private function pagador(string $pagador, ?string $ruc, array $remitente): array
+    {
+        if ($pagador === self::PAGADOR_REMITENTE) {
+            return [
+                'codTipoDocIdentidad' => '6',
+                'numDocIdentidad' => $remitente['numDocIdentidad'],
+                'desNombre' => $remitente['desNombre'],
+            ];
+        }
+
+        $nombre = $ruc === null ? '' : (string) ($this->sunat->contribuyente($ruc)['desRazonSocial'] ?? '');
+
+        if ($nombre === '') {
+            throw new RuntimeException("SUNAT no encontró el RUC {$ruc} de quien paga el flete.");
+        }
+
+        return ['codTipoDocIdentidad' => '6', 'numDocIdentidad' => (string) $ruc, 'desNombre' => $nombre];
+    }
+
+    /** @return array{direccion: array<string, string>, indFrecuente: string} */
+    private function punto(mixed $direccion, string $cual): array
+    {
+        if (! is_array($direccion) || blank($direccion['codUbigeo'] ?? null)) {
+            throw new RuntimeException("La GR-remitente no trae el punto de {$cual} con su ubigeo.");
+        }
+
+        return [
+            'direccion' => [
+                'codUbigeo' => (string) $direccion['codUbigeo'],
+                'desDireccion' => (string) ($direccion['desDireccion'] ?? ''),
+                'desDepartamento' => (string) ($direccion['desDepartamento'] ?? ''),
+                'desProvincia' => (string) ($direccion['desProvincia'] ?? ''),
+                'desDistrito' => (string) ($direccion['desDistrito'] ?? ''),
+            ],
+            'indFrecuente' => '0',
+        ];
+    }
+
+    /** @param  list<array<string, mixed>>  $guias */
+    private function pesoTotal(array $guias): string
+    {
+        $total = array_sum(array_map(fn (array $guia): float => (float) data_get($guia, 'traslado.numPesoBruto', 0), $guias));
+
+        return rtrim(rtrim(number_format($total, 3, '.', ''), '0'), '.');
+    }
+
+    /**
+     * Baja el PDF que acaba de emitir SUNAT y lo pasa por el importador de
+     * siempre, así el viaje queda igual que uno subido a mano. Si el PDF no
+     * llega, la GR igual está emitida: entra después con la carpeta de GR.
+     */
+    private function registrarViaje(string $serie, int $numero): ?Viaje
+    {
+        try {
+            $pdf = $this->sunat->pdf((string) config('services.sunat_sol.ruc'), $serie, $numero);
+        } catch (RuntimeException $error) {
+            Log::warning("SUNAT GRE: no se pudo bajar el PDF de {$serie}-{$numero}.", ['motivo' => $error->getMessage()]);
+
+            return null;
+        }
+
+        if ($pdf === null) {
+            return null;
+        }
+
+        $ruta = tempnam(sys_get_temp_dir(), 'gre');
+        file_put_contents($ruta, $pdf);
+
+        try {
+            $nombre = sprintf('%s-31-%s-%d.pdf', config('services.sunat_sol.ruc'), $serie, $numero);
+
+            return $this->importador->importar(new UploadedFile($ruta, $nombre, 'application/pdf', null, true))['viaje'];
+        } finally {
+            @unlink($ruta);
+        }
+    }
+}

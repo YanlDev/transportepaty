@@ -60,6 +60,10 @@ return [
         'ruc' => env('SUNAT_SOL_RUC'),
         'usuario' => env('SUNAT_SOL_USUARIO'),
         'clave' => env('SUNAT_SOL_CLAVE'),
+        // Serie de las GR-transportista que se emiten por SOL y registro MTC
+        // de Paty como transportista (los dos, de la emisión EG03-12623).
+        'serie_gre' => env('SUNAT_SERIE_GRE', 'EG03'),
+        'registro_mtc' => env('SUNAT_REGISTRO_MTC', '210122CNG'),
     ],
 
 ];

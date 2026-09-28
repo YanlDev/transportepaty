@@ -1,0 +1,352 @@
+{
+ "guia": {
+  "id": "6abad204a60b8e715c31f5b2",
+  "codCpe": "09",
+  "numRuc": "20609175789",
+  "cantidad": null,
+  "codTipoCpe": "00",
+  "numSerie": "T001",
+  "numCpe": 34367,
+  "codEstado": "01",
+  "desEstado": "Emitido",
+  "emision": {
+   "fecEmision": "2026-09-28T14:15:22",
+   "indSEE": "2",
+   "indOrigen": "3",
+   "desNota": "OBSERVACIONES GENERALES XSCKD231260928-074  // TOTAL 27 PALETAS",
+   "desHashQr": "DT/UGSjCzj0dxMBJXIRiEv+xiPdhsEEDNjLrM0gnguaURp0OChVo+3lM/ooEXVTM7fINxZ37cw/ypfdPgZa817y9CxJ1lsuBLsv+D9mkcneYcXo08cTS2GhFTQO+ZDvJ",
+   "desQr": "https://e-factura.sunat.gob.pe/v1/contribuyente/gre/comprobantes/descargaqr?hashqr=DT/UGSjCzj0dxMBJXIRiEv+xiPdhsEEDNjLrM0gnguaURp0OChVo+3lM/ooEXVTM7fINxZ37cw/ypfdPgZa817y9CxJ1lsuBLsv+D9mkcneYcXo08cTS2GhFTQO+ZDvJ",
+   "receptorObs": [
+    {
+     "codObs": "4320",
+     "desObs": "El dato ingresado como unidad de medida no corresponde al valor esperado : 4320Error en la linea: 1: errorCode 4320: Valor no se encuentra en el catalogo: 03 (nodo: \"cbc:DeliveredQuantity/unitCode\" valor: \"M2\")"
+    },
+    {
+     "codObs": "4320",
+     "desObs": "El dato ingresado como unidad de medida no corresponde al valor esperado : 4320Error en la linea: 2: errorCode 4320: Valor no se encuentra en el catalogo: 03 (nodo: \"cbc:DeliveredQuantity/unitCode\" valor: \"M2\")"
+    }
+   ],
+   "pse": {
+    "razonSocial": null,
+    "numRuc": "20551093035"
+   },
+   "firma": {
+    "idCertificado": "557ba7b53516afec9c735d7676e76954eeebee",
+    "digestValue": "/KvblUbN1BxzNYQTGE9ymrkEzJ0=",
+    "fecFirma": null
+   },
+   "numIpCliente": null,
+   "numFecEmision": 20260928,
+   "numRangoHora": 14,
+   "numTicket": "20830455-3e12-475d-810f-181eff7c0659",
+   "fecGenCdr": "2026-09-28T15:45:56.320"
+  },
+  "emisor": {
+   "desNombre": "PORCELANATO LATINO SOCIEDAD ANONIMA CERRADA",
+   "numAutorizacionMtc": null,
+   "indEncSunNumAutorizacionMtc": null,
+   "indSubContratacion": "0",
+   "autorizacion": null,
+   "subContratador": null
+  },
+  "traslado": {
+   "codMotivoTraslado": "01",
+   "desMotivoTraslado": "Venta",
+   "desMotivoTrasladoOtros": "venta",
+   "fecInicioTraslado": "2026-09-28T00:00:00",
+   "numPlacaVehiculo": null,
+   "fecEntrega": "2026-09-28T00:00:00",
+   "indModalidadTraslado": "01",
+   "desModalidadTraslado": "Público",
+   "indTrasladoVehiculo": "0",
+   "indTransbordo": "0",
+   "indRetornoVehicEnvEmbVacio": "0",
+   "indRetornoVehicVacio": "0",
+   "indPagadorFlete": "00",
+   "indTrasladoDua": "0",
+   "desTrasladoDua": "Parcial",
+   "indTrasladoTotalBienes": "0",
+   "numBultosPallets": null,
+   "indTrasladoContenedor": null,
+   "desBien": null,
+   "codUnidadMedidaPb": "TNE",
+   "numPesoBruto": 30.597,
+   "numPesoBrutoItemsSel": null,
+   "desSustentoPesoBrutoItemsSel": null,
+   "contenedores": null,
+   "autorizacion": null,
+   "bien": [
+    {
+     "numOrden": 1,
+     "codTipoDocumento": null,
+     "desCortaTipoDocumento": null,
+     "numSerie": null,
+     "numDocumento": null,
+     "numItem": null,
+     "indBienRegulado": "0",
+     "codBien": "LFGS66804",
+     "codProductoSunat": null,
+     "codSubPartida": null,
+     "codGtin": null,
+     "desBien": "BALDOSA DE GRES PORCELANICO 560CAJAS",
+     "codUniMedida": "M2",
+     "desUniMedida": "",
+     "numCantidad": 806.4,
+     "indFrecuente": "0",
+     "docRelacionado": null,
+     "numDocTransporte": null,
+     "numDetalle": null,
+     "numContenedor": null,
+     "numPrecinto": null,
+     "indContenedorVacio": null
+    },
+    {
+     "numOrden": 2,
+     "codTipoDocumento": null,
+     "desCortaTipoDocumento": null,
+     "numSerie": null,
+     "numDocumento": null,
+     "numItem": null,
+     "indBienRegulado": "0",
+     "codBien": "LFGS66808",
+     "codProductoSunat": null,
+     "codSubPartida": null,
+     "codGtin": null,
+     "desBien": "BALDOSA DE GRES PORCELANICO 520CAJAS",
+     "codUniMedida": "M2",
+     "desUniMedida": "",
+     "numCantidad": 748.8,
+     "indFrecuente": "0",
+     "docRelacionado": null,
+     "numDocTransporte": null,
+     "numDetalle": null,
+     "numContenedor": null,
+     "numPrecinto": null,
+     "indContenedorVacio": null
+    }
+   ],
+   "partida": {
+    "indFrecuente": "0",
+    "direccion": {
+     "codUbigeo": "150505",
+     "desDepartamento": "LIMA ",
+     "desProvincia": "CAÑETE ",
+     "desDistrito": "CHILCA",
+     "desDireccion": "OTR.SUB LOTE C-D-E-F AREA B NRO. SN (KM 62.5 DE LA PANAMERICANA SUR",
+     "contribuyente": {
+      "numEstablecimiento": 0,
+      "numRuc": null,
+      "desRuc": null
+     },
+     "puerto": null,
+     "numLatitud": null,
+     "numLongitud": null
+    }
+   },
+   "llegada": {
+    "indFrecuente": "0",
+    "direccion": {
+     "codUbigeo": "211101",
+     "desDepartamento": "PUNO ",
+     "desProvincia": "SAN ROMAN ",
+     "desDistrito": "JULIACA",
+     "desDireccion": "JR. SANDIA NRO. 206 (ESQ JR LIMA AL COSTADO DE CORREO) ",
+     "contribuyente": {
+      "numEstablecimiento": 0,
+      "numRuc": null,
+      "desRuc": null
+     },
+     "puerto": null,
+     "numLatitud": null,
+     "numLongitud": null
+    }
+   },
+   "pagadorFlete": null,
+   "vehiculo": null,
+   "conductor": null,
+   "proveedor": null,
+   "comprador": {
+    "codTipoDocIdentidad": "",
+    "desTipoDocIdentidad": "",
+    "numDocIdentidad": "",
+    "desNombre": "",
+    "indFrecuente": "0"
+   },
+   "transportista": {
+    "codTipoDocIdentidad": "6",
+    "desTipoDocIdentidad": "REGISTRO ÚNICO DE CONTRIBUYENTES",
+    "numDocIdentidad": "20364000643",
+    "desNombre": "EMPRESA DE TRANSPORTES PATY SOCIEDAD COMERCIAL DE RESPONSABILIDAD LIMITADA",
+    "numRegistroMtc": "210122CNG",
+    "autorizacion": null,
+    "indFrecuente": "0"
+   },
+   "codTipoBienTransportar": "01",
+   "indGreUnica": "0"
+  },
+  "receptor": {
+   "codTipoDocIdentidad": "6",
+   "desTipoDocIdentidad": "REGISTRO ÚNICO DE CONTRIBUYENTES",
+   "numDocIdentidad": "10310435223",
+   "desNombre": "ARREDONDO DAMIAN RAUL ISAAC",
+   "indFrecuente": "0"
+  },
+  "remitente": null,
+  "docRelacionado": null,
+  "docGrePorEvento": null,
+  "baja": null,
+  "noConformidad": null,
+  "auditoria": {
+   "codUsuRegis": "GREADAPT",
+   "fecRegis": "2026-09-28T15:45:56",
+   "codUsuModif": "GREADAPT",
+   "fecModif": "2026-09-28T15:45:56",
+   "numSchemaVersion": "1.0"
+  },
+  "desTipoCpe": "sin evento"
+ },
+ "tracto": {
+  "numTucChv": "21M24000099E",
+  "indTucChv": "2",
+  "indVigencia": "1"
+ },
+ "carreta": {
+  "numTucChv": "21M21000025E",
+  "indTucChv": "2",
+  "indVigencia": "1"
+ },
+ "persona": {
+  "apePaterno": "MAMANI",
+  "apeMaterno": "MASCO",
+  "nomPerNat": "ADOLFO"
+ },
+ "pagador": {
+  "datosContribuyente": {
+   "desRazonSocial": "CASAS CERAMICOS HATUN WASI E.I.R.L."
+  }
+ },
+ "emision_enviada": {
+  "codCpe": "31",
+  "codTipoCpe": "00",
+  "numSerie": "EG03",
+  "codEstado": "01",
+  "emision": {
+   "indSEE": "1",
+   "indOrigen": "1"
+  },
+  "emisor": {
+   "indEncSunNumAutorizacionMtc": "1",
+   "numAutorizacionMtc": "210122CNG",
+   "desNombre": "EMPRESA DE TRANSPORTES PATY SOCIEDAD COMERCIAL DE RESPONSABILIDAD LIMITADA",
+   "indSubContratacion": "0"
+  },
+  "receptor": {
+   "codTipoDocIdentidad": "6",
+   "desNombre": "ARREDONDO DAMIAN RAUL ISAAC",
+   "numDocIdentidad": "10310435223",
+   "indFrecuente": "0"
+  },
+  "traslado": {
+   "fecInicioTraslado": "2026-09-28T00:00:00.000-05:00",
+   "indTransbordo": "0",
+   "indRetornoVehicEnvEmbVacio": "0",
+   "indRetornoVehicVacio": "0",
+   "indPagadorFlete": "03",
+   "codUnidadMedidaPb": "TNE",
+   "numPesoBruto": "30.597",
+   "bien": [],
+   "vehiculo": [
+    {
+     "indTipoVehiculo": "1",
+     "numPlaca": "BYM852",
+     "numTucChv": "21M24000099E",
+     "indTucChv": "2",
+     "indEncSunNumTucChv": "1",
+     "indEncSunNumPlaca": "1",
+     "indFrecuente": "0"
+    },
+    {
+     "indTipoVehiculo": "2",
+     "numPlaca": "VES982",
+     "numTucChv": "21M21000025E",
+     "indTucChv": "2",
+     "indEncSunNumTucChv": "1",
+     "indEncSunNumPlaca": "1",
+     "indFrecuente": "0"
+    }
+   ],
+   "conductor": [
+    {
+     "indTipoOrden": "1",
+     "codTipoDocIdentidad": "1",
+     "numDocIdentidad": "02424215",
+     "numLicencia": "U02424215",
+     "desNombre": "MAMANI MASCO ADOLFO",
+     "indEncSunNumLicencia": "0",
+     "desTipoDocIdentidad": "DOCUMENTO NACIONAL DE IDENTIDAD",
+     "indFrecuente": "0"
+    }
+   ],
+   "transportista": {
+    "codTipoDocIdentidad": "6",
+    "numDocIdentidad": "20364000643",
+    "desNombre": "EMPRESA DE TRANSPORTES PATY SOCIEDAD COMERCIAL DE RESPONSABILIDAD LIMITADA",
+    "indFrecuente": "0"
+   },
+   "partida": {
+    "direccion": {
+     "codUbigeo": "150505",
+     "desDireccion": "OTR.SUB LOTE C-D-E-F AREA B NRO. SN (KM 62.5 DE LA PANAMERICANA SUR",
+     "desDepartamento": "LIMA ",
+     "desProvincia": "CAÑETE ",
+     "desDistrito": "CHILCA"
+    },
+    "indFrecuente": "0"
+   },
+   "llegada": {
+    "direccion": {
+     "codUbigeo": "211101",
+     "desDireccion": "JR. SANDIA NRO. 206 (ESQ JR LIMA AL COSTADO DE CORREO) ",
+     "desDepartamento": "PUNO ",
+     "desProvincia": "SAN ROMAN ",
+     "desDistrito": "JULIACA"
+    },
+    "indFrecuente": "0"
+   },
+   "pagadorFlete": {
+    "codTipoDocIdentidad": "6",
+    "numDocIdentidad": "20601239079",
+    "desNombre": "CASAS CERAMICOS HATUN WASI E.I.R.L."
+   }
+  },
+  "docRelacionado": [
+   {
+    "codTipoDocumento": "09",
+    "desTipoDocumento": "Guía de Remisión Remitente",
+    "numSerie": "T001",
+    "numDocumento": "34367",
+    "numRuc": "20609175789",
+    "indEncSunDocRelacionado": "1",
+    "esVisible": true
+   }
+  ],
+  "numRuc": "20364000643",
+  "remitente": {
+   "codTipoDocIdentidad": "6",
+   "desNombre": "PORCELANATO LATINO SOCIEDAD ANONIMA CERRADA",
+   "numDocIdentidad": "20609175789",
+   "indFrecuente": "0"
+  }
+ },
+ "emision_respuesta": {
+  "data": {
+   "pkComprobante": {
+    "codCpe": "31",
+    "numRuc": "20364000643",
+    "numSerieCpe": "EG03",
+    "numCpe": "12623"
+   },
+   "qr": "https://e-factura.sunat.gob.pe/v1/contribuyente/gre/comprobantes/descargaqr?hashqr=wOh/LyD+ZBAymNEsESzbENXWI3/xhhhZtlg9RXKvWKprVv4KvtmWUjqQ4hlU1/tWqO2yYpTZidXhVAagYkQzm9ws3/IHyjpSGTtjocnUhm9SFGfuw16aHBoDMs7+4z9s"
+  }
+ }
+}

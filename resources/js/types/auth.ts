@@ -28,6 +28,7 @@ export type Permiso =
     | 'novedades.levantar'
     | 'viajes.ver'
     | 'viajes.registrar'
+    | 'viajes.emitir'
     | 'viajes.editar'
     | 'viajes.anular'
     | 'viajes.eliminar'

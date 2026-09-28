@@ -35,6 +35,7 @@ enum Permiso: string
 
     case ViajesVer = 'viajes.ver';
     case ViajesRegistrar = 'viajes.registrar';
+    case ViajesEmitir = 'viajes.emitir';
     case ViajesEditar = 'viajes.editar';
     case ViajesAnular = 'viajes.anular';
     case ViajesEliminar = 'viajes.eliminar';
@@ -111,6 +112,7 @@ enum Permiso: string
             self::NovedadesLevantar => 'Levantar novedades',
             self::ViajesVer => 'Ver viajes',
             self::ViajesRegistrar => 'Subir GR y registrar viajes',
+            self::ViajesEmitir => 'Emitir GR en SUNAT',
             self::ViajesEditar => 'Corregir el tipo de carga',
             self::ViajesAnular => 'Anular y reactivar GR',
             self::ViajesEliminar => 'Eliminar viajes',
