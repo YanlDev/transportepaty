@@ -14,6 +14,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
 use RuntimeException;
@@ -133,24 +134,54 @@ class EmisionGreController extends Controller
     }
 
     /**
-     * Si el MTC reconoce la licencia. SUNAT rara vez la encuentra y SOL deja
-     * emitir igual, así que el resultado es un aviso, no un bloqueo.
+     * El DNI contra RENIEC (vía SUNAT): el nombre que devuelve tiene que ser
+     * el del conductor elegido. La licencia se consulta aparte y solo informa:
+     * a septiembre de 2026 la consulta del MTC no encuentra ninguna licencia,
+     * ni con letra ni sin ella, y SOL deja emitir igual.
      */
     public function conductor(Conductor $conductor): JsonResponse
     {
         $this->authorize('create', Viaje::class);
 
-        if (blank($conductor->licencia)) {
-            return response()->json(['encontrada' => false, 'mensaje' => 'El conductor no tiene licencia registrada en Transpaty.']);
-        }
-
         try {
-            $licencia = $this->sunat->licencia($conductor->licencia);
+            $persona = $this->sunat->persona($conductor->documento);
+            $licencia = filled($conductor->licencia)
+                ? $this->sunat->licencia((string) $conductor->licencia)
+                : ['encontrada' => false, 'mensaje' => 'El conductor no tiene licencia registrada en Transpaty.'];
         } catch (RuntimeException $error) {
             return response()->json(['mensaje' => $error->getMessage()], 502);
         }
 
-        return response()->json(Arr::only($licencia, ['encontrada', 'mensaje']));
+        $nombreReniec = $persona === null ? null : trim(implode(' ', array_filter([
+            $persona['apePaterno'] ?? null,
+            $persona['apeMaterno'] ?? null,
+            $persona['nomPerNat'] ?? null,
+        ])));
+
+        return response()->json([
+            'dni' => [
+                'encontrado' => filled($nombreReniec),
+                'nombre' => $nombreReniec ?: null,
+                'coincide' => filled($nombreReniec)
+                    && $this->mismasPalabras((string) $nombreReniec, "{$conductor->apellidos} {$conductor->nombres}"),
+            ],
+            'licencia' => Arr::only($licencia, ['encontrada', 'mensaje']),
+        ]);
+    }
+
+    /**
+     * Si dos nombres son el mismo sin mirar orden, mayúsculas ni tildes:
+     * RENIEC da «MAMANI MASCO ADOLFO» y el padrón «Adolfo Mamani Masco».
+     */
+    private function mismasPalabras(string $uno, string $otro): bool
+    {
+        $palabras = fn (string $nombre): array => collect(preg_split('/\s+/', Str::upper(Str::ascii($nombre))) ?: [])
+            ->filter()
+            ->sort()
+            ->values()
+            ->all();
+
+        return $palabras($uno) === $palabras($otro);
     }
 
     /**

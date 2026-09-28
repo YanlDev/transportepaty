@@ -69,7 +69,10 @@ type GuiaRemitente = {
 
 type Mtc = { placa: string; tuce: string | null; vigente: boolean };
 
-type Licencia = { encontrada: boolean; mensaje: string | null };
+type VerificacionConductor = {
+    dni: { encontrado: boolean; nombre: string | null; coincide: boolean };
+    licencia: { encontrada: boolean; mensaje: string | null };
+};
 
 type Consulta<T> =
     | { estado: 'cargando' }
@@ -137,7 +140,8 @@ export default function EmitirGr({
     const [mtc, setMtc] = useState<Record<number, Consulta<Mtc>>>({});
 
     const [conductorId, setConductorId] = useState<number | null>(null);
-    const [licencia, setLicencia] = useState<Consulta<Licencia> | null>(null);
+    const [verificacion, setVerificacion] =
+        useState<Consulta<VerificacionConductor> | null>(null);
 
     const [fechaTraslado, setFechaTraslado] = useState(hoy());
     const [pagador, setPagador] = useState<string>('remitente');
@@ -220,13 +224,15 @@ export default function EmitirGr({
 
     const elegirConductor = async (id: number) => {
         setConductorId(id);
-        setLicencia({ estado: 'cargando' });
+        setVerificacion({ estado: 'cargando' });
 
         try {
-            const datos = await consultar<Licencia>(consultarConductor.url(id));
-            setLicencia({ estado: 'ok', datos });
+            const datos = await consultar<VerificacionConductor>(
+                consultarConductor.url(id),
+            );
+            setVerificacion({ estado: 'ok', datos });
         } catch (error) {
-            setLicencia({
+            setVerificacion({
                 estado: 'error',
                 mensaje: (error as Error).message,
             });
@@ -460,26 +466,41 @@ export default function EmitirGr({
                                 {conductorElegido.licencia ?? '—'}
                             </span>
                         </p>
-                        {licencia?.estado === 'cargando' && (
+                        {verificacion?.estado === 'cargando' && (
                             <p className="flex items-center gap-2 text-muted-foreground">
-                                <Spinner /> Consultando la licencia en el MTC…
+                                <Spinner /> Verificando el DNI en RENIEC…
                             </p>
                         )}
-                        {licencia?.estado === 'ok' &&
-                            (licencia.datos.encontrada ? (
+                        {verificacion?.estado === 'ok' &&
+                            (verificacion.datos.dni.coincide ? (
                                 <p className="flex items-center gap-1 text-emerald-600">
-                                    <CheckCircle2 className="size-4" /> Licencia
-                                    encontrada en el MTC.
+                                    <CheckCircle2 className="size-4" /> DNI
+                                    verificado: {verificacion.datos.dni.nombre}
+                                </p>
+                            ) : verificacion.datos.dni.encontrado ? (
+                                <p className="text-destructive">
+                                    El DNI corresponde a{' '}
+                                    {verificacion.datos.dni.nombre}, no a{' '}
+                                    {conductorElegido.nombre}. Corrige el DNI en
+                                    la ficha del conductor.
                                 </p>
                             ) : (
-                                <p className="text-amber-600">
-                                    {licencia.datos.mensaje} SOL permite emitir
-                                    igual.
+                                <p className="text-destructive">
+                                    RENIEC no encontró el DNI{' '}
+                                    {conductorElegido.documento}.
                                 </p>
                             ))}
-                        {licencia?.estado === 'error' && (
+                        {verificacion?.estado === 'ok' &&
+                            !verificacion.datos.licencia.encontrada && (
+                                <p className="text-xs text-muted-foreground">
+                                    La licencia se envía tal cual: la consulta
+                                    del MTC hoy no reconoce licencias, tampoco
+                                    desde SOL.
+                                </p>
+                            )}
+                        {verificacion?.estado === 'error' && (
                             <p className="text-destructive">
-                                {licencia.mensaje}
+                                {verificacion.mensaje}
                             </p>
                         )}
                     </div>

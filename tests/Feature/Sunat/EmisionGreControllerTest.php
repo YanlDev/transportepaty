@@ -122,12 +122,14 @@ it('valida el RUC y la serie antes de ir a SUNAT', function (): void {
     Http::assertNothingSent();
 });
 
-it('trae el TUCE de la placa y si la licencia está en el MTC', function (): void {
+it('trae el TUCE de la placa y verifica el DNI del conductor en RENIEC', function (): void {
     $tracto = Vehiculo::factory()->create(['placa' => 'TCK-922']);
-    $conductor = Conductor::factory()->create(['licencia' => 'D43205379']);
+    $conductor = Conductor::factory()->create(['nombres' => 'Adolfo', 'apellidos' => 'Mamani Masco', 'documento' => '02424215', 'licencia' => 'U02424215']);
+    $otro = Conductor::factory()->create(['nombres' => 'Juan', 'apellidos' => 'Perez', 'documento' => '02424216']);
     fingirSol(tokenSol(), api: [
         '/TCK922/numPlaca' => Http::response(['numTucChv' => '21M22000519E', 'indTucChv' => '2', 'indVigencia' => '1']),
-        '/D43205379/numLicencia' => Http::response(['errors' => [['cod' => 2037, 'msg' => 'No encontramos la licencia']]], 422),
+        '/numLicencia' => Http::response(['errors' => [['cod' => 2037, 'msg' => 'No encontramos la licencia']]], 422),
+        '/personas/' => Http::response(['apePaterno' => 'MAMANI', 'apeMaterno' => 'MASCO', 'nomPerNat' => 'ADOLFO']),
     ]);
     $admin = actorConRol('admin');
 
@@ -139,5 +141,15 @@ it('trae el TUCE de la placa y si la licencia está en el MTC', function (): voi
     actingAs($admin)
         ->getJson(route('viajes.emitir.conductor', $conductor))
         ->assertOk()
-        ->assertExactJson(['encontrada' => false, 'mensaje' => 'No encontramos la licencia']);
+        ->assertExactJson([
+            'dni' => ['encontrado' => true, 'nombre' => 'MAMANI MASCO ADOLFO', 'coincide' => true],
+            'licencia' => ['encontrada' => false, 'mensaje' => 'No encontramos la licencia'],
+        ]);
+
+    // DNI mal cargado: RENIEC devuelve a otra persona.
+    actingAs($admin)
+        ->getJson(route('viajes.emitir.conductor', $otro))
+        ->assertOk()
+        ->assertJsonPath('dni.coincide', false)
+        ->assertJsonPath('dni.nombre', 'MAMANI MASCO ADOLFO');
 });
