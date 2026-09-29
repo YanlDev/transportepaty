@@ -4,6 +4,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Vite;
 use Tests\TestCase;
 
 /*
@@ -19,7 +20,17 @@ use Tests\TestCase;
 
 pest()->extend(TestCase::class)
     ->use(RefreshDatabase::class)
-    ->in('Feature');
+    ->in('Feature', 'Browser');
+
+/*
+| Las pruebas de navegador usan siempre los assets compilados (`npm run build`),
+| aunque esté corriendo `npm run dev`: con Vite de desarrollo la página abre
+| el websocket de recarga en caliente, la red nunca queda quieta y Playwright
+| espera para siempre a que termine de cargar.
+*/
+pest()->beforeEach(function (): void {
+    Vite::useHotFile(storage_path('framework/vite.hot.pruebas-de-navegador'));
+})->in('Browser');
 
 /*
 |--------------------------------------------------------------------------
