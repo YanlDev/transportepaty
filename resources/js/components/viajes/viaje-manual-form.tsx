@@ -98,6 +98,8 @@ export function ViajeManualForm({
                     <Field label="N° de guía" error={errors.numero_gr} required>
                         {(id) => (
                             <Input
+                                autoCapitalize="characters"
+                                autoComplete="off"
                                 id={id}
                                 value={data.numero_gr}
                                 onChange={(e) =>

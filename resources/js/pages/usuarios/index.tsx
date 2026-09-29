@@ -12,6 +12,7 @@ import usuarios, {
     create,
     edit,
 } from '@/actions/App/Http/Controllers/UserController';
+import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,7 +71,7 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
                     </p>
                 </div>
 
-                <Button asChild>
+                <Button asChild className="max-md:hidden">
                     <Link href={create()}>
                         <Plus className="size-4" />
                         Nuevo usuario
@@ -150,6 +151,10 @@ export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {
                     )}
                 </>
             )}
+
+            <AccionPrincipalMovil href={create()} icono={<Plus />}>
+                Nuevo usuario
+            </AccionPrincipalMovil>
         </div>
     );
 }

@@ -59,3 +59,43 @@ it('muestra Emitir GR en celular con la acción fija abajo', function (): void {
         ->assertNoJavaScriptErrors()
         ->screenshot(filename: 'movil-emitir');
 });
+
+/**
+ * Las pantallas del día a día, con datos, en celular: cargan sin errores de
+ * JavaScript y sin scroll horizontal de página.
+ */
+it('muestra sin desbordarse en celular la pantalla', function (string $ruta): void {
+    actingAs(actorConRol('admin'));
+    $tracto = App\Models\Vehiculo::factory()->create();
+    $conductor = App\Models\Conductor::factory()->create();
+    App\Models\Viaje::factory()->count(3)->create(['tracto_id' => $tracto->id, 'conductor_id' => $conductor->id]);
+
+    $ruta = str_replace(['{tracto}', '{conductor}'], [$tracto->id, $conductor->id], $ruta);
+
+    visit($ruta)
+        ->on()->mobile()
+        ->assertScript(SIN_DESBORDE, true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil'.str_replace('/', '-', $ruta));
+})->with([
+    'tablero' => '/dashboard',
+    'tractos' => '/tractos',
+    'ficha de tracto' => '/vehiculos/{tracto}',
+    'conductores' => '/conductores',
+    'ficha de conductor' => '/conductores/{conductor}',
+    'asistencia' => '/asistencia',
+    'cobranza' => '/contabilidad',
+]);
+
+it('en tablet vertical muestra la tabla con el sidebar colapsado a íconos', function (string $ruta): void {
+    actingAs(actorConRol('admin'));
+    App\Models\Viaje::factory()->count(3)->create();
+
+    visit($ruta)
+        ->resize(768, 1024)
+        ->assertPresent('[data-slot="sidebar"][data-state="collapsed"]')
+        ->assertScript("document.querySelector('table')?.offsetParent !== null", true)
+        ->assertScript(SIN_DESBORDE, true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'tablet'.str_replace('/', '-', $ruta));
+})->with(['viajes' => '/viajes', 'cobranza' => '/contabilidad']);

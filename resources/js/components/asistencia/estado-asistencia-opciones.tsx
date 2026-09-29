@@ -35,7 +35,7 @@ export function EstadoAsistenciaOpciones({
                 >
                     <span
                         className={cn(
-                            'grid size-4 place-items-center rounded-none text-[10px] font-bold',
+                            'grid size-5 place-items-center rounded-none text-[11px] font-bold',
                             estadoConfig[estado].badge,
                         )}
                     >

@@ -105,6 +105,8 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                     <Field label="Nombres" error={errors.nombres} required>
                         {(id) => (
                             <Input
+                                autoComplete="given-name"
+                                autoCapitalize="words"
                                 id={id}
                                 value={data.nombres}
                                 onChange={(e) =>
@@ -117,6 +119,8 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                     <Field label="Apellidos" error={errors.apellidos} required>
                         {(id) => (
                             <Input
+                                autoComplete="family-name"
+                                autoCapitalize="words"
                                 id={id}
                                 value={data.apellidos}
                                 onChange={(e) =>
@@ -129,6 +133,7 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                     <Field label="Documento" error={errors.documento} required>
                         {(id) => (
                             <Input
+                                autoComplete="off"
                                 id={id}
                                 inputMode="numeric"
                                 value={data.documento}
@@ -157,6 +162,7 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                     <Field label="Procedencia" error={errors.procedencia}>
                         {(id) => (
                             <Input
+                                autoCapitalize="words"
                                 id={id}
                                 value={data.procedencia}
                                 onChange={(e) =>
@@ -169,6 +175,7 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                     <Field label="Teléfono" error={errors.telefono}>
                         {(id) => (
                             <Input
+                                autoComplete="tel"
                                 id={id}
                                 type="tel"
                                 inputMode="tel"
@@ -201,6 +208,8 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                     <Field label="Email" error={errors.email}>
                         {(id) => (
                             <Input
+                                autoComplete="email"
+                                inputMode="email"
                                 id={id}
                                 type="email"
                                 value={data.email}
@@ -214,6 +223,8 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                     <Field label="N° Licencia" error={errors.licencia}>
                         {(id) => (
                             <Input
+                                autoCapitalize="characters"
+                                autoComplete="off"
                                 id={id}
                                 value={data.licencia}
                                 onChange={(e) =>

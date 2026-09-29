@@ -5,6 +5,7 @@ import conductores, {
     edit,
     show,
 } from '@/actions/App/Http/Controllers/ConductorController';
+import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { ConductorTarjetaMovil } from '@/components/conductores/conductor-tarjeta-movil';
 import { DeleteConductorDialog } from '@/components/conductores/delete-conductor-dialog';
 import { EmptyState } from '@/components/empty-state';
@@ -58,7 +59,7 @@ export default function ConductoresIndex({
                 </div>
 
                 {puedeCrear && (
-                    <Button asChild>
+                    <Button asChild className="max-md:hidden">
                         <Link href={create()}>
                             <Plus className="size-4" />
                             Nuevo conductor
@@ -97,7 +98,7 @@ export default function ConductoresIndex({
                 />
             ) : (
                 <>
-                    <div className="flex flex-col gap-2 sm:hidden">
+                    <div className="flex flex-col gap-2 md:hidden">
                         {paginador.data.map((conductor) => (
                             <ConductorTarjetaMovil
                                 key={conductor.id}
@@ -108,7 +109,7 @@ export default function ConductoresIndex({
                         ))}
                     </div>
 
-                    <div className="hidden overflow-x-auto border sm:block">
+                    <div className="hidden overflow-x-auto rounded-xl border md:block">
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
@@ -277,6 +278,12 @@ export default function ConductoresIndex({
                         </div>
                     )}
                 </>
+            )}
+
+            {puedeCrear && (
+                <AccionPrincipalMovil href={create()} icono={<Plus />}>
+                    Nuevo conductor
+                </AccionPrincipalMovil>
             )}
         </div>
     );

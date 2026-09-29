@@ -3,6 +3,7 @@ import { Building2, Plus } from 'lucide-react';
 import clientes, {
     create,
 } from '@/actions/App/Http/Controllers/ClienteController';
+import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { ClienteTarjeta } from '@/components/clientes/cliente-tarjeta';
 import { TablaClientes } from '@/components/clientes/tabla-clientes';
 import { EmptyState } from '@/components/empty-state';
@@ -52,7 +53,7 @@ export default function ClientesIndex({
                 </div>
 
                 {puedeCrear && (
-                    <Button asChild>
+                    <Button asChild className="max-md:hidden">
                         <Link href={create()}>
                             <Plus className="size-4" />
                             Nuevo cliente
@@ -81,7 +82,7 @@ export default function ClientesIndex({
                 />
             ) : (
                 <>
-                    <div className="flex flex-col gap-2 lg:hidden">
+                    <div className="flex flex-col gap-2 md:hidden">
                         {paginador.data.map((cliente) => (
                             <ClienteTarjeta
                                 key={cliente.id}
@@ -100,6 +101,12 @@ export default function ClientesIndex({
 
                     <Paginacion paginador={paginador} />
                 </>
+            )}
+
+            {puedeCrear && (
+                <AccionPrincipalMovil href={create()} icono={<Plus />}>
+                    Nuevo cliente
+                </AccionPrincipalMovil>
             )}
         </div>
     );

@@ -4,6 +4,7 @@ import vehiculos, {
     create,
     show,
 } from '@/actions/App/Http/Controllers/VehiculoController';
+import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { Copiable } from '@/components/copiable';
 import { EmptyState } from '@/components/empty-state';
 import {
@@ -101,7 +102,7 @@ export default function VehiculosIndex({
                 </div>
 
                 {puedeCrear && (
-                    <Button asChild>
+                    <Button asChild className="max-md:hidden">
                         <Link href={create({ query: { tipo: seccion } })}>
                             <Plus className="size-4" />
                             {textos.nuevo}
@@ -147,7 +148,7 @@ export default function VehiculosIndex({
                 <>
                     <LeyendaSemaforo />
 
-                    <div className="flex flex-col gap-2 sm:hidden">
+                    <div className="flex flex-col gap-2 md:hidden">
                         {paginador.data.map((vehiculo) => (
                             <VehiculoTarjetaMovil
                                 key={vehiculo.id}
@@ -156,7 +157,7 @@ export default function VehiculosIndex({
                         ))}
                     </div>
 
-                    <div className="hidden overflow-x-auto rounded-xl border shadow-sm sm:block">
+                    <div className="hidden overflow-x-auto rounded-xl border shadow-sm md:block">
                         <Table>
                             <TableHeader>
                                 <TableRow className="hover:bg-transparent">
@@ -242,6 +243,15 @@ export default function VehiculosIndex({
 
                     <Paginacion paginador={paginador} />
                 </>
+            )}
+
+            {puedeCrear && (
+                <AccionPrincipalMovil
+                    href={create({ query: { tipo: seccion } })}
+                    icono={<Plus />}
+                >
+                    {textos.nuevo}
+                </AccionPrincipalMovil>
             )}
         </div>
     );

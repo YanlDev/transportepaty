@@ -111,7 +111,7 @@ export function DocumentosResumen({ estado }: { estado: EstadoDocumental }) {
                 {estado.documentos.map((documento) => (
                     <Tooltip key={documento.tipo}>
                         <TooltipTrigger
-                            className={`cursor-help px-1.5 py-0.5 text-[10px] font-semibold tracking-wide ring-1 ring-inset ${chipDocumento[documento.estado]}`}
+                            className={`cursor-help px-1.5 py-0.5 text-[11px] font-semibold tracking-wide ring-1 ring-inset ${chipDocumento[documento.estado]}`}
                         >
                             {documento.abreviatura}
                         </TooltipTrigger>

@@ -105,6 +105,8 @@ export function VehiculoForm({
                 <Field label="Placa" error={errors.placa} required>
                     {(id) => (
                         <Input
+                            autoCapitalize="characters"
+                            autoComplete="off"
                             id={id}
                             value={data.placa}
                             onChange={(e) =>
@@ -121,6 +123,8 @@ export function VehiculoForm({
                 >
                     {(id) => (
                         <Input
+                            autoCapitalize="characters"
+                            autoComplete="off"
                             id={id}
                             value={data.tuc}
                             onChange={(e) =>
@@ -233,6 +237,8 @@ export function VehiculoForm({
                 <Field label="VIN" error={errors.vin}>
                     {(id) => (
                         <Input
+                            autoCapitalize="characters"
+                            autoComplete="off"
                             id={id}
                             value={data.vin}
                             onChange={(e) =>
@@ -245,6 +251,8 @@ export function VehiculoForm({
                     <Field label="N.° de motor" error={errors.numero_motor}>
                         {(id) => (
                             <Input
+                                autoCapitalize="characters"
+                                autoComplete="off"
                                 id={id}
                                 value={data.numero_motor}
                                 onChange={(e) =>

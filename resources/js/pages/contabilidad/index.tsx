@@ -6,9 +6,11 @@ import cuentas from '@/actions/App/Http/Controllers/CuentaBancariaController';
 import { BarraSeleccion } from '@/components/contabilidad/barra-seleccion';
 import { ResumenCobranza } from '@/components/contabilidad/resumen-cobranza';
 import { TablaCobranza } from '@/components/contabilidad/tabla-cobranza';
+import { TarjetaCobranza } from '@/components/contabilidad/tarjeta-cobranza';
 import { EmptyState } from '@/components/empty-state';
 import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
+import { ListadoResponsivo } from '@/components/listado-responsivo';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Paginacion } from '@/components/ui/paginacion';
@@ -191,14 +193,42 @@ export default function ContabilidadIndex({
                 />
             )}
 
-            {paginador.data.length === 0 ? (
-                <EmptyState
-                    icono={<Receipt className="size-7" />}
-                    titulo="No hay viajes para mostrar"
-                    descripcion="Ajusta los filtros o la búsqueda."
-                />
-            ) : (
-                <>
+            <ListadoResponsivo
+                items={filas}
+                clave={({ viaje }) => viaje.id}
+                vacio={
+                    <EmptyState
+                        icono={<Receipt className="size-7" />}
+                        titulo="No hay viajes para mostrar"
+                        descripcion="Ajusta los filtros o la búsqueda."
+                    />
+                }
+                tarjeta={({ viaje, colorGrupo }) => (
+                    <TarjetaCobranza
+                        viaje={viaje}
+                        colorGrupo={colorGrupo}
+                        puedeFacturar={puedeFacturar}
+                        seleccionado={seleccion.some(
+                            (elegido) => elegido.id === viaje.id,
+                        )}
+                        onSeleccionar={(elegido) =>
+                            setSeleccion(
+                                seleccion.some((otro) => otro.id === elegido.id)
+                                    ? seleccion.filter(
+                                          (otro) => otro.id !== elegido.id,
+                                      )
+                                    : [
+                                          ...seleccion,
+                                          {
+                                              id: elegido.id,
+                                              numero_gr: elegido.numero_gr,
+                                          },
+                                      ],
+                            )
+                        }
+                    />
+                )}
+                tabla={
                     <TablaCobranza
                         filas={filas}
                         facturables={facturables}
@@ -208,9 +238,11 @@ export default function ContabilidadIndex({
                         seleccion={seleccion}
                         onSeleccion={setSeleccion}
                     />
+                }
+            />
 
-                    <Paginacion paginador={paginador} preservarEstado />
-                </>
+            {paginador.data.length > 0 && (
+                <Paginacion paginador={paginador} preservarEstado />
             )}
         </div>
     );

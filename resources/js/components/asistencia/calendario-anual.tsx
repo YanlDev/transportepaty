@@ -67,7 +67,7 @@ export function CalendarioAsistenciaAnual({
                             >
                                 <span
                                     className={cn(
-                                        'grid size-4 place-items-center rounded-none text-[10px] font-bold',
+                                        'grid size-5 place-items-center rounded-none text-[11px] font-bold',
                                         estadoConfig[estado].badge,
                                     )}
                                 >
@@ -288,7 +288,7 @@ function DiaCelda({
                 {info && (
                     <span
                         className={cn(
-                            'w-full truncate rounded-none px-1 py-0.5 text-center text-[10px] font-bold',
+                            'w-full truncate rounded-none px-1 py-0.5 text-center text-[11px] font-bold',
                             info.badge,
                         )}
                     >

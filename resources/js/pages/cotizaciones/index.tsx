@@ -114,7 +114,7 @@ export default function CotizacionesIndex({
                 />
             ) : (
                 <>
-                    <div className="flex flex-col gap-2 lg:hidden">
+                    <div className="flex flex-col gap-2 md:hidden">
                         {paginador.data.map((cotizacion) => (
                             <Link
                                 key={cotizacion.id}
@@ -143,7 +143,7 @@ export default function CotizacionesIndex({
                         ))}
                     </div>
 
-                    <div className="hidden overflow-hidden rounded-xl border border-border lg:block">
+                    <div className="hidden overflow-x-auto rounded-xl border border-border md:block">
                         <Table>
                             <TableHeader>
                                 <TableRow>

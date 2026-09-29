@@ -3,6 +3,7 @@ import { Landmark, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cuentasBancarias from '@/actions/App/Http/Controllers/CuentaBancariaController';
+import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import {
     ConfirmarBorradoDialog,
     Resaltado,
@@ -10,16 +11,10 @@ import {
 import { CuentaDialog } from '@/components/contabilidad/cuenta-dialog';
 import { Copiable } from '@/components/copiable';
 import { EmptyState } from '@/components/empty-state';
+import { ListadoResponsivo } from '@/components/listado-responsivo';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from '@/components/ui/table';
+import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import type { CuentaBancaria } from '@/types/contabilidad';
 import type { EnumOption } from '@/types/fleet';
 
@@ -55,98 +50,112 @@ export default function CuentasBancarias({ cuentas, monedas }: Props) {
                     <Button asChild variant="outline">
                         <Link href={contabilidad.index()}>Ver cobranza</Link>
                     </Button>
-                    <Button onClick={() => abrir(null)}>
+                    <Button
+                        onClick={() => abrir(null)}
+                        className="max-md:hidden"
+                    >
                         <Plus className="size-4" />
                         Nueva cuenta
                     </Button>
                 </div>
             </div>
 
-            {cuentas.length === 0 ? (
-                <EmptyState
-                    expandir={false}
-                    icono={<Landmark className="size-7" />}
-                    titulo="Todavía no hay cuentas"
-                    descripcion="Registra las cuentas por las que cobras para poder marcar los pagos en la cobranza."
-                />
-            ) : (
-                <div className="overflow-x-auto rounded-xl border shadow-sm">
-                    <Table>
-                        <TableHeader>
-                            <TableRow className="hover:bg-transparent">
-                                <TableHead>Alias</TableHead>
-                                <TableHead>Banco</TableHead>
-                                <TableHead>N° de cuenta</TableHead>
-                                <TableHead>CCI</TableHead>
-                                <TableHead>Moneda</TableHead>
-                                <TableHead>Estado</TableHead>
-                                <TableHead className="text-right">
-                                    Facturas
-                                </TableHead>
-                                <TableHead className="w-0" />
-                            </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {cuentas.map((cuenta) => (
-                                <TableRow key={cuenta.id}>
-                                    <TableCell className="font-medium">
-                                        {cuenta.alias}
-                                    </TableCell>
-                                    <TableCell>{cuenta.banco}</TableCell>
-                                    <TableCell className="font-mono text-[11px] tabular-nums">
-                                        <Copiable
-                                            valor={cuenta.numero_cuenta}
-                                            etiqueta="N° de cuenta"
-                                        />
-                                    </TableCell>
-                                    <TableCell className="font-mono text-[11px] text-muted-foreground tabular-nums">
-                                        {cuenta.cci ? (
-                                            <Copiable
-                                                valor={cuenta.cci}
-                                                etiqueta="CCI"
-                                            />
-                                        ) : (
-                                            '—'
-                                        )}
-                                    </TableCell>
-                                    <TableCell>{cuenta.moneda_label}</TableCell>
-                                    <TableCell>
-                                        <StatusBadge
-                                            label={
-                                                cuenta.activa
-                                                    ? 'Activa'
-                                                    : 'Cerrada'
-                                            }
-                                            tone={
-                                                cuenta.activa
-                                                    ? 'success'
-                                                    : 'neutral'
-                                            }
-                                        />
-                                    </TableCell>
-                                    <TableCell className="text-right text-muted-foreground tabular-nums">
-                                        {cuenta.facturas_count}
-                                    </TableCell>
-                                    <TableCell>
-                                        <div className="flex items-center justify-end gap-1">
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                className="size-8 text-muted-foreground"
-                                                aria-label={`Editar ${cuenta.alias}`}
-                                                onClick={() => abrir(cuenta)}
-                                            >
-                                                <Pencil className="size-4" />
-                                            </Button>
-                                            <EliminarCuenta cuenta={cuenta} />
-                                        </div>
-                                    </TableCell>
-                                </TableRow>
-                            ))}
-                        </TableBody>
-                    </Table>
-                </div>
-            )}
+            <ListadoResponsivo
+                items={cuentas}
+                clave={(cuenta) => cuenta.id}
+                vacio={
+                    <EmptyState
+                        expandir={false}
+                        icono={<Landmark className="size-7" />}
+                        titulo="Todavía no hay cuentas"
+                        descripcion="Registra las cuentas por las que cobras para poder marcar los pagos en la cobranza."
+                    />
+                }
+                tarjeta={(cuenta) => (
+                    <div className="flex flex-col gap-2 rounded-xl border bg-card p-3">
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="truncate text-base font-semibold">
+                                {cuenta.alias}
+                            </span>
+                            <EstadoCuenta activa={cuenta.activa} />
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                            {cuenta.banco} · {cuenta.moneda_label}
+                        </p>
+                        <div className="font-mono text-sm tabular-nums">
+                            <Copiable
+                                valor={cuenta.numero_cuenta}
+                                etiqueta="N° de cuenta"
+                            />
+                        </div>
+                        {cuenta.cci && (
+                            <div className="font-mono text-xs text-muted-foreground tabular-nums">
+                                CCI{' '}
+                                <Copiable valor={cuenta.cci} etiqueta="CCI" />
+                            </div>
+                        )}
+                        <div className="flex items-center justify-between gap-2 border-t pt-2">
+                            <span className="text-xs text-muted-foreground">
+                                {cuenta.facturas_count} facturas
+                            </span>
+                            <AccionesCuenta
+                                cuenta={cuenta}
+                                onEditar={() => abrir(cuenta)}
+                            />
+                        </div>
+                    </div>
+                )}
+                encabezado={
+                    <TableRow className="hover:bg-transparent">
+                        <TableHead>Alias</TableHead>
+                        <TableHead>Banco</TableHead>
+                        <TableHead>N° de cuenta</TableHead>
+                        <TableHead>CCI</TableHead>
+                        <TableHead>Moneda</TableHead>
+                        <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Facturas</TableHead>
+                        <TableHead className="w-0" />
+                    </TableRow>
+                }
+                fila={(cuenta) => (
+                    <TableRow>
+                        <TableCell className="font-medium">
+                            {cuenta.alias}
+                        </TableCell>
+                        <TableCell>{cuenta.banco}</TableCell>
+                        <TableCell className="font-mono text-xs tabular-nums">
+                            <Copiable
+                                valor={cuenta.numero_cuenta}
+                                etiqueta="N° de cuenta"
+                            />
+                        </TableCell>
+                        <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
+                            {cuenta.cci ? (
+                                <Copiable valor={cuenta.cci} etiqueta="CCI" />
+                            ) : (
+                                '—'
+                            )}
+                        </TableCell>
+                        <TableCell>{cuenta.moneda_label}</TableCell>
+                        <TableCell>
+                            <EstadoCuenta activa={cuenta.activa} />
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground tabular-nums">
+                            {cuenta.facturas_count}
+                        </TableCell>
+                        <TableCell>
+                            <AccionesCuenta
+                                cuenta={cuenta}
+                                onEditar={() => abrir(cuenta)}
+                            />
+                        </TableCell>
+                    </TableRow>
+                )}
+            />
+
+            <AccionPrincipalMovil onClick={() => abrir(null)} icono={<Plus />}>
+                Nueva cuenta
+            </AccionPrincipalMovil>
 
             {/* `key` por cuenta: cada una monta su propio diálogo, así el
                 formulario nace con sus valores y no hay que resembrarlo. */}
@@ -157,6 +166,38 @@ export default function CuentasBancarias({ cuentas, monedas }: Props) {
                 cuenta={enEdicion}
                 monedas={monedas}
             />
+        </div>
+    );
+}
+
+function EstadoCuenta({ activa }: { activa: boolean }) {
+    return (
+        <StatusBadge
+            label={activa ? 'Activa' : 'Cerrada'}
+            tone={activa ? 'success' : 'neutral'}
+        />
+    );
+}
+
+function AccionesCuenta({
+    cuenta,
+    onEditar,
+}: {
+    cuenta: CuentaBancaria;
+    onEditar: () => void;
+}) {
+    return (
+        <div className="flex items-center justify-end gap-1">
+            <Button
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground"
+                aria-label={`Editar ${cuenta.alias}`}
+                onClick={onEditar}
+            >
+                <Pencil className="size-4" />
+            </Button>
+            <EliminarCuenta cuenta={cuenta} />
         </div>
     );
 }

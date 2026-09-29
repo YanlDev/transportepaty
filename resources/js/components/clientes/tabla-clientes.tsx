@@ -35,7 +35,7 @@ export function TablaClientes({
     query,
 }: Props) {
     return (
-        <div className="hidden overflow-x-auto rounded-xl border border-border bg-card lg:block">
+        <div className="hidden overflow-x-auto rounded-xl border border-border bg-card md:block">
             <Table>
                 <TableHeader>
                     <TableRow className="bg-muted/40 hover:bg-muted/40">

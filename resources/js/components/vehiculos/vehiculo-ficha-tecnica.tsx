@@ -1,5 +1,6 @@
 import { Cog, FileText, Gauge, Scale, Wrench } from 'lucide-react';
 import { Copiable } from '@/components/copiable';
+import { cn } from '@/lib/utils';
 import type { Vehiculo } from '@/types/fleet';
 
 /**
@@ -22,7 +23,9 @@ export function VehiculoFichaTecnica({
                 </h2>
             </div>
 
-            <div className="grid gap-3 p-4 sm:grid-cols-2 xl:grid-cols-3">
+            {/* Dos por fila también en el celular: de a uno, seis datos
+                cortos obligaban a bajar una pantalla entera. */}
+            <div className="grid grid-cols-2 gap-2 p-4 sm:gap-3 xl:grid-cols-3">
                 <Tile icono={Cog} label="Ejes">
                     {vehiculo.ejes ? String(vehiculo.ejes) : '—'}
                 </Tile>
@@ -31,7 +34,7 @@ export function VehiculoFichaTecnica({
                         {vehiculo.numero_motor ?? '—'}
                     </Tile>
                 )}
-                <Tile icono={FileText} label="VIN">
+                <Tile icono={FileText} label="VIN" ancho>
                     {vehiculo.vin ? (
                         <Copiable valor={vehiculo.vin} etiqueta="VIN">
                             <span className="font-mono text-sm">
@@ -60,15 +63,23 @@ function Tile({
     icono: Icono,
     label,
     children,
+    ancho = false,
 }: {
     icono: typeof Cog;
     label: string;
     children: React.ReactNode;
+    /** Ocupa toda la fila en el celular (el VIN no entra en media). */
+    ancho?: boolean;
 }) {
     return (
-        <div className="flex items-center gap-3 rounded-lg border border-border p-3">
+        <div
+            className={cn(
+                'flex items-center gap-3 rounded-lg border border-border p-3',
+                ancho && 'max-sm:col-span-2',
+            )}
+        >
             <span
-                className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground"
+                className="grid size-9 shrink-0 place-items-center rounded-md bg-muted text-muted-foreground max-sm:hidden"
                 aria-hidden
             >
                 <Icono className="size-4.5" />

@@ -33,7 +33,7 @@ export function CeldasCobranza({
                 <TableCell className="text-right text-muted-foreground/40">
                     —
                 </TableCell>
-                <TableCell className="font-mono text-[11px] whitespace-nowrap">
+                <TableCell className="font-mono text-xs whitespace-nowrap">
                     {editable ? (
                         <CeldaNuevaFactura viajeId={viaje.id} />
                     ) : (
@@ -80,7 +80,7 @@ export function CeldasCobranza({
                                     sin esto, tres filas de S/ 4,500 se leen
                                     como S/ 13,500 cobrados. */}
                                 {factura.viajes_count > 1 && (
-                                    <span className="text-[10px] text-muted-foreground">
+                                    <span className="text-xs text-muted-foreground">
                                         por {factura.viajes_count} viajes
                                     </span>
                                 )}
@@ -90,7 +90,7 @@ export function CeldasCobranza({
                 </div>
             </TableCell>
 
-            <TableCell className="font-mono text-[11px] whitespace-nowrap tabular-nums">
+            <TableCell className="font-mono text-xs whitespace-nowrap tabular-nums">
                 <ValorEditable
                     url={update(factura.id).url}
                     campo="numero"
@@ -143,13 +143,13 @@ export function CeldasCobranza({
                     justamente el dato que este módulo existe para no perder. */}
                 {factura.fecha_pago !== null &&
                     factura.cuenta_bancaria_id === null && (
-                        <span className="block text-[10px] text-amber-700 dark:text-amber-500">
+                        <span className="block text-xs text-amber-700 dark:text-amber-500">
                             falta la entidad
                         </span>
                     )}
             </TableCell>
 
-            <TableCell className="max-w-[220px] text-muted-foreground">
+            <TableCell className="max-w-56 text-muted-foreground">
                 <ValorEditable
                     url={update(factura.id).url}
                     campo="observacion"

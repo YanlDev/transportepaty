@@ -81,7 +81,7 @@ export function DocumentoTarjeta({
             </span>
 
             <div className="min-w-0 flex-1">
-                <p className="truncate text-sm leading-tight font-medium text-foreground">
+                <p className="line-clamp-2 text-sm leading-tight font-medium text-foreground">
                     {ranura.label}
                 </p>
                 {/* El vencimiento es el dato por el que se mira esta pantalla,

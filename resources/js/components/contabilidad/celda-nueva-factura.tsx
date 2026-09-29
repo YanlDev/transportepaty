@@ -67,7 +67,7 @@ export function CeldaNuevaFactura({ viajeId }: { viajeId: number }) {
                     }
                 }}
                 placeholder="F001-00123"
-                className="w-full min-w-28 rounded-sm border border-primary bg-background px-1 py-0.5 font-mono text-[11px] outline-none"
+                className="w-full min-w-28 rounded-sm border border-primary bg-background px-1 py-0.5 font-mono text-xs outline-none"
             />
         );
     }

@@ -64,10 +64,10 @@ export function FilaCobranza({
             <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
                 {formatearFecha(viaje.fecha_traslado)}
             </TableCell>
-            <TableCell className="font-mono text-[11px] whitespace-nowrap text-blue-950 tabular-nums dark:text-blue-300">
+            <TableCell className="font-mono text-xs whitespace-nowrap text-foreground tabular-nums">
                 <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
             </TableCell>
-            <TableCell className="font-mono text-[11px] whitespace-nowrap text-marca-600 tabular-nums dark:text-marca-400">
+            <TableCell className="font-mono text-xs whitespace-nowrap text-marca-600 tabular-nums dark:text-marca-400">
                 <GuiasRemitenteCelda guias={viaje.guias_remitente} />
             </TableCell>
             <TableCell className="text-center">
@@ -78,13 +78,13 @@ export function FilaCobranza({
                     editable={puedeFacturar}
                 />
             </TableCell>
-            <TableCell className="text-[11px] whitespace-nowrap">
+            <TableCell className="text-xs whitespace-nowrap">
                 <PlacaCelda
                     placa={viaje.placa_tracto}
                     vehiculoId={viaje.tracto_id}
                 />
             </TableCell>
-            <TableCell className="text-[11px] whitespace-nowrap">
+            <TableCell className="text-xs whitespace-nowrap">
                 {viaje.placa_carreta ? (
                     <PlacaCelda
                         placa={viaje.placa_carreta}
@@ -94,22 +94,22 @@ export function FilaCobranza({
                     '—'
                 )}
             </TableCell>
-            <TableCell className="text-[11px] whitespace-nowrap">
+            <TableCell className="text-xs whitespace-nowrap">
                 <ConductorCelda
                     nombre={viaje.conductor_nombre}
                     conductorId={viaje.conductor_id}
                 />
             </TableCell>
-            <TableCell className="max-w-[160px] overflow-hidden">
+            <TableCell className="max-w-40 overflow-hidden">
                 <ClienteChip cliente={viaje.cliente} />
             </TableCell>
-            <TableCell className="max-w-[160px] overflow-hidden">
+            <TableCell className="max-w-40 overflow-hidden">
                 <DireccionCelda
                     ciudad={viaje.origen_ciudad}
                     direccion={viaje.origen}
                 />
             </TableCell>
-            <TableCell className="max-w-[160px] overflow-hidden">
+            <TableCell className="max-w-40 overflow-hidden">
                 <DireccionCelda
                     ciudad={viaje.destino_ciudad}
                     direccion={viaje.destino}

@@ -369,7 +369,7 @@ export function Dona({
                     <span className="text-xl font-semibold tabular-nums">
                         {total}
                     </span>
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground">
                         {etiquetaTotal}
                     </span>
                 </div>

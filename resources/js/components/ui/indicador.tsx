@@ -44,20 +44,24 @@ export function Indicador({
         <div
             className={cn(
                 'flex items-start gap-3 rounded-xl border border-border bg-card p-4',
-                grande && 'sm:p-5',
+                // En el tablero van de a dos por fila en el celular: con el
+                // ícono al costado quedaban ~70px de texto y se cortaba todo.
+                // Ahí el ícono sube y el texto usa el ancho completo.
+                grande && 'flex-col gap-2 p-3.5 sm:flex-row sm:gap-3 sm:p-5',
                 className,
             )}
         >
             <span
                 className={cn(
                     'grid size-10 shrink-0 place-items-center rounded-lg',
+                    grande && 'size-9 sm:size-10',
                     color,
                 )}
                 aria-hidden
             >
                 {icono}
             </span>
-            <div className="min-w-0">
+            <div className="w-full min-w-0">
                 <p className="truncate text-xs text-muted-foreground">
                     {label}
                 </p>
@@ -71,7 +75,7 @@ export function Indicador({
                     {valor}
                 </div>
                 {pie && (
-                    <div className="truncate text-xs text-muted-foreground">
+                    <div className="line-clamp-2 text-xs text-muted-foreground">
                         {pie}
                     </div>
                 )}

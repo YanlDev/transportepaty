@@ -129,7 +129,7 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
                         >
                             <span
                                 className={cn(
-                                    'grid size-4 place-items-center rounded-none text-[10px] font-bold',
+                                    'grid size-5 place-items-center rounded-none text-[11px] font-bold',
                                     estadoConfig[estado].badge,
                                 )}
                             >
@@ -200,7 +200,7 @@ function ConductorCicloTarjeta({
             >
                 <span className="truncate">{fila.nombre_completo}</span>
                 {!fila.activo && (
-                    <span className="shrink-0 rounded-sm bg-muted px-1 py-0.5 text-[9px] font-bold tracking-normal text-muted-foreground normal-case">
+                    <span className="shrink-0 rounded-sm bg-muted px-1 py-0.5 text-[11px] font-bold tracking-normal text-muted-foreground normal-case">
                         Inactivo
                     </span>
                 )}
@@ -211,7 +211,7 @@ function ConductorCicloTarjeta({
                     <span
                         key={letra}
                         className={cn(
-                            'text-center text-[10px] font-medium',
+                            'text-center text-xs font-medium',
                             indice === 6
                                 ? 'text-foreground/70'
                                 : 'text-muted-foreground/70',
@@ -226,7 +226,7 @@ function ConductorCicloTarjeta({
                 {Array.from({ length: celdasVacias }, (_, indice) => (
                     <div
                         key={`vacia-${indice}`}
-                        className="aspect-square w-full sm:size-7"
+                        className="aspect-square w-full sm:size-7 sm:pointer-coarse:size-9 xl:pointer-coarse:size-8"
                     />
                 ))}
                 {dias.map((dia) => (
@@ -308,7 +308,8 @@ function DiaCiclo({
                 // En móvil la celda es de 40px: se marca con el pulgar sin
                 // errarle al día de al lado. En escritorio se compacta.
                 className={cn(
-                    'grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-xs font-bold tabular-nums hover:ring-1 hover:ring-foreground/30 hover:ring-inset disabled:cursor-default sm:size-7 sm:text-[10px]',
+                    // Con dedo (tablet) la celda de 28px no se acierta: sube a 36px.
+                    'grid aspect-square w-full cursor-pointer place-items-center rounded-sm text-xs font-bold tabular-nums hover:ring-1 hover:ring-foreground/30 hover:ring-inset disabled:cursor-default sm:size-7 sm:text-[11px] sm:pointer-coarse:size-9 sm:pointer-coarse:text-xs xl:pointer-coarse:size-8',
                     info
                         ? info.badge
                         : cn(
