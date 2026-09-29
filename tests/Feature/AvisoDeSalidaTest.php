@@ -322,3 +322,23 @@ it('leaves the carga line out for a cliente with no GRs yet', function (): void 
         ->and(app(AvisoDeSalida::class)->mensajeParaArea($programacion->fresh(), AreaAviso::factory()->make()))
         ->not->toContain('Carga en');
 });
+
+/** Lo escrito al programar manda sobre lo deducido: esta vez carga en otro sitio. */
+it('uses the lugar de carga written by hand over the one deduced from GRs', function (): void {
+    $cliente = Cliente::factory()->create();
+
+    Viaje::factory()->count(3)->create([
+        'cliente_id' => $cliente->id,
+        'origen' => 'AV. UNIVERSITARIA - COMAS - LIMA - LIMA',
+    ]);
+
+    $programacion = Programacion::factory()->create([
+        'cliente_id' => $cliente->id,
+        'lugar_carga' => 'ALMACÉN LURÍN, MZ B LT 4',
+    ]);
+
+    expect(app(AvisoDeSalida::class)->lugarDeCarga($programacion))->toBe('ALMACÉN LURÍN, MZ B LT 4')
+        ->and(app(AvisoDeSalida::class)->lugarDeducido($cliente->id))->toBe('COMAS')
+        ->and(app(AvisoDeSalida::class)->mensajeParaArea($programacion->fresh(), AreaAviso::factory()->make()))
+        ->toContain('Carga en: *ALMACÉN LURÍN, MZ B LT 4*');
+});

@@ -740,3 +740,38 @@ it('flags the card when the salida changed after the driver was notified', funct
     $programacion->update(['destino' => 'PUNO']);
     $pedir()->assertInertia(fn ($page) => $page->where('programaciones.0.cambio_tras_aviso', true));
 });
+
+it('saves the lugar de carga and marks the aviso as outdated when it changes after sending', function (): void {
+    $admin = actorConRol('admin');
+    $programacion = Programacion::factory()->create(['aviso_enviado_at' => now()->subHour()]);
+
+    actingAs($admin)
+        ->put(route('programacion.update', $programacion), [
+            ...datosDeProgramacion(),
+            'vehiculo_id' => $programacion->vehiculo_id,
+            'conductor_id' => $programacion->conductor_id,
+            'cliente_id' => $programacion->cliente_id,
+            'lugar_carga' => 'ALMACÉN LURÍN',
+        ])
+        ->assertRedirect();
+
+    $programacion->refresh();
+
+    expect($programacion->lugar_carga)->toBe('ALMACÉN LURÍN')
+        ->and($programacion->cambioTrasElAviso())->toBeTrue();
+});
+
+it('offers each client with the lugar de carga its GRs suggest', function (): void {
+    $cliente = Cliente::factory()->create();
+    Viaje::factory()->count(2)->create([
+        'cliente_id' => $cliente->id,
+        'origen' => 'AV. UNIVERSITARIA - COMAS - LIMA - LIMA',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('programacion.index'))
+        ->assertInertia(fn ($page) => $page->where(
+            'clientes',
+            fn ($clientes) => collect($clientes)->firstWhere('id', $cliente->id)['lugar_carga_sugerido'] === 'COMAS',
+        ));
+});

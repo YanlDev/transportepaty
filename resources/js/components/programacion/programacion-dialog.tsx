@@ -34,6 +34,7 @@ type FormData = {
     conductor_id: number | null;
     cliente_id: number | null;
     destino: string;
+    lugar_carga: string;
     whatsapp_adicional: string;
     precio_flete: string;
     precio_incluye_igv: boolean;
@@ -93,6 +94,7 @@ export function ProgramacionDialog({
             conductor_id: programacion?.conductor_id ?? null,
             cliente_id: programacion?.cliente_id ?? null,
             destino: programacion?.destino ?? '',
+            lugar_carga: programacion?.lugar_carga ?? '',
             whatsapp_adicional: programacion?.whatsapp_adicional ?? '',
             precio_flete: programacion?.precio_flete?.toString() ?? '',
             precio_incluye_igv: programacion?.precio_incluye_igv ?? false,
@@ -134,6 +136,10 @@ export function ProgramacionDialog({
             etiqueta: conductor.nombre,
         }),
     );
+
+    const lugarSugerido =
+        clientes.find((cliente) => cliente.id === data.cliente_id)
+            ?.lugar_carga_sugerido ?? null;
 
     const opcionesClientes: OpcionBuscable[] = clientes.map((cliente) => ({
         valor: cliente.id,
@@ -445,6 +451,38 @@ export function ProgramacionDialog({
                                                 )}
                                             </datalist>
                                         </>
+                                    )}
+                                </Field>
+
+                                {/* Vacío, el aviso pone la ciudad de donde suele
+                                    partir el cliente según sus GR; se escribe
+                                    cuando esta vez carga en otro sitio. */}
+                                <Field
+                                    label="Lugar de carga"
+                                    error={errors.lugar_carga}
+                                    ayuda={
+                                        lugarSugerido
+                                            ? `Si lo dejas vacío, el aviso dirá «${lugarSugerido}» (de sus GR anteriores).`
+                                            : 'Opcional. Si lo dejas vacío, el aviso no lo menciona.'
+                                    }
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            value={data.lugar_carga}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'lugar_carga',
+                                                    evento.target.value.toUpperCase(),
+                                                )
+                                            }
+                                            placeholder={
+                                                lugarSugerido ??
+                                                'AV. ARGENTINA 123, CALLAO'
+                                            }
+                                            autoCapitalize="characters"
+                                            enterKeyHint="next"
+                                        />
                                     )}
                                 </Field>
 

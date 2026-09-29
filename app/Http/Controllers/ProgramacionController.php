@@ -225,6 +225,7 @@ class ProgramacionController extends Controller
             // habla del cliente, y el que colorea la tarjeta.
             'cliente' => $programacion->cliente->alias,
             'destino' => $programacion->destino,
+            'lugar_carga' => $programacion->lugar_carga,
             'telefono' => $programacion->conductor->telefono,
             'telefono_alterno' => $programacion->conductor->telefono_alterno,
             'whatsapp_adicional' => $programacion->whatsapp_adicional,
@@ -359,6 +360,9 @@ class ProgramacionController extends Controller
                 // creado: al volver, es por su RUC que se lo encuentra en esta
                 // lista ya recargada.
                 'ruc' => $cliente->ruc,
+                // Lo que el aviso pondría si no se escribe el lugar de carga,
+                // para mostrarlo como sugerencia en el campo.
+                'lugar_carga_sugerido' => $this->aviso->lugarDeducido($cliente->id),
             ])
             ->all();
     }

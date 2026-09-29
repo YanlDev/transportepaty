@@ -30,6 +30,8 @@ export type ProgramacionTarjeta = {
     /** El alias del cliente: el nombre corto, y el que colorea la tarjeta. */
     cliente: string;
     destino: string;
+    /** Escrito a mano; null si el aviso lo deduce de las GR del cliente. */
+    lugar_carga: string | null;
     /**
      * Como en una pantalla de salidas, a partir de las GR del día: con guía
      * ya salió; sin guía sigue programada, o queda para revisar si el día ya
@@ -120,6 +122,8 @@ export type ClienteOpcion = {
     alias: string;
     /** Con el que el alta express reconoce al cliente que acaba de crear. */
     ruc: string;
+    /** Lo que el aviso pone como «Carga en» si no se escribe: la ciudad de partida de sus GR. */
+    lugar_carga_sugerido: string | null;
 };
 
 /**

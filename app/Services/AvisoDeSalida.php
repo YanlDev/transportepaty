@@ -240,18 +240,31 @@ class AvisoDeSalida
     }
 
     /**
-     * De dónde carga ese cliente, según sus últimas GR. Nadie lo escribe al
-     * programar: el dato ya está en los viajes anteriores —Crisar carga en
-     * Huaral, Porcelanato en Chilca— y abastecimiento necesita saberlo para
-     * mandar la unidad al sitio correcto.
+     * Dónde carga la unidad: lo que se escribió al programar o, si quedó
+     * vacío, lo que dicen las últimas GR del cliente —Crisar carga en Huaral,
+     * Porcelanato en Chilca—. Abastecimiento lo necesita para mandar la unidad
+     * al sitio correcto.
      *
-     * Devuelve null para un cliente sin historial, y ahí la línea no sale:
-     * inventar un lugar de carga es peor que no ponerlo.
+     * Devuelve null para un cliente sin historial y sin nada escrito, y ahí
+     * la línea no sale: inventar un lugar de carga es peor que no ponerlo.
      */
     public function lugarDeCarga(Programacion $programacion): ?string
     {
-        $clienteId = $programacion->cliente_id;
+        // Lo escrito a mano manda: el cliente pudo cargar esta vez en otro
+        // sitio que el de siempre.
+        if (filled($programacion->lugar_carga)) {
+            return $programacion->lugar_carga;
+        }
 
+        return $this->lugarDeducido($programacion->cliente_id);
+    }
+
+    /**
+     * La ciudad de partida más frecuente en las últimas GR del cliente, o
+     * null si no tiene historial.
+     */
+    public function lugarDeducido(int $clienteId): ?string
+    {
         if (array_key_exists($clienteId, $this->lugaresDeCarga)) {
             return $this->lugaresDeCarga[$clienteId];
         }

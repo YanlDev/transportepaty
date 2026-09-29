@@ -30,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property int $conductor_id
  * @property int $cliente_id
  * @property string $destino
+ * @property string|null $lugar_carga Escrito a mano; vacío, el aviso lo deduce de las GR del cliente.
  * @property string|null $whatsapp_adicional
  * @property float|null $precio_flete
  * @property bool $precio_incluye_igv
@@ -48,6 +49,7 @@ use Illuminate\Support\Carbon;
     'conductor_id',
     'cliente_id',
     'destino',
+    'lugar_carga',
     'whatsapp_adicional',
     'precio_flete',
     'precio_incluye_igv',
@@ -71,7 +73,7 @@ class Programacion extends Model
      * Lo que dice el aviso al conductor: si cambia después de avisarle, el
      * aviso que tiene en el celular quedó viejo.
      */
-    private const DATOS_DEL_AVISO = ['fecha', 'vehiculo_id', 'conductor_id', 'cliente_id', 'destino'];
+    private const DATOS_DEL_AVISO = ['fecha', 'vehiculo_id', 'conductor_id', 'cliente_id', 'destino', 'lugar_carga'];
 
     protected static function booted(): void
     {

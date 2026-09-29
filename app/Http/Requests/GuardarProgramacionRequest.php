@@ -31,6 +31,7 @@ class GuardarProgramacionRequest extends FormRequest
             'conductor_id' => ['required', Rule::exists('conductores', 'id')],
             'cliente_id' => ['required', Rule::exists('clientes', 'id')],
             'destino' => ['required', 'string', 'max:255'],
+            'lugar_carga' => ['nullable', 'string', 'max:255'],
             // A quién más avisar de esta salida: el dueño de la unidad, un
             // apoyo. Es de la salida, no de la persona.
             'whatsapp_adicional' => ['nullable', 'string', 'max:30'],
