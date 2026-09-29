@@ -3,9 +3,11 @@ import { FilePenLine, Route as RouteIcon, Send } from 'lucide-react';
 import { useState } from 'react';
 import emisionGre from '@/actions/App/Http/Controllers/EmisionGreController';
 import viajes, { create } from '@/actions/App/Http/Controllers/ViajeController';
+import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { EmptyState } from '@/components/empty-state';
 import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
+import { ListadoResponsivo } from '@/components/listado-responsivo';
 import { Button } from '@/components/ui/button';
 import { Paginacion } from '@/components/ui/paginacion';
 import {
@@ -79,8 +81,14 @@ export default function ViajesIndex({
                         {pendientes > 0 && (
                             <ReintentarCoincidencias pendientes={pendientes} />
                         )}
-                        <Button asChild variant="outline">
-                            <Link href={emisionGre.create()}>
+                        {/* En el celular «Emitir GR» es el botón flotante de
+                            abajo; acá arriba solo desde md. */}
+                        <Button
+                            asChild
+                            variant="outline"
+                            className="max-md:hidden"
+                        >
+                            <Link href={emisionGre.create()} prefetch>
                                 <Send className="size-4" />
                                 Emitir GR
                             </Link>
@@ -133,42 +141,50 @@ export default function ViajesIndex({
                 />
             </FiltrosBarra>
 
-            {paginador.data.length === 0 ? (
-                <EmptyState
-                    icono={<RouteIcon className="size-7" />}
-                    titulo="No se encontraron viajes"
-                    descripcion={
-                        filtros.buscar
-                            ? 'Ajusta la búsqueda.'
-                            : puedeRegistrar
-                              ? 'Sube tus primeras GR para empezar el historial.'
-                              : 'Todavía no se ha subido ninguna GR.'
-                    }
-                />
-            ) : (
-                <>
-                    <div className="flex flex-col gap-2 sm:hidden">
-                        {filas.map(({ viaje, colorGrupo }) => (
-                            <ViajeTarjetaMovil
-                                key={viaje.id}
-                                viaje={viaje}
-                                tiposCarga={tiposCarga}
-                                puedeEditar={puedeEditar}
-                                colorGrupo={colorGrupo}
-                                onVerDetalle={() => setViajeSeleccionado(viaje)}
-                            />
-                        ))}
-                    </div>
-
+            <ListadoResponsivo
+                items={filas}
+                clave={({ viaje }) => viaje.id}
+                vacio={
+                    <EmptyState
+                        icono={<RouteIcon className="size-7" />}
+                        titulo="No se encontraron viajes"
+                        descripcion={
+                            filtros.buscar
+                                ? 'Ajusta la búsqueda.'
+                                : puedeRegistrar
+                                  ? 'Sube tus primeras GR para empezar el historial.'
+                                  : 'Todavía no se ha subido ninguna GR.'
+                        }
+                    />
+                }
+                tarjeta={({ viaje, colorGrupo }) => (
+                    <ViajeTarjetaMovil
+                        viaje={viaje}
+                        tiposCarga={tiposCarga}
+                        puedeEditar={puedeEditar}
+                        colorGrupo={colorGrupo}
+                        onVerDetalle={() => setViajeSeleccionado(viaje)}
+                    />
+                )}
+                tabla={
                     <TablaViajes
                         filas={filas}
                         tiposCarga={tiposCarga}
                         puedeEditar={puedeEditar}
                         onVerDetalle={setViajeSeleccionado}
                     />
+                }
+            />
 
-                    <Paginacion paginador={paginador} />
-                </>
+            {paginador.data.length > 0 && <Paginacion paginador={paginador} />}
+
+            {puedeRegistrar && (
+                <AccionPrincipalMovil
+                    href={emisionGre.create()}
+                    icono={<Send />}
+                >
+                    Emitir GR
+                </AccionPrincipalMovil>
             )}
 
             <ViajeDetalleDialog

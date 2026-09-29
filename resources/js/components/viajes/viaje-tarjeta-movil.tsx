@@ -1,7 +1,6 @@
-import { ArrowRight, Eye, Trash2 } from 'lucide-react';
+import { ArrowRight, Trash2 } from 'lucide-react';
 import { Copiable } from '@/components/copiable';
 import { Button } from '@/components/ui/button';
-import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { AccionAnulacion } from '@/components/viajes/anulacion-viaje';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
@@ -40,7 +39,7 @@ export function ViajeTarjetaMovil({
     return (
         <div
             className={cn(
-                'flex flex-col gap-2 border bg-card p-3',
+                'flex flex-col gap-2 rounded-xl border bg-card p-3',
                 colorGrupo && cn('border-l-2', colorGrupo),
                 viaje.anulacion && 'bg-muted/40 opacity-60',
             )}
@@ -50,21 +49,23 @@ export function ViajeTarjetaMovil({
                 onClick={onVerDetalle}
                 className="flex flex-col gap-2 text-left"
             >
-                <div className="flex items-start justify-between gap-2">
-                    <span className="text-sm font-semibold tabular-nums">
+                {/* Arriba lo que se busca con la vista: cuándo y para quién. */}
+                <div className="flex min-w-0 items-center justify-between gap-2">
+                    <span className="shrink-0 text-sm font-semibold tabular-nums">
                         {formatearFecha(viaje.fecha_traslado)}
                     </span>
-                    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {formatearPeso(viaje.peso, viaje.unidad_peso)}
+                    <span className="min-w-0 truncate">
+                        <ClienteChip cliente={viaje.cliente} />
                     </span>
                 </div>
 
-                <ClienteChip cliente={viaje.cliente} />
-
-                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <p className="flex min-w-0 items-center gap-1.5 text-sm">
                     <span className="truncate">{viaje.origen_ciudad}</span>
-                    <ArrowRight className="size-3 shrink-0" />
+                    <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate">{viaje.destino_ciudad}</span>
+                    <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
+                        {formatearPeso(viaje.peso, viaje.unidad_peso)}
+                    </span>
                 </p>
 
                 <p className="text-xs text-muted-foreground">
@@ -94,40 +95,24 @@ export function ViajeTarjetaMovil({
                 <div className="flex items-center gap-2">
                     <span
                         className={cn(
-                            'font-mono text-[11px] tabular-nums',
-                            !viaje.anulacion &&
-                                'text-blue-950 dark:text-blue-300',
+                            'font-mono text-xs whitespace-nowrap tabular-nums',
+                            !viaje.anulacion && 'text-foreground',
                         )}
                     >
                         <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
                     </span>
                 </div>
 
-                <div className="flex items-center gap-1">
+                {/* Sin «vista rápida» del PDF: tocar la tarjeta abre el
+                    detalle, que ya tiene «Ver PDF», y a 360px no entraban
+                    las cuatro acciones. */}
+                <div className="flex shrink-0 items-center gap-1">
                     <TipoCargaCelda
                         viajeId={viaje.id}
                         valor={viaje.tipo_carga}
                         label={viaje.tipo_carga_label}
                         opciones={tiposCarga}
                         editable={puedeEditar}
-                    />
-
-                    <DocumentoVisorDialog
-                        url={viaje.archivo_url ?? ''}
-                        esPdf
-                        titulo={`GR ${viaje.numero_gr}`}
-                        detalle={`${viaje.cliente} · ${formatearFecha(viaje.fecha_traslado)}`}
-                        trigger={
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                disabled={!viaje.archivo_url}
-                                className="size-11 text-muted-foreground"
-                                aria-label="Vista rápida de la GR"
-                            >
-                                <Eye className="size-5" />
-                            </Button>
-                        }
                     />
 
                     {puede('viajes.anular') && (

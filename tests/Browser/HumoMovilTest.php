@@ -35,3 +35,27 @@ it('muestra el tablero en celular con la navegación de pulgar', function (): vo
         ->assertScript(SIN_DESBORDE, true)
         ->assertNoJavaScriptErrors();
 });
+
+it('muestra Viajes en celular como tarjetas, con «Emitir GR» flotando al alcance del pulgar', function (): void {
+    actingAs(actorConRol('admin'));
+    App\Models\Viaje::factory()->count(3)->create();
+
+    visit('/viajes')
+        ->on()->mobile()
+        ->assertVisible('a[href$="/viajes/emitir"].fixed')
+        ->assertScript(SIN_DESBORDE, true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-viajes');
+});
+
+it('muestra Emitir GR en celular con la acción fija abajo', function (): void {
+    actingAs(actorConRol('admin'));
+
+    visit('/viajes/emitir')
+        ->on()->mobile()
+        ->assertSee('GR-remitente')
+        ->assertVisible('div.fixed button')
+        ->assertScript(SIN_DESBORDE, true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-emitir');
+});

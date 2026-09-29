@@ -1,19 +1,9 @@
 import { Head } from '@inertiajs/react';
-import {
-    AlertTriangle,
-    CheckCircle2,
-    FileText,
-    History,
-    Plus,
-    Send,
-    Trash2,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Send } from 'lucide-react';
 import { useState } from 'react';
 import emision, {
     emitir as emitirGr,
-    registrar as registrarGr,
     conductor as consultarConductor,
-    guia as consultarGuia,
     vehiculo as consultarVehiculo,
 } from '@/actions/App/Http/Controllers/EmisionGreController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
@@ -39,133 +29,25 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { consultar, hoy, tokenXsrf } from '@/components/viajes/emision/http';
+import {
+    NotaUltimoViaje,
+    ResultadoDeEmision,
+    Seccion,
+    TuceDeVehiculo,
+} from '@/components/viajes/emision/piezas';
+import { SeccionGuias } from '@/components/viajes/emision/seccion-guias';
+import { PAGADORES } from '@/components/viajes/emision/tipos';
+import type {
+    CampoUnidad,
+    Consulta,
+    GuiaRemitente,
+    Mtc,
+    PropsEmitirGr,
+    ResultadoEmision,
+    VerificacionConductor,
+} from '@/components/viajes/emision/tipos';
 import { formatearPlaca } from '@/lib/format';
-
-type Placa = { id: number; placa: string };
-
-type ConductorOpcion = {
-    id: number;
-    nombre: string;
-    documento: string;
-    licencia: string | null;
-};
-
-type ClienteOpcion = { ruc: string; alias: string };
-
-type Props = {
-    tractos: Placa[];
-    carretas: Placa[];
-    conductores: ConductorOpcion[];
-    clientes: ClienteOpcion[];
-    sunatConfigurado: boolean;
-    puedeEmitir: boolean;
-    rucPaty: string;
-    ultimos: Ultimos;
-};
-
-/** La última combinación con que salió cada tracto y cada conductor. */
-type Ultimos = {
-    porTracto: Record<
-        number,
-        { carreta: number | null; conductor: number | null }
-    >;
-    porConductor: Record<number, { tracto: number; carreta: number | null }>;
-};
-
-type CampoUnidad = 'tracto' | 'carreta' | 'conductor';
-
-type ResultadoEmision =
-    | { estado: 'emitida'; numeroGr: string; viajeRegistrado: boolean }
-    | { estado: 'en_duda' | 'rechazada' | 'no_enviada'; mensaje: string };
-
-type GuiaRemitente = {
-    ruc: string;
-    serie: string;
-    numero: number;
-    completa: boolean;
-    remitente: string | null;
-    destinatario: string | null;
-    destinatarioRuc: string | null;
-    partida: string | null;
-    llegada: string | null;
-    peso: number | null;
-    unidadPeso: string | null;
-    bultos: number | null;
-    motivo: string | null;
-    fechaTraslado: string | null;
-    transportistaRuc: string | null;
-    avisos: string[];
-};
-
-type Mtc = {
-    placa: string;
-    numero: string;
-    origen: 'transpaty' | 'mtc' | 'ruc';
-    vence: string | null;
-    placaEnSunat: boolean;
-};
-
-type VerificacionConductor = {
-    dni: { encontrado: boolean; nombre: string | null; coincide: boolean };
-    licencia: { encontrada: boolean; mensaje: string | null };
-};
-
-type Consulta<T> =
-    | { estado: 'cargando' }
-    | { estado: 'ok'; datos: T }
-    | { estado: 'error'; mensaje: string };
-
-/** `codigo` es el de SUNAT (parámetro 1024 del formulario de SOL). */
-const PAGADORES = [
-    { value: 'remitente', label: 'El remitente', codigo: '01' },
-    { value: 'subcontratador', label: 'Un subcontratador', codigo: '02' },
-    { value: 'tercero', label: 'Un tercero', codigo: '03' },
-] as const;
-
-/**
- * GET a un endpoint JSON de la app. Los errores traen `mensaje` (SUNAT caído,
- * GR inexistente) o, si es validación, el primero de `errors`.
- */
-async function consultar<T>(url: string): Promise<T> {
-    const respuesta = await fetch(url, {
-        headers: {
-            Accept: 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-        },
-        credentials: 'same-origin',
-    });
-    const cuerpo = await respuesta.json().catch(() => ({}));
-
-    if (!respuesta.ok) {
-        const validacion = cuerpo.errors
-            ? (Object.values(cuerpo.errors)[0] as string[] | undefined)?.[0]
-            : undefined;
-
-        throw new Error(
-            cuerpo.mensaje ??
-                validacion ??
-                `No se pudo consultar (error ${respuesta.status}).`,
-        );
-    }
-
-    return cuerpo as T;
-}
-
-/** El token CSRF que Laravel deja en la cookie XSRF-TOKEN. */
-function tokenXsrf(): string {
-    const cookie = document.cookie
-        .split('; ')
-        .find((par) => par.startsWith('XSRF-TOKEN='));
-
-    return cookie ? decodeURIComponent(cookie.split('=')[1]) : '';
-}
-
-function hoy(): string {
-    const fecha = new Date();
-    fecha.setMinutes(fecha.getMinutes() - fecha.getTimezoneOffset());
-
-    return fecha.toISOString().slice(0, 10);
-}
 
 export default function EmitirGr({
     tractos,
@@ -176,12 +58,7 @@ export default function EmitirGr({
     puedeEmitir,
     rucPaty,
     ultimos,
-}: Props) {
-    const [ruc, setRuc] = useState('');
-    const [serie, setSerie] = useState('');
-    const [numero, setNumero] = useState('');
-    const [buscandoGuia, setBuscandoGuia] = useState(false);
-    const [errorGuia, setErrorGuia] = useState<string | null>(null);
+}: PropsEmitirGr) {
     const [guias, setGuias] = useState<GuiaRemitente[]>([]);
 
     const [tractoId, setTractoId] = useState<number | null>(null);
@@ -206,54 +83,6 @@ export default function EmitirGr({
     const conductorElegido = conductores.find((c) => c.id === conductorId);
     const tracto = tractos.find((t) => t.id === tractoId);
     const carreta = carretas.find((c) => c.id === carretaId);
-
-    const agregarGuia = async (event: React.FormEvent) => {
-        event.preventDefault();
-        setErrorGuia(null);
-
-        const serieNormal = serie.trim().toUpperCase();
-        const numeroNormal = Number(numero);
-
-        if (
-            guias.some(
-                (g) =>
-                    g.ruc === ruc &&
-                    g.serie === serieNormal &&
-                    g.numero === numeroNormal,
-            )
-        ) {
-            setErrorGuia('Esa GR-remitente ya está en la lista.');
-
-            return;
-        }
-
-        setBuscandoGuia(true);
-
-        try {
-            const guia = await consultar<GuiaRemitente>(
-                consultarGuia.url({
-                    query: {
-                        ruc: ruc.trim(),
-                        serie: serieNormal,
-                        numero: numero.trim(),
-                    },
-                }),
-            );
-            setGuias((actuales) => [...actuales, guia]);
-
-            // La primera guía propone la fecha: es el día que el remitente
-            // declaró para el traslado.
-            if (guias.length === 0 && guia.fechaTraslado) {
-                setFechaTraslado(guia.fechaTraslado);
-            }
-
-            setNumero('');
-        } catch (error) {
-            setErrorGuia((error as Error).message);
-        } finally {
-            setBuscandoGuia(false);
-        }
-    };
 
     // Lo que eligió la persona a mano. El autollenado solo toca los campos
     // que no están acá: elegir el tracto no pisa un conductor ya escogido.
@@ -501,121 +330,23 @@ export default function EmitirGr({
                 </Alert>
             )}
 
-            <Seccion
-                titulo="1. GR-remitente"
-                descripcion="SUNAT completa remitente, destinatario, partida, llegada y peso."
-            >
-                <form onSubmit={agregarGuia} className="grid gap-4">
-                    <Field label="Cliente (remitente)" required>
-                        {(id) => (
-                            <div className="grid gap-2 sm:grid-cols-[1fr_10rem]">
-                                <Select
-                                    value={
-                                        clientes.some((c) => c.ruc === ruc)
-                                            ? ruc
-                                            : ''
-                                    }
-                                    onValueChange={setRuc}
-                                >
-                                    <SelectTrigger id={id}>
-                                        <SelectValue placeholder="Elegir cliente o escribir el RUC" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {clientes.map((cliente) => (
-                                            <SelectItem
-                                                key={cliente.ruc}
-                                                value={cliente.ruc}
-                                            >
-                                                {cliente.alias} · {cliente.ruc}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Input
-                                    aria-label="RUC del remitente"
-                                    inputMode="numeric"
-                                    maxLength={11}
-                                    placeholder="RUC"
-                                    value={ruc}
-                                    onChange={(e) =>
-                                        setRuc(
-                                            e.target.value.replace(/\D/g, ''),
-                                        )
-                                    }
-                                />
-                            </div>
-                        )}
-                    </Field>
+            <SeccionGuias
+                clientes={clientes}
+                sunatConfigurado={sunatConfigurado}
+                guias={guias}
+                onAgregada={(guia) => {
+                    setGuias((actuales) => [...actuales, guia]);
 
-                    <div className="grid grid-cols-[6rem_1fr_auto] items-end gap-2">
-                        <Field label="Serie" required>
-                            {(id) => (
-                                <Input
-                                    id={id}
-                                    maxLength={4}
-                                    placeholder="T007"
-                                    value={serie}
-                                    onChange={(e) =>
-                                        setSerie(e.target.value.toUpperCase())
-                                    }
-                                />
-                            )}
-                        </Field>
-                        <Field label="Número" required>
-                            {(id) => (
-                                <Input
-                                    id={id}
-                                    inputMode="numeric"
-                                    placeholder="10088"
-                                    value={numero}
-                                    onChange={(e) =>
-                                        setNumero(
-                                            e.target.value.replace(/\D/g, ''),
-                                        )
-                                    }
-                                />
-                            )}
-                        </Field>
-                        <Button
-                            type="submit"
-                            disabled={
-                                buscandoGuia ||
-                                !sunatConfigurado ||
-                                ruc.length !== 11 ||
-                                serie.length !== 4 ||
-                                numero === ''
-                            }
-                        >
-                            {buscandoGuia ? (
-                                <Spinner />
-                            ) : (
-                                <Plus className="size-4" />
-                            )}
-                            Agregar
-                        </Button>
-                    </div>
-
-                    {errorGuia && (
-                        <p className="text-sm text-destructive">{errorGuia}</p>
-                    )}
-                </form>
-
-                {guias.length > 0 && (
-                    <ul className="mt-4 grid gap-3">
-                        {guias.map((guia) => (
-                            <TarjetaGuia
-                                key={`${guia.ruc}-${guia.serie}-${guia.numero}`}
-                                guia={guia}
-                                onQuitar={() =>
-                                    setGuias((actuales) =>
-                                        actuales.filter((g) => g !== guia),
-                                    )
-                                }
-                            />
-                        ))}
-                    </ul>
-                )}
-            </Seccion>
+                    // La primera guía propone la fecha: es el día que el
+                    // remitente declaró para el traslado.
+                    if (guias.length === 0 && guia.fechaTraslado) {
+                        setFechaTraslado(guia.fechaTraslado);
+                    }
+                }}
+                onQuitar={(guia) =>
+                    setGuias((actuales) => actuales.filter((g) => g !== guia))
+                }
+            />
 
             <Seccion
                 titulo="2. Unidad"
@@ -831,7 +562,7 @@ export default function EmitirGr({
                     <Field label="¿Quién paga el flete?" required>
                         {(id) => (
                             <Select value={pagador} onValueChange={setPagador}>
-                                <SelectTrigger id={id}>
+                                <SelectTrigger id={id} className="w-full">
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -868,7 +599,7 @@ export default function EmitirGr({
             </Seccion>
 
             <Seccion titulo="5. Vista previa">
-                <dl className="grid gap-2 text-sm sm:grid-cols-[10rem_1fr]">
+                <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-2 text-sm sm:grid-cols-[10rem_minmax(0,1fr)]">
                     <dt className="text-muted-foreground">GR-remitente</dt>
                     <dd>
                         {guias.length > 0
@@ -932,7 +663,8 @@ export default function EmitirGr({
                     </p>
                 )}
 
-                <div className="mt-4 flex flex-col gap-2">
+                {/* En el celular el botón vive en la barra fija de abajo. */}
+                <div className="mt-4 flex flex-col gap-2 max-md:hidden">
                     <Button
                         className="w-full sm:w-auto"
                         disabled={!listaParaEmitir || faltantes.length > 0}
@@ -957,6 +689,29 @@ export default function EmitirGr({
 
                 {resultado && <ResultadoDeEmision resultado={resultado} />}
             </Seccion>
+
+            {/* La acción principal, siempre a mano en el celular: pegada
+                encima de la BottomNav, con lo que falta al lado. */}
+            <div aria-hidden className="h-20 md:hidden" />
+            <div className="fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 flex items-center gap-3 border-t bg-background/95 px-4 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+                <p className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                    {bloqueos.length > 0
+                        ? 'No se puede emitir: revisa los avisos.'
+                        : faltantes.length > 0
+                          ? `Falta: ${faltantes.join(', ')}.`
+                          : resultado?.estado === 'emitida'
+                            ? `Emitida ${resultado.numeroGr}.`
+                            : 'Todo listo para emitir.'}
+                </p>
+                <Button
+                    className="shrink-0"
+                    disabled={!listaParaEmitir || faltantes.length > 0}
+                    onClick={() => setConfirmando(true)}
+                >
+                    {emitiendo ? <Spinner /> : <Send className="size-4" />}
+                    {emitiendo ? 'Emitiendo…' : 'Emitir GR'}
+                </Button>
+            </div>
 
             <Dialog open={confirmando} onOpenChange={setConfirmando}>
                 <DialogContent>
@@ -1024,287 +779,6 @@ export default function EmitirGr({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
-        </div>
-    );
-}
-
-function ResultadoDeEmision({ resultado }: { resultado: ResultadoEmision }) {
-    const [registrando, setRegistrando] = useState(false);
-    const [registrado, setRegistrado] = useState(
-        resultado.estado === 'emitida' && resultado.viajeRegistrado,
-    );
-    const [errorRegistro, setErrorRegistro] = useState<string | null>(null);
-
-    const registrarViaje = async (numeroGr: string) => {
-        setRegistrando(true);
-        setErrorRegistro(null);
-
-        try {
-            const respuesta = await fetch(registrarGr.url(), {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    Accept: 'application/json',
-                    'Content-Type': 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-XSRF-TOKEN': tokenXsrf(),
-                },
-                body: JSON.stringify({ numero_gr: numeroGr }),
-            });
-            const cuerpo = await respuesta.json().catch(() => ({}));
-
-            if (respuesta.ok && cuerpo.viajeRegistrado) {
-                setRegistrado(true);
-            } else {
-                setErrorRegistro(
-                    cuerpo.mensaje ??
-                        'SUNAT todavía no entrega el PDF. Prueba en un minuto.',
-                );
-            }
-        } catch {
-            setErrorRegistro('No se pudo conectar. Prueba en un minuto.');
-        } finally {
-            setRegistrando(false);
-        }
-    };
-
-    if (resultado.estado === 'emitida') {
-        return (
-            <Alert className="mt-4 border-emerald-600/40">
-                <CheckCircle2 className="size-4 text-emerald-600" />
-                <AlertTitle>Emitida {resultado.numeroGr}</AlertTitle>
-                <AlertDescription>
-                    {registrado
-                        ? 'El viaje ya está registrado en Viajes con el PDF de SUNAT.'
-                        : 'SUNAT la emitió, pero todavía no entregó el PDF, así que el viaje no se registró.'}{' '}
-                    <a
-                        className="underline"
-                        href={viajes.index.url({
-                            query: { buscar: resultado.numeroGr },
-                        })}
-                    >
-                        Ver en Viajes
-                    </a>
-                    {!registrado && (
-                        <div className="mt-2 flex flex-col items-start gap-1">
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                disabled={registrando}
-                                onClick={() =>
-                                    registrarViaje(resultado.numeroGr)
-                                }
-                            >
-                                {registrando && <Spinner />}
-                                Registrar el viaje
-                            </Button>
-                            {errorRegistro && (
-                                <span className="text-xs text-destructive">
-                                    {errorRegistro}
-                                </span>
-                            )}
-                        </div>
-                    )}
-                </AlertDescription>
-            </Alert>
-        );
-    }
-
-    return (
-        <Alert variant="destructive" className="mt-4">
-            <AlertTriangle className="size-4" />
-            <AlertTitle>
-                {resultado.estado === 'en_duda'
-                    ? 'No se sabe si se emitió'
-                    : 'No se emitió'}
-            </AlertTitle>
-            <AlertDescription>{resultado.mensaje}</AlertDescription>
-        </Alert>
-    );
-}
-
-function Seccion({
-    titulo,
-    descripcion,
-    children,
-}: {
-    titulo: string;
-    descripcion?: string;
-    children: React.ReactNode;
-}) {
-    return (
-        <section className="rounded-xl border border-border bg-card p-4 sm:p-5">
-            <div className="mb-4">
-                <h2 className="text-sm font-semibold text-foreground">
-                    {titulo}
-                </h2>
-                {descripcion && (
-                    <p className="text-xs text-muted-foreground">
-                        {descripcion}
-                    </p>
-                )}
-            </div>
-            {children}
-        </section>
-    );
-}
-
-function TarjetaGuia({
-    guia,
-    onQuitar,
-}: {
-    guia: GuiaRemitente;
-    onQuitar: () => void;
-}) {
-    return (
-        <li className="rounded-lg border border-border p-3 text-sm">
-            <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 font-medium">
-                    <FileText className="size-4 text-muted-foreground" />
-                    {guia.serie}-{guia.numero}
-                    {!guia.completa && (
-                        <span className="text-xs font-normal text-amber-600">
-                            (resumida)
-                        </span>
-                    )}
-                </div>
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Quitar GR-remitente"
-                    onClick={onQuitar}
-                >
-                    <Trash2 className="size-4" />
-                </Button>
-            </div>
-            <dl className="mt-1 grid gap-1 text-muted-foreground">
-                <div>
-                    <dt className="sr-only">Remitente y destinatario</dt>
-                    <dd>
-                        {guia.remitente ?? '—'} → {guia.destinatario ?? '—'}
-                    </dd>
-                </div>
-                <div>
-                    <dt className="sr-only">Ruta</dt>
-                    <dd>
-                        {guia.partida ?? '—'}
-                        <br />→ {guia.llegada ?? '—'}
-                    </dd>
-                </div>
-                <div>
-                    <dt className="sr-only">Carga</dt>
-                    <dd>
-                        {guia.peso ?? '—'} {guia.unidadPeso ?? ''}
-                        {guia.bultos ? ` · ${guia.bultos} bultos` : ''}
-                        {guia.fechaTraslado
-                            ? ` · traslado ${guia.fechaTraslado}`
-                            : ''}
-                    </dd>
-                </div>
-            </dl>
-            {guia.avisos.length > 0 && (
-                <ul className="mt-2 grid gap-1">
-                    {guia.avisos.map((aviso) => (
-                        <li
-                            key={aviso}
-                            className="flex items-start gap-1 text-destructive"
-                        >
-                            <AlertTriangle className="mt-0.5 size-4 shrink-0" />
-                            {aviso}
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </li>
-    );
-}
-
-/** Avisa que el campo lo completó el último viaje, no la persona. */
-function NotaUltimoViaje() {
-    return (
-        <p className="flex items-center gap-1 text-xs text-muted-foreground">
-            <History className="size-3.5" />
-            Del último viaje; cámbialo si esta vez es otro.
-        </p>
-    );
-}
-
-function TuceDeVehiculo({
-    consulta,
-    elegido,
-    rucPaty,
-    onCambio,
-}: {
-    consulta?: Consulta<Mtc>;
-    elegido?: string;
-    rucPaty: string;
-    onCambio: (valor: string) => void;
-}) {
-    if (!consulta || consulta.estado === 'cargando') {
-        return (
-            <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Spinner /> Buscando el TUCE…
-            </p>
-        );
-    }
-
-    if (consulta.estado === 'error') {
-        return <p className="text-xs text-destructive">{consulta.mensaje}</p>;
-    }
-
-    const { numero, origen, vence, placaEnSunat } = consulta.datos;
-    const valor = elegido ?? numero;
-    const esRuc = valor === rucPaty;
-
-    return (
-        <div className="grid gap-1">
-            <div className="flex gap-2">
-                <Input
-                    aria-label="TUCE o certificado de habilitación"
-                    className="h-8 text-xs"
-                    value={valor}
-                    onChange={(e) => onCambio(e.target.value.toUpperCase())}
-                />
-                <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="h-8 shrink-0 text-xs"
-                    disabled={esRuc}
-                    onClick={() => onCambio(rucPaty)}
-                >
-                    Usar RUC de Paty
-                </Button>
-            </div>
-            <p
-                className={
-                    esRuc
-                        ? 'text-xs text-amber-600'
-                        : 'flex flex-wrap items-center gap-1 text-xs text-emerald-600'
-                }
-            >
-                {esRuc ? (
-                    'Va el RUC de Paty en lugar del TUCE.'
-                ) : elegido !== undefined && elegido !== numero ? (
-                    <span className="text-muted-foreground">
-                        TUCE escrito a mano.
-                    </span>
-                ) : (
-                    <>
-                        <CheckCircle2 className="size-3.5" />
-                        {origen === 'transpaty'
-                            ? `De la ficha${vence ? `, vence ${vence}` : ''}`
-                            : 'Del MTC'}
-                    </>
-                )}
-                {!placaEnSunat && (
-                    <span className="text-muted-foreground">
-                        {' '}
-                        (SUNAT aún no tiene registrada la placa)
-                    </span>
-                )}
-            </p>
         </div>
     );
 }

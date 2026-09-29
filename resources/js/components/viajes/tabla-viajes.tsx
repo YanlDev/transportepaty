@@ -49,7 +49,7 @@ export function TablaViajes({
     const { puede } = usePermisos();
 
     return (
-        <div className="hidden overflow-x-auto rounded-xl border shadow-sm sm:block">
+        <div className="overflow-x-auto rounded-xl border shadow-sm">
             <Table>
                 <TableHeader>
                     <TableRow className="hover:bg-transparent">
