@@ -3,6 +3,7 @@ import {
     AlertTriangle,
     CheckCircle2,
     FileText,
+    History,
     Plus,
     Send,
     Trash2,
@@ -27,7 +28,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialogo-responsivo';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -59,7 +60,19 @@ type Props = {
     sunatConfigurado: boolean;
     puedeEmitir: boolean;
     rucPaty: string;
+    ultimos: Ultimos;
 };
+
+/** La última combinación con que salió cada tracto y cada conductor. */
+type Ultimos = {
+    porTracto: Record<
+        number,
+        { carreta: number | null; conductor: number | null }
+    >;
+    porConductor: Record<number, { tracto: number; carreta: number | null }>;
+};
+
+type CampoUnidad = 'tracto' | 'carreta' | 'conductor';
 
 type ResultadoEmision =
     | { estado: 'emitida'; numeroGr: string; viajeRegistrado: boolean }
@@ -162,6 +175,7 @@ export default function EmitirGr({
     sunatConfigurado,
     puedeEmitir,
     rucPaty,
+    ultimos,
 }: Props) {
     const [ruc, setRuc] = useState('');
     const [serie, setSerie] = useState('');
@@ -241,12 +255,17 @@ export default function EmitirGr({
         }
     };
 
-    const elegirVehiculo = async (
-        id: number,
-        guardar: (id: number) => void,
-    ) => {
-        guardar(id);
+    // Lo que eligió la persona a mano. El autollenado solo toca los campos
+    // que no están acá: elegir el tracto no pisa un conductor ya escogido.
+    const [elegidosAMano, setElegidosAMano] = useState<Set<CampoUnidad>>(
+        new Set(),
+    );
+    // Lo que se completó solo, para decirlo en pantalla.
+    const [autollenados, setAutollenados] = useState<Set<CampoUnidad>>(
+        new Set(),
+    );
 
+    const consultarTuce = async (id: number) => {
         if (mtc[id]?.estado === 'ok') {
             return;
         }
@@ -264,8 +283,7 @@ export default function EmitirGr({
         }
     };
 
-    const elegirConductor = async (id: number) => {
-        setConductorId(id);
+    const verificarConductor = async (id: number) => {
         setVerificacion({ estado: 'cargando' });
 
         try {
@@ -279,6 +297,83 @@ export default function EmitirGr({
                 mensaje: (error as Error).message,
             });
         }
+    };
+
+    /** Marca el campo como elegido a mano y deja de mostrarlo como sugerido. */
+    const marcarAMano = (campo: CampoUnidad) => {
+        setElegidosAMano((actual) => new Set(actual).add(campo));
+        setAutollenados((actual) => {
+            const siguiente = new Set(actual);
+            siguiente.delete(campo);
+
+            return siguiente;
+        });
+    };
+
+    /**
+     * Completa con la última combinación usada lo que la persona no eligió
+     * a mano. No encadena: lo autollenado no dispara otro autollenado.
+     */
+    const autollenar = (propuesta: {
+        tracto?: number | null;
+        carreta?: number | null;
+        conductor?: number | null;
+    }) => {
+        const nuevos: CampoUnidad[] = [];
+
+        if (
+            propuesta.tracto &&
+            !elegidosAMano.has('tracto') &&
+            tractos.some((t) => t.id === propuesta.tracto)
+        ) {
+            setTractoId(propuesta.tracto);
+            void consultarTuce(propuesta.tracto);
+            nuevos.push('tracto');
+        }
+
+        if (
+            propuesta.carreta &&
+            !elegidosAMano.has('carreta') &&
+            carretas.some((c) => c.id === propuesta.carreta)
+        ) {
+            setCarretaId(propuesta.carreta);
+            void consultarTuce(propuesta.carreta);
+            nuevos.push('carreta');
+        }
+
+        if (
+            propuesta.conductor &&
+            !elegidosAMano.has('conductor') &&
+            conductores.some((c) => c.id === propuesta.conductor)
+        ) {
+            setConductorId(propuesta.conductor);
+            void verificarConductor(propuesta.conductor);
+            nuevos.push('conductor');
+        }
+
+        if (nuevos.length > 0) {
+            setAutollenados((actual) => new Set([...actual, ...nuevos]));
+        }
+    };
+
+    const elegirTracto = (id: number) => {
+        marcarAMano('tracto');
+        setTractoId(id);
+        void consultarTuce(id);
+        autollenar(ultimos.porTracto[id] ?? {});
+    };
+
+    const elegirCarreta = (id: number) => {
+        marcarAMano('carreta');
+        setCarretaId(id);
+        void consultarTuce(id);
+    };
+
+    const elegirConductor = (id: number) => {
+        marcarAMano('conductor');
+        setConductorId(id);
+        void verificarConductor(id);
+        autollenar(ultimos.porConductor[id] ?? {});
     };
 
     const [confirmando, setConfirmando] = useState(false);
@@ -533,9 +628,7 @@ export default function EmitirGr({
                                 <SelectorBuscable
                                     id={id}
                                     valor={tractoId}
-                                    onCambio={(valor) =>
-                                        elegirVehiculo(valor, setTractoId)
-                                    }
+                                    onCambio={elegirTracto}
                                     etiqueta="Elegir tracto"
                                     opciones={tractos.map((t) => ({
                                         valor: t.id,
@@ -543,6 +636,9 @@ export default function EmitirGr({
                                         detalle: t.placa,
                                     }))}
                                 />
+                                {autollenados.has('tracto') && (
+                                    <NotaUltimoViaje />
+                                )}
                                 {tractoId && (
                                     <TuceDeVehiculo
                                         consulta={mtc[tractoId]}
@@ -565,9 +661,7 @@ export default function EmitirGr({
                                 <SelectorBuscable
                                     id={id}
                                     valor={carretaId}
-                                    onCambio={(valor) =>
-                                        elegirVehiculo(valor, setCarretaId)
-                                    }
+                                    onCambio={elegirCarreta}
                                     etiqueta="Elegir carreta"
                                     opciones={carretas.map((c) => ({
                                         valor: c.id,
@@ -575,6 +669,9 @@ export default function EmitirGr({
                                         detalle: c.placa,
                                     }))}
                                 />
+                                {autollenados.has('carreta') && (
+                                    <NotaUltimoViaje />
+                                )}
                                 {carretaId && (
                                     <TuceDeVehiculo
                                         consulta={mtc[carretaId]}
@@ -597,17 +694,22 @@ export default function EmitirGr({
             <Seccion titulo="3. Conductor">
                 <Field label="Conductor" required>
                     {(id) => (
-                        <SelectorBuscable
-                            id={id}
-                            valor={conductorId}
-                            onCambio={elegirConductor}
-                            etiqueta="Elegir conductor"
-                            opciones={conductores.map((c) => ({
-                                valor: c.id,
-                                etiqueta: c.nombre,
-                                detalle: c.documento,
-                            }))}
-                        />
+                        <>
+                            <SelectorBuscable
+                                id={id}
+                                valor={conductorId}
+                                onCambio={elegirConductor}
+                                etiqueta="Elegir conductor"
+                                opciones={conductores.map((c) => ({
+                                    valor: c.id,
+                                    etiqueta: c.nombre,
+                                    detalle: c.documento,
+                                }))}
+                            />
+                            {autollenados.has('conductor') && (
+                                <NotaUltimoViaje />
+                            )}
+                        </>
                     )}
                 </Field>
                 {conductorElegido && (
@@ -1115,6 +1217,16 @@ function TarjetaGuia({
                 </ul>
             )}
         </li>
+    );
+}
+
+/** Avisa que el campo lo completó el último viaje, no la persona. */
+function NotaUltimoViaje() {
+    return (
+        <p className="flex items-center gap-1 text-xs text-muted-foreground">
+            <History className="size-3.5" />
+            Del último viaje; cámbialo si esta vez es otro.
+        </p>
     );
 }
 

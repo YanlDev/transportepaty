@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\TipoVehiculo;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -152,4 +153,19 @@ it('trae el TUCE de la placa y verifica el DNI del conductor en RENIEC', functio
         ->assertOk()
         ->assertJsonPath('dni.coincide', false)
         ->assertJsonPath('dni.nombre', 'MAMANI MASCO ADOLFO');
+});
+
+it('propone la última carreta y el último conductor de cada tracto, y al revés', function (): void {
+    $tracto = Vehiculo::factory()->create(['placa' => 'VEP-918']);
+    $carretaVieja = Vehiculo::factory()->create(['placa' => 'BUV-001', 'tipo' => TipoVehiculo::Carreta]);
+    $carretaNueva = Vehiculo::factory()->create(['placa' => 'BUV-997', 'tipo' => TipoVehiculo::Carreta]);
+    $conductor = Conductor::factory()->create();
+    Viaje::factory()->create(['tracto_id' => $tracto->id, 'carreta_id' => $carretaVieja->id, 'conductor_id' => $conductor->id, 'fecha_traslado' => now()->subDays(10)]);
+    Viaje::factory()->create(['tracto_id' => $tracto->id, 'carreta_id' => $carretaNueva->id, 'conductor_id' => $conductor->id, 'fecha_traslado' => now()->subDays(2)]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.emitir'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where("ultimos.porTracto.{$tracto->id}", ['carreta' => $carretaNueva->id, 'conductor' => $conductor->id])
+            ->where("ultimos.porConductor.{$conductor->id}", ['tracto' => $tracto->id, 'carreta' => $carretaNueva->id]));
 });

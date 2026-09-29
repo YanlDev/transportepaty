@@ -61,6 +61,7 @@ class EmisionGreController extends Controller
             'sunatConfigurado' => filled(config('services.sunat_sol.clave')),
             'puedeEmitir' => request()->user()?->can('emitir', Viaje::class) ?? false,
             'rucPaty' => (string) config('services.sunat_sol.ruc'),
+            'ultimos' => $this->ultimasCombinaciones(),
         ]);
     }
 
@@ -274,6 +275,44 @@ class EmisionGreController extends Controller
             ->implode(', ');
 
         return trim(preg_replace('/\s+/', ' ', (string) ($direccion['desDireccion'] ?? '')).($lugar !== '' ? " ({$lugar})" : ''));
+    }
+
+    /**
+     * La última unidad y el último conductor con que salió cada tracto y cada
+     * conductor, para autollenar la pantalla: al elegir el tracto se proponen
+     * su carreta y su chofer de siempre, y al revés. Se miran los viajes de
+     * los últimos 120 días (los anulados no cuentan: el filtro global los
+     * saca) y gana el más reciente.
+     *
+     * @return array{porTracto: array<int, array{carreta: int|null, conductor: int|null}>, porConductor: array<int, array{tracto: int, carreta: int|null}>}
+     */
+    private function ultimasCombinaciones(): array
+    {
+        $porTracto = [];
+        $porConductor = [];
+
+        $viajes = Viaje::query()
+            ->whereNotNull('tracto_id')
+            ->where('fecha_traslado', '>=', now()->subDays(120)->toDateString())
+            ->orderByDesc('fecha_traslado')
+            ->orderByDesc('id')
+            ->get(['tracto_id', 'carreta_id', 'conductor_id']);
+
+        foreach ($viajes as $viaje) {
+            $tracto = $viaje->tracto_id;
+
+            if ($tracto === null) {
+                continue;
+            }
+
+            $porTracto[$tracto] ??= ['carreta' => $viaje->carreta_id, 'conductor' => $viaje->conductor_id];
+
+            if ($viaje->conductor_id !== null) {
+                $porConductor[$viaje->conductor_id] ??= ['tracto' => $tracto, 'carreta' => $viaje->carreta_id];
+            }
+        }
+
+        return ['porTracto' => $porTracto, 'porConductor' => $porConductor];
     }
 
     /**
