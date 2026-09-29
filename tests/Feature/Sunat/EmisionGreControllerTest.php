@@ -1,9 +1,11 @@
 <?php
 
 use App\Enums\TipoVehiculo;
+use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
@@ -168,4 +170,41 @@ it('propone la última carreta y el último conductor de cada tracto, y al revé
         ->assertInertia(fn (Assert $page) => $page
             ->where("ultimos.porTracto.{$tracto->id}", ['carreta' => $carretaNueva->id, 'conductor' => $conductor->id])
             ->where("ultimos.porConductor.{$conductor->id}", ['tracto' => $tracto->id, 'carreta' => $carretaNueva->id]));
+});
+
+it('lista quién emite las GR-remitente y por quién llega cada uno', function (): void {
+    Cliente::factory()->create(['ruc' => '20603930844', 'alias' => 'Crisar Logistica']);
+    Viaje::factory()->count(3)->create([
+        'cliente' => 'CRISAR LOGISTICA S.A.C.',
+        'cliente_ruc' => '20603930844',
+        'guias_remitente' => [['numero' => 'T930 - 49433', 'ruc' => '20331061655']],
+    ]);
+    Viaje::factory()->create([
+        'cliente' => 'MINSUR S.A.',
+        'cliente_ruc' => '20100136741',
+        'guias_remitente' => [['numero' => 'T007 - 10088', 'ruc' => '20100136741']],
+    ]);
+    Cache::forever('sunat.razon-social.20331061655', 'AJEPER S.A.');
+
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.emitir'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('remitentes.0', [
+                'ruc' => '20331061655',
+                'nombre' => 'AJEPER S.A.',
+                'viajes' => 3,
+                'contratante' => ['ruc' => '20603930844', 'nombre' => 'Crisar Logistica'],
+            ])
+            ->where('remitentes.1.ruc', '20100136741')
+            ->where('remitentes.1.contratante', null));
+});
+
+it('aprende la razón social del emisor al consultar su GR-remitente', function (): void {
+    fingirSol(tokenSol(), api: ['/gre/comprobantes/20331061655-09-T930-49433' => Http::response(['emisor' => ['desNombre' => 'AJEPER S.A.']] + guiaSunat())]);
+
+    actingAs(actorConRol('admin'))
+        ->getJson(route('viajes.emitir.guia', ['ruc' => '20331061655', 'serie' => 'T930', 'numero' => 49433]))
+        ->assertOk();
+
+    expect(Cache::get('sunat.razon-social.20331061655'))->toBe('AJEPER S.A.');
 });

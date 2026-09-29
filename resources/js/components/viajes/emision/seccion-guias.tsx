@@ -4,23 +4,17 @@ import { guia as consultarGuia } from '@/actions/App/Http/Controllers/EmisionGre
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { CampoRemitente } from '@/components/viajes/emision/campo-remitente';
 import { consultar } from '@/components/viajes/emision/http';
 import { Seccion, TarjetaGuia } from '@/components/viajes/emision/piezas';
 import type {
-    ClienteOpcion,
     GuiaRemitente,
+    Remitente,
 } from '@/components/viajes/emision/tipos';
 
 type Props = {
-    clientes: ClienteOpcion[];
+    remitentes: Remitente[];
     sunatConfigurado: boolean;
     guias: GuiaRemitente[];
     onAgregada: (guia: GuiaRemitente) => void;
@@ -33,7 +27,7 @@ type Props = {
  * vive acá; la lista de guías agregadas es de la página.
  */
 export function SeccionGuias({
-    clientes,
+    remitentes,
     sunatConfigurado,
     guias,
     onAgregada,
@@ -93,42 +87,14 @@ export function SeccionGuias({
             descripcion="SUNAT completa remitente, destinatario, partida, llegada y peso."
         >
             <form onSubmit={agregarGuia} className="grid gap-4">
-                <Field label="Cliente (remitente)" required>
+                <Field label="Quién emitió la GR-remitente" required>
                     {(id) => (
-                        <div className="grid gap-2 sm:grid-cols-[1fr_10rem]">
-                            <Select
-                                value={
-                                    clientes.some((c) => c.ruc === ruc)
-                                        ? ruc
-                                        : ''
-                                }
-                                onValueChange={setRuc}
-                            >
-                                <SelectTrigger id={id}>
-                                    <SelectValue placeholder="Elegir cliente o escribir el RUC" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {clientes.map((cliente) => (
-                                        <SelectItem
-                                            key={cliente.ruc}
-                                            value={cliente.ruc}
-                                        >
-                                            {cliente.alias} · {cliente.ruc}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <Input
-                                aria-label="RUC del remitente"
-                                inputMode="numeric"
-                                maxLength={11}
-                                placeholder="RUC"
-                                value={ruc}
-                                onChange={(e) =>
-                                    setRuc(e.target.value.replace(/\D/g, ''))
-                                }
-                            />
-                        </div>
+                        <CampoRemitente
+                            id={id}
+                            remitentes={remitentes}
+                            ruc={ruc}
+                            onRuc={setRuc}
+                        />
                     )}
                 </Field>
 

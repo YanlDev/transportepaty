@@ -20,6 +20,7 @@ export type PropsEmitirGr = {
     puedeEmitir: boolean;
     rucPaty: string;
     ultimos: Ultimos;
+    remitentes: Remitente[];
 };
 
 /** La última combinación con que salió cada tracto y cada conductor. */
@@ -80,3 +81,14 @@ export const PAGADORES = [
     { value: 'subcontratador', label: 'Un subcontratador', codigo: '02' },
     { value: 'tercero', label: 'Un tercero', codigo: '03' },
 ] as const;
+
+/**
+ * Quien emite GR-remitente para Paty, sacado de las GR del último año, con
+ * quién contrata a Paty en esos viajes cuando no es el mismo (Crisar).
+ */
+export type Remitente = {
+    ruc: string;
+    nombre: string | null;
+    viajes: number;
+    contratante: { ruc: string; nombre: string } | null;
+};

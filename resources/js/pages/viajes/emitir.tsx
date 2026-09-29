@@ -58,6 +58,7 @@ export default function EmitirGr({
     puedeEmitir,
     rucPaty,
     ultimos,
+    remitentes,
 }: PropsEmitirGr) {
     const [guias, setGuias] = useState<GuiaRemitente[]>([]);
 
@@ -79,6 +80,51 @@ export default function EmitirGr({
     // sale con «Transporte subcontratado: Sí» y sus datos (EG03-12627).
     const [subcontratado, setSubcontratado] = useState(false);
     const [rucSubcontratador, setRucSubcontratador] = useState('');
+    // De dónde salió la subcontratación marcada sola, para decirlo; null si
+    // la marcó la persona o no hay.
+    const [subcontratoSugerido, setSubcontratoSugerido] = useState<
+        'sunat' | 'historial' | null
+    >(null);
+
+    /**
+     * Si la GR-remitente consigna a otra transportista (Crisar), Paty va
+     * subcontratada por ella: lo dice SUNAT. Si SUNAT no lo dice, se usa el
+     * historial: quién contrata a Paty en los viajes de ese remitente. Solo
+     * se propone cuando todavía no se marcó nada a mano.
+     */
+    /** Nombre conocido de un RUC: padrón de clientes o GR anteriores. */
+    const nombreDeRuc = (ruc: string): string | undefined =>
+        clientes.find((cliente) => cliente.ruc === ruc)?.alias ??
+        remitentes.find((remitente) => remitente.ruc === ruc)?.nombre ??
+        remitentes.find((remitente) => remitente.contratante?.ruc === ruc)
+            ?.contratante?.nombre;
+
+    const sugerirSubcontratacion = (guia: GuiaRemitente) => {
+        if (subcontratado) {
+            return;
+        }
+
+        const porSunat =
+            guia.transportistaRuc && guia.transportistaRuc !== rucPaty
+                ? guia.transportistaRuc
+                : null;
+        const porHistorial =
+            remitentes.find((remitente) => remitente.ruc === guia.ruc)
+                ?.contratante?.ruc ?? null;
+        const sugerido = porSunat ?? porHistorial;
+
+        if (!sugerido) {
+            return;
+        }
+
+        setSubcontratado(true);
+        setRucSubcontratador(sugerido);
+        setSubcontratoSugerido(porSunat ? 'sunat' : 'historial');
+
+        if (pagador === 'remitente') {
+            setPagador('subcontratador');
+        }
+    };
 
     const conductorElegido = conductores.find((c) => c.id === conductorId);
     const tracto = tractos.find((t) => t.id === tractoId);
@@ -331,7 +377,7 @@ export default function EmitirGr({
             )}
 
             <SeccionGuias
-                clientes={clientes}
+                remitentes={remitentes}
                 sunatConfigurado={sunatConfigurado}
                 guias={guias}
                 onAgregada={(guia) => {
@@ -342,6 +388,8 @@ export default function EmitirGr({
                     if (guias.length === 0 && guia.fechaTraslado) {
                         setFechaTraslado(guia.fechaTraslado);
                     }
+
+                    sugerirSubcontratacion(guia);
                 }}
                 onQuitar={(guia) =>
                     setGuias((actuales) => actuales.filter((g) => g !== guia))
@@ -501,9 +549,10 @@ export default function EmitirGr({
                     <label className="flex min-h-11 items-center gap-3 sm:col-span-2">
                         <Checkbox
                             checked={subcontratado}
-                            onCheckedChange={(valor) =>
-                                setSubcontratado(valor === true)
-                            }
+                            onCheckedChange={(valor) => {
+                                setSubcontratado(valor === true);
+                                setSubcontratoSugerido(null);
+                            }}
                         />
                         <span className="text-sm">
                             Transporte subcontratado
@@ -517,11 +566,15 @@ export default function EmitirGr({
                         <Field
                             label="RUC de quien subcontrata"
                             required
-                            ayuda={
-                                clientes.find(
-                                    (c) => c.ruc === rucSubcontratador,
-                                )?.alias
-                            }
+                            ayuda={[
+                                nombreDeRuc(rucSubcontratador),
+                                subcontratoSugerido === 'sunat' &&
+                                    'Marcado solo: la GR-remitente consigna a esta transportista.',
+                                subcontratoSugerido === 'historial' &&
+                                    'Marcado solo: los viajes de este remitente llegan por ella.',
+                            ]
+                                .filter(Boolean)
+                                .join(' · ')}
                         >
                             {(id) => (
                                 <Input

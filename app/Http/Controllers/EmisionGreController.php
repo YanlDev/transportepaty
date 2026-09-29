@@ -19,6 +19,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -32,6 +33,9 @@ use RuntimeException;
  */
 class EmisionGreController extends Controller
 {
+    /** Razón social de un emisor de GR-remitente, aprendida de SUNAT. */
+    private const CLAVE_NOMBRE_REMITENTE = 'sunat.razon-social.';
+
     public function __construct(
         private readonly ClienteGreSunat $sunat,
         private readonly EmisionGre $emision,
@@ -62,6 +66,7 @@ class EmisionGreController extends Controller
             'puedeEmitir' => request()->user()?->can('emitir', Viaje::class) ?? false,
             'rucPaty' => (string) config('services.sunat_sol.ruc'),
             'ultimos' => $this->ultimasCombinaciones(),
+            'remitentes' => $this->remitentesFrecuentes(),
         ]);
     }
 
@@ -155,6 +160,13 @@ class EmisionGreController extends Controller
                 ? 'La GR-remitente es de hace más de 30 días ('.Carbon::parse($fechaTraslado)->format('d/m/Y').').'
                 : null,
         ]));
+
+        // La razón social del emisor se aprende acá: los que no son clientes
+        // de Paty (Ajeper, Caral…) no están en ningún padrón, y así la lista
+        // de remitentes los muestra con nombre la próxima vez.
+        if (filled(data_get($datos, 'emisor.desNombre'))) {
+            Cache::forever(self::CLAVE_NOMBRE_REMITENTE.$ruc, (string) data_get($datos, 'emisor.desNombre'));
+        }
 
         return response()->json([
             'serie' => $serie,
@@ -275,6 +287,73 @@ class EmisionGreController extends Controller
             ->implode(', ');
 
         return trim(preg_replace('/\s+/', ' ', (string) ($direccion['desDireccion'] ?? '')).($lugar !== '' ? " ({$lugar})" : ''));
+    }
+
+    /**
+     * Quiénes emiten las GR-remitente que transporta Paty, del más frecuente
+     * al menos, con quién contrata a Paty en esos viajes. No siempre es el
+     * mismo: Ajeper y Embotelladora Caral emiten la guía pero contrata Crisar
+     * (subcontratación), Mur-Wy a veces llega por MAG Logística. Sale de las
+     * GR del último año, no de un padrón que haya que mantener.
+     *
+     * @return list<array{ruc: string, nombre: string|null, viajes: int, contratante: array{ruc: string, nombre: string}|null}>
+     */
+    private function remitentesFrecuentes(): array
+    {
+        $padron = Cliente::query()->pluck('alias', 'ruc');
+        $conteo = [];
+        $nombres = [];
+        $contratantes = [];
+
+        $viajes = Viaje::query()
+            ->whereNotNull('guias_remitente')
+            ->where('fecha_traslado', '>=', now()->subYear()->toDateString())
+            ->get(['cliente', 'cliente_ruc', 'guias_remitente']);
+
+        foreach ($viajes as $viaje) {
+            foreach ($viaje->guias_remitente ?? [] as $guia) {
+                $ruc = $guia['ruc'];
+                $conteo[$ruc] = ($conteo[$ruc] ?? 0) + 1;
+
+                if ($viaje->cliente_ruc === $ruc) {
+                    $nombres[$ruc] ??= $viaje->cliente;
+                } elseif (filled($viaje->cliente_ruc)) {
+                    $clave = (string) $viaje->cliente_ruc;
+                    $contratantes[$ruc][$clave] = ($contratantes[$ruc][$clave] ?? 0) + 1;
+                    $nombres[$clave] ??= $viaje->cliente;
+                }
+            }
+        }
+
+        arsort($conteo);
+
+        return array_values(collect($conteo)
+            ->take(60)
+            ->map(function (int $viajesDelRemitente, string|int $ruc) use ($padron, $nombres, $contratantes): array {
+                $ruc = (string) $ruc;
+                $nombre = fn (string $unRuc): ?string => $padron[$unRuc] ?? Cache::get(self::CLAVE_NOMBRE_REMITENTE.$unRuc) ?? $nombres[$unRuc] ?? null;
+                $contratante = null;
+
+                // Contratante habitual: el que aparece en más de la mitad de
+                // los viajes de ese remitente. Si es mitad y mitad, no se
+                // propone nada: no hay un «de siempre».
+                if (isset($contratantes[$ruc])) {
+                    arsort($contratantes[$ruc]);
+                    $rucContratante = (string) array_key_first($contratantes[$ruc]);
+
+                    if ($contratantes[$ruc][$rucContratante] * 2 > $viajesDelRemitente) {
+                        $contratante = ['ruc' => $rucContratante, 'nombre' => $nombre($rucContratante) ?? $rucContratante];
+                    }
+                }
+
+                return [
+                    'ruc' => $ruc,
+                    'nombre' => $nombre($ruc),
+                    'viajes' => $viajesDelRemitente,
+                    'contratante' => $contratante,
+                ];
+            })
+            ->all());
     }
 
     /**
