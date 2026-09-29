@@ -253,3 +253,48 @@ it('registra una GR ya emitida a partir de su número', function (): void {
 
     expect(app(EmisionGre::class)->registrarEmitida('EG03-00012624')?->id)->toBe($viaje->id);
 });
+
+it('arma igual que SOL una GR subcontratada, con el subcontratador como pagador', function (): void {
+    $grabada = json_decode((string) file_get_contents(base_path('tests/Fixtures/sunat/emision-eg03-12627-subcontratada.json')), true);
+    fingirSol(tokenSol(), api: [
+        '/simplificado/20331061655-09-T930-49433' => Http::response($grabada['guia']),
+        '/comprobantes/20331061655-09-T930-49433' => Http::response($grabada['guia_completa_rechazada'], 422),
+        '/VCX787/numPlaca' => Http::response($grabada['tracto']),
+        '/BEX981/numPlaca' => Http::response($grabada['carreta']),
+        '/numLicencia' => Http::response(['errors' => [['cod' => 2037, 'msg' => 'No encontramos']]], 422),
+        '/personas/41683249' => Http::response($grabada['persona']),
+        '/contribuyentes/20603930844' => Http::response($grabada['subcontratador']),
+        '/contribuyentes/20364000643' => Http::response(['datosContribuyente' => ['desRazonSocial' => 'EMPRESA DE TRANSPORTES PATY SOCIEDAD COMERCIAL DE RESPONSABILIDAD LIMITADA']]),
+    ]);
+    $tracto = Vehiculo::factory()->create(['placa' => 'VCX-787', 'tipo' => TipoVehiculo::Tracto]);
+    $carreta = Vehiculo::factory()->create(['placa' => 'BEX-981', 'tipo' => TipoVehiculo::Carreta]);
+    $conductor = Conductor::factory()->create(['nombres' => 'Eloy', 'apellidos' => 'Miranda Castillo', 'documento' => '41683249', 'licencia' => 'U41683249']);
+
+    $cuerpo = app(EmisionGre::class)->armar(
+        [['ruc' => '20331061655', 'serie' => 'T930', 'numero' => 49433]],
+        $tracto, $carreta, $conductor, '2026-09-28',
+        EmisionGre::PAGADOR_SUBCONTRATADOR, null, rucSubcontratador: '20603930844',
+    );
+
+    expect($cuerpo)->toEqual($grabada['emision_enviada']);
+});
+
+it('pide el RUC de quien subcontrata cuando paga el subcontratador', function () use ($guias): void {
+    Role::findOrCreate('admin', 'web');
+    Http::fake();
+    [$tracto, $carreta, $conductor] = unidadDeLaEmision();
+
+    Pest\Laravel\actingAs(actorConRol('admin'))
+        ->postJson(route('viajes.emitir.store'), [
+            'guias' => $guias,
+            'tracto_id' => $tracto->id,
+            'carreta_id' => $carreta->id,
+            'conductor_id' => $conductor->id,
+            'fecha_traslado' => '2026-09-28',
+            'pagador' => EmisionGre::PAGADOR_SUBCONTRATADOR,
+        ])
+        ->assertUnprocessable()
+        ->assertJsonPath('mensaje', 'Si paga el subcontratador, marca el transporte como subcontratado e indica su RUC.');
+
+    Http::assertNothingSent();
+});

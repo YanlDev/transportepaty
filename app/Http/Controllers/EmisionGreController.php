@@ -89,11 +89,12 @@ class EmisionGreController extends Controller
                 Conductor::query()->findOrFail($request->integer('conductor_id')),
                 $request->string('fecha_traslado')->value(),
                 $pagador,
-                $pagador === EmisionGre::PAGADOR_REMITENTE ? null : $request->string('ruc_pagador')->value(),
+                $request->filled('ruc_pagador') && $pagador !== EmisionGre::PAGADOR_REMITENTE ? $request->string('ruc_pagador')->value() : null,
                 array_filter([
                     $request->integer('tracto_id') => $request->string('tuce_tracto')->trim()->value(),
                     $request->integer('carreta_id') => $request->string('tuce_carreta')->trim()->value(),
                 ]),
+                $request->filled('ruc_subcontratador') ? $request->string('ruc_subcontratador')->value() : null,
             );
         } catch (EmisionEnDuda $duda) {
             return response()->json([

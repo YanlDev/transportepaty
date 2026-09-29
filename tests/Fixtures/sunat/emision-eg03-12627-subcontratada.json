@@ -1,0 +1,209 @@
+{
+ "guia_completa_rechazada": {
+  "cod": 422,
+  "msg": "Unprocessable Entity - Se presentaron errores de validación que impidieron completar el Request",
+  "errors": [
+   {
+    "cod": 2049,
+    "msg": "Usted no puede consultar este comprobante"
+   }
+  ]
+ },
+ "guia": {
+  "id": "6abaef6e529ca7a9ddaca7e6",
+  "codCpe": "09",
+  "numRuc": "20331061655",
+  "numSerie": "T930",
+  "numCpe": 49433,
+  "codEstado": "01",
+  "emisor": {
+   "desNombre": "AJEPER S.A."
+  },
+  "receptor": {
+   "codTipoDocIdentidad": "6",
+   "desNombre": "COMERCIALIZADORA CODISAL S.A.C.(JULIACA)",
+   "numDocIdentidad": "20612449202",
+   "indFrecuente": "0"
+  },
+  "traslado": {
+   "codMotivoTraslado": "01",
+   "codUnidadMedidaPb": "KGM",
+   "numPesoBruto": 30355.916,
+   "indTransbordo": "0",
+   "indGreUnica": "1",
+   "partida": {
+    "indFrecuente": "0",
+    "direccion": {
+     "codUbigeo": "150601",
+     "desDireccion": "PARCELA NRO 55 ZONA CAMPO GRAN",
+     "desDepartamento": "LIMA ",
+     "desProvincia": "HUARAL ",
+     "desDistrito": "HUARAL"
+    }
+   },
+   "llegada": {
+    "indFrecuente": "0",
+    "direccion": {
+     "codUbigeo": "211101",
+     "desDireccion": "NIN  PQE PQ. INDUSTRIAL MZA. A LOTE. 5-1B URB. ZONA INDUSTRIAL TAPARACHI  MZ. A",
+     "desDepartamento": "PUNO ",
+     "desProvincia": "SAN ROMAN ",
+     "desDistrito": "JULIACA"
+    }
+   },
+   "transportista": {
+    "codTipoDocIdentidad": "6",
+    "numDocIdentidad": "20603930844"
+   }
+  }
+ },
+ "tracto": {
+  "numTucChv": "21M24000015E",
+  "indTucChv": "2",
+  "indVigencia": "1"
+ },
+ "carreta": {
+  "numTucChv": "21M23000096E",
+  "indTucChv": "2",
+  "indVigencia": "1"
+ },
+ "persona": {
+  "apePaterno": "MIRANDA",
+  "apeMaterno": "CASTILLO",
+  "nomPerNat": "ELOY"
+ },
+ "subcontratador": {
+  "datosContribuyente": {
+   "desRazonSocial": "CRISAR LOGISTICA S.A.C."
+  }
+ },
+ "emision_enviada": {
+  "codCpe": "31",
+  "codTipoCpe": "00",
+  "numSerie": "EG03",
+  "codEstado": "01",
+  "emision": {
+   "indSEE": "1",
+   "indOrigen": "1"
+  },
+  "emisor": {
+   "indEncSunNumAutorizacionMtc": "1",
+   "numAutorizacionMtc": "210122CNG",
+   "desNombre": "EMPRESA DE TRANSPORTES PATY SOCIEDAD COMERCIAL DE RESPONSABILIDAD LIMITADA",
+   "indSubContratacion": "1",
+   "subContratador": {
+    "codTipoDocIdentidad": "6",
+    "numDocIdentidad": "20603930844",
+    "desNombre": "CRISAR LOGISTICA S.A.C."
+   }
+  },
+  "receptor": {
+   "codTipoDocIdentidad": "6",
+   "desNombre": "COMERCIALIZADORA CODISAL S.A.C.(JULIACA)",
+   "numDocIdentidad": "20612449202",
+   "indFrecuente": "0"
+  },
+  "traslado": {
+   "fecInicioTraslado": "2026-09-28T00:00:00.000-05:00",
+   "indTransbordo": "0",
+   "indRetornoVehicEnvEmbVacio": "0",
+   "indRetornoVehicVacio": "0",
+   "indPagadorFlete": "02",
+   "codUnidadMedidaPb": "KGM",
+   "numPesoBruto": "30355.916",
+   "bien": [],
+   "vehiculo": [
+    {
+     "indTipoVehiculo": "1",
+     "numPlaca": "VCX787",
+     "numTucChv": "21M24000015E",
+     "indTucChv": "2",
+     "indEncSunNumTucChv": "1",
+     "indEncSunNumPlaca": "1",
+     "indFrecuente": "0"
+    },
+    {
+     "indTipoVehiculo": "2",
+     "numPlaca": "BEX981",
+     "numTucChv": "21M23000096E",
+     "indTucChv": "2",
+     "indEncSunNumTucChv": "1",
+     "indEncSunNumPlaca": "1",
+     "indFrecuente": "0"
+    }
+   ],
+   "conductor": [
+    {
+     "indTipoOrden": "1",
+     "codTipoDocIdentidad": "1",
+     "numDocIdentidad": "41683249",
+     "numLicencia": "U41683249",
+     "desNombre": "MIRANDA CASTILLO ELOY",
+     "indEncSunNumLicencia": "0",
+     "desTipoDocIdentidad": "DOCUMENTO NACIONAL DE IDENTIDAD",
+     "indFrecuente": "0"
+    }
+   ],
+   "transportista": {
+    "codTipoDocIdentidad": "6",
+    "numDocIdentidad": "20364000643",
+    "desNombre": "EMPRESA DE TRANSPORTES PATY SOCIEDAD COMERCIAL DE RESPONSABILIDAD LIMITADA",
+    "indFrecuente": "0"
+   },
+   "partida": {
+    "direccion": {
+     "codUbigeo": "150601",
+     "desDireccion": "PARCELA NRO 55 ZONA CAMPO GRAN",
+     "desDepartamento": "LIMA ",
+     "desProvincia": "HUARAL ",
+     "desDistrito": "HUARAL"
+    },
+    "indFrecuente": "0"
+   },
+   "llegada": {
+    "direccion": {
+     "codUbigeo": "211101",
+     "desDireccion": "NIN  PQE PQ. INDUSTRIAL MZA. A LOTE. 5-1B URB. ZONA INDUSTRIAL TAPARACHI  MZ. A",
+     "desDepartamento": "PUNO ",
+     "desProvincia": "SAN ROMAN ",
+     "desDistrito": "JULIACA"
+    },
+    "indFrecuente": "0"
+   },
+   "pagadorFlete": {
+    "codTipoDocIdentidad": "6",
+    "numDocIdentidad": "20603930844",
+    "desNombre": "CRISAR LOGISTICA S.A.C."
+   }
+  },
+  "docRelacionado": [
+   {
+    "codTipoDocumento": "09",
+    "desTipoDocumento": "Guía de Remisión Remitente",
+    "numSerie": "T930",
+    "numDocumento": "49433",
+    "numRuc": "20331061655",
+    "indEncSunDocRelacionado": "1",
+    "esVisible": false
+   }
+  ],
+  "numRuc": "20364000643",
+  "remitente": {
+   "codTipoDocIdentidad": "6",
+   "desNombre": "AJEPER S.A.",
+   "numDocIdentidad": "20331061655",
+   "indFrecuente": "0"
+  }
+ },
+ "emision_respuesta": {
+  "data": {
+   "pkComprobante": {
+    "codCpe": "31",
+    "numRuc": "20364000643",
+    "numSerieCpe": "EG03",
+    "numCpe": "12627"
+   },
+   "qr": "https://e-factura.sunat.gob.pe/v1/contribuyente/gre/comprobantes/descargaqr?hashqr=wOh/LyD+ZBAymNEsESzbEAZp5ZRNq8P9mngPMFO+U0GPcdauWzZZYKHEcRLNEJgAQBckosN33+AUMHT0HWuIRUGqtFqIXOiUo/poFU3Q725a3Bwxes2PpOE20bAFCcb3"
+  }
+ }
+}

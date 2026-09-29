@@ -19,6 +19,7 @@ import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import { SelectorBuscable } from '@/components/selector-buscable';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -183,6 +184,10 @@ export default function EmitirGr({
     const [fechaTraslado, setFechaTraslado] = useState(hoy());
     const [pagador, setPagador] = useState<string>('remitente');
     const [rucPagador, setRucPagador] = useState('');
+    // Cuando otra transportista (p. ej. Crisar) subcontrata a Paty: la GR
+    // sale con «Transporte subcontratado: Sí» y sus datos (EG03-12627).
+    const [subcontratado, setSubcontratado] = useState(false);
+    const [rucSubcontratador, setRucSubcontratador] = useState('');
 
     const conductorElegido = conductores.find((c) => c.id === conductorId);
     const tracto = tractos.find((t) => t.id === tractoId);
@@ -280,7 +285,18 @@ export default function EmitirGr({
     const [emitiendo, setEmitiendo] = useState(false);
     const [resultado, setResultado] = useState<ResultadoEmision | null>(null);
 
-    const avisosBloqueantes = guias.flatMap((g) => g.avisos);
+    // En una subcontratación la GR-remitente consigna como transportista a la
+    // subcontratante, no a Paty: ese aviso deja de ser un problema.
+    const avisosBloqueantes = guias.flatMap((g) =>
+        g.avisos.filter(
+            (aviso) =>
+                !(
+                    subcontratado &&
+                    g.transportistaRuc === rucSubcontratador &&
+                    aviso.startsWith('La GR-remitente consigna a otro')
+                ),
+        ),
+    );
     // Estos no se emiten ni confirmando: el servidor también los frena.
     const bloqueos = avisosBloqueantes.filter(
         (aviso) =>
@@ -313,7 +329,10 @@ export default function EmitirGr({
                     conductor_id: conductorId,
                     fecha_traslado: fechaTraslado,
                     pagador: PAGADORES.find((p) => p.value === pagador)?.codigo,
-                    ruc_pagador: pagador === 'remitente' ? null : rucPagador,
+                    ruc_pagador: pagador === 'tercero' ? rucPagador : null,
+                    ruc_subcontratador: subcontratado
+                        ? rucSubcontratador
+                        : null,
                     tuce_tracto: tractoId ? (tuces[tractoId] ?? null) : null,
                     tuce_carreta: carretaId ? (tuces[carretaId] ?? null) : null,
                 }),
@@ -355,7 +374,13 @@ export default function EmitirGr({
         guias.length === 0 && 'al menos una GR-remitente',
         !tractoId && 'el tracto',
         !conductorId && 'el conductor',
-        pagador !== 'remitente' &&
+        subcontratado &&
+            !/^\d{11}$/.test(rucSubcontratador) &&
+            'el RUC de quien subcontrata',
+        pagador === 'subcontratador' &&
+            !subcontratado &&
+            'marcar el transporte como subcontratado',
+        pagador === 'tercero' &&
             !/^\d{11}$/.test(rucPagador) &&
             'el RUC de quien paga el flete',
     ].filter(Boolean) as string[];
@@ -640,6 +665,55 @@ export default function EmitirGr({
 
             <Seccion titulo="4. Traslado y flete">
                 <div className="grid gap-4 sm:grid-cols-2">
+                    <label className="flex min-h-11 items-center gap-3 sm:col-span-2">
+                        <Checkbox
+                            checked={subcontratado}
+                            onCheckedChange={(valor) =>
+                                setSubcontratado(valor === true)
+                            }
+                        />
+                        <span className="text-sm">
+                            Transporte subcontratado
+                            <span className="block text-xs text-muted-foreground">
+                                Otra transportista contrató a Paty para este
+                                traslado.
+                            </span>
+                        </span>
+                    </label>
+                    {subcontratado && (
+                        <Field
+                            label="RUC de quien subcontrata"
+                            required
+                            ayuda={
+                                clientes.find(
+                                    (c) => c.ruc === rucSubcontratador,
+                                )?.alias
+                            }
+                        >
+                            {(id) => (
+                                <Input
+                                    id={id}
+                                    inputMode="numeric"
+                                    maxLength={11}
+                                    list="clientes-ruc"
+                                    placeholder="20603930844"
+                                    value={rucSubcontratador}
+                                    onChange={(e) =>
+                                        setRucSubcontratador(
+                                            e.target.value.replace(/\D/g, ''),
+                                        )
+                                    }
+                                />
+                            )}
+                        </Field>
+                    )}
+                    <datalist id="clientes-ruc">
+                        {clientes.map((cliente) => (
+                            <option key={cliente.ruc} value={cliente.ruc}>
+                                {cliente.alias}
+                            </option>
+                        ))}
+                    </datalist>
                     <Field label="Fecha de inicio del traslado" required>
                         {(id) => (
                             <Input
@@ -671,15 +745,8 @@ export default function EmitirGr({
                             </Select>
                         )}
                     </Field>
-                    {pagador !== 'remitente' && (
-                        <Field
-                            label={
-                                pagador === 'subcontratador'
-                                    ? 'RUC del subcontratador'
-                                    : 'RUC de quien paga'
-                            }
-                            required
-                        >
+                    {pagador === 'tercero' && (
+                        <Field label="RUC de quien paga" required>
                             {(id) => (
                                 <Input
                                     id={id}
@@ -733,10 +800,23 @@ export default function EmitirGr({
                         {PAGADORES.find(
                             (p) => p.value === pagador,
                         )?.label.toLowerCase()}
-                        {pagador !== 'remitente' && rucPagador
+                        {pagador === 'tercero' && rucPagador
                             ? ` (${rucPagador})`
                             : ''}
                     </dd>
+                    {subcontratado && (
+                        <>
+                            <dt className="text-muted-foreground">
+                                Subcontratado por
+                            </dt>
+                            <dd>
+                                {clientes.find(
+                                    (c) => c.ruc === rucSubcontratador,
+                                )?.alias ?? 'RUC'}{' '}
+                                {rucSubcontratador || '—'}
+                            </dd>
+                        </>
+                    )}
                 </dl>
 
                 {faltantes.length > 0 && (

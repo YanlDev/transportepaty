@@ -39,7 +39,9 @@ class EmitirGreRequest extends FormRequest
             'pagador' => ['required', Rule::in([EmisionGre::PAGADOR_REMITENTE, EmisionGre::PAGADOR_SUBCONTRATADOR, EmisionGre::PAGADOR_TERCERO])],
             'tuce_tracto' => ['nullable', 'string', 'max:20'],
             'tuce_carreta' => ['nullable', 'string', 'max:20'],
-            'ruc_pagador' => ['nullable', 'required_unless:pagador,'.EmisionGre::PAGADOR_REMITENTE, 'digits:11'],
+            'ruc_subcontratador' => ['nullable', 'digits:11', 'required_if:pagador,'.EmisionGre::PAGADOR_SUBCONTRATADOR],
+            // Si paga el subcontratador, su RUC es el del subcontratador.
+            'ruc_pagador' => ['nullable', 'required_if:pagador,'.EmisionGre::PAGADOR_TERCERO, 'digits:11'],
         ];
     }
 
@@ -49,7 +51,8 @@ class EmitirGreRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'ruc_pagador.required_unless' => 'Falta el RUC de quien paga el flete.',
+            'ruc_pagador.required_if' => 'Falta el RUC de quien paga el flete.',
+            'ruc_subcontratador.required_if' => 'Si paga el subcontratador, marca el transporte como subcontratado e indica su RUC.',
         ];
     }
 

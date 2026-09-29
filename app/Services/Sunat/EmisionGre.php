@@ -39,6 +39,7 @@ class EmisionGre
     /**
      * @param  list<array{ruc: string, serie: string, numero: int}>  $guias
      * @param  array<int, string>  $tuces  TUCE elegido a mano por id de vehículo (p. ej. el RUC de Paty)
+     * @param  string|null  $rucSubcontratador  quien subcontrató a Paty para este traslado (p. ej. Crisar)
      * @return array{numero_gr: string, viaje: Viaje|null}
      *
      * @throws RuntimeException un dato no permite emitir (no se envió nada)
@@ -54,13 +55,14 @@ class EmisionGre
         string $pagador,
         ?string $rucPagador,
         array $tuces = [],
+        ?string $rucSubcontratador = null,
     ): array {
         $clave = 'sunat.emision.'.md5(json_encode($guias) ?: '');
 
         // Doble clic o dos personas con la misma GR-remitente: la segunda
         // espera y, al entrar, ya encuentra la GR-transportista registrada.
-        return Cache::lock($clave, 180)->block(60, function () use ($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador, $tuces): array {
-            $cuerpo = $this->armar($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador, $tuces);
+        return Cache::lock($clave, 180)->block(60, function () use ($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador, $tuces, $rucSubcontratador): array {
+            $cuerpo = $this->armar($guias, $tracto, $carreta, $conductor, $fechaTraslado, $pagador, $rucPagador, $tuces, $rucSubcontratador);
             $serie = (string) config('services.sunat_sol.serie_gre');
 
             Log::channel('sunat')->info('SUNAT GRE: emitiendo GR-transportista.', ['guias' => $guias, 'tracto' => $tracto->placa]);
@@ -87,6 +89,7 @@ class EmisionGre
      *
      * @param  list<array{ruc: string, serie: string, numero: int}>  $guias
      * @param  array<int, string>  $tuces  TUCE elegido a mano por id de vehículo
+     * @param  string|null  $rucSubcontratador  quien subcontrató a Paty para este traslado (p. ej. Crisar)
      * @return array<string, mixed>
      */
     public function armar(
@@ -98,12 +101,14 @@ class EmisionGre
         string $pagador,
         ?string $rucPagador,
         array $tuces = [],
+        ?string $rucSubcontratador = null,
     ): array {
         if ($guias === []) {
             throw new RuntimeException('Falta la GR-remitente.');
         }
 
-        $datosGuias = array_map(fn (array $guia): array => $this->guiaVerificada($guia), $guias);
+        $consultas = array_map(fn (array $guia): array => $this->guiaVerificada($guia), $guias);
+        $datosGuias = array_column($consultas, 'datos');
         $principal = $datosGuias[0];
         $remitente = [
             'codTipoDocIdentidad' => '6',
@@ -116,6 +121,13 @@ class EmisionGre
 
         if ($nombrePaty === '') {
             throw new RuntimeException('SUNAT no devolvió la razón social de Paty.');
+        }
+
+        $subcontratador = $rucSubcontratador === null ? null : $this->contribuyenteConNombre($rucSubcontratador, 'la empresa que subcontrata');
+
+        // Si paga el subcontratador y no se indicó otro RUC, es el mismo.
+        if ($pagador === self::PAGADOR_SUBCONTRATADOR && $rucPagador === null && $subcontratador !== null) {
+            $rucPagador = $subcontratador['numDocIdentidad'];
         }
 
         $vehiculos = [$this->vehiculo($tracto, '1', $tuces[$tracto->id] ?? null)];
@@ -134,8 +146,10 @@ class EmisionGre
                 'indEncSunNumAutorizacionMtc' => '1',
                 'numAutorizacionMtc' => (string) config('services.sunat_sol.registro_mtc'),
                 'desNombre' => $nombrePaty,
-                'indSubContratacion' => '0',
-            ],
+                // «Transporte subcontratado: Sí» y el bloque «Datos del
+                // subcontratador» de la GR (emisión EG03-12627).
+                'indSubContratacion' => $subcontratador === null ? '0' : '1',
+            ] + ($subcontratador === null ? [] : ['subContratador' => $subcontratador]),
             'receptor' => [
                 'codTipoDocIdentidad' => (string) data_get($principal, 'receptor.codTipoDocIdentidad', '6'),
                 'desNombre' => (string) data_get($principal, 'receptor.desNombre'),
@@ -163,15 +177,18 @@ class EmisionGre
                 'llegada' => $this->punto(data_get($principal, 'traslado.llegada.direccion'), 'llegada'),
                 'pagadorFlete' => $this->pagador($pagador, $rucPagador, $remitente),
             ],
-            'docRelacionado' => array_map(fn (array $guia): array => [
+            'docRelacionado' => array_map(fn (array $guia, array $consulta): array => [
                 'codTipoDocumento' => '09',
                 'desTipoDocumento' => 'Guía de Remisión Remitente',
                 'numSerie' => $guia['serie'],
                 'numDocumento' => (string) $guia['numero'],
                 'numRuc' => $guia['ruc'],
                 'indEncSunDocRelacionado' => '1',
-                'esVisible' => true,
-            ], $guias),
+                // Falso cuando SUNAT solo deja ver a Paty la versión resumida
+                // (la GR-remitente consigna a otro transportista, p. ej. la
+                // subcontratante): así lo manda SOL (EG03-12627).
+                'esVisible' => $consulta['completa'],
+            ], $guias, $consultas),
             'numRuc' => $ruc,
             'remitente' => $remitente,
         ];
@@ -204,7 +221,7 @@ class EmisionGre
 
     /**
      * @param  array{ruc: string, serie: string, numero: int}  $guia
-     * @return array<string, mixed>
+     * @return array{completa: bool, datos: array<string, mixed>}
      */
     private function guiaVerificada(array $guia): array
     {
@@ -225,7 +242,7 @@ class EmisionGre
             throw new RuntimeException("La GR-remitente {$nombre} no está vigente en SUNAT.");
         }
 
-        return $consulta['datos'];
+        return $consulta;
     }
 
     /**
@@ -352,13 +369,28 @@ class EmisionGre
             ];
         }
 
-        $nombre = $ruc === null ? '' : (string) ($this->sunat->contribuyente($ruc)['desRazonSocial'] ?? '');
-
-        if ($nombre === '') {
-            throw new RuntimeException("SUNAT no encontró el RUC {$ruc} de quien paga el flete.");
+        if ($ruc === null) {
+            throw new RuntimeException('Falta el RUC de quien paga el flete.');
         }
 
-        return ['codTipoDocIdentidad' => '6', 'numDocIdentidad' => (string) $ruc, 'desNombre' => $nombre];
+        return $this->contribuyenteConNombre($ruc, 'quien paga el flete');
+    }
+
+    /**
+     * Un RUC con su razón social según SUNAT, en la forma en que la GR lo
+     * pide para el pagador y el subcontratador.
+     *
+     * @return array{codTipoDocIdentidad: string, numDocIdentidad: string, desNombre: string}
+     */
+    private function contribuyenteConNombre(string $ruc, string $quien): array
+    {
+        $nombre = (string) ($this->sunat->contribuyente($ruc)['desRazonSocial'] ?? '');
+
+        if ($nombre === '') {
+            throw new RuntimeException("SUNAT no encontró el RUC {$ruc} de {$quien}.");
+        }
+
+        return ['codTipoDocIdentidad' => '6', 'numDocIdentidad' => $ruc, 'desNombre' => $nombre];
     }
 
     /** @return array{direccion: array<string, string>, indFrecuente: string} */
