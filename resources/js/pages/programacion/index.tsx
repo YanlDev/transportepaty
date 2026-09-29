@@ -1,9 +1,10 @@
 import { Head, Link, router, usePoll } from '@inertiajs/react';
-import { Plus, Truck, WhatsappLogo } from '@phosphor-icons/react';
+import { Plus, Truck } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
 import { EmptyState } from '@/components/empty-state';
+import { IconoWhatsapp } from '@/components/icono-whatsapp';
 import { ProgramacionDialog } from '@/components/programacion/programacion-dialog';
 import { TableroSalidas } from '@/components/programacion/tablero-salidas';
 import { Button } from '@/components/ui/button';
@@ -196,7 +197,7 @@ export default function ProgramacionIndex({
 
             {puede('programacion.avisar') && !whatsappConectado && (
                 <p className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                    <WhatsappLogo weight="fill" className="size-4" />
+                    <IconoWhatsapp className="size-4" />
                     El número de WhatsApp de la empresa no está vinculado: los
                     avisos se abren como texto en tu WhatsApp.
                     <Link

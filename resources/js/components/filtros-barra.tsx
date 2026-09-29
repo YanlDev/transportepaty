@@ -105,7 +105,7 @@ export function FiltrosBarra({
                     </Button>
                 </SheetTrigger>
 
-                <SheetContent side="bottom" className="max-h-[85vh] gap-0">
+                <SheetContent side="bottom" className="max-h-[85dvh] gap-0">
                     <SheetHeader className="pb-2">
                         <SheetTitle>Filtros</SheetTitle>
                         <SheetDescription className="sr-only">

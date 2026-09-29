@@ -1,0 +1,17 @@
+{
+    "name": "Transportes Paty",
+    "short_name": "Paty",
+    "description": "Flota, viajes y GR de Transportes Paty.",
+    "lang": "es-PE",
+    "start_url": "/dashboard",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "any",
+    "background_color": "#ffffff",
+    "theme_color": "#0059a9",
+    "icons": [
+        { "src": "/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+        { "src": "/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+        { "src": "/apple-touch-icon.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+    ]
+}

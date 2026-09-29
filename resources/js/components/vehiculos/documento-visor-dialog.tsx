@@ -5,7 +5,7 @@ import {
     DialogContent,
     DialogTitle,
     DialogTrigger,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialogo-responsivo';
 
 type Props = {
     /** Vacío cuando el registro todavía no tiene archivo adjunto. */
@@ -42,7 +42,8 @@ export function DocumentoVisorDialog({
             <DialogTrigger asChild>{trigger}</DialogTrigger>
             <DialogContent
                 showCloseButton={false}
-                className="flex h-[92vh] max-h-[1000px] w-[95vw] flex-col gap-0 overflow-hidden p-0 shadow-2xl sm:max-w-5xl"
+                movil="pantalla"
+                className="flex flex-col gap-0 overflow-hidden p-0 shadow-2xl max-md:p-0 max-md:pb-0 md:h-[92dvh] md:max-h-[1000px] md:w-[95vw] md:max-w-5xl md:p-0"
             >
                 <div className="flex h-11 shrink-0 items-center gap-3 border-b bg-background px-3">
                     <DialogTitle className="truncate text-sm font-medium">

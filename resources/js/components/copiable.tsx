@@ -43,7 +43,7 @@ export function Copiable({ valor, etiqueta, children, className }: Props) {
                 aria-label={
                     yaCopiado ? `${etiqueta} copiado` : `Copiar ${etiqueta}`
                 }
-                className={`grid size-8 shrink-0 place-items-center text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 sm:size-auto sm:p-0.5 sm:opacity-0 sm:group-hover/fila:opacity-100 ${
+                className={`grid size-8 shrink-0 place-items-center text-muted-foreground transition-opacity hover:text-foreground focus-visible:opacity-100 sm:size-auto sm:p-0.5 sm:opacity-0 sm:group-hover/fila:opacity-100 sm:pointer-coarse:size-9 sm:pointer-coarse:opacity-100 ${
                     yaCopiado ? 'text-emerald-600 sm:opacity-100' : ''
                 }`}
             >

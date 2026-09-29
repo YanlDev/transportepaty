@@ -10,7 +10,7 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialogo-responsivo';
 import { Spinner } from '@/components/ui/spinner';
 
 type Props = {

@@ -1,4 +1,5 @@
-import { PencilSimple, Trash, WhatsappLogo } from '@phosphor-icons/react';
+import { Pencil, Trash2 } from 'lucide-react';
+import { IconoWhatsapp } from '@/components/icono-whatsapp';
 import {
     abrirWhatsapp,
     AvisoSalida,
@@ -89,7 +90,7 @@ export function TableroSalidas({
                             }
                             title="Mandar el resumen del día al WhatsApp de operaciones"
                         >
-                            <WhatsappLogo weight="fill" className="size-4" />
+                            <IconoWhatsapp className="size-4" />
                             Resumen a operaciones
                         </Button>
                     )}
@@ -240,7 +241,7 @@ function Acciones({
                     onClick={onEditar}
                     aria-label={`Editar la programación de ${programacion.placa}`}
                 >
-                    <PencilSimple className="size-4" />
+                    <Pencil className="size-4" />
                 </Button>
             )}
             {puede('programacion.eliminar') && (
@@ -251,7 +252,7 @@ function Acciones({
                     aria-label={`Quitar la programación de ${programacion.placa}`}
                     className="text-muted-foreground hover:text-destructive"
                 >
-                    <Trash className="size-4" />
+                    <Trash2 className="size-4" />
                 </Button>
             )}
         </div>

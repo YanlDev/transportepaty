@@ -118,7 +118,7 @@ export function DocumentoTarjeta({
                             {fecha}
                             <Pencil
                                 aria-hidden
-                                className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover/fecha:opacity-100"
+                                className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/fecha:opacity-100 group-hover/fecha:opacity-100 pointer-coarse:opacity-100"
                             />
                         </ValorEditable>
                     ) : (

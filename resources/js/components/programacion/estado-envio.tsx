@@ -1,4 +1,4 @@
-import { Check, Checks, Clock, WarningCircle } from '@phosphor-icons/react';
+import { Check, CheckCheck, CircleAlert, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { ResumenEnvio } from '@/types/programacion';
 
@@ -29,10 +29,10 @@ export function EstadoEnvio({
 
     const icono = {
         pendiente: <Clock className="size-3.5 animate-pulse" />,
-        enviado: <Check weight="bold" className="size-3.5" />,
-        entregado: <Checks weight="bold" className="size-3.5" />,
-        leido: <Checks weight="bold" className="size-3.5" />,
-        fallido: <WarningCircle weight="fill" className="size-3.5" />,
+        enviado: <Check className="size-3.5" />,
+        entregado: <CheckCheck className="size-3.5" />,
+        leido: <CheckCheck className="size-3.5" />,
+        fallido: <CircleAlert className="size-3.5" />,
     }[envio.estado];
 
     return (

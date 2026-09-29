@@ -75,10 +75,14 @@ function SidebarProvider({
     (value: boolean | ((value: boolean) => boolean)) => {
       const openState = typeof value === "function" ? value(open) : value
       if (setOpenProp) {
+        // Controlado desde afuera (la tablet, ver AppShell): no se guarda en
+        // la cookie, que es la preferencia del escritorio.
         setOpenProp(openState)
-      } else {
-        _setOpen(openState)
+
+        return
       }
+
+      _setOpen(openState)
 
       // This sets the cookie to keep the sidebar state.
       document.cookie = `${SIDEBAR_COOKIE_NAME}=${openState}; path=/; max-age=${SIDEBAR_COOKIE_MAX_AGE}`

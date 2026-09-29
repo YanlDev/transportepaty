@@ -4,7 +4,7 @@ import {
     DialogContent,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialogo-responsivo';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
 import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';

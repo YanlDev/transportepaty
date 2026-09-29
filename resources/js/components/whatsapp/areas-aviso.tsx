@@ -1,5 +1,5 @@
 import { router, useForm } from '@inertiajs/react';
-import { Plus, Trash } from '@phosphor-icons/react';
+import { Plus, Trash2 } from 'lucide-react';
 import areasAviso from '@/actions/App/Http/Controllers/AreaAvisoController';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
 import InputError from '@/components/input-error';
@@ -160,7 +160,7 @@ function FilaArea({ area }: { area?: AreaAviso }) {
                         aria-label={`Quitar ${area.nombre}`}
                         className="text-muted-foreground hover:text-destructive"
                     >
-                        <Trash className="size-4" />
+                        <Trash2 className="size-4" />
                     </Button>
                 )}
             </div>

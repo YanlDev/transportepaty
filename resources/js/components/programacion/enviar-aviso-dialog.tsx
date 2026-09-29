@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
-import { WhatsappLogo } from '@phosphor-icons/react';
 import { useState } from 'react';
+import { IconoWhatsapp } from '@/components/icono-whatsapp';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -9,7 +9,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialogo-responsivo';
 import { Spinner } from '@/components/ui/spinner';
 
 export type EnvioPendiente = {
@@ -75,7 +75,7 @@ export function EnviarAvisoDialog({
                 </DialogHeader>
 
                 {envio && (
-                    <div className="relative max-h-[60vh] overflow-y-auto rounded-lg border bg-muted">
+                    <div className="relative max-h-[60dvh] overflow-y-auto rounded-lg border bg-muted">
                         {!cargada && (
                             <div className="aspect-square w-full animate-pulse bg-muted" />
                         )}
@@ -97,7 +97,7 @@ export function EnviarAvisoDialog({
                         {enviando ? (
                             <Spinner />
                         ) : (
-                            <WhatsappLogo weight="fill" className="size-4" />
+                            <IconoWhatsapp className="size-4" />
                         )}
                         Enviar por WhatsApp
                     </Button>

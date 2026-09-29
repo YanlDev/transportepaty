@@ -13,7 +13,7 @@ import {
     DialogFooter,
     DialogTitle,
     DialogTrigger,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialogo-responsivo';
 import { Label } from '@/components/ui/label';
 
 export default function DeleteUser() {

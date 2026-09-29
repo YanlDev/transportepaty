@@ -1,7 +1,7 @@
 import { Head, router, useForm, usePoll } from '@inertiajs/react';
-import { WhatsappLogo } from '@phosphor-icons/react';
 import { useEffect } from 'react';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
+import { IconoWhatsapp } from '@/components/icono-whatsapp';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -81,10 +81,7 @@ export default function WhatsappIndex({
             <section className="flex max-w-2xl flex-col gap-5 rounded-xl border bg-card p-5">
                 <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-3">
-                        <WhatsappLogo
-                            weight="fill"
-                            className="size-8 text-emerald-600"
-                        />
+                        <IconoWhatsapp className="size-8 text-emerald-600" />
                         <div>
                             <h2 className="font-semibold">
                                 Número de la empresa

@@ -1,16 +1,16 @@
 import { router, usePage } from '@inertiajs/react';
 import {
-    CaretDown,
+    ChevronDown,
     Headset,
     Package,
     Phone,
     Receipt,
-    Warning,
-    WhatsappLogo,
-} from '@phosphor-icons/react';
+    TriangleAlert,
+} from 'lucide-react';
 import { useState } from 'react';
 import avisoSalida from '@/actions/App/Http/Controllers/AvisoSalidaController';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
+import { IconoWhatsapp } from '@/components/icono-whatsapp';
 import { EnviarAvisoDialog } from '@/components/programacion/enviar-aviso-dialog';
 import type { EnvioPendiente } from '@/components/programacion/enviar-aviso-dialog';
 import { EstadoEnvio } from '@/components/programacion/estado-envio';
@@ -195,9 +195,9 @@ export function AvisoSalida({
                             : 'border-emerald-600/30 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900',
                     )}
                 >
-                    <WhatsappLogo weight="fill" className="size-3.5" />
+                    <IconoWhatsapp className="size-3.5" />
                     {avisado ? `Avisado ${horaDelAviso(tarjeta)}` : 'Avisar'}
-                    <CaretDown className="size-3" />
+                    <ChevronDown className="size-3" />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="start">
                     <DropdownMenuLabel>Conductor</DropdownMenuLabel>
@@ -233,7 +233,7 @@ export function AvisoSalida({
             <BotonWhatsapp
                 etiqueta="Advertencia"
                 titulo="Mandar la advertencia de documentación"
-                icono={<Warning weight="fill" className="size-3.5" />}
+                icono={<TriangleAlert className="size-3.5" />}
                 destacado={false}
                 destinatarios={destinatarios}
                 onElegir={(destinatario) =>
@@ -318,7 +318,7 @@ function BotonWhatsapp({
             <DropdownMenuTrigger title={titulo} className={clases}>
                 {icono}
                 {etiqueta}
-                <CaretDown className="size-3" />
+                <ChevronDown className="size-3" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
                 {destinatarios.map((destinatario) => (
@@ -338,9 +338,9 @@ function BotonWhatsapp({
 }
 
 const ICONOS_AREA: Record<string, React.ReactNode> = {
-    Abastecimiento: <Package weight="fill" className="size-3.5" />,
-    Facturación: <Receipt weight="fill" className="size-3.5" />,
-    'Centro de Control': <Headset weight="fill" className="size-3.5" />,
+    Abastecimiento: <Package className="size-3.5" />,
+    Facturación: <Receipt className="size-3.5" />,
+    'Centro de Control': <Headset className="size-3.5" />,
 };
 
 /** Avisa al área de esta salida, como imagen o con el texto en WhatsApp. */
@@ -360,9 +360,7 @@ function BotonArea({
             title={`Mandar el aviso a ${aviso.area} (${aviso.numero})`}
             className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         >
-            {ICONOS_AREA[aviso.area] ?? (
-                <WhatsappLogo weight="fill" className="size-3.5" />
-            )}
+            {ICONOS_AREA[aviso.area] ?? <IconoWhatsapp className="size-3.5" />}
             {aviso.area}
             <EstadoEnvio envio={envio} />
         </button>

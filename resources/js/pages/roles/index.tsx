@@ -20,7 +20,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialogo-responsivo';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {

@@ -16,7 +16,7 @@ import {
     DialogFooter,
     DialogHeader,
     DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialogo-responsivo';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -275,7 +275,7 @@ export function ProgramacionDialog({
             {/* Con tope de alto y scroll adentro: el buscador de clientes
                 tiene sesenta filas y sin esto el panel crecía más que la
                 ventana y se salía del recuadro. */}
-            <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden sm:max-w-lg">
+            <DialogContent className="flex flex-col overflow-hidden md:max-h-[85dvh] md:max-w-lg">
                 {buscador !== null ? (
                     <>
                         <DialogHeader className="sr-only">

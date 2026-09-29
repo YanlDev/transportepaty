@@ -1,16 +1,15 @@
 import { Link } from '@inertiajs/react';
 import {
+    Building2,
     Calculator,
     CalendarCheck,
-    IconContext,
-    IdentificationCard,
-    Path,
-    Buildings,
+    Container,
+    IdCard,
+    LayoutGrid,
     Receipt,
-    SquaresFour,
+    Route,
     Truck,
-    TruckTrailer,
-} from '@phosphor-icons/react';
+} from 'lucide-react';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
@@ -49,7 +48,7 @@ import type { NavItem } from '@/types';
 const dashboardNavItem: NavItem = {
     title: 'Dashboard',
     href: dashboard(),
-    icon: SquaresFour,
+    icon: LayoutGrid,
 };
 
 /**
@@ -66,7 +65,7 @@ const flotaNavItems: NavItem[] = [
     {
         title: 'Carretas',
         href: vehiculos.carretas(),
-        icon: TruckTrailer,
+        icon: Container,
     },
 ];
 
@@ -74,14 +73,14 @@ const flotaNavItems: NavItem[] = [
 const conductoresNavItem: NavItem = {
     title: 'Conductores',
     href: conductores.index(),
-    icon: IdentificationCard,
+    icon: IdCard,
 };
 
 /** Los viajes: los lee también el contador, que factura contra ellos. */
 const viajesNavItem: NavItem = {
     title: 'Viajes',
     href: viajes.index(),
-    icon: Path,
+    icon: Route,
 };
 
 /**
@@ -106,7 +105,7 @@ const gestionNavItems: NavItem[] = [
     {
         title: 'Clientes',
         href: clientes.index(),
-        icon: Buildings,
+        icon: Building2,
     },
     {
         title: 'Cotizaciones',
@@ -196,21 +195,13 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <IconContext.Provider value={{ weight: 'duotone' }}>
-                    {puede('tablero.ver') && (
-                        <NavMain items={[dashboardNavItem]} />
-                    )}
-                    {secciones.map(
-                        ({ label, items }) =>
-                            items.length > 0 && (
-                                <NavMain
-                                    key={label}
-                                    items={items}
-                                    label={label}
-                                />
-                            ),
-                    )}
-                </IconContext.Provider>
+                {puede('tablero.ver') && <NavMain items={[dashboardNavItem]} />}
+                {secciones.map(
+                    ({ label, items }) =>
+                        items.length > 0 && (
+                            <NavMain key={label} items={items} label={label} />
+                        ),
+                )}
             </SidebarContent>
 
             <SidebarFooter>
