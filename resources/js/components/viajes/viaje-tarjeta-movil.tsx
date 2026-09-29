@@ -2,7 +2,7 @@ import { ArrowRight, Trash2 } from 'lucide-react';
 import { Copiable } from '@/components/copiable';
 import { Button } from '@/components/ui/button';
 import { AccionAnulacion } from '@/components/viajes/anulacion-viaje';
-import { ClienteChip } from '@/components/viajes/cliente-chip';
+import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
 import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
 import { usePermisos } from '@/hooks/use-permisos';
@@ -55,7 +55,10 @@ export function ViajeTarjetaMovil({
                         {formatearFecha(viaje.fecha_traslado)}
                     </span>
                     <span className="min-w-0 truncate">
-                        <ClienteChip cliente={viaje.cliente} />
+                        <ClienteConRemitente
+                            cliente={viaje.cliente}
+                            remitente={viaje.remitente}
+                        />
                     </span>
                 </div>
 

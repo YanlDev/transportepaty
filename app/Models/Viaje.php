@@ -32,6 +32,8 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $cliente
  * @property string|null $cliente_ruc
  * @property int|null $cliente_id
+ * @property string|null $remitente Quien emitió la GR-remitente; puede no ser el cliente (Ajeper vía Crisar).
+ * @property string|null $remitente_ruc
  * @property string $destinatario
  * @property string|null $destinatario_ruc
  * @property array<int, array{numero: string, ruc: string}>|null $guias_remitente
@@ -67,6 +69,8 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'cliente',
     'cliente_ruc',
     'cliente_id',
+    'remitente',
+    'remitente_ruc',
     'destinatario',
     'destinatario_ruc',
     'guias_remitente',
@@ -385,6 +389,10 @@ class Viaje extends Model implements HasMedia
             'conductor_nombre' => $this->conductor_nombre,
             'conductor_id' => $this->conductor_id,
             'cliente' => $this->nombreCliente(),
+            // Solo cuando no es el mismo cliente: es lo único que aporta.
+            'remitente' => $this->remitente_ruc !== null && $this->remitente_ruc !== $this->cliente_ruc
+                ? $this->remitente
+                : null,
             'destinatario' => $this->destinatario,
             'origen' => $this->origen,
             'origen_ciudad' => $this->ciudadOrigen(),

@@ -87,6 +87,8 @@ class ImportadorViaje
             'destino' => $campos['destino'],
             'cliente' => $cliente,
             'cliente_ruc' => $clienteRuc,
+            'remitente' => self::normalizarRazonSocial($campos['cliente']),
+            'remitente_ruc' => $campos['cliente_ruc'],
             'cliente_id' => $clienteDelPadron?->id,
             'destinatario' => $campos['destinatario'],
             'destinatario_ruc' => $campos['destinatario_ruc'],
@@ -183,7 +185,7 @@ class ImportadorViaje
      * @param  array<string, mixed>  $campos
      * @return array{0: string, 1: string|null}
      */
-    private function clienteReal(array $campos): array
+    public function clienteReal(array $campos): array
     {
         if ($campos['subcontratador'] !== null) {
             return [self::normalizarRazonSocial($campos['subcontratador']), $campos['subcontratador_ruc']];

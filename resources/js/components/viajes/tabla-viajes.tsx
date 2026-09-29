@@ -12,7 +12,7 @@ import {
 } from '@/components/ui/table';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { AccionAnulacion } from '@/components/viajes/anulacion-viaje';
-import { ClienteChip } from '@/components/viajes/cliente-chip';
+import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
 import { ConductorCelda } from '@/components/viajes/conductor-celda';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
 import { GuiasRemitenteCelda } from '@/components/viajes/guias-remitente-celda';
@@ -134,7 +134,10 @@ export function TablaViajes({
                                 />
                             </TableCell>
                             <TableCell className="max-w-[160px] overflow-hidden">
-                                <ClienteChip cliente={viaje.cliente} />
+                                <ClienteConRemitente
+                                    cliente={viaje.cliente}
+                                    remitente={viaje.remitente}
+                                />
                             </TableCell>
                             <TableCell className="max-w-[160px] overflow-hidden">
                                 <DireccionCelda

@@ -172,3 +172,15 @@ it('throws when the file is not a parseable PDF', function (): void {
         base_path('tests/Fixtures/disponibilidad-real.xlsx'),
     );
 })->throws(Exception::class);
+
+it('reads who pays the freight, even without a subcontratador block', function (): void {
+    // EG03-12625: remitente Ajeper, sin bloque de subcontratador, paga Crisar.
+    $campos = (new LectorGuiaRemision)->extraerDesdeArchivo(
+        base_path('tests/Fixtures/guias/gr-ajeper-paga-crisar-sin-subcontratacion.pdf'),
+    );
+
+    expect($campos['cliente'])->toBe('AJEPER S.A.')
+        ->and($campos['subcontratador'])->toBeNull()
+        ->and($campos['pagador_flete'])->toBe('CRISAR LOGISTICA S.A.C.')
+        ->and($campos['pagador_flete_ruc'])->toBe('20603930844');
+});

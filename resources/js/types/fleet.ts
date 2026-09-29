@@ -245,6 +245,8 @@ export type ViajeListItem = {
      */
     anulacion?: AnulacionViaje | null;
     numero_gr: string;
+    /** Quien emitió la GR-remitente, solo si no es el cliente (Ajeper cuando cobra Crisar). */
+    remitente: string | null;
     /** GR(s) del remitente (cliente) referidas en la GR-transportista. Vacío si el PDF no traía ninguna. */
     guias_remitente: { numero: string; ruc: string }[] | null;
     /** Misma clave → misma salida física del camión (heurística: fecha + tracto + carreta + conductor). */

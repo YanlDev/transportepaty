@@ -5,7 +5,7 @@ import { EstadoCobranzaBadge } from '@/components/contabilidad/estado-cobranza-b
 import { VerGuia } from '@/components/contabilidad/ver-guia';
 import { Copiable } from '@/components/copiable';
 import { Checkbox } from '@/components/ui/checkbox';
-import { ClienteChip } from '@/components/viajes/cliente-chip';
+import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { ViajeContable } from '@/types/contabilidad';
@@ -79,7 +79,10 @@ export function TarjetaCobranza({
                     {formatearFecha(viaje.fecha_traslado)}
                 </span>
                 <span className="min-w-0 truncate">
-                    <ClienteChip cliente={viaje.cliente} />
+                    <ClienteConRemitente
+                        cliente={viaje.cliente}
+                        remitente={viaje.remitente}
+                    />
                 </span>
             </div>
 

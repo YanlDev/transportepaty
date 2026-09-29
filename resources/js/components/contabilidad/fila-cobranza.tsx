@@ -7,7 +7,7 @@ import { Copiable } from '@/components/copiable';
 import { DireccionCelda } from '@/components/direccion-celda';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TableCell, TableRow } from '@/components/ui/table';
-import { ClienteChip } from '@/components/viajes/cliente-chip';
+import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
 import { ConductorCelda } from '@/components/viajes/conductor-celda';
 import { GuiasRemitenteCelda } from '@/components/viajes/guias-remitente-celda';
 import { PlacaCelda } from '@/components/viajes/placa-celda';
@@ -101,7 +101,10 @@ export function FilaCobranza({
                 />
             </TableCell>
             <TableCell className="max-w-40 overflow-hidden">
-                <ClienteChip cliente={viaje.cliente} />
+                <ClienteConRemitente
+                    cliente={viaje.cliente}
+                    remitente={viaje.remitente}
+                />
             </TableCell>
             <TableCell className="max-w-40 overflow-hidden">
                 <DireccionCelda

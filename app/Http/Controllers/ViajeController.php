@@ -53,6 +53,7 @@ class ViajeController extends Controller
                     $query->whereLike('placa_tracto', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('placa_carreta', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('cliente', "%{$buscar}%", caseSensitive: false)
+                        ->orWhereLike('remitente', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('destinatario', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('conductor_nombre', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('numero_gr', "%{$buscar}%", caseSensitive: false)

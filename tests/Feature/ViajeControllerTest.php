@@ -665,3 +665,21 @@ it('does not duplicate nor revive an anulada GR when its PDF is uploaded again',
         ->and(Viaje::query()->count())->toBe(0)
         ->and(Viaje::query()->conAnuladas()->sole()->estaAnulada())->toBeTrue();
 });
+
+it('keeps the GR remitente apart from the cliente Paty bills', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [
+            gr('gr-ajeper-subcontratado-crisar.pdf'),
+            gr('gr-minsur-concentrado.pdf'),
+        ]])
+        ->assertSessionHasNoErrors();
+
+    $ajeper = Viaje::query()->where('remitente_ruc', '20331061655')->sole();
+    $minsur = Viaje::query()->where('remitente_ruc', '20100136741')->sole();
+
+    expect($ajeper->cliente)->toBe('CRISAR LOGISTICA S.A.C.')
+        ->and($ajeper->remitente)->toBe('AJEPER S.A.')
+        ->and($ajeper->datosDeListado()['remitente'])->toBe('AJEPER S.A.')
+        // Si el remitente es el cliente, la lista no lo repite.
+        ->and($minsur->datosDeListado()['remitente'])->toBeNull();
+});

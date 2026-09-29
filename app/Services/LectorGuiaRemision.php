@@ -34,7 +34,7 @@ class LectorGuiaRemision
      * string}>` (puede venir vacía). Las claves son: `numero_gr`,
      * `fecha_emision`, `fecha_traslado`, `origen`, `destino`, `cliente`,
      * `cliente_ruc`, `destinatario`, `destinatario_ruc`, `subcontratador`,
-     * `subcontratador_ruc`, `guias_remitente`, `peso`, `unidad_peso`,
+     * `subcontratador_ruc`, `pagador_flete`, `pagador_flete_ruc`, `guias_remitente`, `peso`, `unidad_peso`,
      * `placa_tracto`, `placa_carreta`, `conductor_nombre`, `conductor_dni`.
      *
      * @return array<string, mixed>
@@ -137,6 +137,10 @@ class LectorGuiaRemision
             // GR: quien use estos campos decide si lo usa para reemplazar al
             // cliente (ver `ImportadorViaje`).
             ...$this->extraerEmpresa('subcontratador', 'Datos del subcontratador:', $texto),
+            // Quién paga el flete. Solo informativo: el cliente sigue siendo
+            // el subcontratador o el remitente —cuando paga un comprador
+            // (Hatun Wasi en GR de Porcelanato) no se le cobra a él—.
+            ...$this->extraerEmpresa('pagador_flete', 'Datos de pagador de flete:', $texto),
             'guias_remitente' => $this->extraerGuiasRemitente($texto),
             'peso' => $this->capturar('/Peso Bruto total de la carga:\s*([\d,]+(?:\.\d+)?)/u', $texto),
             'unidad_peso' => $this->capturar('/Unidad de Medida del Peso Bruto:\s*(\w+)/u', $texto),
@@ -193,6 +197,8 @@ class LectorGuiaRemision
             'destinatario_ruc' => $remitenteRuc,
             'subcontratador' => null,
             'subcontratador_ruc' => null,
+            'pagador_flete' => null,
+            'pagador_flete_ruc' => null,
             'guias_remitente' => [],
             'peso' => '0',
             'unidad_peso' => 'KGM',

@@ -58,6 +58,7 @@ it('carries the same operativo columns as the viajes list', function (): void {
                 'carreta_id',
                 'conductor_nombre',
                 'cliente',
+                'remitente',
                 'destinatario',
                 'origen',
                 'origen_ciudad',
