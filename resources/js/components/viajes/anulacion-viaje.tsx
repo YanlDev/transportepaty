@@ -8,7 +8,8 @@ import type { AnulacionViaje } from '@/types/fleet';
 
 /**
  * Anular una GR vigente o reactivar una anulada, según cómo esté. Reactivar
- * no pide confirmación: solo devuelve la GR a como estaba.
+ * no pide confirmación: solo devuelve la GR a como estaba. Una dada de baja
+ * en SUNAT no se reactiva: solo se muestra la marca.
  */
 export function AccionAnulacion({
     viaje,
@@ -19,6 +20,17 @@ export function AccionAnulacion({
 }) {
     const tamano = grande ? 'size-11' : 'size-8';
     const icono = grande ? 'size-5' : 'size-4';
+
+    if (viaje.anulacion?.baja_sunat) {
+        return (
+            <span
+                className="px-1 text-[10px] font-semibold tracking-wide whitespace-nowrap text-muted-foreground uppercase"
+                title="Dada de baja en SUNAT: no se puede reactivar"
+            >
+                Baja SUNAT
+            </span>
+        );
+    }
 
     if (viaje.anulacion) {
         return (

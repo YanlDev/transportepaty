@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EstadoCobranza;
+use App\Enums\MotivoBajaGre;
 use App\Enums\TipoCarga;
 use Database\Factories\ViajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -52,6 +53,8 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property Carbon|null $anulada_at
  * @property int|null $anulada_por
  * @property string|null $motivo_anulacion
+ * @property Carbon|null $baja_sunat_at
+ * @property MotivoBajaGre|null $motivo_baja_sunat
  * @property-read Factura|null $factura
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
@@ -445,6 +448,8 @@ class Viaje extends Model implements HasMedia
             'fecha_traslado' => 'date:Y-m-d',
             'gr_fisica_recibida_at' => 'datetime',
             'anulada_at' => 'datetime',
+            'baja_sunat_at' => 'datetime',
+            'motivo_baja_sunat' => MotivoBajaGre::class,
             'guias_remitente' => 'array',
             'peso' => 'decimal:3',
             'tipo_carga' => TipoCarga::class,

@@ -235,6 +235,8 @@ export type AnulacionViaje = {
     fecha: string;
     por: string | null;
     motivo: string | null;
+    /** Cuándo se dio de baja en SUNAT desde Transpaty; así ya no se reactiva. */
+    baja_sunat: string | null;
 };
 
 export type ViajeListItem = {

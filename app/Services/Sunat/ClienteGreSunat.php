@@ -2,6 +2,8 @@
 
 namespace App\Services\Sunat;
 
+use App\Enums\MotivoBajaGre;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
 use Illuminate\Http\Client\Response;
@@ -136,12 +138,7 @@ class ClienteGreSunat
         }
 
         if (in_array($respuesta->status(), [400, 422], true)) {
-            $errores = $respuesta->json('errors');
-            $mensajes = is_array($errores)
-                ? implode(' · ', array_filter(array_map(fn (mixed $error): string => is_array($error) ? (string) ($error['msg'] ?? '') : '', $errores)))
-                : '';
-
-            throw new EmisionRechazada($mensajes !== '' ? $mensajes : (string) $respuesta->json('msg', 'SUNAT rechazó la GR.'));
+            throw new EmisionRechazada($this->mensajesDeError($respuesta) ?? 'SUNAT rechazó la GR.');
         }
 
         $numero = $respuesta->json('data.pkComprobante.numCpe');
@@ -155,6 +152,47 @@ class ClienteGreSunat
             'numero' => (int) $numero,
             'qr' => $respuesta->json('data.qr'),
         ];
+    }
+
+    /**
+     * Da de baja en SUNAT una GR-transportista de Paty, como «Baja de GRE» de
+     * SOL (grabación EG03-12631, 29-09-2026): `PUT .../baja` con el motivo, y
+     * SUNAT responde la hora en que la registró. No tiene vuelta atrás.
+     *
+     * Igual que la emisión, solo se repite tras un 401 (SUNAT no procesó
+     * nada). Si la conexión se corta después de enviar, no se sabe si quedó
+     * de baja: se avisa para revisar en SOL en vez de reintentar.
+     *
+     * @throws BajaRechazada SUNAT no la dio de baja (ya estaba de baja, fuera de plazo, etc.)
+     * @throws RuntimeException no se sabe si quedó de baja
+     */
+    public function darDeBaja(string $ruc, string $serie, int $numero, MotivoBajaGre $motivo): CarbonImmutable
+    {
+        $ruta = sprintf('/gre/comprobantes/%s-31-%s-%d/baja', $ruc, strtoupper($serie), $numero);
+        $cuerpo = ['codMotivo' => $motivo->value];
+
+        try {
+            $respuesta = $this->solicitud(30)->put(self::BASE.$ruta, $cuerpo);
+
+            if ($respuesta->status() === 401) {
+                $this->sesion->olvidar();
+                $respuesta = $this->solicitud(30)->put(self::BASE.$ruta, $cuerpo);
+            }
+        } catch (ConnectionException) {
+            throw new RuntimeException('Se cortó la conexión con SUNAT al dar de baja: revisa en SOL si quedó de baja antes de intentar de nuevo.');
+        }
+
+        if (in_array($respuesta->status(), [400, 404, 422], true)) {
+            throw new BajaRechazada($this->mensajesDeError($respuesta) ?? 'SUNAT no dio de baja la GR.');
+        }
+
+        $registrada = $respuesta->json('fecRegOperacion');
+
+        if (! $respuesta->successful() || ! is_string($registrada)) {
+            throw new RuntimeException("SUNAT respondió {$respuesta->status()} al dar de baja: revisa en SOL si quedó de baja antes de intentar de nuevo.");
+        }
+
+        return CarbonImmutable::parse($registrada, 'America/Lima')->utc();
     }
 
     /**
@@ -239,6 +277,21 @@ class ClienteGreSunat
             ])
             ->withUserAgent(SesionSol::AGENTE)
             ->timeout($segundos);
+    }
+
+    /** Los `errors[].msg` de SUNAT juntos, o su `msg` suelto. */
+    private function mensajesDeError(Response $respuesta): ?string
+    {
+        $errores = $respuesta->json('errors');
+        $mensajes = is_array($errores)
+            ? implode(' · ', array_filter(array_map(fn (mixed $error): string => is_array($error) ? (string) ($error['msg'] ?? '') : '', $errores)))
+            : '';
+
+        if ($mensajes === '') {
+            $mensajes = (string) $respuesta->json('msg', '');
+        }
+
+        return $mensajes !== '' ? $mensajes : null;
     }
 
     private function codigoError(Response $respuesta): ?int

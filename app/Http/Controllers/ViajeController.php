@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
+use App\Enums\MotivoBajaGre;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\AnularViajeRequest;
@@ -13,6 +14,8 @@ use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Services\ImportadorViaje;
+use App\Services\Sunat\BajaGre;
+use App\Services\Sunat\BajaRechazada;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,6 +23,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use RuntimeException;
 
 class ViajeController extends Controller
 {
@@ -86,6 +90,7 @@ class ViajeController extends Controller
                     'fecha' => $viaje->anulada_at?->toIso8601String(),
                     'por' => $viaje->anuladaPor?->name,
                     'motivo' => $viaje->motivo_anulacion,
+                    'baja_sunat' => $viaje->baja_sunat_at?->toIso8601String(),
                 ] : null,
             ]);
 
@@ -234,29 +239,60 @@ class ViajeController extends Controller
     }
 
     /**
-     * Marca la GR como anulada ante SUNAT: queda en el listado, en gris, y
-     * deja de contar como viaje en todo lo demás (ver `Viaje::booted()`).
+     * Marca la GR como anulada: queda en el listado, en gris, y deja de
+     * contar como viaje en todo lo demás (ver `Viaje::booted()`). Con
+     * `baja_sunat` además la da de baja en SUNAT, primero, y solo si SUNAT
+     * acepta se marca anulada.
      */
-    public function anular(AnularViajeRequest $request, Viaje $viaje): RedirectResponse
+    public function anular(AnularViajeRequest $request, Viaje $viaje, BajaGre $baja): RedirectResponse
     {
         $this->authorize('anular', $viaje);
 
-        $viaje->forceFill([
-            'anulada_at' => now(),
-            'anulada_por' => $request->user()->id,
-            'motivo_anulacion' => $request->validated('motivo') ?: null,
-        ])->save();
+        $motivoBaja = $request->enum('baja_sunat', MotivoBajaGre::class);
+
+        if ($motivoBaja === null) {
+            $viaje->forceFill([
+                'anulada_at' => now(),
+                'anulada_por' => $request->user()->id,
+                'motivo_anulacion' => $request->validated('motivo') ?: null,
+            ])->save();
+
+            return back()->with('toast', [
+                'type' => 'success',
+                'message' => "GR {$viaje->numero_gr} marcada como anulada.",
+            ]);
+        }
+
+        $this->authorize('emitir', Viaje::class);
+
+        try {
+            $baja->darDeBaja($viaje, $motivoBaja, $request->user(), $request->validated('motivo') ?: null);
+        } catch (BajaRechazada $rechazo) {
+            return back()->withErrors(['baja_sunat' => "SUNAT no la dio de baja: {$rechazo->getMessage()}"]);
+        } catch (RuntimeException $duda) {
+            return back()->withErrors(['baja_sunat' => $duda->getMessage()]);
+        }
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "GR {$viaje->numero_gr} marcada como anulada.",
+            'message' => "GR {$viaje->numero_gr} dada de baja en SUNAT y anulada.",
         ]);
     }
 
-    /** Deshace una anulación hecha por error: la GR vuelve a contar. */
+    /**
+     * Deshace una anulación hecha por error: la GR vuelve a contar. Una dada
+     * de baja en SUNAT no: esa baja no tiene vuelta atrás.
+     */
     public function reactivar(Viaje $viaje): RedirectResponse
     {
         $this->authorize('anular', $viaje);
+
+        if ($viaje->baja_sunat_at !== null) {
+            return back()->with('toast', [
+                'type' => 'error',
+                'message' => "GR {$viaje->numero_gr} está dada de baja en SUNAT: no se puede reactivar.",
+            ]);
+        }
 
         $viaje->forceFill([
             'anulada_at' => null,

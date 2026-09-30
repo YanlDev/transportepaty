@@ -1,0 +1,8 @@
+{
+    "_origen": "Baja de GRE en SOL, EG03-12631 (Crisar/Ajeper, VAP803), 29-09-2026. Solo el pedido y la respuesta de la baja.",
+    "metodo": "PUT",
+    "ruta": "/v1/contribuyente/gre/comprobantes/20364000643-31-EG03-12631/baja",
+    "cuerpo": {"codMotivo": "02"},
+    "respuesta": {"fecRegOperacion": "2026-09-29T15:29:28"},
+    "motivos": [{"numParametro":"1031","lstParam":[{"codParametro":"01","desParametro":"Con baja - Durante el traslado, por cambio de destinatario | Durante el traslado, por cambio de destinatario","estado":"1"},{"codParametro":"02","desParametro":"Con baja - Antes de iniciar el traslado | Antes de iniciar el traslado","estado":"1"}]}]
+}

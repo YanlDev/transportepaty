@@ -49,6 +49,8 @@ export function ViajeDetalleDialog({ viaje, onOpenChange }: Props) {
                                 {viaje.anulacion.por &&
                                     ` por ${viaje.anulacion.por}`}
                                 . No cuenta como viaje.
+                                {viaje.anulacion.baja_sunat &&
+                                    ` Dada de baja en SUNAT el ${formatearFecha(viaje.anulacion.baja_sunat)}.`}
                                 {viaje.anulacion.motivo && (
                                     <span className="mt-1 block">
                                         {viaje.anulacion.motivo}
