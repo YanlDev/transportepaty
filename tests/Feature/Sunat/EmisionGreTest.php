@@ -193,7 +193,10 @@ it('responde con el número emitido', function () use ($guias): void {
             'ruc_pagador' => '20601239079',
         ])
         ->assertOk()
-        ->assertJson(['estado' => 'emitida', 'numeroGr' => 'EG03-00012623']);
+        ->assertJson(['estado' => 'emitida', 'numeroGr' => 'EG03-00012623'])
+        // El PDF de prueba no es una GR legible: el viaje no se registra y
+        // no hay enlace que mandar por WhatsApp, pero la clave viaja igual.
+        ->assertJsonPath('pdfUrl', null);
 });
 
 it('avisa que la emisión quedó en duda y no la da por emitida', function () use ($guias): void {

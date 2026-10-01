@@ -7,6 +7,10 @@ import {
 } from '@/components/ui/dialogo-responsivo';
 import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
 import { ClienteChip } from '@/components/viajes/cliente-chip';
+import {
+    EnviarGrWhatsapp,
+    detalleParaWhatsapp,
+} from '@/components/viajes/enviar-gr-whatsapp';
 import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import type { ViajeListItem } from '@/types/fleet';
@@ -127,6 +131,12 @@ export function ViajeDetalleDialog({ viaje, onOpenChange }: Props) {
                                     }
                                 />
                             </div>
+                            <EnviarGrWhatsapp
+                                className="mt-2 w-full"
+                                numeroGr={viaje.numero_gr}
+                                pdfUrl={viaje.archivo_url}
+                                detalle={detalleParaWhatsapp(viaje)}
+                            />
                         </div>
                     </>
                 )}

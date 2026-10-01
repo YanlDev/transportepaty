@@ -3,6 +3,7 @@
 use App\Models\Conductor;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
+use Illuminate\Http\UploadedFile;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -118,4 +119,17 @@ it('abre la lista de remitentes sin desbordar el celular', function (): void {
         ->assertScript(SIN_DESBORDE, true)
         ->assertNoJavaScriptErrors()
         ->screenshot(filename: 'movil-emitir-remitentes');
+});
+
+it('ofrece mandar la GR por WhatsApp desde el detalle del viaje', function (): void {
+    actingAs(actorConRol('admin'));
+    $viaje = Viaje::factory()->create(['numero_gr' => 'EG03-00099999']);
+    $viaje->addMedia(UploadedFile::fake()->createWithContent('gr.pdf', '%PDF-1.4 prueba'))->toMediaCollection('archivo');
+
+    visit('/viajes')
+        ->on()->mobile()
+        ->click('EG03-00099999')
+        ->assertSee('Enviar por WhatsApp')
+        ->assertAttributeContains('a[href^="https://wa.me/?text="]', 'href', 'EG03-00099999')
+        ->assertNoJavaScriptErrors();
 });

@@ -35,7 +35,13 @@ export type Ultimos = {
 export type CampoUnidad = 'tracto' | 'carreta' | 'conductor';
 
 export type ResultadoEmision =
-    | { estado: 'emitida'; numeroGr: string; viajeRegistrado: boolean }
+    | {
+          estado: 'emitida';
+          numeroGr: string;
+          viajeRegistrado: boolean;
+          /** Enlace al PDF de SUNAT; null si todavía no se pudo bajar. */
+          pdfUrl: string | null;
+      }
     | { estado: 'en_duda' | 'rechazada' | 'no_enviada'; mensaje: string };
 
 export type GuiaRemitente = {

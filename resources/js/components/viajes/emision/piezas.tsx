@@ -19,6 +19,7 @@ import type {
     Mtc,
     ResultadoEmision,
 } from '@/components/viajes/emision/tipos';
+import { EnviarGrWhatsapp } from '@/components/viajes/enviar-gr-whatsapp';
 
 /**
  * Las piezas de la pantalla «Emitir GR»: cada sección, la tarjeta de una
@@ -27,14 +28,20 @@ import type {
 
 export function ResultadoDeEmision({
     resultado,
+    detalle = [],
 }: {
     resultado: ResultadoEmision;
+    /** Fecha, placas, conductor… para el mensaje de WhatsApp. */
+    detalle?: string[];
 }) {
     const [registrando, setRegistrando] = useState(false);
     const [registrado, setRegistrado] = useState(
         resultado.estado === 'emitida' && resultado.viajeRegistrado,
     );
     const [errorRegistro, setErrorRegistro] = useState<string | null>(null);
+    const [pdfUrl, setPdfUrl] = useState<string | null>(
+        resultado.estado === 'emitida' ? resultado.pdfUrl : null,
+    );
 
     const registrarViaje = async (numeroGr: string) => {
         setRegistrando(true);
@@ -56,6 +63,7 @@ export function ResultadoDeEmision({
 
             if (respuesta.ok && cuerpo.viajeRegistrado) {
                 setRegistrado(true);
+                setPdfUrl(cuerpo.pdfUrl ?? null);
             } else {
                 setErrorRegistro(
                     cuerpo.mensaje ??
@@ -86,6 +94,15 @@ export function ResultadoDeEmision({
                     >
                         Ver en Viajes
                     </a>
+                    {/* Se queda a la vista mientras se esté en la pantalla:
+                        si desapareciera sola, una distracción obligaría a ir
+                        a buscar la GR a Viajes para mandarla. */}
+                    <EnviarGrWhatsapp
+                        className="mt-3 w-full sm:w-auto"
+                        numeroGr={resultado.numeroGr}
+                        pdfUrl={pdfUrl}
+                        detalle={detalle}
+                    />
                     {!registrado && (
                         <div className="mt-2 flex flex-col items-start gap-1">
                             <Button

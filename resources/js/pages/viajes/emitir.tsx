@@ -49,6 +49,14 @@ import type {
 } from '@/components/viajes/emision/tipos';
 import { formatearPlaca } from '@/lib/format';
 
+/**
+ * «JR. SANDIA 206 (JULIACA, SAN ROMAN, PUNO)» → «JULIACA»: el distrito, que
+ * la vista previa pone entre paréntesis al final de la dirección.
+ */
+function ciudadDe(direccion: string | null | undefined): string {
+    return direccion?.split('(').pop()?.split(',')[0]?.trim() ?? '';
+}
+
 export default function EmitirGr({
     tractos,
     carretas,
@@ -740,7 +748,15 @@ export default function EmitirGr({
                     )}
                 </div>
 
-                {resultado && <ResultadoDeEmision resultado={resultado} />}
+                {resultado && (
+                    <ResultadoDeEmision
+                        resultado={resultado}
+                        detalle={[
+                            `${fechaTraslado.split('-').reverse().join('/')} · ${ciudadDe(guias[0]?.partida)} → ${ciudadDe(guias[0]?.llegada)}`,
+                            `${tracto ? formatearPlaca(tracto.placa) : ''}${carreta ? ` / ${formatearPlaca(carreta.placa)}` : ''} · ${conductorElegido?.nombre ?? ''}`,
+                        ]}
+                    />
+                )}
             </Seccion>
 
             {/* La acción principal, siempre a mano en el celular: pegada

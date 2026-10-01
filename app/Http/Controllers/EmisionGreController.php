@@ -117,6 +117,8 @@ class EmisionGreController extends Controller
             'estado' => 'emitida',
             'numeroGr' => $resultado['numero_gr'],
             'viajeRegistrado' => $resultado['viaje'] !== null,
+            // Para mandarla por WhatsApp apenas sale: el enlace al PDF.
+            'pdfUrl' => $resultado['viaje']?->getFirstMediaUrl('archivo') ?: null,
         ]);
     }
 
@@ -204,7 +206,10 @@ class EmisionGreController extends Controller
             return response()->json(['mensaje' => $error->getMessage()], 502);
         }
 
-        return response()->json(['viajeRegistrado' => $viaje !== null]);
+        return response()->json([
+            'viajeRegistrado' => $viaje !== null,
+            'pdfUrl' => $viaje?->getFirstMediaUrl('archivo') ?: null,
+        ]);
     }
 
     /**
