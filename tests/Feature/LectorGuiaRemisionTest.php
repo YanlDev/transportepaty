@@ -106,6 +106,24 @@ it('extracts the destinatario when its RUC label wraps onto the next line', func
     expect($campos['destinatario_ruc'])->toBe('20448484816');
 });
 
+it('extracts remitente and destinatario when the RUC label wraps in the middle', function (): void {
+    // Con una razón social muy larga el corte cae entre «REGISTRO ÚNICO DE» y
+    // «CONTRIBUYENTES», no antes del «N°»: sin cliente ni destinatario la GR
+    // entera se descartaba (EG03-00012656, emitida desde Transpaty).
+    $campos = (new LectorGuiaRemision)->extraerDesdeArchivo(
+        base_path('tests/Fixtures/guias/gr-agro-veterinaria-ruc-partido.pdf'),
+    );
+
+    expect($campos)->toMatchArray([
+        'numero_gr' => 'EG03-00012656',
+        'cliente' => 'IMPORTACIONES DISTRIBUCIONES AGRO VETERINARIA PERU SOCIEDAD ANONIMA CERRADA',
+        'cliente_ruc' => '20447751152',
+        'destinatario' => 'IMPORTACIONES DISTRIBUCIONES AGRO VETERINARIA PERU SOCIEDAD ANONIMA CERRADA',
+        'destinatario_ruc' => '20447751152',
+        'conductor_nombre' => 'MERCADO GUTIERREZ ROLANDO',
+    ]);
+});
+
 it('extracts every field from a GRE Remitente, not just the GRE Transportista that Paty issues', function (): void {
     // A diferencia de la GRE Transportista, acá quien emite el documento es
     // el dueño de la carga (no hay sección «Datos del remitente:»): el

@@ -251,11 +251,11 @@ class LectorGuiaRemision
      */
     private function extraerEmpresa(string $clave, string $etiqueta, string $texto): array
     {
-        // El corte de línea del PDF puede caer justo antes de «N°» en vez de
-        // después (visto cuando remitente y destinatario son la misma
-        // empresa): el espacio entre «CONTRIBUYENTES» y «N°» tiene que admitir
-        // un salto de línea, no solo un espacio literal.
-        $patron = '/'.$this->etiquetaTolerante($etiqueta).'\s*(.*?)\s*-\s*REGISTRO ÚNICO DE CONTRIBUYENTES\s*N°\s*(\d+)/uis';
+        // El corte de línea del PDF puede caer en cualquier espacio de la
+        // etiqueta: antes de «N°» (remitente y destinatario iguales) o entre
+        // «DE» y «CONTRIBUYENTES» (razón social muy larga). Cada espacio
+        // tiene que admitir un salto de línea, no solo un espacio literal.
+        $patron = '/'.$this->etiquetaTolerante($etiqueta).'\s*(.*?)\s*-\s*REGISTRO\s+ÚNICO\s+DE\s+CONTRIBUYENTES\s*N°\s*(\d+)/uis';
 
         if (! preg_match($patron, $texto, $coincidencias)) {
             return [$clave => null, "{$clave}_ruc" => null];
