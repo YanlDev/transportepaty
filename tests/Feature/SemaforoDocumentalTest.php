@@ -38,7 +38,7 @@ function documentosAlDia(TipoVehiculo $tipo): array
     return $documentos;
 }
 
-it('exige cinco documentos al tracto y cuatro a la carreta', function (): void {
+it('exige seis documentos al tracto y cinco a la carreta', function (): void {
     $tracto = array_map(
         fn (TipoDocumento $tipo): string => $tipo->value,
         TipoVehiculo::Tracto->documentosObligatorios(),
@@ -54,6 +54,7 @@ it('exige cinco documentos al tracto y cuatro a la carreta', function (): void {
         'revision_tecnica_carga',
         'habilitacion_mtc',
         'matpel',
+        'bonificacion',
     ]);
 
     // La carreta es remolcada: el SOAT lo lleva la unidad motriz.
@@ -62,6 +63,7 @@ it('exige cinco documentos al tracto y cuatro a la carreta', function (): void {
         'revision_tecnica_carga',
         'habilitacion_mtc',
         'matpel',
+        'bonificacion',
     ]);
 });
 
@@ -170,7 +172,7 @@ it('pone en rojo el vehículo sin ningún documento', function (): void {
     $estado = estadoDocumentalCon($vehiculo, []);
 
     expect($estado['semaforo'])->toBe('rojo')
-        ->and($estado['faltantes'])->toHaveCount(5);
+        ->and($estado['faltantes'])->toHaveCount(6);
 });
 
 it('lista cada documento obligatorio con su situación', function (): void {
@@ -184,7 +186,7 @@ it('lista cada documento obligatorio con su situación', function (): void {
 
     $porTipo = collect($estado['documentos'])->keyBy('tipo');
 
-    expect($estado['documentos'])->toHaveCount(5)
+    expect($estado['documentos'])->toHaveCount(6)
         ->and($porTipo['tarjeta_propiedad']['estado'])->toBe('vigente')
         ->and($porTipo['soat']['estado'])->toBe('vencido')
         ->and($porTipo['matpel']['estado'])->toBe('por_vencer')
@@ -221,5 +223,6 @@ it('la carreta no lista el SOAT entre sus documentos', function (): void {
             'revision_tecnica_carga',
             'habilitacion_mtc',
             'matpel',
+            'bonificacion',
         ]);
 });

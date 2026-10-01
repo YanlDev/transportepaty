@@ -44,9 +44,9 @@ enum TipoVehiculo: string
 
     /**
      * Documentos sin los cuales la unidad no debería salir a ruta: TUC, tarjeta
-     * de propiedad, revisión técnica de mercancías, MATPEL y —solo en el
-     * tracto— el SOAT, que cubre a la unidad motriz. Es la lista contra la que
-     * se calcula el semáforo documental.
+     * de propiedad, revisión técnica de mercancías, MATPEL, permiso de
+     * bonificación de PROVIAS y —solo en el tracto— el SOAT, que cubre a la
+     * unidad motriz. Es la lista contra la que se calcula el semáforo documental.
      *
      * @return array<int, TipoDocumento>
      */

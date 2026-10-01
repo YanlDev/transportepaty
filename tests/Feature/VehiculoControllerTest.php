@@ -369,12 +369,12 @@ it('offers the soat only for tractos', function (): void {
         ->get(route('vehiculos.show', $tracto))
         ->assertInertia(fn (Assert $page) => $page
             ->component('vehiculos/show')
-            ->has('tiposDocumento', 6)
+            ->has('tiposDocumento', 7)
         );
 
     actingAs($admin)
         ->get(route('vehiculos.show', $carreta))
-        ->assertInertia(fn (Assert $page) => $page->has('tiposDocumento', 5));
+        ->assertInertia(fn (Assert $page) => $page->has('tiposDocumento', 6));
 });
 
 it('muestra el semáforo documental en el listado', function (): void {
@@ -390,7 +390,7 @@ it('muestra el semáforo documental en el listado', function (): void {
         ->assertInertia(fn (Assert $page) => $page
             ->where('vehiculos.data.0.documentacion.semaforo', 'rojo')
             ->where('vehiculos.data.0.documentacion.vencidos', ['SOAT'])
-            ->has('vehiculos.data.0.documentacion.faltantes', 4)
+            ->has('vehiculos.data.0.documentacion.faltantes', 5)
         );
 });
 
@@ -423,7 +423,7 @@ it('keeps every obligatory document in a fixed slot on the detail page', functio
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('vehiculos/show')
-            ->has('ranuras', 5)
+            ->has('ranuras', 6)
             ->where('ranuras.0.tipo', 'tarjeta_propiedad')
             ->where('ranuras.1.tipo', 'soat')
             ->where('ranuras.2.tipo', 'revision_tecnica_carga')
@@ -443,7 +443,7 @@ it('does not offer a soat slot for a carreta', function (): void {
         ->get(route('vehiculos.show', $carreta))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('ranuras', 4)
+            ->has('ranuras', 5)
             ->where('ranuras.0.tipo', 'tarjeta_propiedad')
             ->where('ranuras.1.tipo', 'revision_tecnica_carga')
         );
@@ -462,9 +462,9 @@ it('puts loose documents after the obligatory slots', function (): void {
         ->get(route('vehiculos.show', $vehiculo))
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
-            ->has('ranuras', 6)
-            ->where('ranuras.5.obligatorio', false)
-            ->where('ranuras.5.label', 'Póliza de responsabilidad civil')
+            ->has('ranuras', 7)
+            ->where('ranuras.6.obligatorio', false)
+            ->where('ranuras.6.label', 'Póliza de responsabilidad civil')
             ->where('ranuras.0.obligatorio', true)
         );
 });
@@ -477,7 +477,7 @@ it('shares the same slots with the documents page', function (): void {
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('vehiculos/documentos')
-            ->has('ranuras', 5)
+            ->has('ranuras', 6)
             ->where('ranuras.0.tipo', 'tarjeta_propiedad')
         );
 });

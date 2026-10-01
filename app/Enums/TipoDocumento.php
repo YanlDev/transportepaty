@@ -13,6 +13,7 @@ enum TipoDocumento: string
     case RevisionTecnicaCarga = 'revision_tecnica_carga';
     case HabilitacionMtc = 'habilitacion_mtc';
     case Matpel = 'matpel';
+    case Bonificacion = 'bonificacion';
     case Otro = 'otro';
 
     public function label(): string
@@ -23,6 +24,7 @@ enum TipoDocumento: string
             self::RevisionTecnicaCarga => 'Revisión técnica de mercancías',
             self::HabilitacionMtc => 'TUC (habilitación MTC)',
             self::Matpel => 'MATPEL (materiales peligrosos)',
+            self::Bonificacion => 'Permiso de bonificación (PROVIAS)',
             self::Otro => 'Otro',
         };
     }
@@ -39,6 +41,7 @@ enum TipoDocumento: string
             self::RevisionTecnicaCarga => 'REV. TÉC',
             self::HabilitacionMtc => 'TUC',
             self::Matpel => 'MATPEL',
+            self::Bonificacion => 'BONIF',
             self::Otro => 'OTRO',
         };
     }
@@ -75,7 +78,7 @@ enum TipoDocumento: string
     {
         return match ($this) {
             self::Soat, self::RevisionTecnicaCarga, self::HabilitacionMtc, self::Matpel => true,
-            self::TarjetaPropiedad, self::Otro => false,
+            self::TarjetaPropiedad, self::Bonificacion, self::Otro => false,
         };
     }
 }
