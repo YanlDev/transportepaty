@@ -4,9 +4,10 @@ import cotizaciones, {
     store,
     update,
 } from '@/actions/App/Http/Controllers/CotizacionController';
-import { HojaTarifa } from '@/components/cotizaciones/hoja-tarifa';
+import { EntradaRuta, HojaTarifa } from '@/components/cotizaciones/hoja-tarifa';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import {
@@ -39,6 +40,8 @@ export type BorradorCotizacion = Partial<
         | 'material'
         | 'km'
         | 'dias'
+        | 'km_retorno'
+        | 'dias_retorno'
         | 'margen_pct',
         string
     >
@@ -69,6 +72,9 @@ type FormData = {
     material: string;
     km: string;
     dias: string;
+    retorno: boolean;
+    km_retorno: string;
+    dias_retorno: string;
     margen_pct: string;
     estado: string;
     notas: string;
@@ -116,6 +122,16 @@ export function CotizacionForm({
             material: cotizacion?.material ?? borrador.material ?? '',
             km: cotizacion?.km?.toString() ?? borrador.km ?? '',
             dias: cotizacion?.dias?.toString() ?? borrador.dias ?? '',
+            retorno: cotizacion
+                ? cotizacion.km_retorno > 0 || cotizacion.dias_retorno > 0
+                : Number(borrador.km_retorno) > 0 ||
+                  Number(borrador.dias_retorno) > 0,
+            km_retorno:
+                cotizacion?.km_retorno?.toString() ?? borrador.km_retorno ?? '',
+            dias_retorno:
+                cotizacion?.dias_retorno?.toString() ??
+                borrador.dias_retorno ??
+                '',
             margen_pct: (
                 (cotizacion?.margen_pct ??
                     (borrador.margen_pct === undefined
@@ -135,10 +151,16 @@ export function CotizacionForm({
 
     const km = Number(data.km) || 0;
     const dias = Number(data.dias) || 0;
+    const kmRetorno = data.retorno ? Number(data.km_retorno) || 0 : 0;
+    const diasRetorno = data.retorno ? Number(data.dias_retorno) || 0 : 0;
     const margenPct = (Number(data.margen_pct) || 0) / 100;
     const resultado =
         km > 0 && dias > 0 && margenPct >= 0 && margenPct < 1
-            ? calcularTarifa(lineas, { km, dias, margenPct }, flota.igv_pct)
+            ? calcularTarifa(
+                  lineas,
+                  { km, dias, kmRetorno, diasRetorno, margenPct },
+                  flota.igv_pct,
+              )
             : null;
 
     const submit = (event: React.FormEvent) => {
@@ -157,6 +179,9 @@ export function CotizacionForm({
                     ? ''
                     : datos.punto_llegada_id,
             margen_pct: (Number(datos.margen_pct) / 100).toString(),
+            // Desmarcar el retorno lo borra aunque los campos tengan algo.
+            km_retorno: datos.retorno ? datos.km_retorno : '0',
+            dias_retorno: datos.retorno ? datos.dias_retorno : '0',
         }));
 
         if (mode === 'create') {
@@ -383,8 +408,27 @@ export function CotizacionForm({
                     <p className="text-xs text-muted-foreground">
                         {cotizacion
                             ? 'Con las tasas con las que se emitió: cambiar el tarifario no mueve esta cotización.'
-                            : 'Los días son los que la unidad queda tomada, incluyendo esperas de carga y el retorno.'}
+                            : 'Los días son los que la unidad queda tomada, incluyendo esperas de carga.'}
                     </p>
+                    <label className="mt-3 flex items-center gap-2 text-sm">
+                        <Checkbox
+                            checked={data.retorno}
+                            onCheckedChange={(marcado) => {
+                                setData((actual) => ({
+                                    ...actual,
+                                    retorno: marcado === true,
+                                    // Lo más común es volver por el mismo camino.
+                                    km_retorno:
+                                        marcado === true &&
+                                        actual.km_retorno === ''
+                                            ? actual.km
+                                            : actual.km_retorno,
+                                }));
+                            }}
+                        />
+                        La unidad regresa vacía: cobrar los km y días de la
+                        vuelta
+                    </label>
                 </div>
 
                 <HojaTarifa
@@ -396,32 +440,36 @@ export function CotizacionForm({
                             kmNumero: km,
                             resultado,
                             dias: (
-                                <Input
-                                    aria-label="Días de ruta"
-                                    type="number"
-                                    inputMode="decimal"
-                                    step="0.5"
-                                    min={0.5}
-                                    value={data.dias}
-                                    onChange={(e) =>
-                                        setData('dias', e.target.value)
+                                <EntradaRuta
+                                    etiqueta="Días de ruta"
+                                    decimal
+                                    valor={data.dias}
+                                    onChange={(valor) => setData('dias', valor)}
+                                    retorno={
+                                        data.retorno
+                                            ? data.dias_retorno
+                                            : undefined
+                                    }
+                                    onChangeRetorno={(valor) =>
+                                        setData('dias_retorno', valor)
                                     }
                                     placeholder="9"
-                                    className="h-8 bg-background text-right font-mono tabular-nums"
                                 />
                             ),
                             km: (
-                                <Input
-                                    aria-label="Kilómetros"
-                                    type="number"
-                                    inputMode="numeric"
-                                    min={1}
-                                    value={data.km}
-                                    onChange={(e) =>
-                                        setData('km', e.target.value)
+                                <EntradaRuta
+                                    etiqueta="Kilómetros"
+                                    valor={data.km}
+                                    onChange={(valor) => setData('km', valor)}
+                                    retorno={
+                                        data.retorno
+                                            ? data.km_retorno
+                                            : undefined
+                                    }
+                                    onChangeRetorno={(valor) =>
+                                        setData('km_retorno', valor)
                                     }
                                     placeholder="1275"
-                                    className="h-8 bg-background text-right font-mono tabular-nums"
                                 />
                             ),
                         },
@@ -448,6 +496,8 @@ export function CotizacionForm({
 
                 <InputError message={errors.dias} />
                 <InputError message={errors.km} />
+                <InputError message={errors.dias_retorno} />
+                <InputError message={errors.km_retorno} />
                 <InputError message={errors.margen_pct} />
             </section>
 

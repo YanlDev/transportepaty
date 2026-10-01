@@ -107,6 +107,9 @@
             El monto corresponde al servicio de transporte de carga en la ruta
             {{ $cotizacion->origen }} - {{ $cotizacion->destino }} ({{ number_format($cotizacion->km) }} km).
         </div>
+        @if ($cotizacion->km_retorno > 0)
+            <div>Incluye el retorno de la unidad sin carga ({{ number_format($cotizacion->km_retorno) }} km).</div>
+        @endif
         @if ($cotizacion->notas)
             <div>{{ $cotizacion->notas }}</div>
         @endif

@@ -594,6 +594,9 @@ export type Cotizacion = ResultadoTarifa & {
     material: string | null;
     km: number;
     dias: number;
+    /** Lo que la unidad recorre y queda tomada al volver sin carga. */
+    km_retorno: number;
+    dias_retorno: number;
     margen_pct: number;
     costo_por_km: number;
     estado: string;

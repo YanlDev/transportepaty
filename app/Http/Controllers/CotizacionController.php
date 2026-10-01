@@ -95,7 +95,7 @@ class CotizacionController extends Controller
         // Es solo para precargar el formulario: lo que se guarda se valida
         // en `store`, así que acá basta con quedarse con los campos conocidos.
         $borrador = array_filter(
-            $request->only(['cliente_nombre', 'destino', 'material', 'km', 'dias', 'margen_pct']),
+            $request->only(['cliente_nombre', 'destino', 'material', 'km', 'dias', 'km_retorno', 'dias_retorno', 'margen_pct']),
             fn (mixed $valor): bool => is_string($valor) && $valor !== '',
         );
 
@@ -215,7 +215,7 @@ class CotizacionController extends Controller
             ...$cotizacion->only([
                 'id', 'numero', 'cliente_id', 'cliente_nombre', 'cliente_ruc',
                 'punto_partida_id', 'punto_llegada_id', 'origen', 'destino',
-                'material', 'km', 'dias', 'desglose', 'margen_pct',
+                'material', 'km', 'dias', 'km_retorno', 'dias_retorno', 'desglose', 'margen_pct',
                 'total_fijo', 'total_variable',
                 'costo_operativo', 'margen', 'subtotal', 'igv', 'total', 'notas',
             ]),

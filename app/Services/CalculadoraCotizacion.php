@@ -54,14 +54,17 @@ class CalculadoraCotizacion
      * margen, el costo es el 88 % de la tarifa. Por eso la tarifa es el costo
      * dividido entre (1 − margen) y no el costo por (1 + margen).
      *
-     * @param  array{km?: mixed, dias?: mixed, margen_pct?: mixed}  $datos
+     * El retorno vacío se suma a la ida con las mismas tasas: la vuelta sin
+     * carga no se cobra aparte, pero la unidad rueda y queda tomada igual.
+     *
+     * @param  array{km?: mixed, dias?: mixed, km_retorno?: mixed, dias_retorno?: mixed, margen_pct?: mixed}  $datos
      * @param  list<array{nombre: string, tipo: string, naturaleza: string, tasa: float}>  $lineas
      * @return array{desglose: array{componentes: list<array<string, mixed>>}, margen_pct: float, total_fijo: float, total_variable: float, costo_operativo: float, margen: float, subtotal: float, igv: float, total: float}
      */
     public function calcular(array $datos, array $lineas, float $igvPct): array
     {
-        $km = (float) ($datos['km'] ?? 0);
-        $dias = (float) ($datos['dias'] ?? 0);
+        $km = (float) ($datos['km'] ?? 0) + (float) ($datos['km_retorno'] ?? 0);
+        $dias = (float) ($datos['dias'] ?? 0) + (float) ($datos['dias_retorno'] ?? 0);
         $margenPct = (float) ($datos['margen_pct'] ?? 0);
 
         $componentes = [];

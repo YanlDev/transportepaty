@@ -32,6 +32,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $material
  * @property int $km
  * @property float $dias
+ * @property int $km_retorno
+ * @property float $dias_retorno
  * @property array{componentes: list<array<string, mixed>>} $desglose
  * @property float $margen_pct
  * @property float $total_fijo
@@ -58,6 +60,8 @@ use Illuminate\Support\Carbon;
     'material',
     'km',
     'dias',
+    'km_retorno',
+    'dias_retorno',
     'desglose',
     'margen_pct',
     'total_fijo',
@@ -177,6 +181,8 @@ class Cotizacion extends Model
             'valido_hasta' => 'date',
             'km' => 'integer',
             'dias' => 'float',
+            'km_retorno' => 'integer',
+            'dias_retorno' => 'float',
             'desglose' => 'array',
             'margen_pct' => 'float',
             'total_fijo' => 'float',

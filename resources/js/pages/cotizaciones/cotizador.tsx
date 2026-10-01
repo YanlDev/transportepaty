@@ -6,9 +6,10 @@ import cotizaciones, {
     create,
 } from '@/actions/App/Http/Controllers/CotizacionController';
 import { CotizacionesTabs } from '@/components/cotizaciones/cotizaciones-tabs';
-import { HojaTarifa } from '@/components/cotizaciones/hoja-tarifa';
+import { EntradaRuta, HojaTarifa } from '@/components/cotizaciones/hoja-tarifa';
 import type { ColumnaHoja } from '@/components/cotizaciones/hoja-tarifa';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { calcularTarifa } from '@/lib/tarifa';
 import type { LineaTarifa } from '@/types/fleet';
@@ -28,6 +29,10 @@ type Ruta = {
     material: string;
     dias: string;
     km: string;
+    /** Si la unidad vuelve sin carga y hay que cobrar la vuelta. */
+    retorno: boolean;
+    diasRetorno: string;
+    kmRetorno: string;
 };
 
 type Hoja = { rutas: Ruta[]; margen: string };
@@ -58,6 +63,9 @@ function rutaVacia(): Ruta {
         material: '',
         dias: '',
         km: '',
+        retorno: false,
+        diasRetorno: '',
+        kmRetorno: '',
     };
 }
 
@@ -76,8 +84,15 @@ function leerHoja(margenPorDefecto: number): Hoja {
 
         const hoja = JSON.parse(guardada) as Hoja;
 
+        // Las hojas guardadas antes del retorno vacío no traen esos campos.
         return Array.isArray(hoja.rutas) && hoja.rutas.length > 0
-            ? hoja
+            ? {
+                  ...hoja,
+                  rutas: hoja.rutas.map((ruta) => ({
+                      ...rutaVacia(),
+                      ...ruta,
+                  })),
+              }
             : vacia;
     } catch {
         return vacia;
@@ -114,7 +129,11 @@ export default function Cotizador({
     const margenPct = (Number(hoja.margen) || 0) / 100;
     const margenValido = margenPct >= 0 && margenPct < 1;
 
-    const cambiarRuta = (id: string, campo: keyof Ruta, valor: string) =>
+    const cambiarRuta = (
+        id: string,
+        campo: keyof Ruta,
+        valor: string | boolean,
+    ) =>
         setHoja((actual) => ({
             ...actual,
             rutas: actual.rutas.map((ruta) =>
@@ -146,6 +165,8 @@ export default function Cotizador({
     const columnas: ColumnaHoja[] = hoja.rutas.map((ruta, indice) => {
         const km = Number(ruta.km) || 0;
         const dias = Number(ruta.dias) || 0;
+        const kmRetorno = ruta.retorno ? Number(ruta.kmRetorno) || 0 : 0;
+        const diasRetorno = ruta.retorno ? Number(ruta.diasRetorno) || 0 : 0;
         const completa = km > 0 && dias > 0 && margenValido;
 
         return {
@@ -192,37 +213,57 @@ export default function Cotizador({
                         placeholder="Material"
                         className="h-8 text-center text-xs"
                     />
+                    <label className="flex items-center justify-center gap-1.5 text-xs text-muted-foreground">
+                        <Checkbox
+                            checked={ruta.retorno}
+                            onCheckedChange={(marcado) => {
+                                cambiarRuta(
+                                    ruta.id,
+                                    'retorno',
+                                    marcado === true,
+                                );
+
+                                // Lo más común es volver por el mismo camino.
+                                if (marcado === true && ruta.kmRetorno === '') {
+                                    cambiarRuta(ruta.id, 'kmRetorno', ruta.km);
+                                }
+                            }}
+                        />
+                        Regresa vacío
+                    </label>
                 </div>
             ),
             dias: (
-                <Input
-                    aria-label={`Días de la ruta ${indice + 1}`}
-                    type="number"
-                    inputMode="decimal"
-                    step="0.5"
-                    min={0.5}
-                    value={ruta.dias}
-                    onChange={(e) =>
-                        cambiarRuta(ruta.id, 'dias', e.target.value)
+                <EntradaRuta
+                    etiqueta={`Días de la ruta ${indice + 1}`}
+                    decimal
+                    valor={ruta.dias}
+                    onChange={(valor) => cambiarRuta(ruta.id, 'dias', valor)}
+                    retorno={ruta.retorno ? ruta.diasRetorno : undefined}
+                    onChangeRetorno={(valor) =>
+                        cambiarRuta(ruta.id, 'diasRetorno', valor)
                     }
                     placeholder="9"
-                    className="h-8 bg-background text-right font-mono tabular-nums"
                 />
             ),
             km: (
-                <Input
-                    aria-label={`Kilómetros de la ruta ${indice + 1}`}
-                    type="number"
-                    inputMode="numeric"
-                    min={1}
-                    value={ruta.km}
-                    onChange={(e) => cambiarRuta(ruta.id, 'km', e.target.value)}
+                <EntradaRuta
+                    etiqueta={`Kilómetros de la ruta ${indice + 1}`}
+                    valor={ruta.km}
+                    onChange={(valor) => cambiarRuta(ruta.id, 'km', valor)}
+                    retorno={ruta.retorno ? ruta.kmRetorno : undefined}
+                    onChangeRetorno={(valor) =>
+                        cambiarRuta(ruta.id, 'kmRetorno', valor)
+                    }
                     placeholder="1275"
-                    className="h-8 bg-background text-right font-mono tabular-nums"
                 />
             ),
             resultado: completa
-                ? calcularTarifa(lineas, { km, dias, margenPct }, igv_pct)
+                ? calcularTarifa(
+                      lineas,
+                      { km, dias, kmRetorno, diasRetorno, margenPct },
+                      igv_pct,
+                  )
                 : null,
             pie: (
                 <div className="flex items-center gap-1">
@@ -236,6 +277,9 @@ export default function Cotizador({
                                         material: ruta.material,
                                         km: Math.round(km).toString(),
                                         dias: dias.toString(),
+                                        km_retorno:
+                                            Math.round(kmRetorno).toString(),
+                                        dias_retorno: diasRetorno.toString(),
                                         margen_pct: margenPct.toString(),
                                     },
                                 })}

@@ -80,7 +80,12 @@ export function TablaViajes({
                             onClick={(evento) => {
                                 const objetivo = evento.target as HTMLElement;
 
+                                // Los clics dentro de un diálogo abierto desde
+                                // la fila (anular, eliminar) llegan acá por el
+                                // árbol de React aunque el diálogo esté fuera
+                                // de la fila en el DOM: no abren el detalle.
                                 if (
+                                    !evento.currentTarget.contains(objetivo) ||
                                     objetivo.closest(
                                         'a, button, [role="menuitem"]',
                                     )

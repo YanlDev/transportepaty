@@ -312,3 +312,65 @@ it('takes the margin over the selling price like the route sheet', function (): 
         ->and($calculo['igv'])->toBe(2121.27)
         ->and($calculo['total'])->toBe(13906.13);
 });
+
+/**
+ * La vuelta sin carga se cobra con las mismas tasas: 300 km y 2 días de ida
+ * más 300 km y 1 día de retorno cuestan lo mismo que 600 km y 3 días.
+ */
+it('charges the empty return with the same rates as the outbound leg', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('cotizaciones.store'), datosCotizacion([
+            'km' => 300,
+            'dias' => 2,
+            'km_retorno' => 300,
+            'dias_retorno' => 1,
+        ]))
+        ->assertRedirect();
+
+    $cotizacion = Cotizacion::query()->sole();
+    $calculadora = new CalculadoraCotizacion;
+    $sinRetorno = $calculadora->calcular(
+        ['km' => 600, 'dias' => 3, 'margen_pct' => 0.12],
+        $calculadora->lineasDesde(ComponenteCosto::query()->activos()->ordenados()->get()),
+        0.18,
+    );
+
+    expect($cotizacion->km)->toBe(300)
+        ->and($cotizacion->km_retorno)->toBe(300)
+        ->and($cotizacion->dias_retorno)->toBe(1.0)
+        ->and($cotizacion->total_fijo)->toBe($sinRetorno['total_fijo'])
+        ->and($cotizacion->total_variable)->toBe($sinRetorno['total_variable'])
+        ->and($cotizacion->total)->toBe($sinRetorno['total']);
+});
+
+it('stores no empty return when the route comes back loaded', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('cotizaciones.store'), datosCotizacion([
+            'km_retorno' => null,
+            'dias_retorno' => null,
+        ]))
+        ->assertRedirect();
+
+    $cotizacion = Cotizacion::query()->sole();
+
+    expect($cotizacion->km_retorno)->toBe(0)
+        ->and($cotizacion->dias_retorno)->toBe(0.0)
+        // 2 días a 648.77, sin nada de vuelta.
+        ->and($cotizacion->total_fijo)->toBe(1297.54);
+});
+
+it('rejects a negative empty return', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('cotizaciones.store'), datosCotizacion(['km_retorno' => -5]))
+        ->assertSessionHasErrors('km_retorno');
+});
+
+it('carries the empty return from the quick sheet into the form', function (): void {
+    actingAs(actorConRol('admin'))
+        ->get(route('cotizaciones.create', ['km' => '1275', 'dias' => '9', 'km_retorno' => '1275', 'dias_retorno' => '3']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('borrador.km_retorno', '1275')
+            ->where('borrador.dias_retorno', '3')
+        );
+});

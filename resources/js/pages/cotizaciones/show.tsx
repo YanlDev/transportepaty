@@ -81,10 +81,21 @@ export default function CotizacionShow({ cotizacion }: Props) {
                         etiqueta="Material"
                         valor={cotizacion.material ?? '—'}
                     />
-                    <Dato etiqueta="Distancia" valor={`${cotizacion.km} km`} />
+                    <Dato
+                        etiqueta="Distancia"
+                        valor={
+                            cotizacion.km_retorno > 0
+                                ? `${cotizacion.km} km + ${cotizacion.km_retorno} km de retorno vacío`
+                                : `${cotizacion.km} km`
+                        }
+                    />
                     <Dato
                         etiqueta="Días de ruta"
-                        valor={`${cotizacion.dias}`}
+                        valor={
+                            cotizacion.dias_retorno > 0
+                                ? `${cotizacion.dias} + ${cotizacion.dias_retorno} de retorno vacío`
+                                : `${cotizacion.dias}`
+                        }
                     />
                     <Dato
                         etiqueta="Costo por kilómetro"
@@ -105,11 +116,15 @@ export default function CotizacionShow({ cotizacion }: Props) {
                         dias: (
                             <p className="text-right font-mono tabular-nums">
                                 {cotizacion.dias}
+                                {cotizacion.dias_retorno > 0 &&
+                                    ` + ${cotizacion.dias_retorno}`}
                             </p>
                         ),
                         km: (
                             <p className="text-right font-mono tabular-nums">
                                 {cotizacion.km.toLocaleString('es-PE')}
+                                {cotizacion.km_retorno > 0 &&
+                                    ` + ${cotizacion.km_retorno.toLocaleString('es-PE')}`}
                             </p>
                         ),
                     },

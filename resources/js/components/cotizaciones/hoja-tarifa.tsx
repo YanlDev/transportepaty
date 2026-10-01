@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Input } from '@/components/ui/input';
 import { formatearMonto } from '@/lib/tarifa';
 import { cn } from '@/lib/utils';
 import type { LineaTarifa, ResultadoTarifa } from '@/types/fleet';
@@ -211,6 +212,66 @@ export function HojaTarifa({
                     )}
                 </tbody>
             </table>
+        </div>
+    );
+}
+
+/**
+ * La celda amarilla de días o de km: lo de la ida y, cuando la ruta vuelve sin
+ * carga, debajo lo del regreso, que se cobra con las mismas tasas.
+ */
+export function EntradaRuta({
+    etiqueta,
+    valor,
+    onChange,
+    retorno,
+    onChangeRetorno,
+    decimal = false,
+    placeholder,
+}: {
+    etiqueta: string;
+    valor: string;
+    onChange: (valor: string) => void;
+    /** Undefined cuando la ruta no tiene retorno vacío. */
+    retorno?: string;
+    onChangeRetorno?: (valor: string) => void;
+    /** Días admiten medios; km van enteros. */
+    decimal?: boolean;
+    placeholder?: string;
+}) {
+    const clase = 'h-8 bg-background text-right font-mono tabular-nums';
+
+    return (
+        <div className="flex flex-col gap-1">
+            <Input
+                aria-label={etiqueta}
+                type="number"
+                inputMode={decimal ? 'decimal' : 'numeric'}
+                step={decimal ? '0.5' : undefined}
+                min={decimal ? 0.5 : 1}
+                value={valor}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                className={clase}
+            />
+            {retorno !== undefined && onChangeRetorno && (
+                <label className="flex flex-col gap-0.5">
+                    <span className="text-center text-[11px] leading-tight text-amber-900 dark:text-amber-200">
+                        + retorno vacío
+                    </span>
+                    <Input
+                        aria-label={`${etiqueta} del retorno vacío`}
+                        type="number"
+                        inputMode={decimal ? 'decimal' : 'numeric'}
+                        step={decimal ? '0.5' : undefined}
+                        min={0}
+                        value={retorno}
+                        onChange={(e) => onChangeRetorno(e.target.value)}
+                        placeholder="0"
+                        className={clase}
+                    />
+                </label>
+            )}
         </div>
     );
 }

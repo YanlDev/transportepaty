@@ -6,13 +6,28 @@ import type { LineaTarifa, ResultadoTarifa } from '@/types/fleet';
  * servidor, que la vuelve a hacer: si una cambia, la otra también.
  *
  * Cada paso se redondea antes de alimentar al siguiente, como allá, para que
- * los dos lleguen al mismo centavo.
+ * los dos lleguen al mismo centavo. El retorno vacío se suma a la ida con las
+ * mismas tasas.
  */
 export function calcularTarifa(
     lineas: LineaTarifa[],
-    { km, dias, margenPct }: { km: number; dias: number; margenPct: number },
+    {
+        km: kmIda,
+        dias: diasIda,
+        kmRetorno = 0,
+        diasRetorno = 0,
+        margenPct,
+    }: {
+        km: number;
+        dias: number;
+        kmRetorno?: number;
+        diasRetorno?: number;
+        margenPct: number;
+    },
     igvPct: number,
 ): ResultadoTarifa {
+    const km = kmIda + kmRetorno;
+    const dias = diasIda + diasRetorno;
     let totalFijo = 0;
     let totalVariable = 0;
 
