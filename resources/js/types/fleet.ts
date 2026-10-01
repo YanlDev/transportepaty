@@ -480,7 +480,6 @@ export type PuntoTrasladoListItem = PuntoTraslado & {
  * cuántos días al año cada una está realmente disponible para vender.
  */
 export type ParametroFlota = {
-    tamano_flota: number;
     dias_ano: number;
     dias_mantenimiento: number;
     dias_certificaciones: number;

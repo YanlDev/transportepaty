@@ -41,12 +41,11 @@ const FORMULARIOS: Record<string, { campos: Campo[]; filas?: Filas }> = {
     },
     prorrateo_anual: {
         campos: [
-            { clave: 'monto_anual', label: 'Monto anual (S/)', tipo: 'numero' },
             {
-                clave: 'dedicacion_pct',
-                label: 'Dedicación a la operación (%)',
-                tipo: 'porcentaje',
-                ayuda: 'Qué parte de ese gasto atiende al transporte y no a otras actividades.',
+                clave: 'monto_anual_unidad',
+                label: 'Monto anual por unidad (S/)',
+                tipo: 'numero',
+                ayuda: 'Lo que la empresa paga al año en este rubro, dividido entre sus tractos.',
             },
         ],
     },

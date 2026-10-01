@@ -19,7 +19,6 @@ class UpdateParametroFlotaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'tamano_flota' => ['required', 'integer', 'min:1'],
             'dias_ano' => ['required', 'numeric', 'min:1', 'max:366'],
             // Los días perdidos se restan de los del año: si entre los tres se
             // comieran el año entero no quedarían días sobre los que repartir

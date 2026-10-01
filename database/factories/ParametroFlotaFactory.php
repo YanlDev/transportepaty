@@ -22,7 +22,6 @@ class ParametroFlotaFactory extends Factory
     public function definition(): array
     {
         return [
-            'tamano_flota' => 100,
             'dias_ano' => 365,
             'dias_mantenimiento' => 4.87,
             'dias_certificaciones' => 4,

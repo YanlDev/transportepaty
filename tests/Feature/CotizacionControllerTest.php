@@ -47,7 +47,6 @@ function datosCotizacion(array $overrides = []): array
 function datosFlota(array $overrides = []): array
 {
     return array_merge([
-        'tamano_flota' => 100,
         'dias_ano' => 365,
         'dias_mantenimiento' => 4.87,
         'dias_certificaciones' => 4,
@@ -260,10 +259,10 @@ it('serves the proforma as a pdf', function (): void {
 
 it('lets admins update the cost parameters', function (): void {
     actingAs(actorConRol('admin'))
-        ->put(route('parametros-costo.update'), datosFlota(['tamano_flota' => 80]))
+        ->put(route('parametros-costo.update'), datosFlota(['dias_sincronizacion' => 40]))
         ->assertRedirect();
 
-    expect(ParametroFlota::vigentes()->tamano_flota)->toBe(80);
+    expect(ParametroFlota::vigentes()->dias_sincronizacion)->toBe(40.0);
 });
 
 it('forbids viewers from touching the cost parameters', function (): void {

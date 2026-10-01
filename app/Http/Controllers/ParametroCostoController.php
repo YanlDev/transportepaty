@@ -35,7 +35,7 @@ class ParametroCostoController extends Controller
         return Inertia::render('parametros-costo/edit', [
             'flota' => [
                 ...$flota->only([
-                    'tamano_flota', 'dias_ano', 'dias_mantenimiento',
+                    'dias_ano', 'dias_mantenimiento',
                     'dias_certificaciones', 'dias_sincronizacion', 'igv_pct',
                     'margen_pct_default',
                 ]),

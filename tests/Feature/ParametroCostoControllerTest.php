@@ -24,7 +24,6 @@ function parametrosFlota(array $extra = []): array
     $flota = ParametroFlota::vigentes();
 
     return [
-        'tamano_flota' => $flota->tamano_flota,
         'dias_ano' => $flota->dias_ano,
         'dias_mantenimiento' => $flota->dias_mantenimiento,
         'dias_certificaciones' => $flota->dias_certificaciones,

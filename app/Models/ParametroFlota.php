@@ -8,8 +8,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * El contexto que comparten todos los costos fijos: cuántas unidades hay y
- * cuántos días al año cada una está realmente disponible para vender.
+ * El contexto que comparten todos los costos fijos: cuántos días al año una
+ * unidad está realmente disponible para vender.
  *
  * Los días disponibles son el divisor de toda la estructura, y por eso están
  * acá y no escondidos dentro de cada tasa: un camión no factura 365 días
@@ -20,7 +20,6 @@ use Illuminate\Database\Eloquent\Model;
  * Es una fila sola: hay un juego vigente y se edita.
  *
  * @property int $id
- * @property int $tamano_flota
  * @property float $dias_ano
  * @property float $dias_mantenimiento
  * @property float $dias_certificaciones
@@ -29,7 +28,6 @@ use Illuminate\Database\Eloquent\Model;
  * @property float $margen_pct_default
  */
 #[Fillable([
-    'tamano_flota',
     'dias_ano',
     'dias_mantenimiento',
     'dias_certificaciones',
@@ -70,7 +68,6 @@ class ParametroFlota extends Model
     protected function casts(): array
     {
         return [
-            'tamano_flota' => 'integer',
             'dias_ano' => 'float',
             'dias_mantenimiento' => 'float',
             'dias_certificaciones' => 'float',

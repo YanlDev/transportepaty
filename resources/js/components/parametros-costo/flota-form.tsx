@@ -8,7 +8,6 @@ import { Spinner } from '@/components/ui/spinner';
 import type { ParametroFlota } from '@/types/fleet';
 
 type FormData = {
-    tamano_flota: string;
     dias_ano: string;
     dias_mantenimiento: string;
     dias_certificaciones: string;
@@ -29,7 +28,6 @@ type FormData = {
 export function FlotaForm({ flota }: { flota: ParametroFlota }) {
     const { data, setData, put, transform, processing, errors } =
         useForm<FormData>({
-            tamano_flota: flota.tamano_flota.toString(),
             dias_ano: flota.dias_ano.toString(),
             dias_mantenimiento: flota.dias_mantenimiento.toString(),
             dias_certificaciones: flota.dias_certificaciones.toString(),
@@ -77,19 +75,6 @@ export function FlotaForm({ flota }: { flota: ParametroFlota }) {
             </div>
 
             <div className="grid gap-4 sm:grid-cols-3">
-                <Field label="Unidades de la flota" error={errors.tamano_flota}>
-                    {(id) => (
-                        <Input
-                            id={id}
-                            type="number"
-                            min={1}
-                            value={data.tamano_flota}
-                            onChange={(e) =>
-                                setData('tamano_flota', e.target.value)
-                            }
-                        />
-                    )}
-                </Field>
                 <Field label="Días del año" error={errors.dias_ano}>
                     {(id) => (
                         <Input
