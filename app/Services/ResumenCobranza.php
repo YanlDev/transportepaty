@@ -16,7 +16,7 @@ use Illuminate\Support\Collection;
  * cobranza, cuánto hay por cobrar y cuánto falta facturar.
  *
  * Vive fuera del controlador por lo mismo que `ResumenTablero`: traducir un
- * estado de cobranza a la presencia de `factura_id` y de `fecha_pago`, o
+ * estado de cobranza a la presencia de facturas y de `fecha_pago`, o
  * decidir que los totales se suman por factura y no por fila, son reglas del
  * negocio y no de la petición.
  *
@@ -58,7 +58,9 @@ class ResumenCobranza
      * una le agrega lo suyo.
      *
      * Los filtros de estado no son una columna: se traducen a la presencia de
-     * `factura_id` y de `fecha_pago`, que son los dos únicos hechos guardados.
+     * facturas y de `fecha_pago`, que son los dos únicos hechos guardados. Con
+     * varias facturas, el viaje está pagado solo cuando no le queda ninguna
+     * por cobrar — la misma regla que `Viaje::estadoCobranza()`.
      *
      * @param  FiltrosCobranza  $filtros
      * @return Builder<Viaje>
@@ -71,7 +73,7 @@ class ResumenCobranza
                     $query->whereLike('numero_gr', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('cliente', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('destinatario', "%{$buscar}%", caseSensitive: false)
-                        ->orWhereHas('factura', fn ($query) => $query->whereLike('numero', "%{$buscar}%", caseSensitive: false));
+                        ->orWhereHas('facturas', fn ($query) => $query->whereLike('numero', "%{$buscar}%", caseSensitive: false));
                 });
             })
             ->when($filtros['cliente'], fn ($query, string $cliente) => $query->where('cliente', $cliente))
@@ -90,9 +92,12 @@ class ResumenCobranza
             ->when($filtros['hasta'], fn ($query, string $hasta) => $query->where('fecha_traslado', '<=', $hasta))
             ->when($filtros['estado'], function ($query, string $estado): void {
                 match ($estado) {
-                    EstadoCobranza::SinFacturar->value => $query->whereNull('factura_id'),
-                    EstadoCobranza::Facturado->value => $query->whereHas('factura', fn ($query) => $query->whereNull('fecha_pago')),
-                    EstadoCobranza::Pagado->value => $query->whereHas('factura', fn ($query) => $query->whereNotNull('fecha_pago')),
+                    EstadoCobranza::SinFacturar->value => $query->whereDoesntHave('facturas')->whereNull('no_facturable_at'),
+                    EstadoCobranza::NoFacturable->value => $query->whereNotNull('no_facturable_at'),
+                    EstadoCobranza::Facturado->value => $query->whereHas('facturas', fn ($query) => $query->whereNull('fecha_pago')),
+                    EstadoCobranza::Pagado->value => $query
+                        ->whereHas('facturas')
+                        ->whereDoesntHave('facturas', fn ($query) => $query->whereNull('fecha_pago')),
                     default => null,
                 };
             });
@@ -105,7 +110,8 @@ class ResumenCobranza
      *
      * Los totales se calculan sobre facturas distintas, no sobre filas: una
      * factura que cubre tres viajes aparece en tres filas y sumarla tres veces
-     * inflaría el saldo.
+     * inflaría el saldo. Las varias facturas de un mismo viaje, en cambio, sí
+     * suman cada una: son cobros distintos.
      *
      * @param  FiltrosCobranza  $filtros
      * @return array<string, mixed>
@@ -113,7 +119,10 @@ class ResumenCobranza
     public function totales(array $filtros): array
     {
         $facturas = Factura::query()
-            ->whereIn('id', $this->consulta($filtros)->whereNotNull('factura_id')->select('factura_id'))
+            ->whereHas('viajes', fn ($query) => $query->whereIn(
+                'viajes.id',
+                $this->consulta($filtros)->reorder()->select('viajes.id'),
+            ))
             ->get(['id', 'monto', 'moneda', 'fecha_pago']);
 
         $porMoneda = $facturas
@@ -177,7 +186,9 @@ class ResumenCobranza
     private function porFacturarPorMes(array $filtros): array
     {
         return $this->consulta($filtros)
-            ->whereNull('factura_id')
+            ->whereDoesntHave('facturas')
+            // Lo que se decidió no cobrar no está pendiente de nada.
+            ->whereNull('no_facturable_at')
             ->reorder()
             ->pluck('fecha_traslado')
             ->groupBy(fn (CarbonImmutable|Carbon $fecha): string => $fecha->format('Y-m'))

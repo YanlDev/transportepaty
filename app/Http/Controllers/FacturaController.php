@@ -15,7 +15,8 @@ use Illuminate\Support\Str;
  * Emitir, corregir y anular facturas. Facturar es, en la práctica, elegir qué
  * viajes entran: por eso el alta recibe una lista de ids y no un viaje suelto
  * —dos GR de una misma salida se cobran una vez, y una factura quincenal junta
- * diez viajes del mismo cliente.
+ * diez viajes del mismo cliente—. Un viaje ya facturado puede recibir otra
+ * factura: el flete y la estadía, o un cobro partido en dos o tres.
  *
  * Todo se edita desde la propia tabla, celda por celda, así que las
  * correcciones llegan de a un campo por `update()` en vez de como un
@@ -50,7 +51,7 @@ class FacturaController extends Controller
                 'moneda' => $datos['moneda'] ?? 'PEN',
             ]);
 
-            Viaje::query()->whereIn('id', $viajeIds)->update(['factura_id' => $factura->id]);
+            $factura->viajes()->attach($viajeIds);
         });
 
         return back()->with('toast', [
@@ -71,6 +72,17 @@ class FacturaController extends Controller
         $this->authorize('update', $factura);
 
         $datos = $request->validated();
+
+        // El precio por GR se guarda como total: es la cifra de la factura,
+        // la que se cobra y la que suma en los totales.
+        if (array_key_exists('monto_por_viaje', $datos)) {
+            $porViaje = $datos['monto_por_viaje'];
+            unset($datos['monto_por_viaje']);
+
+            $datos['monto'] = $porViaje === null
+                ? null
+                : round((float) $porViaje * $factura->viajes()->count(), 2);
+        }
 
         if (array_key_exists('numero', $datos)) {
             $datos['numero'] = Str::upper(trim($datos['numero']));
@@ -97,29 +109,28 @@ class FacturaController extends Controller
         $this->authorize('delete', $factura);
 
         DB::transaction(function () use ($factura): void {
-            $factura->viajes()->update(['factura_id' => null]);
+            $factura->viajes()->detach();
             $factura->delete();
         });
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => 'Factura anulada. Sus viajes volvieron a quedar sin facturar.',
+            'message' => "Factura {$factura->numero} anulada.",
         ]);
     }
 
     /**
-     * Saca un viaje de su factura sin tocar la factura ni los demás viajes que
-     * cubre. Es la corrección de haber metido una GR de más en el grupo.
+     * Saca un viaje de una de sus facturas sin tocar la factura, los demás
+     * viajes que cubre ni las otras facturas del viaje. Es la corrección de
+     * haber metido una GR de más en el grupo.
      */
-    public function desvincular(Viaje $viaje): RedirectResponse
+    public function desvincular(Factura $factura, Viaje $viaje): RedirectResponse
     {
-        $factura = $viaje->factura;
-
-        abort_if($factura === null, 404);
-
         $this->authorize('update', $factura);
 
-        $viaje->update(['factura_id' => null]);
+        abort_unless($factura->viajes()->whereKey($viaje->id)->exists(), 404);
+
+        $factura->viajes()->detach($viaje->id);
 
         // Una factura que se quedó sin ningún viaje ya no cobra nada: se anula
         // sola en vez de quedar colgada sin forma de llegar a ella desde la
@@ -130,7 +141,7 @@ class FacturaController extends Controller
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "La GR {$viaje->numero_gr} volvió a quedar sin facturar.",
+            'message' => "La GR {$viaje->numero_gr} salió de la factura {$factura->numero}.",
         ]);
     }
 }

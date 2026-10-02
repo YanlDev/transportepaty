@@ -64,7 +64,7 @@ it('forbids a visor from anulando a GR', function (): void {
 });
 
 it('refuses to anular a GR that is already in a factura', function (): void {
-    $viaje = Viaje::factory()->create(['factura_id' => Factura::factory()->create()->id]);
+    $viaje = Viaje::factory()->hasAttached(Factura::factory()->create(), relationship: 'facturas')->create();
 
     actingAs(actorConRol('admin'))
         ->post(route('viajes.anular', $viaje))

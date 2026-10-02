@@ -31,6 +31,10 @@ class PatchFacturaRequest extends FormRequest
             // factura sin fecha de emisión no existe.
             'fecha_emision' => ['sometimes', 'required', 'date'],
             'monto' => ['sometimes', 'nullable', 'numeric', 'min:0.01', 'max:99999999.99'],
+            // El precio de cada GR, para las facturas que se pactan por viaje
+            // (Minsur): el total se calcula multiplicando. Lo que se guarda
+            // sigue siendo el total, que es lo que dice la factura.
+            'monto_por_viaje' => ['sometimes', 'nullable', 'numeric', 'min:0.01', 'max:99999999.99', 'prohibits:monto'],
             'moneda' => ['sometimes', 'required', Rule::enum(Moneda::class)],
 
             // La fecha de pago no exige la cuenta acá —se cargan en celdas

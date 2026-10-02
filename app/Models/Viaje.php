@@ -8,9 +8,11 @@ use App\Enums\TipoCarga;
 use Database\Factories\ViajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Spatie\MediaLibrary\HasMedia;
@@ -48,14 +50,15 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string|null $conductor_dni
  * @property int|null $conductor_id
  * @property string|null $observaciones
- * @property int|null $factura_id
  * @property Carbon|null $gr_fisica_recibida_at
+ * @property Carbon|null $no_facturable_at
+ * @property string|null $motivo_no_facturable
  * @property Carbon|null $anulada_at
  * @property int|null $anulada_por
  * @property string|null $motivo_anulacion
  * @property Carbon|null $baja_sunat_at
  * @property MotivoBajaGre|null $motivo_baja_sunat
- * @property-read Factura|null $factura
+ * @property-read EloquentCollection<int, Factura> $facturas
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
@@ -87,8 +90,9 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'conductor_dni',
     'conductor_id',
     'observaciones',
-    'factura_id',
     'gr_fisica_recibida_at',
+    'no_facturable_at',
+    'motivo_no_facturable',
 ])]
 class Viaje extends Model implements HasMedia
 {
@@ -143,6 +147,15 @@ class Viaje extends Model implements HasMedia
         return parent::resolveRouteBindingQuery($query->withoutGlobalScope(self::SIN_ANULADAS), $value, $field);
     }
 
+    /**
+     * Una GR que se decidió no cobrar (una cajita que viajó con la carga
+     * grande). Sigue contando en la operación; solo sale de la cobranza.
+     */
+    public function esNoFacturable(): bool
+    {
+        return $this->no_facturable_at !== null;
+    }
+
     public function estaAnulada(): bool
     {
         return $this->anulada_at !== null;
@@ -179,23 +192,35 @@ class Viaje extends Model implements HasMedia
     }
 
     /**
-     * La factura que cobra este viaje, cuando ya se emitió. Null mientras esté
-     * sin facturar, que es el estado de todo lo que se importa.
+     * Las facturas que cobran este viaje. Casi siempre una, pero puede haber
+     * más: el flete y la estadía se facturan por separado, o el cliente pide
+     * partir el cobro. Vacía mientras esté sin facturar, que es el estado de
+     * todo lo que se importa.
      *
-     * @return BelongsTo<Factura, $this>
+     * @return BelongsToMany<Factura, $this>
      */
-    public function factura(): BelongsTo
+    public function facturas(): BelongsToMany
     {
-        return $this->belongsTo(Factura::class);
+        return $this->belongsToMany(Factura::class)->withTimestamps();
     }
 
     /**
-     * En qué punto del cobro está. Requiere `factura` precargada para no caer
-     * en N+1 al recorrer un listado.
+     * En qué punto del cobro está. Con varias facturas, el viaje queda por
+     * cobrar mientras falte cobrar cualquiera de ellas: «pagado» es que ya
+     * entró toda la plata. Requiere `facturas` precargada para no caer en N+1
+     * al recorrer un listado.
      */
     public function estadoCobranza(): EstadoCobranza
     {
-        return $this->factura?->estado() ?? EstadoCobranza::SinFacturar;
+        if ($this->facturas->isEmpty()) {
+            return $this->esNoFacturable()
+                ? EstadoCobranza::NoFacturable
+                : EstadoCobranza::SinFacturar;
+        }
+
+        return $this->facturas->contains(fn (Factura $factura): bool => $factura->fecha_pago === null)
+            ? EstadoCobranza::Facturado
+            : EstadoCobranza::Pagado;
     }
 
     /**
@@ -447,6 +472,7 @@ class Viaje extends Model implements HasMedia
             'fecha_emision' => 'datetime',
             'fecha_traslado' => 'date:Y-m-d',
             'gr_fisica_recibida_at' => 'datetime',
+            'no_facturable_at' => 'datetime',
             'anulada_at' => 'datetime',
             'baja_sunat_at' => 'datetime',
             'motivo_baja_sunat' => MotivoBajaGre::class,

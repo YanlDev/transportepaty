@@ -11,8 +11,17 @@ import { avisarError } from '@/lib/aviso-error';
  * Para cobrar varias GR en un solo documento —dos que salieron en el mismo
  * camión, o la quincena de un cliente— se marcan las filas y se usa la barra
  * de selección, que es la única forma de decir «estas van juntas».
+ *
+ * Con `adicional` aparece debajo de una factura ya emitida y le suma otra al
+ * mismo viaje: la estadía aparte del flete, o un cobro partido.
  */
-export function CeldaNuevaFactura({ viajeId }: { viajeId: number }) {
+export function CeldaNuevaFactura({
+    viajeId,
+    adicional = false,
+}: {
+    viajeId: number;
+    adicional?: boolean;
+}) {
     const [editando, setEditando] = useState(false);
     const [numero, setNumero] = useState('');
     const [guardando, setGuardando] = useState(false);
@@ -76,12 +85,16 @@ export function CeldaNuevaFactura({ viajeId }: { viajeId: number }) {
         <button
             type="button"
             onClick={() => setEditando(true)}
-            aria-label="Registrar la factura de este viaje"
+            aria-label={
+                adicional
+                    ? 'Registrar otra factura para este viaje'
+                    : 'Registrar la factura de este viaje'
+            }
             className={`w-full rounded-sm px-1 py-0.5 text-left text-muted-foreground/40 hover:bg-accent hover:text-foreground ${
-                guardando ? 'animate-pulse opacity-60' : ''
-            }`}
+                adicional ? 'mt-0.5 font-sans text-[11px]' : ''
+            } ${guardando ? 'animate-pulse opacity-60' : ''}`}
         >
-            + factura
+            {adicional ? '+ otra factura' : '+ factura'}
         </button>
     );
 }

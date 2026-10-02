@@ -6,6 +6,7 @@ import { VerGuia } from '@/components/contabilidad/ver-guia';
 import { Copiable } from '@/components/copiable';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
+import { diasVencidaMayor, esFacturable } from '@/lib/cobranza';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { ViajeContable } from '@/types/contabilidad';
@@ -32,7 +33,7 @@ export function TarjetaCobranza({
     seleccionado,
     onSeleccionar,
 }: Props) {
-    const factura = viaje.factura;
+    const facturas = viaje.facturas;
 
     return (
         <div
@@ -46,31 +47,37 @@ export function TarjetaCobranza({
                 <EstadoCobranzaBadge
                     estado={viaje.estado}
                     label={viaje.estado_label}
-                    diasVencida={factura?.dias_vencida}
+                    diasVencida={diasVencidaMayor(viaje)}
                 />
-                {factura?.monto != null ? (
-                    <span className="text-right">
-                        <span className="text-base font-semibold tabular-nums">
-                            {factura.simbolo}{' '}
-                            {factura.monto.toLocaleString('es-PE', {
-                                minimumFractionDigits: 2,
-                                maximumFractionDigits: 2,
-                            })}
-                        </span>
-                        {/* El monto es de la factura, no del viaje. */}
-                        {factura.viajes_count > 1 && (
-                            <span className="block text-xs text-muted-foreground">
-                                por {factura.viajes_count} viajes
+                {/* Una sola factura: su monto grande, como siempre. Con
+                    varias, el detalle va abajo, una línea por factura. */}
+                {facturas.length === 1 &&
+                    (facturas[0].monto != null ? (
+                        <span className="text-right">
+                            <span className="text-base font-semibold tabular-nums">
+                                {facturas[0].simbolo}{' '}
+                                {formatearMonto(facturas[0].monto)}
                             </span>
-                        )}
-                    </span>
-                ) : (
-                    // Sin factura, la pastilla de estado ya lo dice.
-                    factura && (
+                            {/* El monto es de la factura, no del viaje. */}
+                            {facturas[0].viajes_count > 1 && (
+                                <span className="block text-xs text-muted-foreground">
+                                    {formatearMonto(
+                                        facturas[0].monto /
+                                            facturas[0].viajes_count,
+                                    )}{' '}
+                                    c/u · {facturas[0].viajes_count} GR
+                                </span>
+                            )}
+                        </span>
+                    ) : (
                         <span className="text-sm text-muted-foreground">
                             Sin monto
                         </span>
-                    )
+                    ))}
+                {facturas.length > 1 && (
+                    <span className="text-sm text-muted-foreground">
+                        {facturas.length} facturas
+                    </span>
                 )}
             </div>
 
@@ -97,8 +104,9 @@ export function TarjetaCobranza({
 
             <div className="flex items-center justify-between gap-2 border-t pt-2">
                 <div className="flex min-w-0 items-center gap-2">
-                    {/* Un viaje ya facturado no se puede volver a elegir. */}
-                    {puedeFacturar && factura === null && (
+                    {/* También uno ya facturado: puede llevar otra factura
+                        aparte, como la estadía. No uno que no se cobra. */}
+                    {puedeFacturar && esFacturable(viaje) && (
                         <Checkbox
                             aria-label={`Seleccionar la GR ${viaje.numero_gr} para facturar`}
                             checked={seleccionado}
@@ -108,9 +116,9 @@ export function TarjetaCobranza({
                     <span className="min-w-0 font-mono text-xs whitespace-nowrap">
                         <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
                     </span>
-                    {factura && (
+                    {facturas.length === 1 && (
                         <span className="truncate font-mono text-xs text-muted-foreground">
-                            · {factura.numero}
+                            · {facturas[0].numero}
                         </span>
                     )}
                 </div>
@@ -123,9 +131,52 @@ export function TarjetaCobranza({
                         editable={puedeFacturar}
                     />
                     <VerGuia viaje={viaje} />
-                    <AccionesFila viaje={viaje} puedeFacturar={puedeFacturar} />
+                    {facturas.length <= 1 && (
+                        <AccionesFila
+                            viaje={viaje}
+                            factura={facturas[0] ?? null}
+                            puedeFacturar={puedeFacturar}
+                        />
+                    )}
                 </div>
             </div>
+
+            {facturas.length > 1 && (
+                <ul className="flex flex-col gap-1 border-t pt-2">
+                    {facturas.map((factura) => (
+                        <li
+                            key={factura.id}
+                            className="flex items-center justify-between gap-2 text-sm"
+                        >
+                            <span className="truncate font-mono text-xs">
+                                {factura.numero}
+                            </span>
+                            <span className="ml-auto shrink-0 tabular-nums">
+                                {factura.monto != null
+                                    ? `${factura.simbolo} ${formatearMonto(factura.monto)}`
+                                    : 'Sin monto'}
+                                {factura.fecha_pago === null && (
+                                    <span className="ml-1 text-xs text-amber-700 dark:text-amber-500">
+                                        por cobrar
+                                    </span>
+                                )}
+                            </span>
+                            <AccionesFila
+                                viaje={viaje}
+                                factura={factura}
+                                puedeFacturar={puedeFacturar}
+                            />
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
     );
+}
+
+function formatearMonto(monto: number): string {
+    return monto.toLocaleString('es-PE', {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
 }

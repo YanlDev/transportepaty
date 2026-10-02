@@ -5,6 +5,7 @@ import type { ViajeListItem } from '@/types/fleet';
  * salida, o la factura quincenal de un cliente), así que la misma factura
  * aparece repetida en varias filas de la tabla — `viajes_count` es lo que
  * permite decirlo en pantalla y no leer el monto como si fuera de esa sola fila.
+ * A la inversa, un viaje puede tener varias facturas (flete y estadía).
  */
 export type FacturaResumen = {
     id: number;
@@ -35,11 +36,16 @@ export type FacturaResumen = {
  * estado del cobro y su factura.
  */
 export type ViajeContable = ViajeListItem & {
-    /** `sin_facturar` | `facturado` | `pagado`. */
+    /** `sin_facturar` | `facturado` | `pagado` | `no_facturable`. */
     estado: string;
     estado_label: string;
-    /** Null cuando el viaje todavía no se facturó. */
-    factura: FacturaResumen | null;
+    /** Por qué se decidió no cobrar esta GR; null si no se dijo o sí se cobra. */
+    motivo_no_facturable: string | null;
+    /**
+     * Vacío cuando el viaje todavía no se facturó; casi siempre una, pero el
+     * flete y la estadía pueden ir en facturas distintas. Ordenadas por emisión.
+     */
+    facturas: FacturaResumen[];
     /** Cuándo llegó el papel de la GR a la oficina; null si todavía no. */
     gr_fisica_recibida_at: string | null;
 };
@@ -47,9 +53,12 @@ export type ViajeContable = ViajeListItem & {
 /**
  * Un viaje marcado para facturar. Lleva el N° de GR además del id porque la
  * selección cruza páginas: los que quedaron en otra página no están en la
- * tabla y la barra los tiene que poder nombrar igual.
+ * tabla y la barra los tiene que poder nombrar igual. `facturado` permite
+ * avisar que la factura nueva se suma a una que ya tiene.
  */
-export type ViajeSeleccionado = Pick<ViajeContable, 'id' | 'numero_gr'>;
+export type ViajeSeleccionado = Pick<ViajeContable, 'id' | 'numero_gr'> & {
+    facturado: boolean;
+};
 
 /** Totales por moneda: sumar soles con dólares daría un número sin sentido. */
 export type ResumenMoneda = {

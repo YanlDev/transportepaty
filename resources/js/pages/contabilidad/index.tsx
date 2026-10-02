@@ -17,6 +17,7 @@ import { Paginacion } from '@/components/ui/paginacion';
 import { useContabilidadFiltros } from '@/hooks/use-contabilidad-filtros';
 import { usePermisos } from '@/hooks/use-permisos';
 import { agruparViajes } from '@/lib/agrupar-viajes';
+import { aSeleccion, esFacturable } from '@/lib/cobranza';
 import type {
     CuentaOpcion,
     FiltrosContabilidad,
@@ -59,10 +60,11 @@ export default function ContabilidadIndex({
 
     const filas = agruparViajes(paginador.data);
 
-    // Solo lo que todavía no se facturó entra en una selección: elegir un
-    // viaje ya cobrado para facturarlo de nuevo es siempre un error.
+    // «Marcar todos» toma solo lo que todavía no se facturó: sumarle una
+    // segunda factura a un viaje (la estadía, por ejemplo) es un caso puntual
+    // y se marca fila por fila.
     const facturables = paginador.data.filter(
-        (viaje) => viaje.factura === null,
+        (viaje) => viaje.facturas.length === 0 && esFacturable(viaje),
     );
 
     const filtrosActivos = [
@@ -217,13 +219,7 @@ export default function ContabilidadIndex({
                                     ? seleccion.filter(
                                           (otro) => otro.id !== elegido.id,
                                       )
-                                    : [
-                                          ...seleccion,
-                                          {
-                                              id: elegido.id,
-                                              numero_gr: elegido.numero_gr,
-                                          },
-                                      ],
+                                    : [...seleccion, aSeleccion(elegido)],
                             )
                         }
                     />

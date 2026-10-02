@@ -130,8 +130,11 @@ Route::middleware('auth')->group(function () {
     // Si el papel de la GR ya llegó a la oficina: lo marca la cobranza.
     Route::patch('viajes/{viaje}/gr-fisica', [ContabilidadController::class, 'marcarGrFisica'])
         ->name('contabilidad.gr-fisica');
+    // GR que se emitió pero no se cobra (una cajita que viajó con la carga).
+    Route::patch('viajes/{viaje}/no-facturable', [ContabilidadController::class, 'marcarNoFacturable'])
+        ->name('contabilidad.no-facturable');
     // Sacar un solo viaje de su factura, sin anular la factura entera.
-    Route::delete('viajes/{viaje}/factura', [FacturaController::class, 'desvincular'])
+    Route::delete('facturas/{factura}/viajes/{viaje}', [FacturaController::class, 'desvincular'])
         ->name('facturas.desvincular');
 
     // Qué unidades salen con carga particular cada día. Se carga antes de

@@ -72,7 +72,8 @@ it('carries the same operativo columns as the viajes list', function (): void {
                 'gr_fisica_recibida_at',
                 'estado',
                 'estado_label',
-                'factura',
+                'motivo_no_facturable',
+                'facturas',
             ])
         ));
 });
@@ -82,15 +83,13 @@ it('carries the same operativo columns as the viajes list', function (): void {
  * nadie lo note; se cuenta aparte para que se vea.
  */
 it('counts the facturas that still have no monto', function (): void {
-    Viaje::factory()->create([
-        'factura_id' => Factura::factory()->create(['monto' => null])->id,
-    ]);
+    Viaje::factory()->hasAttached(Factura::factory()->create(['monto' => null]), relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index'))
         ->assertInertia(fn ($page) => $page
             ->where('resumen.sin_monto', 1)
-            ->where('viajes.data.0.factura.monto', null)
+            ->where('viajes.data.0.facturas.0.monto', null)
         );
 });
 
@@ -101,20 +100,20 @@ it('marks a viaje without factura as sin facturar', function (): void {
         ->get(route('contabilidad.index'))
         ->assertInertia(fn ($page) => $page
             ->where('viajes.data.0.estado', 'sin_facturar')
-            ->where('viajes.data.0.factura', null)
+            ->has('viajes.data.0.facturas', 0)
             ->where('resumen.por_facturar.0.viajes', 1)
         );
 });
 
 it('reports a viaje as por cobrar until the factura has a fecha de pago', function (): void {
     $factura = Factura::factory()->create(['monto' => 4500.50]);
-    Viaje::factory()->create(['factura_id' => $factura->id]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index'))
         ->assertInertia(fn ($page) => $page
             ->where('viajes.data.0.estado', 'facturado')
-            ->where('viajes.data.0.factura.monto', 4500.50)
+            ->where('viajes.data.0.facturas.0.monto', 4500.50)
             ->where('resumen.montos.0.por_cobrar', 4500.50)
             ->where('resumen.montos.0.cobrado', 0)
         );
@@ -127,13 +126,13 @@ it('reports a viaje as pagado once the factura has a fecha de pago', function ()
         'fecha_pago' => '2026-09-01',
         'cuenta_bancaria_id' => $cuenta->id,
     ]);
-    Viaje::factory()->create(['factura_id' => $factura->id]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index'))
         ->assertInertia(fn ($page) => $page
             ->where('viajes.data.0.estado', 'pagado')
-            ->where('viajes.data.0.factura.cuenta', 'BCP Soles')
+            ->where('viajes.data.0.facturas.0.cuenta', 'BCP Soles')
             ->where('resumen.montos.0.cobrado', 3200.75)
             ->where('resumen.montos.0.por_cobrar', 0)
         );
@@ -145,24 +144,59 @@ it('reports a viaje as pagado once the factura has a fecha de pago', function ()
  */
 it('counts a factura once in the totals even when it covers several viajes', function (): void {
     $factura = Factura::factory()->create(['monto' => 4500.50]);
-    Viaje::factory()->count(3)->create(['factura_id' => $factura->id]);
+    Viaje::factory()->count(3)->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index'))
         ->assertInertia(fn ($page) => $page
             ->where('resumen.montos.0.por_cobrar', 4500.50)
             ->where('resumen.facturas', 1)
-            ->where('viajes.data.0.factura.viajes_count', 3)
+            ->where('viajes.data.0.facturas.0.viajes_count', 3)
+        );
+});
+
+/**
+ * Flete y estadía de una misma GR: la GR sigue por cobrar mientras falte
+ * cobrar cualquiera de las dos, y ambas suman en el total porque son cobros
+ * distintos.
+ */
+it('keeps a viaje por cobrar until every one of its facturas is paid', function (): void {
+    $flete = Factura::factory()->create(['monto' => 4000, 'fecha_emision' => '2026-09-01', 'fecha_pago' => '2026-09-20']);
+    $estadia = Factura::factory()->create(['monto' => 500, 'fecha_emision' => '2026-09-05']);
+    Viaje::factory()
+        ->hasAttached($flete, relationship: 'facturas')
+        ->hasAttached($estadia, relationship: 'facturas')
+        ->create(['numero_gr' => 'EG03-DOSFACTURAS']);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('viajes.data.0.estado', 'facturado')
+            ->has('viajes.data.0.facturas', 2)
+            ->where('viajes.data.0.facturas.0.id', $flete->id)
+            ->where('viajes.data.0.facturas.1.id', $estadia->id)
+            ->where('resumen.facturas', 2)
+            ->where('resumen.montos.0.cobrado', 4000)
+            ->where('resumen.montos.0.por_cobrar', 500)
+        );
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['estado' => 'pagado']))
+        ->assertInertia(fn ($page) => $page->has('viajes.data', 0));
+
+    $estadia->update(['fecha_pago' => '2026-09-25']);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['estado' => 'pagado']))
+        ->assertInertia(fn ($page) => $page
+            ->has('viajes.data', 1)
+            ->where('viajes.data.0.estado', 'pagado')
         );
 });
 
 it('keeps soles and dolares apart in the totals', function (): void {
-    Viaje::factory()->create([
-        'factura_id' => Factura::factory()->create(['monto' => 1000, 'moneda' => 'PEN'])->id,
-    ]);
-    Viaje::factory()->create([
-        'factura_id' => Factura::factory()->create(['monto' => 500, 'moneda' => 'USD'])->id,
-    ]);
+    Viaje::factory()->hasAttached(Factura::factory()->create(['monto' => 1000, 'moneda' => 'PEN']), relationship: 'facturas')->create();
+    Viaje::factory()->hasAttached(Factura::factory()->create(['monto' => 500, 'moneda' => 'USD']), relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index'))
@@ -171,13 +205,11 @@ it('keeps soles and dolares apart in the totals', function (): void {
 
 it('filters by estado de cobranza', function (): void {
     Viaje::factory()->create(['numero_gr' => 'EG03-SINFACT']);
-    Viaje::factory()->create([
+    Viaje::factory()->hasAttached(Factura::factory()->create(), relationship: 'facturas')->create([
         'numero_gr' => 'EG03-PORCOBRAR',
-        'factura_id' => Factura::factory()->create()->id,
     ]);
-    Viaje::factory()->create([
+    Viaje::factory()->hasAttached(Factura::factory()->pagada()->create(), relationship: 'facturas')->create([
         'numero_gr' => 'EG03-PAGADO',
-        'factura_id' => Factura::factory()->pagada()->create()->id,
     ]);
 
     foreach ([
@@ -196,7 +228,7 @@ it('filters by estado de cobranza', function (): void {
 
 it('finds a viaje by the numero of its factura', function (): void {
     $factura = Factura::factory()->create(['numero' => 'F001-00987']);
-    Viaje::factory()->create(['numero_gr' => 'EG03-CONFACTURA', 'factura_id' => $factura->id]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['numero_gr' => 'EG03-CONFACTURA']);
     Viaje::factory()->create(['numero_gr' => 'EG03-OTRO']);
 
     actingAs(actorConRol('contador'))
@@ -215,9 +247,8 @@ it('breaks down what is left to factura by month, newest first', function (): vo
     Viaje::factory()->count(2)->create(['fecha_traslado' => '2026-09-05']);
     Viaje::factory()->create(['fecha_traslado' => '2026-08-05']);
     // Ya facturado: no cuenta como pendiente.
-    Viaje::factory()->create([
+    Viaje::factory()->hasAttached(Factura::factory()->create(), relationship: 'facturas')->create([
         'fecha_traslado' => '2026-09-20',
-        'factura_id' => Factura::factory()->create()->id,
     ]);
 
     actingAs(actorConRol('contador'))
@@ -233,7 +264,7 @@ it('breaks down what is left to factura by month, newest first', function (): vo
 });
 
 it('leaves the por facturar breakdown empty once everything is billed', function (): void {
-    Viaje::factory()->create(['factura_id' => Factura::factory()->create()->id]);
+    Viaje::factory()->hasAttached(Factura::factory()->create(), relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index'))
@@ -275,13 +306,11 @@ it('filters by a whole month', function (): void {
  * queda por cobrar de setiembre», que es para lo que se filtra.
  */
 it('narrows the totals to the selected month', function (): void {
-    Viaje::factory()->create([
+    Viaje::factory()->hasAttached(Factura::factory()->create(['monto' => 1000.50]), relationship: 'facturas')->create([
         'fecha_traslado' => '2026-09-05',
-        'factura_id' => Factura::factory()->create(['monto' => 1000.50])->id,
     ]);
-    Viaje::factory()->create([
+    Viaje::factory()->hasAttached(Factura::factory()->create(['monto' => 9999]), relationship: 'facturas')->create([
         'fecha_traslado' => '2026-08-05',
-        'factura_id' => Factura::factory()->create(['monto' => 9999])->id,
     ]);
 
     actingAs(actorConRol('contador'))
@@ -389,4 +418,65 @@ it('requires saying whether the paper GR arrived', function (): void {
     actingAs(actorConRol('contador'))
         ->patch(route('contabilidad.gr-fisica', $viaje), [])
         ->assertSessionHasErrors('recibida');
+});
+
+/**
+ * La cajita de 0.2 TNE que viajó con la carga grande: no se cobra, así que
+ * sale de lo pendiente sin anular la GR, que ante SUNAT sigue valiendo.
+ */
+it('takes a no facturable GR out of what is left to facturar', function (): void {
+    $cajita = Viaje::factory()->create(['numero_gr' => 'EG03-CAJITA', 'fecha_traslado' => '2026-08-03']);
+    Viaje::factory()->create(['numero_gr' => 'EG03-GRANDE', 'fecha_traslado' => '2026-08-03']);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('contabilidad.no-facturable', $cajita), ['no_facturable' => true, 'motivo' => 'Caja de 0.2 TNE'])
+        ->assertSessionHasNoErrors();
+
+    expect($cajita->refresh()->esNoFacturable())->toBeTrue()
+        ->and($cajita->motivo_no_facturable)->toBe('Caja de 0.2 TNE');
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['estado' => 'sin_facturar']))
+        ->assertInertia(fn ($page) => $page
+            ->has('viajes.data', 1)
+            ->where('viajes.data.0.numero_gr', 'EG03-GRANDE')
+            ->where('resumen.por_facturar.0.viajes', 1)
+        );
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['estado' => 'no_facturable']))
+        ->assertInertia(fn ($page) => $page
+            ->has('viajes.data', 1)
+            ->where('viajes.data.0.estado', 'no_facturable')
+            ->where('viajes.data.0.motivo_no_facturable', 'Caja de 0.2 TNE')
+        );
+});
+
+it('puts a no facturable GR back in the cobranza', function (): void {
+    $viaje = Viaje::factory()->create(['no_facturable_at' => now(), 'motivo_no_facturable' => 'Cortesía']);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('contabilidad.no-facturable', $viaje), ['no_facturable' => false])
+        ->assertSessionHasNoErrors();
+
+    expect($viaje->refresh()->esNoFacturable())->toBeFalse()
+        ->and($viaje->motivo_no_facturable)->toBeNull();
+});
+
+it('refuses to mark a GR that is already facturada as no facturable', function (): void {
+    $viaje = Viaje::factory()->hasAttached(Factura::factory()->create(), relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('contabilidad.no-facturable', $viaje), ['no_facturable' => true])
+        ->assertSessionHasErrors('no_facturable');
+
+    expect($viaje->refresh()->esNoFacturable())->toBeFalse();
+});
+
+it('keeps the visor from marking a GR as no facturable', function (): void {
+    $viaje = Viaje::factory()->create();
+
+    actingAs(actorConRol('visor'))
+        ->patch(route('contabilidad.no-facturable', $viaje), ['no_facturable' => true])
+        ->assertForbidden();
 });

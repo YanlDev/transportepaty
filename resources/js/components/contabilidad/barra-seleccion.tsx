@@ -15,7 +15,8 @@ import type { ViajeSeleccionado } from '@/types/contabilidad';
  *
  * Lista las GR elegidas porque la selección puede venir de varias páginas y
  * las de otra página no se ven en la tabla: así se revisa qué entra en la
- * factura antes de emitirla.
+ * factura antes de emitirla. Las que ya tienen factura se marcan: la nueva se
+ * les suma (la estadía aparte del flete), y conviene verlo antes de emitir.
  */
 export function BarraSeleccion({
     seleccion,
@@ -28,6 +29,7 @@ export function BarraSeleccion({
 }) {
     const [numero, setNumero] = useState('');
     const [guardando, setGuardando] = useState(false);
+    const yaFacturadas = seleccion.filter((viaje) => viaje.facturado).length;
 
     const emitir = () => {
         const limpio = numero.trim();
@@ -93,11 +95,25 @@ export function BarraSeleccion({
                 </div>
             </div>
 
+            {yaFacturadas > 0 && (
+                <p className="text-xs text-amber-700 dark:text-amber-500">
+                    {yaFacturadas === 1
+                        ? '1 GR ya tiene factura'
+                        : `${yaFacturadas} GR ya tienen factura`}
+                    : esta se les suma como factura adicional.
+                </p>
+            )}
+
             <ul className="flex flex-wrap gap-1.5">
                 {seleccion.map((viaje) => (
                     <li
                         key={viaje.id}
-                        className="flex items-center gap-1 rounded-md border bg-background py-0.5 pr-1 pl-2 font-mono text-xs"
+                        className={`flex items-center gap-1 rounded-md border bg-background py-0.5 pr-1 pl-2 font-mono text-xs ${
+                            viaje.facturado
+                                ? 'border-amber-500/50 text-amber-700 dark:text-amber-500'
+                                : ''
+                        }`}
+                        title={viaje.facturado ? 'Ya tiene factura' : undefined}
                     >
                         {viaje.numero_gr}
                         <button

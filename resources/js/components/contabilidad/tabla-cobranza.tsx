@@ -8,6 +8,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import type { FilaAgrupada } from '@/lib/agrupar-viajes';
+import { aSeleccion } from '@/lib/cobranza';
 import type {
     CuentaOpcion,
     ViajeContable,
@@ -52,7 +53,7 @@ export function TablaCobranza({
         onSeleccion(
             idsMarcados.has(viaje.id)
                 ? seleccion.filter((otro) => otro.id !== viaje.id)
-                : [...seleccion, { id: viaje.id, numero_gr: viaje.numero_gr }],
+                : [...seleccion, aSeleccion(viaje)],
         );
     };
 
@@ -66,13 +67,7 @@ export function TablaCobranza({
 
         onSeleccion(
             marcar
-                ? [
-                      ...deOtrasPaginas,
-                      ...facturables.map((viaje) => ({
-                          id: viaje.id,
-                          numero_gr: viaje.numero_gr,
-                      })),
-                  ]
+                ? [...deOtrasPaginas, ...facturables.map(aSeleccion)]
                 : deOtrasPaginas,
         );
     };

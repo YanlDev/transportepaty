@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Factura;
 use App\Models\Viaje;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -20,9 +21,14 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  * Exporta exactamente lo que dejan los filtros —los mismos que usa
  * `/contabilidad`, resueltos por `ResumenCobranza`— y en el mismo orden, para
  * que el archivo se pueda leer al lado de la pantalla sin traducir nada. Una
- * fila por viaje, igual que la tabla: cuando una factura cubre varios viajes,
- * su número y su monto se repiten, porque lo que se exporta es el viaje y no
- * la factura.
+ * fila por viaje y factura, igual que la tabla: cuando una factura cubre
+ * varios viajes, su número se repite, y cuando un viaje tiene varias
+ * facturas, el viaje se repite una vez por cada una.
+ *
+ * Lo primero que se hace con este archivo es sumar la columna de montos, así
+ * que ninguna columna de dinero repite una cifra: «Monto factura» lleva el
+ * total solo en la primera fila de cada factura, y «Monto por GR» lo reparte
+ * entre sus GR. Cualquiera de las dos suma el total real.
  *
  * Escribe sin paginar. La consulta se recorre con `lazy()` en lugar de
  * `get()` para que el pico de memoria no dependa de cuántos viajes haya
@@ -56,7 +62,8 @@ class ExportadorCobranza
         'Estado',
         'N° factura',
         'Fecha emisión',
-        'Monto',
+        'Monto factura',
+        'Monto por GR',
         'Moneda',
         'Fecha pago',
         'Días vencida',
@@ -117,26 +124,42 @@ class ExportadorCobranza
     {
         $fila = self::FILA_ENCABEZADO;
 
+        /** @var array<int, true> $facturasEscritas */
+        $facturasEscritas = [];
+
         $viajes = $this->cobranza->consulta($filtros)
             // Solo lo que lee `celdas()`: las placas y el conductor salen de
             // columnas del propio viaje, no de las relaciones.
             ->with([
                 'clienteDelPadron:id,alias',
-                'factura.cuentaBancaria:id,alias',
+                'facturas' => fn ($query) => $query->orderBy('fecha_emision')->orderBy('facturas.id'),
+                'facturas.cuentaBancaria:id,alias',
+                'facturas.viajes:viajes.id',
             ])
             ->orderByDesc('fecha_traslado')
             ->orderByDesc('numero_gr')
             ->lazy();
 
         foreach ($viajes as $viaje) {
-            $fila++;
+            // Sin facturas, una sola fila con la cobranza vacía.
+            $facturas = $viaje->facturas->isEmpty() ? [null] : $viaje->facturas->all();
 
-            foreach ($this->celdas($viaje) as $columna => $valor) {
-                if ($valor === null) {
-                    continue;
+            foreach ($facturas as $factura) {
+                $fila++;
+
+                $primeraVez = $factura !== null && ! isset($facturasEscritas[$factura->id]);
+
+                if ($factura !== null) {
+                    $facturasEscritas[$factura->id] = true;
                 }
 
-                $hoja->setCellValue([$columna + 1, $fila], $valor);
+                foreach ($this->celdas($viaje, $factura, $primeraVez) as $columna => $valor) {
+                    if ($valor === null) {
+                        continue;
+                    }
+
+                    $hoja->setCellValue([$columna + 1, $fila], $valor);
+                }
             }
         }
 
@@ -152,10 +175,8 @@ class ExportadorCobranza
      *
      * @return array<int, string|float|int|null>
      */
-    private function celdas(Viaje $viaje): array
+    private function celdas(Viaje $viaje, ?Factura $factura, bool $primeraVez): array
     {
-        $factura = $viaje->factura;
-
         return [
             $this->fecha($viaje->fecha_traslado),
             $viaje->numero_gr,
@@ -172,13 +193,35 @@ class ExportadorCobranza
             $viaje->estadoCobranza()->label(),
             $factura?->numero,
             $factura === null ? null : $this->fecha($factura->fecha_emision),
-            $factura?->monto === null ? null : (float) $factura->monto,
+            $factura?->monto !== null && $primeraVez ? (float) $factura->monto : null,
+            $factura === null ? null : $this->montoPorGr($factura, $viaje),
             $factura?->moneda->value,
             $factura?->fecha_pago === null ? null : $this->fecha($factura->fecha_pago),
             $factura?->diasVencida(),
             $factura?->cuentaBancaria?->alias,
-            $factura?->observacion,
+            $factura === null ? $viaje->motivo_no_facturable : $factura->observacion,
         ];
+    }
+
+    /**
+     * La parte de la factura que le toca a esta GR, en partes iguales. Se
+     * reparte en céntimos y lo que sobra de la división va a las primeras GR
+     * (por id), para que la columna sume exactamente el total de la factura:
+     * 100.00 entre 3 da 33.34 + 33.33 + 33.33, no tres veces 33.33.
+     */
+    private function montoPorGr(Factura $factura, Viaje $viaje): ?float
+    {
+        if ($factura->monto === null) {
+            return null;
+        }
+
+        $ids = $factura->viajes->pluck('id')->sort()->values();
+        $cantidad = max($ids->count(), 1);
+        $centimos = (int) round((float) $factura->monto * 100);
+        $posicion = $ids->search($viaje->id);
+        $extra = $posicion !== false && $posicion < $centimos % $cantidad ? 1 : 0;
+
+        return (intdiv($centimos, $cantidad) + $extra) / 100;
     }
 
     /**
@@ -260,7 +303,8 @@ class ExportadorCobranza
         $this->formatear($hoja, 12, $primeraFila, $ultimaFila, '#,##0.00');
         $this->formatear($hoja, 15, $primeraFila, $ultimaFila, NumberFormat::FORMAT_DATE_DDMMYYYY);
         $this->formatear($hoja, 16, $primeraFila, $ultimaFila, '#,##0.00');
-        $this->formatear($hoja, 18, $primeraFila, $ultimaFila, NumberFormat::FORMAT_DATE_DDMMYYYY);
+        $this->formatear($hoja, 17, $primeraFila, $ultimaFila, '#,##0.00');
+        $this->formatear($hoja, 19, $primeraFila, $ultimaFila, NumberFormat::FORMAT_DATE_DDMMYYYY);
 
         // La columna de GR remitente lleva varias por celda.
         $hoja->getStyle([3, $primeraFila, 3, $ultimaFila])

@@ -12,6 +12,7 @@ import { ConductorCelda } from '@/components/viajes/conductor-celda';
 import { GuiasRemitenteCelda } from '@/components/viajes/guias-remitente-celda';
 import { PlacaCelda } from '@/components/viajes/placa-celda';
 import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';
+import { diasVencidaMayor, esFacturable } from '@/lib/cobranza';
 import { formatearFecha, formatearPeso } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { CuentaOpcion, ViajeContable } from '@/types/contabilidad';
@@ -29,7 +30,12 @@ type Props = {
     onSeleccionar: (viaje: ViajeContable) => void;
 };
 
-/** Una GR en la hoja de cobranza: la operación a la izquierda, la plata a la derecha. */
+/**
+ * Una GR en la hoja de cobranza: la operación a la izquierda, la plata a la
+ * derecha. Con varias facturas (flete y estadía), la GR se abre en una línea
+ * por factura: la operación y el estado ocupan todas con `rowSpan`, y cada
+ * factura conserva sus propias celdas editables y sus acciones.
+ */
 export function FilaCobranza({
     viaje,
     colorGrupo,
@@ -39,19 +45,90 @@ export function FilaCobranza({
     seleccionado,
     onSeleccionar,
 }: Props) {
+    // Sin facturas igual hay una línea: la de «+ factura».
+    const lineas = viaje.facturas.length === 0 ? [null] : viaje.facturas;
+    const alto = lineas.length;
+    const claseLinea = cn(seleccionado && 'bg-primary/5');
+
     return (
-        <TableRow
-            className={cn(
-                colorGrupo && cn('border-l-2', colorGrupo),
-                seleccionado && 'bg-primary/5',
-            )}
-        >
+        <>
+            {lineas.map((factura, indice) => {
+                const esPrimera = indice === 0;
+                const esUltima = indice === alto - 1;
+
+                return (
+                    <TableRow
+                        key={factura?.id ?? 'sin-factura'}
+                        className={cn(
+                            claseLinea,
+                            esPrimera &&
+                                colorGrupo &&
+                                cn('border-l-2', colorGrupo),
+                            // Las líneas de una misma GR no se separan: el
+                            // borde va solo debajo de la última.
+                            !esUltima && 'border-b-0',
+                        )}
+                    >
+                        {esPrimera && (
+                            <ColumnasOperacion
+                                viaje={viaje}
+                                alto={alto}
+                                puedeFacturar={puedeFacturar}
+                                seleccionado={seleccionado}
+                                onSeleccionar={onSeleccionar}
+                            />
+                        )}
+
+                        <CeldasCobranza
+                            viajeId={viaje.id}
+                            noFacturable={!esFacturable(viaje)}
+                            motivoNoFacturable={viaje.motivo_no_facturable}
+                            factura={factura}
+                            agregarOtra={esUltima}
+                            cuentas={cuentas}
+                            monedas={monedas}
+                            editable={puedeFacturar}
+                        />
+
+                        <TableCell>
+                            <AccionesFila
+                                viaje={viaje}
+                                factura={factura}
+                                puedeFacturar={puedeFacturar}
+                            />
+                        </TableCell>
+                    </TableRow>
+                );
+            })}
+        </>
+    );
+}
+
+/**
+ * Lo que la GR es una sola vez aunque tenga varias facturas: la casilla, el
+ * viaje tal como ocurrió y el estado del cobro, que resume todas.
+ */
+function ColumnasOperacion({
+    viaje,
+    alto,
+    puedeFacturar,
+    seleccionado,
+    onSeleccionar,
+}: {
+    viaje: ViajeContable;
+    alto: number;
+    puedeFacturar: boolean;
+    seleccionado: boolean;
+    onSeleccionar: (viaje: ViajeContable) => void;
+}) {
+    return (
+        <>
             {puedeFacturar && (
-                <TableCell>
-                    {/* Un viaje ya facturado no se puede elegir: volver a
-                        facturarlo es siempre un error, así que la casilla ni
-                        siquiera aparece. */}
-                    {viaje.factura === null && (
+                <TableCell rowSpan={alto} className="align-top">
+                    {/* También en un viaje ya facturado: puede llevar otra
+                        factura aparte, como la estadía. No en uno que se
+                        decidió no cobrar. */}
+                    {esFacturable(viaje) && (
                         <Checkbox
                             aria-label={`Seleccionar la GR ${viaje.numero_gr}`}
                             checked={seleccionado}
@@ -61,16 +138,25 @@ export function FilaCobranza({
                 </TableCell>
             )}
 
-            <TableCell className="whitespace-nowrap text-muted-foreground tabular-nums">
+            <TableCell
+                rowSpan={alto}
+                className="whitespace-nowrap text-muted-foreground tabular-nums"
+            >
                 {formatearFecha(viaje.fecha_traslado)}
             </TableCell>
-            <TableCell className="font-mono text-xs whitespace-nowrap text-foreground tabular-nums">
+            <TableCell
+                rowSpan={alto}
+                className="font-mono text-xs whitespace-nowrap text-foreground tabular-nums"
+            >
                 <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
             </TableCell>
-            <TableCell className="font-mono text-xs whitespace-nowrap text-marca-600 tabular-nums dark:text-marca-400">
+            <TableCell
+                rowSpan={alto}
+                className="font-mono text-xs whitespace-nowrap text-marca-600 tabular-nums dark:text-marca-400"
+            >
                 <GuiasRemitenteCelda guias={viaje.guias_remitente} />
             </TableCell>
-            <TableCell className="text-center">
+            <TableCell rowSpan={alto} className="text-center">
                 <CeldaGrFisica
                     viajeId={viaje.id}
                     numeroGr={viaje.numero_gr}
@@ -78,13 +164,13 @@ export function FilaCobranza({
                     editable={puedeFacturar}
                 />
             </TableCell>
-            <TableCell className="text-xs whitespace-nowrap">
+            <TableCell rowSpan={alto} className="text-xs whitespace-nowrap">
                 <PlacaCelda
                     placa={viaje.placa_tracto}
                     vehiculoId={viaje.tracto_id}
                 />
             </TableCell>
-            <TableCell className="text-xs whitespace-nowrap">
+            <TableCell rowSpan={alto} className="text-xs whitespace-nowrap">
                 {viaje.placa_carreta ? (
                     <PlacaCelda
                         placa={viaje.placa_carreta}
@@ -94,31 +180,31 @@ export function FilaCobranza({
                     '—'
                 )}
             </TableCell>
-            <TableCell className="text-xs whitespace-nowrap">
+            <TableCell rowSpan={alto} className="text-xs whitespace-nowrap">
                 <ConductorCelda
                     nombre={viaje.conductor_nombre}
                     conductorId={viaje.conductor_id}
                 />
             </TableCell>
-            <TableCell className="max-w-40 overflow-hidden">
+            <TableCell rowSpan={alto} className="max-w-40 overflow-hidden">
                 <ClienteConRemitente
                     cliente={viaje.cliente}
                     remitente={viaje.remitente}
                 />
             </TableCell>
-            <TableCell className="max-w-40 overflow-hidden">
+            <TableCell rowSpan={alto} className="max-w-40 overflow-hidden">
                 <DireccionCelda
                     ciudad={viaje.origen_ciudad}
                     direccion={viaje.origen}
                 />
             </TableCell>
-            <TableCell className="max-w-40 overflow-hidden">
+            <TableCell rowSpan={alto} className="max-w-40 overflow-hidden">
                 <DireccionCelda
                     ciudad={viaje.destino_ciudad}
                     direccion={viaje.destino}
                 />
             </TableCell>
-            <TableCell>
+            <TableCell rowSpan={alto}>
                 {/* Sin editar: el tipo de carga lo corrige la operación en
                     `/viajes`, no la cobranza. */}
                 <TipoCargaBadge
@@ -126,31 +212,26 @@ export function FilaCobranza({
                     label={viaje.tipo_carga_label}
                 />
             </TableCell>
-            <TableCell className="text-right whitespace-nowrap tabular-nums">
+            <TableCell
+                rowSpan={alto}
+                className="text-right whitespace-nowrap tabular-nums"
+            >
                 {formatearPeso(viaje.peso, viaje.unidad_peso)}
             </TableCell>
-            <TableCell className="w-0">
+            <TableCell rowSpan={alto} className="w-0">
                 <VerGuia viaje={viaje} />
             </TableCell>
 
-            <TableCell className={cn(INICIO_COBRANZA, 'whitespace-nowrap')}>
+            <TableCell
+                rowSpan={alto}
+                className={cn(INICIO_COBRANZA, 'whitespace-nowrap')}
+            >
                 <EstadoCobranzaBadge
                     estado={viaje.estado}
                     label={viaje.estado_label}
-                    diasVencida={viaje.factura?.dias_vencida}
+                    diasVencida={diasVencidaMayor(viaje)}
                 />
             </TableCell>
-
-            <CeldasCobranza
-                viaje={viaje}
-                cuentas={cuentas}
-                monedas={monedas}
-                editable={puedeFacturar}
-            />
-
-            <TableCell>
-                <AccionesFila viaje={viaje} puedeFacturar={puedeFacturar} />
-            </TableCell>
-        </TableRow>
+        </>
     );
 }

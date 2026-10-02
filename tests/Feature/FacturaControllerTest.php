@@ -89,15 +89,33 @@ it('uppercases the numero de factura', function (): void {
     expect(Factura::query()->sole()->numero)->toBe('F001-00777');
 });
 
-it('rejects a viaje that is already on another factura', function (): void {
-    $viaje = Viaje::factory()->create(['numero_gr' => 'EG03-YAFACTURADO']);
-    $viaje->update(['factura_id' => Factura::factory()->create()->id]);
+/**
+ * El flete y la estadía de una misma GR se facturan por separado: un viaje ya
+ * facturado tiene que poder recibir otra factura sin perder la primera.
+ */
+it('adds a second factura to a viaje that already has one', function (): void {
+    $primera = Factura::factory()->create();
+    $viaje = Viaje::factory()->hasAttached($primera, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
-        ->post(route('facturas.store'), datosFactura(['viaje_ids' => [$viaje->id]]))
-        ->assertSessionHasErrors('viaje_ids');
+        ->post(route('facturas.store'), datosFactura([
+            'numero' => 'F001-00200',
+            'viaje_ids' => [$viaje->id],
+        ]))
+        ->assertSessionHasNoErrors();
 
-    expect(Factura::query()->count())->toBe(1);
+    expect($viaje->facturas()->pluck('numero')->all())
+        ->toEqualCanonicalizing([$primera->numero, 'F001-00200']);
+});
+
+it('rejects the same viaje twice in one factura', function (): void {
+    $viaje = Viaje::factory()->create();
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.store'), datosFactura(['viaje_ids' => [$viaje->id, $viaje->id]]))
+        ->assertSessionHasErrors('viaje_ids.0');
+
+    expect(Factura::query()->count())->toBe(0);
 });
 
 it('rejects a duplicated numero de factura', function (): void {
@@ -118,7 +136,7 @@ it('requires at least one viaje', function (): void {
 it('records the cobro with its cuenta', function (): void {
     $cuenta = CuentaBancaria::factory()->create();
     $factura = Factura::factory()->create(['fecha_emision' => '2026-09-01']);
-    Viaje::factory()->create(['factura_id' => $factura->id]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
         ->patch(route('facturas.update', $factura), ['fecha_pago' => '2026-09-20'])
@@ -223,21 +241,50 @@ it('accepts both dates when the cobro follows the new emision', function (): voi
 
 /**
  * Sacar un viaje de la factura tiene que devolverlo a «sin facturar»: si
- * quedara con el `factura_id` viejo, se daría por cobrado por una factura que
- * ya no lo cubre.
+ * siguiera enlazado, se daría por cobrado por una factura que ya no lo cubre.
  */
 it('frees a single viaje without touching the rest of the factura', function (): void {
-    $viajes = Viaje::factory()->count(2)->create();
     $factura = Factura::factory()->create();
-    Viaje::query()->whereIn('id', $viajes->pluck('id'))->update(['factura_id' => $factura->id]);
+    $viajes = Viaje::factory()->count(2)->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
-        ->delete(route('facturas.desvincular', $viajes->first()))
+        ->delete(route('facturas.desvincular', [$factura, $viajes->first()]))
         ->assertSessionHasNoErrors();
 
-    expect($viajes->first()->refresh()->factura_id)->toBeNull()
-        ->and($viajes->last()->refresh()->factura_id)->toBe($factura->id)
+    expect($viajes->first()->facturas()->exists())->toBeFalse()
+        ->and($viajes->last()->facturas()->pluck('facturas.id')->all())->toBe([$factura->id])
         ->and(Factura::query()->count())->toBe(1);
+});
+
+/**
+ * Con dos facturas sobre la misma GR, sacarla de una no la saca de la otra:
+ * el flete puede estar bien facturado aunque la estadía no.
+ */
+it('frees a viaje from one factura and keeps the other', function (): void {
+    $flete = Factura::factory()->create();
+    $estadia = Factura::factory()->create();
+    $viaje = Viaje::factory()
+        ->hasAttached($flete, relationship: 'facturas')
+        ->hasAttached($estadia, relationship: 'facturas')
+        ->create();
+
+    actingAs(actorConRol('contador'))
+        ->delete(route('facturas.desvincular', [$estadia, $viaje]))
+        ->assertSessionHasNoErrors();
+
+    expect($viaje->facturas()->pluck('facturas.id')->all())->toBe([$flete->id])
+        // Era su único viaje: se anula sola.
+        ->and(Factura::query()->whereKey($estadia->id)->exists())->toBeFalse();
+});
+
+it('refuses to free a viaje from a factura that does not cover it', function (): void {
+    $factura = Factura::factory()->create();
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+    $ajeno = Viaje::factory()->create();
+
+    actingAs(actorConRol('contador'))
+        ->delete(route('facturas.desvincular', [$factura, $ajeno]))
+        ->assertNotFound();
 });
 
 /**
@@ -245,22 +292,20 @@ it('frees a single viaje without touching the rest of the factura', function ():
  * ella desde la tabla, que se recorre por viaje.
  */
 it('anula the factura when its last viaje is freed', function (): void {
-    $viaje = Viaje::factory()->create();
     $factura = Factura::factory()->create();
-    $viaje->update(['factura_id' => $factura->id]);
+    $viaje = Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
-        ->delete(route('facturas.desvincular', $viaje))
+        ->delete(route('facturas.desvincular', [$factura, $viaje]))
         ->assertSessionHasNoErrors();
 
     expect(Factura::query()->count())->toBe(0)
-        ->and($viaje->refresh()->factura_id)->toBeNull();
+        ->and($viaje->facturas()->exists())->toBeFalse();
 });
 
 it('frees every viaje when the factura is anulada', function (): void {
-    $viajes = Viaje::factory()->count(2)->create();
     $factura = Factura::factory()->create();
-    Viaje::query()->whereIn('id', $viajes->pluck('id'))->update(['factura_id' => $factura->id]);
+    Viaje::factory()->count(2)->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
         ->delete(route('facturas.destroy', $factura))
@@ -270,5 +315,39 @@ it('frees every viaje when the factura is anulada', function (): void {
         // Los viajes no se van con la factura: anular una emitida por error es
         // justamente para poder volver a facturarlos.
         ->and(Viaje::query()->count())->toBe(2)
-        ->and(Viaje::query()->whereNotNull('factura_id')->count())->toBe(0);
+        ->and(Viaje::query()->whereHas('facturas')->count())->toBe(0);
+});
+
+/**
+ * Minsur pacta el flete por viaje: en una factura de doce GR se escribe el
+ * precio de una y el total se calcula. Lo guardado es el total, que es lo que
+ * suma en la cobranza.
+ */
+it('turns a precio por GR into the factura total', function (): void {
+    $factura = Factura::factory()->create(['monto' => null]);
+    Viaje::factory()->count(12)->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['monto_por_viaje' => 7347.21])
+        ->assertSessionHasNoErrors();
+
+    expect((float) $factura->refresh()->monto)->toBe(88166.52);
+});
+
+it('rejects a total and a precio por GR in the same request', function (): void {
+    $factura = Factura::factory()->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['monto' => 100, 'monto_por_viaje' => 50])
+        ->assertSessionHasErrors('monto_por_viaje');
+});
+
+it('refuses to facturar a GR marked as no facturable', function (): void {
+    $viaje = Viaje::factory()->create(['numero_gr' => 'EG03-CAJITA', 'no_facturable_at' => now()]);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.store'), datosFactura(['viaje_ids' => [$viaje->id]]))
+        ->assertSessionHasErrors('viaje_ids');
+
+    expect(Factura::query()->count())->toBe(0);
 });

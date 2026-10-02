@@ -7,7 +7,8 @@ use App\Enums\Concerns\HasLabel;
 /**
  * En qué punto del cobro está un viaje. No es una columna: se deriva de si el
  * viaje tiene factura y de si esa factura tiene fecha de pago, que son los dos
- * únicos hechos que se registran. Tenerlo como enum evita que cada vista
+ * únicos hechos que se registran —más la marca de «no se factura» de las GR
+ * que se decidió no cobrar—. Tenerlo como enum evita que cada vista
  * reinvente la misma condición.
  */
 enum EstadoCobranza: string
@@ -17,6 +18,7 @@ enum EstadoCobranza: string
     case SinFacturar = 'sin_facturar';
     case Facturado = 'facturado';
     case Pagado = 'pagado';
+    case NoFacturable = 'no_facturable';
 
     public function label(): string
     {
@@ -24,6 +26,7 @@ enum EstadoCobranza: string
             self::SinFacturar => 'Sin facturar',
             self::Facturado => 'Por cobrar',
             self::Pagado => 'Pagado',
+            self::NoFacturable => 'No se factura',
         };
     }
 }

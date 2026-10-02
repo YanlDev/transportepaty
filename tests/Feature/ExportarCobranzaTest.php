@@ -88,7 +88,7 @@ it('writes every column of the table, with the money as a number', function (): 
         'observacion' => 'A 30 días',
     ]);
 
-    $viaje->update(['factura_id' => $factura->id]);
+    $viaje->facturas()->attach($factura);
 
     actingAs(actorConRol('admin'));
 
@@ -97,7 +97,8 @@ it('writes every column of the table, with the money as a number', function (): 
     expect($hoja[0])->toBe([
         'Fecha', 'N° GR', 'GR remitente', 'Tracto', 'Carreta', 'Conductor',
         'Cliente', 'Destinatario', 'Origen', 'Destino', 'Tipo de carga',
-        'Peso (TNE)', 'Estado', 'N° factura', 'Fecha emisión', 'Monto',
+        'Peso (TNE)', 'Estado', 'N° factura', 'Fecha emisión', 'Monto factura',
+        'Monto por GR',
         'Moneda', 'Fecha pago', 'Días vencida', 'Cuenta', 'Observación',
     ]);
 
@@ -114,9 +115,11 @@ it('writes every column of the table, with the money as a number', function (): 
         ->and($fila[11])->toBe(23.76)
         ->and($fila[13])->toBe('F001-00042')
         ->and($fila[15])->toBe(4500.5)
-        ->and($fila[16])->toBe('PEN')
-        ->and($fila[19])->toBe('BCP Soles')
-        ->and($fila[20])->toBe('A 30 días');
+        // Una sola GR: le toca la factura entera.
+        ->and($fila[16])->toBe(4500.5)
+        ->and($fila[17])->toBe('PEN')
+        ->and($fila[20])->toBe('BCP Soles')
+        ->and($fila[21])->toBe('A 30 días');
 });
 
 it('writes the weight in tonnes even when the guide came in kilos', function (): void {
@@ -169,7 +172,48 @@ it('leaves the billing columns empty when the trip has no invoice', function ():
     expect($hoja[1][12])->toBe('Sin facturar')
         ->and($hoja[1][13])->toBeNull()
         ->and($hoja[1][15])->toBeNull()
-        ->and($hoja[1][19])->toBeNull();
+        ->and($hoja[1][16])->toBeNull()
+        ->and($hoja[1][20])->toBeNull();
+});
+
+/**
+ * Una GR con flete y estadía facturados aparte sale en dos filas, una por
+ * factura, para que cada monto quede en su propia celda y se pueda sumar.
+ */
+it('writes one row per factura when a viaje has several', function (): void {
+    $viaje = Viaje::factory()->create(['numero_gr' => 'EG03-DOSFACTURAS']);
+    $viaje->facturas()->attach([
+        Factura::factory()->create(['numero' => 'F001-00001', 'fecha_emision' => '2026-09-01', 'monto' => 4000])->id,
+        Factura::factory()->create(['numero' => 'F001-00002', 'fecha_emision' => '2026-09-05', 'monto' => 500])->id,
+    ]);
+
+    actingAs(actorConRol('admin'));
+
+    $hoja = hojaExportada(route('contabilidad.exportar'));
+
+    expect($hoja)->toHaveCount(3)
+        ->and([$hoja[1][1], $hoja[1][13], $hoja[1][15]])->toBe(['EG03-DOSFACTURAS', 'F001-00001', 4000.0])
+        ->and([$hoja[2][1], $hoja[2][13], $hoja[2][15]])->toBe(['EG03-DOSFACTURAS', 'F001-00002', 500.0]);
+});
+
+/**
+ * Lo que se reportó: doce GR de Minsur en una factura repetían el monto en
+ * cada fila y la suma de la columna lo multiplicaba por doce. Ahora el total
+ * va una sola vez, y el reparto por GR suma exactamente lo mismo.
+ */
+it('never repeats a factura total, so both money columns add up to it', function (): void {
+    $factura = Factura::factory()->create(['numero' => 'F001-00300', 'monto' => 100]);
+    Viaje::factory()->count(3)->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('admin'));
+
+    $filas = array_slice(hojaExportada(route('contabilidad.exportar')), 1);
+
+    expect(array_sum(array_column($filas, 15)))->toBe(100.0)
+        ->and(count(array_filter(array_column($filas, 15))))->toBe(1)
+        // 33.34 + 33.33 + 33.33: los céntimos sobrantes no se pierden.
+        ->and(round(array_sum(array_column($filas, 16)), 2))->toBe(100.0)
+        ->and(array_column($filas, 16))->toEqualCanonicalizing([33.34, 33.33, 33.33]);
 });
 
 it('exports only what the filters leave, not the whole table', function (): void {

@@ -12,6 +12,7 @@ const TONOS: Record<string, StatusTone> = {
     sin_facturar: 'neutral',
     facturado: 'warning',
     pagado: 'success',
+    no_facturable: 'info',
 };
 
 type Props = {

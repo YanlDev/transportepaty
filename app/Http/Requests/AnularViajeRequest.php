@@ -46,10 +46,10 @@ class AnularViajeRequest extends FormRequest
             function (Validator $validator): void {
                 $viaje = $this->route('viaje');
 
-                if ($viaje instanceof Viaje && $viaje->factura_id !== null) {
+                if ($viaje instanceof Viaje && $viaje->facturas()->exists()) {
                     $validator->errors()->add(
                         'motivo',
-                        'Esta GR ya está en una factura: quítala de la factura antes de anularla.',
+                        'Esta GR ya está facturada: quítala de sus facturas antes de anularla.',
                     );
                 }
             },

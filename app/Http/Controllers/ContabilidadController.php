@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\EstadoCobranza;
 use App\Enums\Moneda;
 use App\Http\Requests\MarcarGrFisicaRequest;
+use App\Http\Requests\MarcarNoFacturableRequest;
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
@@ -47,8 +48,8 @@ class ContabilidadController extends Controller
             // donde un `with()` no aporta nada.
             //
             // Son las mismas de `/viajes` —la tabla muestra las mismas
-            // columnas de operación— más la factura. `media` evita el N+1 de
-            // `getFirstMediaUrl()`, y `factura.viajes` se trae solo con la
+            // columnas de operación— más sus facturas. `media` evita el N+1 de
+            // `getFirstMediaUrl()`, y `facturas.viajes` se trae solo con la
             // llave para saber cuántos viajes cubre cada factura sin una
             // consulta por fila.
             ->with([
@@ -57,8 +58,9 @@ class ContabilidadController extends Controller
                 'conductor:id,nombres,apellidos',
                 'clienteDelPadron:id,alias',
                 'media',
-                'factura.cuentaBancaria:id,alias,banco',
-                'factura.viajes:id,factura_id',
+                'facturas' => fn ($query) => $query->orderBy('fecha_emision')->orderBy('facturas.id'),
+                'facturas.cuentaBancaria:id,alias,banco',
+                'facturas.viajes:viajes.id',
             ])
             ->orderByDesc('fecha_traslado')
             ->orderByDesc('numero_gr')
@@ -122,6 +124,30 @@ class ContabilidadController extends Controller
     }
 
     /**
+     * Marca o desmarca una GR como «no se factura»: la cajita que viajó con la
+     * carga grande, una cortesía. Sale de lo pendiente sin anularla, porque
+     * ante SUNAT sigue valiendo y el viaje cuenta en la operación.
+     */
+    public function marcarNoFacturable(MarcarNoFacturableRequest $request, Viaje $viaje): RedirectResponse
+    {
+        $this->authorize('create', Factura::class);
+
+        $noFacturable = $request->boolean('no_facturable');
+
+        $viaje->update([
+            'no_facturable_at' => $noFacturable ? ($viaje->no_facturable_at ?? now()) : null,
+            'motivo_no_facturable' => $noFacturable ? $request->validated('motivo') : null,
+        ]);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => $noFacturable
+                ? "La GR {$viaje->numero_gr} quedó como «no se factura»."
+                : "La GR {$viaje->numero_gr} vuelve a estar por facturar.",
+        ]);
+    }
+
+    /**
      * Los filtros de la cobranza tal como llegan en la URL. Los comparten la
      * tabla y la exportación, que tienen que mirar exactamente el mismo
      * recorte: si divergen, el archivo deja de ser lo que se ve en pantalla.
@@ -145,8 +171,6 @@ class ContabilidadController extends Controller
      */
     private function filaContable(Viaje $viaje): array
     {
-        $factura = $viaje->factura;
-
         return [
             // Las columnas de operación son las mismas de `/viajes`: acá no se
             // factura contra un resumen, se factura contra el viaje entero.
@@ -154,27 +178,41 @@ class ContabilidadController extends Controller
             'gr_fisica_recibida_at' => $viaje->gr_fisica_recibida_at?->toIso8601String(),
             'estado' => $viaje->estadoCobranza()->value,
             'estado_label' => $viaje->estadoCobranza()->label(),
-            'factura' => $factura === null ? null : [
-                'id' => $factura->id,
-                'numero' => $factura->numero,
-                'fecha_emision' => $factura->fecha_emision->toDateString(),
-                'monto' => $factura->monto === null ? null : (float) $factura->monto,
-                'moneda' => $factura->moneda->value,
-                'simbolo' => $factura->moneda->simbolo(),
-                'fecha_pago' => $factura->fecha_pago?->toDateString(),
-                'dias_vencida' => $factura->diasVencida(),
-                'cuenta_bancaria_id' => $factura->cuenta_bancaria_id,
-                'cuenta' => $factura->cuentaBancaria?->alias,
-                'observacion' => $factura->observacion,
-                // Cuántos viajes cubre: la fila muestra el monto completo de
-                // la factura, y sin esto parecería que cada una de las tres
-                // filas de una factura agrupada cobró ese monto por separado.
-                'viajes_count' => $factura->viajes->count(),
-                // Los ids van con la fila para poder editar la factura sin
-                // otra ida al servidor, y sobre todo sin perder los viajes que
-                // cayeron en otra página del listado.
-                'viaje_ids' => $factura->viajes->pluck('id')->all(),
-            ],
+            'motivo_no_facturable' => $viaje->motivo_no_facturable,
+            // Casi siempre una, pero el flete y la estadía pueden facturarse
+            // por separado: la fila se abre en una línea por factura.
+            'facturas' => $viaje->facturas
+                ->map(fn (Factura $factura): array => $this->resumenFactura($factura))
+                ->values()
+                ->all(),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function resumenFactura(Factura $factura): array
+    {
+        return [
+            'id' => $factura->id,
+            'numero' => $factura->numero,
+            'fecha_emision' => $factura->fecha_emision->toDateString(),
+            'monto' => $factura->monto === null ? null : (float) $factura->monto,
+            'moneda' => $factura->moneda->value,
+            'simbolo' => $factura->moneda->simbolo(),
+            'fecha_pago' => $factura->fecha_pago?->toDateString(),
+            'dias_vencida' => $factura->diasVencida(),
+            'cuenta_bancaria_id' => $factura->cuenta_bancaria_id,
+            'cuenta' => $factura->cuentaBancaria?->alias,
+            'observacion' => $factura->observacion,
+            // Cuántos viajes cubre: la fila muestra el monto completo de la
+            // factura, y sin esto parecería que cada una de las tres filas de
+            // una factura agrupada cobró ese monto por separado.
+            'viajes_count' => $factura->viajes->count(),
+            // Los ids van con la fila para poder editar la factura sin otra
+            // ida al servidor, y sobre todo sin perder los viajes que cayeron
+            // en otra página del listado.
+            'viaje_ids' => $factura->viajes->pluck('id')->all(),
         ];
     }
 
