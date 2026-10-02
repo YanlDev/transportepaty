@@ -58,7 +58,7 @@ export default function CotizacionShow({ cotizacion }: Props) {
                     <Button asChild variant="outline">
                         <a href={pdf(cotizacion.id).url}>
                             <Download className="size-4" />
-                            Descargar proforma
+                            Descargar PDF
                         </a>
                     </Button>
                     {puede('cotizaciones.editar') && (
@@ -71,6 +71,45 @@ export default function CotizacionShow({ cotizacion }: Props) {
                     )}
                 </div>
             </div>
+
+            <section className="rounded-xl border border-border bg-card p-5">
+                <h2 className="mb-4 text-sm font-semibold">
+                    Precio al cliente
+                </h2>
+                <dl className="grid gap-3 text-sm sm:grid-cols-2">
+                    <Dato
+                        etiqueta="En la proforma"
+                        valor={`${cotizacion.cantidad} ${cotizacion.unidad === 'TN' ? 'TN' : 'viaje(s)'} × S/ ${soles(cotizacion.precio_unitario)} = S/ ${soles(cotizacion.subtotal)} + IGV`}
+                    />
+                    <Dato
+                        etiqueta="Total con IGV"
+                        valor={`S/ ${soles(cotizacion.total)}`}
+                    />
+                    <Dato
+                        etiqueta="Tarifa calculada"
+                        valor={`S/ ${soles(cotizacion.tarifa_calculada)}`}
+                    />
+                    <Dato
+                        etiqueta="Rebaja (no sale en la proforma)"
+                        valor={`S/ ${soles(cotizacion.rebaja)}`}
+                    />
+                    {cotizacion.cliente_ruc && (
+                        <Dato etiqueta="RUC" valor={cotizacion.cliente_ruc} />
+                    )}
+                    {cotizacion.cliente_direccion && (
+                        <Dato
+                            etiqueta="Dirección"
+                            valor={cotizacion.cliente_direccion}
+                        />
+                    )}
+                    {cotizacion.referencia && (
+                        <Dato
+                            etiqueta="Referencia"
+                            valor={cotizacion.referencia}
+                        />
+                    )}
+                </dl>
+            </section>
 
             <section className="rounded-xl border border-border bg-card p-5">
                 <h2 className="mb-4 text-sm font-semibold">Ruta</h2>

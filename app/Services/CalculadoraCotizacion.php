@@ -57,15 +57,23 @@ class CalculadoraCotizacion
      * El retorno vacío se suma a la ida con las mismas tasas: la vuelta sin
      * carga no se cobra aparte, pero la unidad rueda y queda tomada igual.
      *
-     * @param  array{km?: mixed, dias?: mixed, km_retorno?: mixed, dias_retorno?: mixed, margen_pct?: mixed}  $datos
+     * La tarifa del tarifario es una sugerencia (`tarifa_calculada`): si se
+     * fija un precio unitario, lo que se cobra es cantidad × ese precio, y el
+     * margen pasa a ser el real que deja ese precio. Sin precio fijado, el
+     * unitario sale de repartir la tarifa calculada entre la cantidad.
+     *
+     * @param  array{km?: mixed, dias?: mixed, km_retorno?: mixed, dias_retorno?: mixed, margen_pct?: mixed, cantidad?: mixed, precio_unitario?: mixed}  $datos
      * @param  list<array{nombre: string, tipo: string, naturaleza: string, tasa: float}>  $lineas
-     * @return array{desglose: array{componentes: list<array<string, mixed>>}, margen_pct: float, total_fijo: float, total_variable: float, costo_operativo: float, margen: float, subtotal: float, igv: float, total: float}
+     * @return array{desglose: array{componentes: list<array<string, mixed>>}, margen_pct: float, total_fijo: float, total_variable: float, costo_operativo: float, margen: float, tarifa_calculada: float, cantidad: float, precio_unitario: float, subtotal: float, igv: float, total: float}
      */
     public function calcular(array $datos, array $lineas, float $igvPct): array
     {
         $km = (float) ($datos['km'] ?? 0) + (float) ($datos['km_retorno'] ?? 0);
         $dias = (float) ($datos['dias'] ?? 0) + (float) ($datos['dias_retorno'] ?? 0);
         $margenPct = (float) ($datos['margen_pct'] ?? 0);
+        $cantidadPedida = (float) ($datos['cantidad'] ?? 0);
+        $cantidad = $cantidadPedida > 0 ? $cantidadPedida : 1.0;
+        $precioFijado = (float) ($datos['precio_unitario'] ?? 0);
 
         $componentes = [];
         $totalFijo = 0.0;
@@ -88,7 +96,13 @@ class CalculadoraCotizacion
         $totalVariable = round($totalVariable, 2);
         $costoOperativo = round($totalFijo + $totalVariable, 2);
 
-        $subtotal = $margenPct < 1.0 ? round($costoOperativo / (1 - $margenPct), 2) : $costoOperativo;
+        $tarifaCalculada = $margenPct < 1.0 ? round($costoOperativo / (1 - $margenPct), 2) : $costoOperativo;
+
+        // El subtotal es siempre cantidad × unitario, aunque el unitario salga
+        // de repartir la tarifa: la proforma imprime los tres y tienen que
+        // cuadrar con una calculadora en la mano.
+        $precioUnitario = $precioFijado > 0 ? round($precioFijado, 2) : round($tarifaCalculada / $cantidad, 2);
+        $subtotal = round($cantidad * $precioUnitario, 2);
         $margen = round($subtotal - $costoOperativo, 2);
         $igv = round($subtotal * $igvPct, 2);
 
@@ -99,6 +113,9 @@ class CalculadoraCotizacion
             'total_variable' => $totalVariable,
             'costo_operativo' => $costoOperativo,
             'margen' => $margen,
+            'tarifa_calculada' => $tarifaCalculada,
+            'cantidad' => $cantidad,
+            'precio_unitario' => $precioUnitario,
             'subtotal' => $subtotal,
             'igv' => $igv,
             'total' => round($subtotal + $igv, 2),

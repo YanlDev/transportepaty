@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\EstadoCotizacion;
+use App\Models\Cotizacion;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -27,6 +28,8 @@ class CotizacionRequest extends FormRequest
         $this->merge([
             'km_retorno' => $this->input('km_retorno') ?? 0,
             'dias_retorno' => $this->input('dias_retorno') ?? 0,
+            'cantidad' => $this->input('cantidad') ?? 1,
+            'unidad' => $this->input('unidad') ?? 'VIAJE',
         ]);
     }
 
@@ -43,11 +46,13 @@ class CotizacionRequest extends FormRequest
             'cliente_id' => ['nullable', 'exists:clientes,id'],
             'cliente_nombre' => ['required', 'string', 'max:255'],
             'cliente_ruc' => ['nullable', 'digits:11'],
+            'cliente_direccion' => ['nullable', 'string', 'max:255'],
             'punto_partida_id' => ['nullable', 'exists:puntos_traslado,id'],
             'punto_llegada_id' => ['nullable', 'exists:puntos_traslado,id'],
             'origen' => ['required', 'string', 'max:255'],
             'destino' => ['required', 'string', 'max:255'],
             'material' => ['nullable', 'string', 'max:255'],
+            'referencia' => ['nullable', 'string', 'max:255'],
             'km' => ['required', 'integer', 'min:1'],
             // Admite medios días: hay rutas que se cotizan en 1.5 o 5.5 días,
             // y redondear hacia arriba encarece la tarifa sin motivo.
@@ -59,6 +64,11 @@ class CotizacionRequest extends FormRequest
             // Es margen sobre el precio de venta: la tarifa es el costo entre
             // (1 − margen), así que un margen de 100 % no tiene tarifa posible.
             'margen_pct' => ['required', 'numeric', 'min:0', 'max:0.9'],
+            // 30 TN a S/ 435 o 1 viaje a S/ 9,000. Sin precio unitario se
+            // cobra la tarifa calculada repartida entre la cantidad.
+            'cantidad' => ['required', 'numeric', 'min:0.01', 'max:99999'],
+            'unidad' => ['required', Rule::in(array_keys(Cotizacion::UNIDADES))],
+            'precio_unitario' => ['nullable', 'numeric', 'min:0.01', 'max:9999999'],
             'estado' => ['required', Rule::enum(EstadoCotizacion::class)],
             'notas' => ['nullable', 'string', 'max:2000'],
         ];

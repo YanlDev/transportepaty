@@ -95,7 +95,7 @@ class CotizacionController extends Controller
         // Es solo para precargar el formulario: lo que se guarda se valida
         // en `store`, así que acá basta con quedarse con los campos conocidos.
         $borrador = array_filter(
-            $request->only(['cliente_nombre', 'destino', 'material', 'km', 'dias', 'km_retorno', 'dias_retorno', 'margen_pct']),
+            $request->only(['cliente_nombre', 'destino', 'material', 'km', 'dias', 'km_retorno', 'dias_retorno', 'margen_pct', 'precio_unitario']),
             fn (mixed $valor): bool => is_string($valor) && $valor !== '',
         );
 
@@ -193,7 +193,7 @@ class CotizacionController extends Controller
         $this->authorize('view', $cotizacion);
 
         return Pdf::loadView('pdf.cotizacion', ['cotizacion' => $cotizacion])
-            ->download("proforma-{$cotizacion->numero}.pdf");
+            ->download("cotizacion-{$cotizacion->numero}.pdf");
     }
 
     /**
@@ -213,12 +213,14 @@ class CotizacionController extends Controller
     {
         return [
             ...$cotizacion->only([
-                'id', 'numero', 'cliente_id', 'cliente_nombre', 'cliente_ruc',
+                'id', 'numero', 'cliente_id', 'cliente_nombre', 'cliente_ruc', 'cliente_direccion',
                 'punto_partida_id', 'punto_llegada_id', 'origen', 'destino',
-                'material', 'km', 'dias', 'km_retorno', 'dias_retorno', 'desglose', 'margen_pct',
-                'total_fijo', 'total_variable',
-                'costo_operativo', 'margen', 'subtotal', 'igv', 'total', 'notas',
+                'material', 'referencia', 'km', 'dias', 'km_retorno', 'dias_retorno', 'desglose', 'margen_pct',
+                'total_fijo', 'total_variable', 'costo_operativo', 'margen',
+                'tarifa_calculada', 'cantidad', 'unidad', 'precio_unitario',
+                'subtotal', 'igv', 'total', 'notas',
             ]),
+            'rebaja' => $cotizacion->rebaja(),
             'fecha' => $cotizacion->fecha->toDateString(),
             'valido_hasta' => $cotizacion->valido_hasta->toDateString(),
             'estado' => $cotizacion->estado->value,
@@ -238,7 +240,7 @@ class CotizacionController extends Controller
             'clientes' => Cliente::query()
                 ->where('activo', true)
                 ->orderBy('alias')
-                ->get(['id', 'alias', 'razon_social', 'ruc'])
+                ->get(['id', 'alias', 'razon_social', 'ruc', 'direccion'])
                 ->all(),
             'puntos' => PuntoTraslado::query()
                 ->activos()
@@ -246,6 +248,7 @@ class CotizacionController extends Controller
                 ->get(['id', 'nombre', 'direccion'])
                 ->all(),
             'estados' => EstadoCotizacion::options(),
+            'unidades' => Cotizacion::UNIDADES,
             'lineas' => $this->lineasVigentes(),
             'flota' => [
                 'margen_pct_default' => $flota->margen_pct_default,

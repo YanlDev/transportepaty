@@ -25,11 +25,13 @@ use Illuminate\Support\Carbon;
  * @property int|null $cliente_id
  * @property string $cliente_nombre
  * @property string|null $cliente_ruc
+ * @property string|null $cliente_direccion
  * @property int|null $punto_partida_id
  * @property int|null $punto_llegada_id
  * @property string $origen
  * @property string $destino
  * @property string|null $material
+ * @property string|null $referencia
  * @property int $km
  * @property float $dias
  * @property int $km_retorno
@@ -40,6 +42,10 @@ use Illuminate\Support\Carbon;
  * @property float $total_variable
  * @property float $costo_operativo
  * @property float $margen
+ * @property float $tarifa_calculada
+ * @property float $cantidad
+ * @property string $unidad
+ * @property float $precio_unitario
  * @property float $subtotal
  * @property float $igv
  * @property float $total
@@ -53,11 +59,13 @@ use Illuminate\Support\Carbon;
     'cliente_id',
     'cliente_nombre',
     'cliente_ruc',
+    'cliente_direccion',
     'punto_partida_id',
     'punto_llegada_id',
     'origen',
     'destino',
     'material',
+    'referencia',
     'km',
     'dias',
     'km_retorno',
@@ -68,6 +76,10 @@ use Illuminate\Support\Carbon;
     'total_variable',
     'costo_operativo',
     'margen',
+    'tarifa_calculada',
+    'cantidad',
+    'unidad',
+    'precio_unitario',
     'subtotal',
     'igv',
     'total',
@@ -85,6 +97,23 @@ class Cotizacion extends Model
      * choquen ni se lean como cosas distintas.
      */
     public const SERIE = '006';
+
+    /**
+     * Hasta dónde llegó la serie en las proformas hechas a mano (la 006-0107
+     * a Calcesur, setiembre de 2026). El sistema sigue desde ahí para que
+     * ningún cliente reciba dos proformas distintas con el mismo número.
+     */
+    public const ULTIMO_CORRELATIVO_EN_PAPEL = 107;
+
+    /**
+     * Cómo se cobra: por viaje completo o por tonelada transportada.
+     *
+     * @var array<string, string>
+     */
+    public const UNIDADES = [
+        'VIAJE' => 'Viaje',
+        'TN' => 'Tonelada',
+    ];
 
     protected $table = 'cotizaciones';
 
@@ -124,11 +153,21 @@ class Cotizacion extends Model
             ->orderByDesc('numero')
             ->value('numero');
 
-        $correlativo = $ultimo === null
-            ? 1
-            : (int) substr($ultimo, strlen(self::SERIE) + 1) + 1;
+        $correlativo = max(
+            $ultimo === null ? 0 : (int) substr($ultimo, strlen(self::SERIE) + 1),
+            self::ULTIMO_CORRELATIVO_EN_PAPEL,
+        ) + 1;
 
         return self::SERIE.'-'.str_pad((string) $correlativo, 4, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Cuánto se le bajó a la tarifa del tarifario. Negativo si se cobra más.
+     * Es dato de la casa: la proforma no lo muestra.
+     */
+    public function rebaja(): float
+    {
+        return round($this->tarifa_calculada - $this->subtotal, 2);
     }
 
     /**
@@ -189,6 +228,9 @@ class Cotizacion extends Model
             'total_variable' => 'float',
             'costo_operativo' => 'float',
             'margen' => 'float',
+            'tarifa_calculada' => 'float',
+            'cantidad' => 'float',
+            'precio_unitario' => 'float',
             'subtotal' => 'float',
             'igv' => 'float',
             'total' => 'float',

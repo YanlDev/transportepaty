@@ -555,8 +555,13 @@ export type ResultadoTarifa = {
     total_fijo: number;
     total_variable: number;
     costo_operativo: number;
+    /** Lo que deja el precio cobrado sobre el costo: el margen real. */
     margen: number;
-    /** La tarifa sin IGV. */
+    /** La tarifa que sale del tarifario y el margen, antes de cualquier rebaja. */
+    tarifa_calculada: number;
+    cantidad: number;
+    precio_unitario: number;
+    /** Lo que se cobra sin IGV: cantidad × precio unitario. */
     subtotal: number;
     igv: number;
     total: number;
@@ -586,11 +591,17 @@ export type Cotizacion = ResultadoTarifa & {
     cliente_id: number | null;
     cliente_nombre: string;
     cliente_ruc: string | null;
+    cliente_direccion: string | null;
     punto_partida_id: number | null;
     punto_llegada_id: number | null;
     origen: string;
     destino: string;
     material: string | null;
+    referencia: string | null;
+    /** `VIAJE` o `TN`. */
+    unidad: string;
+    /** Tarifa calculada menos lo cobrado; negativo si se cobra más. */
+    rebaja: number;
     km: number;
     dias: number;
     /** Lo que la unidad recorre y queda tomada al volver sin carga. */

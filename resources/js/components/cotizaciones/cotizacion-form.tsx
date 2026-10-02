@@ -19,7 +19,8 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import { calcularTarifa } from '@/lib/tarifa';
+import { calcularTarifa, formatearMonto } from '@/lib/tarifa';
+import { cn } from '@/lib/utils';
 import type {
     Cliente,
     Cotizacion,
@@ -29,7 +30,10 @@ import type {
 } from '@/types/fleet';
 
 /** Lo que la lista de clientes trae para elegir en el formulario. */
-type ClienteOpcion = Pick<Cliente, 'id' | 'alias' | 'razon_social' | 'ruc'>;
+type ClienteOpcion = Pick<
+    Cliente,
+    'id' | 'alias' | 'razon_social' | 'ruc' | 'direccion'
+>;
 type PuntoOpcion = Pick<PuntoTraslado, 'id' | 'nombre' | 'direccion'>;
 
 /** Lo que llega de la hoja rápida para no volver a tipearlo. */
@@ -42,7 +46,8 @@ export type BorradorCotizacion = Partial<
         | 'dias'
         | 'km_retorno'
         | 'dias_retorno'
-        | 'margen_pct',
+        | 'margen_pct'
+        | 'precio_unitario',
         string
     >
 >;
@@ -56,6 +61,8 @@ type Props = {
     clientes: ClienteOpcion[];
     puntos: PuntoOpcion[];
     estados: EnumOption[];
+    /** `VIAJE` → «Viaje», `TN` → «Tonelada». */
+    unidades: Record<string, string>;
     flota: { margen_pct_default: number; igv_pct: number };
 };
 
@@ -65,17 +72,23 @@ type FormData = {
     cliente_id: string;
     cliente_nombre: string;
     cliente_ruc: string;
+    cliente_direccion: string;
     punto_partida_id: string;
     punto_llegada_id: string;
     origen: string;
     destino: string;
     material: string;
+    referencia: string;
     km: string;
     dias: string;
     retorno: boolean;
     km_retorno: string;
     dias_retorno: string;
     margen_pct: string;
+    cantidad: string;
+    unidad: string;
+    /** Vacío cobra la tarifa calculada repartida entre la cantidad. */
+    precio_unitario: string;
     estado: string;
     notas: string;
 };
@@ -90,6 +103,7 @@ export function CotizacionForm({
     clientes,
     puntos,
     estados,
+    unidades,
     flota,
 }: Props) {
     // Se calculan una sola vez al montar: leer el reloj en cada render deja
@@ -113,6 +127,7 @@ export function CotizacionForm({
             cliente_nombre:
                 cotizacion?.cliente_nombre ?? borrador.cliente_nombre ?? '',
             cliente_ruc: cotizacion?.cliente_ruc ?? '',
+            cliente_direccion: cotizacion?.cliente_direccion ?? '',
             punto_partida_id:
                 cotizacion?.punto_partida_id?.toString() ?? SIN_PUNTO,
             punto_llegada_id:
@@ -120,6 +135,7 @@ export function CotizacionForm({
             origen: cotizacion?.origen ?? '',
             destino: cotizacion?.destino ?? borrador.destino ?? '',
             material: cotizacion?.material ?? borrador.material ?? '',
+            referencia: cotizacion?.referencia ?? '',
             km: cotizacion?.km?.toString() ?? borrador.km ?? '',
             dias: cotizacion?.dias?.toString() ?? borrador.dias ?? '',
             retorno: cotizacion
@@ -138,6 +154,14 @@ export function CotizacionForm({
                         ? flota.margen_pct_default
                         : Number(borrador.margen_pct))) * 100
             ).toString(),
+            cantidad: cotizacion?.cantidad?.toString() ?? '1',
+            unidad: cotizacion?.unidad ?? 'VIAJE',
+            // Una cotización que cobraba la tarifa calculada sigue sin precio
+            // fijado: corregirle los km tiene que moverle el precio.
+            precio_unitario:
+                cotizacion && cotizacion.rebaja !== 0
+                    ? cotizacion.precio_unitario.toString()
+                    : (borrador.precio_unitario ?? ''),
             estado: cotizacion?.estado ?? 'borrador',
             notas: cotizacion?.notas ?? '',
         });
@@ -154,14 +178,42 @@ export function CotizacionForm({
     const kmRetorno = data.retorno ? Number(data.km_retorno) || 0 : 0;
     const diasRetorno = data.retorno ? Number(data.dias_retorno) || 0 : 0;
     const margenPct = (Number(data.margen_pct) || 0) / 100;
+    const cantidad = Number(data.cantidad) || 0;
     const resultado =
         km > 0 && dias > 0 && margenPct >= 0 && margenPct < 1
             ? calcularTarifa(
                   lineas,
-                  { km, dias, kmRetorno, diasRetorno, margenPct },
+                  {
+                      km,
+                      dias,
+                      kmRetorno,
+                      diasRetorno,
+                      margenPct,
+                      cantidad,
+                      precioUnitario: Number(data.precio_unitario) || 0,
+                  },
                   flota.igv_pct,
               )
             : null;
+
+    /**
+     * Pasar de «1 viaje a 9,000» a «30 TN» no debe cambiar lo que se cobra:
+     * con un precio fijado, el unitario se reparte para que el total quede.
+     */
+    const cambiarCantidad = (valor: string) => {
+        const nueva = Number(valor) || 0;
+
+        setData((actual) => ({
+            ...actual,
+            cantidad: valor,
+            precio_unitario:
+                actual.precio_unitario !== '' && resultado && nueva > 0
+                    ? (
+                          Math.round((resultado.subtotal / nueva) * 100) / 100
+                      ).toString()
+                    : actual.precio_unitario,
+        }));
+    };
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -202,6 +254,7 @@ export function CotizacionForm({
             cliente_id: id,
             cliente_nombre: elegido?.razon_social ?? actual.cliente_nombre,
             cliente_ruc: elegido?.ruc ?? actual.cliente_ruc,
+            cliente_direccion: elegido?.direccion ?? actual.cliente_direccion,
         }));
     };
 
@@ -283,6 +336,18 @@ export function CotizacionForm({
                                     setData('cliente_ruc', e.target.value)
                                 }
                                 placeholder="20600812913"
+                            />
+                        )}
+                    </Field>
+                    <Field label="Dirección" error={errors.cliente_direccion}>
+                        {(id) => (
+                            <Input
+                                id={id}
+                                value={data.cliente_direccion}
+                                onChange={(e) =>
+                                    setData('cliente_direccion', e.target.value)
+                                }
+                                placeholder="Car. Juliaca-Puno Km. 11"
                             />
                         )}
                     </Field>
@@ -504,6 +569,119 @@ export function CotizacionForm({
             <section className="rounded-xl border border-border bg-card p-5">
                 <div className="mb-4">
                     <h2 className="text-sm font-semibold text-foreground">
+                        Precio al cliente
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                        Lo que sale en la proforma. Sin precio unitario se cobra
+                        la tarifa calculada; con uno, la rebaja queda acá y no
+                        se imprime.
+                    </p>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-3">
+                    <Field label="Cantidad" error={errors.cantidad} required>
+                        {(id) => (
+                            <Input
+                                id={id}
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min={0.01}
+                                value={data.cantidad}
+                                onChange={(e) =>
+                                    cambiarCantidad(e.target.value)
+                                }
+                                className="text-right font-mono tabular-nums"
+                            />
+                        )}
+                    </Field>
+                    <Field label="Unidad" error={errors.unidad} required>
+                        {(id) => (
+                            <Select
+                                value={data.unidad}
+                                onValueChange={(value) =>
+                                    setData('unidad', value)
+                                }
+                            >
+                                <SelectTrigger id={id}>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {Object.entries(unidades).map(
+                                        ([valor, etiqueta]) => (
+                                            <SelectItem
+                                                key={valor}
+                                                value={valor}
+                                            >
+                                                {etiqueta}
+                                            </SelectItem>
+                                        ),
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        )}
+                    </Field>
+                    <Field
+                        label="Precio unitario (S/, sin IGV)"
+                        error={errors.precio_unitario}
+                    >
+                        {(id) => (
+                            <Input
+                                id={id}
+                                type="number"
+                                inputMode="decimal"
+                                step="0.01"
+                                min={0}
+                                value={data.precio_unitario}
+                                onChange={(e) =>
+                                    setData('precio_unitario', e.target.value)
+                                }
+                                placeholder={
+                                    resultado && cantidad > 0
+                                        ? formatearMonto(
+                                              resultado.tarifa_calculada /
+                                                  cantidad,
+                                          )
+                                        : ''
+                                }
+                                className="text-right font-mono tabular-nums"
+                            />
+                        )}
+                    </Field>
+                </div>
+
+                {resultado && (
+                    <dl className="mt-4 grid gap-x-6 gap-y-2 rounded-lg bg-muted/50 p-3 text-sm sm:grid-cols-2">
+                        <Resumen
+                            etiqueta="En la proforma"
+                            valor={`${data.cantidad} ${data.unidad === 'TN' ? 'TN' : 'viaje(s)'} × S/ ${formatearMonto(resultado.precio_unitario)} = S/ ${formatearMonto(resultado.subtotal)} + IGV`}
+                        />
+                        <Resumen
+                            etiqueta="Total con IGV"
+                            valor={`S/ ${formatearMonto(resultado.total)}`}
+                        />
+                        <Resumen
+                            etiqueta="Rebaja sobre la calculada"
+                            valor={`S/ ${formatearMonto(resultado.tarifa_calculada - resultado.subtotal)}`}
+                            tenue
+                        />
+                        <Resumen
+                            etiqueta="Margen real"
+                            valor={
+                                resultado.subtotal > 0
+                                    ? `S/ ${formatearMonto(resultado.margen)} (${((resultado.margen / resultado.subtotal) * 100).toFixed(1)} %)`
+                                    : '—'
+                            }
+                            tenue
+                            alerta={resultado.margen < 0}
+                        />
+                    </dl>
+                )}
+            </section>
+
+            <section className="rounded-xl border border-border bg-card p-5">
+                <div className="mb-4">
+                    <h2 className="text-sm font-semibold text-foreground">
                         Condiciones
                     </h2>
                 </div>
@@ -561,8 +739,20 @@ export function CotizacionForm({
                             />
                         )}
                     </Field>
+                    <Field label="Referencia" error={errors.referencia}>
+                        {(id) => (
+                            <Input
+                                id={id}
+                                value={data.referencia}
+                                onChange={(e) =>
+                                    setData('referencia', e.target.value)
+                                }
+                                placeholder="Su solicitud del 30/09"
+                            />
+                        )}
+                    </Field>
                     <div className="sm:col-span-2">
-                        <Field label="Notas" error={errors.notas}>
+                        <Field label="Observaciones" error={errors.notas}>
                             {(id) => (
                                 <Textarea
                                     id={id}
@@ -589,5 +779,32 @@ export function CotizacionForm({
                 </Button>
             </div>
         </form>
+    );
+}
+
+function Resumen({
+    etiqueta,
+    valor,
+    tenue,
+    alerta,
+}: {
+    etiqueta: string;
+    valor: string;
+    tenue?: boolean;
+    alerta?: boolean;
+}) {
+    return (
+        <div>
+            <dt className="text-xs text-muted-foreground">{etiqueta}</dt>
+            <dd
+                className={cn(
+                    'font-mono tabular-nums',
+                    tenue && 'text-muted-foreground',
+                    alerta && 'font-semibold text-destructive',
+                )}
+            >
+                {valor}
+            </dd>
+        </div>
     );
 }

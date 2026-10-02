@@ -12,9 +12,13 @@ import type {
 } from '@/types/fleet';
 
 type Props = {
-    clientes: Pick<Cliente, 'id' | 'alias' | 'razon_social' | 'ruc'>[];
+    clientes: Pick<
+        Cliente,
+        'id' | 'alias' | 'razon_social' | 'ruc' | 'direccion'
+    >[];
     puntos: Pick<PuntoTraslado, 'id' | 'nombre' | 'direccion'>[];
     estados: EnumOption[];
+    unidades: Record<string, string>;
     lineas: LineaTarifa[];
     /** Llega vacío como lista cuando no hay nada que precargar. */
     borrador: BorradorCotizacion | [];
@@ -25,6 +29,7 @@ export default function CotizacionCreate({
     clientes,
     puntos,
     estados,
+    unidades,
     lineas,
     borrador,
     flota,
@@ -45,6 +50,7 @@ export default function CotizacionCreate({
                 clientes={clientes}
                 puntos={puntos}
                 estados={estados}
+                unidades={unidades}
                 lineas={lineas}
                 borrador={Array.isArray(borrador) ? {} : borrador}
                 flota={flota}

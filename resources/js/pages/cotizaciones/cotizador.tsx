@@ -6,7 +6,11 @@ import cotizaciones, {
     create,
 } from '@/actions/App/Http/Controllers/CotizacionController';
 import { CotizacionesTabs } from '@/components/cotizaciones/cotizaciones-tabs';
-import { EntradaRuta, HojaTarifa } from '@/components/cotizaciones/hoja-tarifa';
+import {
+    EntradaRuta,
+    EntradaTarifa,
+    HojaTarifa,
+} from '@/components/cotizaciones/hoja-tarifa';
 import type { ColumnaHoja } from '@/components/cotizaciones/hoja-tarifa';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -33,6 +37,8 @@ type Ruta = {
     retorno: boolean;
     diasRetorno: string;
     kmRetorno: string;
+    /** La tarifa fijada a mano; vacía cobra la calculada. */
+    tarifa: string;
 };
 
 type Hoja = { rutas: Ruta[]; margen: string };
@@ -66,6 +72,7 @@ function rutaVacia(): Ruta {
         retorno: false,
         diasRetorno: '',
         kmRetorno: '',
+        tarifa: '',
     };
 }
 
@@ -167,7 +174,22 @@ export default function Cotizador({
         const dias = Number(ruta.dias) || 0;
         const kmRetorno = ruta.retorno ? Number(ruta.kmRetorno) || 0 : 0;
         const diasRetorno = ruta.retorno ? Number(ruta.diasRetorno) || 0 : 0;
+        const tarifa = Number(ruta.tarifa) || 0;
         const completa = km > 0 && dias > 0 && margenValido;
+        const resultado = completa
+            ? calcularTarifa(
+                  lineas,
+                  {
+                      km,
+                      dias,
+                      kmRetorno,
+                      diasRetorno,
+                      margenPct,
+                      precioUnitario: tarifa,
+                  },
+                  igv_pct,
+              )
+            : null;
 
         return {
             clave: ruta.id,
@@ -258,13 +280,15 @@ export default function Cotizador({
                     placeholder="1275"
                 />
             ),
-            resultado: completa
-                ? calcularTarifa(
-                      lineas,
-                      { km, dias, kmRetorno, diasRetorno, margenPct },
-                      igv_pct,
-                  )
-                : null,
+            resultado,
+            tarifaFinal: (
+                <EntradaTarifa
+                    etiqueta={`Tarifa de la ruta ${indice + 1}`}
+                    valor={ruta.tarifa}
+                    onChange={(valor) => cambiarRuta(ruta.id, 'tarifa', valor)}
+                    calculada={resultado?.tarifa_calculada ?? null}
+                />
+            ),
             pie: (
                 <div className="flex items-center gap-1">
                     {completa ? (
@@ -281,6 +305,9 @@ export default function Cotizador({
                                             Math.round(kmRetorno).toString(),
                                         dias_retorno: diasRetorno.toString(),
                                         margen_pct: margenPct.toString(),
+                                        ...(tarifa > 0 && {
+                                            precio_unitario: tarifa.toString(),
+                                        }),
                                     },
                                 })}
                             >
@@ -336,7 +363,9 @@ export default function Cotizador({
                     </h1>
                     <p className="text-sm text-muted-foreground">
                         Días y kilómetros de cada ruta contra el tarifario
-                        vigente. Nada se guarda hasta que emitís la cotización.
+                        vigente. La tarifa se puede redondear a mano: la rebaja
+                        queda acá y no sale en la proforma. Nada se guarda hasta
+                        que emitís la cotización.
                     </p>
                 </div>
 

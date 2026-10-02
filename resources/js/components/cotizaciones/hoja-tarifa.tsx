@@ -14,6 +14,11 @@ export type ColumnaHoja = {
     km: ReactNode;
     /** Null mientras falten días o kilómetros. */
     resultado: ResultadoTarifa | null;
+    /**
+     * El campo para fijar la tarifa a mano, si la columna lo admite. Sin él,
+     * la fila azul muestra lo que se cobra.
+     */
+    tarifaFinal?: ReactNode;
     /** Acciones al pie de la columna (emitir, quitar). */
     pie?: ReactNode;
     kmNumero: number;
@@ -51,6 +56,13 @@ export function HojaTarifa({
 
     const conCabecera = columnas.some((columna) => columna.cabecera);
     const conPie = columnas.some((columna) => columna.pie);
+    const rebajaDe = (resultado: ResultadoTarifa | null) =>
+        resultado ? resultado.tarifa_calculada - resultado.subtotal : 0;
+    // Las filas de la rebaja solo aparecen si alguna ruta cobra otra cosa que
+    // la tarifa calculada: sin rebaja serían dos filas repitiendo la azul.
+    const conRebaja = columnas.some(
+        (columna) => Math.abs(rebajaDe(columna.resultado)) >= 0.005,
+    );
 
     return (
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
@@ -144,10 +156,55 @@ export function HojaTarifa({
                     <Total
                         etiqueta="Margen de operación"
                         tasa={margen}
-                        valores={columnas.map(
-                            (columna) => columna.resultado?.margen ?? null,
+                        valores={columnas.map((columna) =>
+                            columna.resultado
+                                ? columna.resultado.tarifa_calculada -
+                                  columna.resultado.costo_operativo
+                                : null,
                         )}
                     />
+
+                    {conRebaja && (
+                        <>
+                            <Total
+                                etiqueta="Tarifa calculada"
+                                valores={columnas.map(
+                                    (columna) =>
+                                        columna.resultado?.tarifa_calculada ??
+                                        null,
+                                )}
+                                tenue
+                            />
+                            <Total
+                                etiqueta="Rebaja"
+                                tasa={
+                                    <span className="text-[11px]">
+                                        no va en la proforma
+                                    </span>
+                                }
+                                valores={columnas.map((columna) =>
+                                    columna.resultado
+                                        ? -rebajaDe(columna.resultado)
+                                        : null,
+                                )}
+                                tenue
+                            />
+                            <Total
+                                etiqueta="Margen real"
+                                valores={columnas.map(
+                                    (columna) =>
+                                        columna.resultado?.margen ?? null,
+                                )}
+                                sufijos={columnas.map((columna) =>
+                                    columna.resultado &&
+                                    columna.resultado.subtotal > 0
+                                        ? `${((columna.resultado.margen / columna.resultado.subtotal) * 100).toFixed(1)} %`
+                                        : null,
+                                )}
+                                tenue
+                            />
+                        </>
+                    )}
 
                     <tr className="border-t-2 border-primary bg-primary text-primary-foreground">
                         <th
@@ -165,9 +222,12 @@ export function HojaTarifa({
                                 key={columna.clave}
                                 className="border-l border-primary-foreground/20 px-3 py-2.5 text-right font-mono text-base font-semibold tabular-nums"
                             >
-                                {columna.resultado
-                                    ? formatearMonto(columna.resultado.subtotal)
-                                    : '—'}
+                                {columna.tarifaFinal ??
+                                    (columna.resultado
+                                        ? formatearMonto(
+                                              columna.resultado.subtotal,
+                                          )
+                                        : '—')}
                             </td>
                         ))}
                     </tr>
@@ -276,6 +336,51 @@ export function EntradaRuta({
     );
 }
 
+/**
+ * La tarifa que se le cobra al cliente, sobre la fila azul. Vacía cobra la
+ * calculada, que queda de sugerencia en el placeholder.
+ */
+export function EntradaTarifa({
+    etiqueta,
+    valor,
+    onChange,
+    calculada,
+}: {
+    etiqueta: string;
+    valor: string;
+    onChange: (valor: string) => void;
+    /** Null mientras la ruta no tenga días y km. */
+    calculada: number | null;
+}) {
+    return (
+        <div className="flex flex-col items-end gap-0.5">
+            <Input
+                aria-label={etiqueta}
+                type="number"
+                inputMode="decimal"
+                step="0.01"
+                min={0}
+                value={valor}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={
+                    calculada === null ? '—' : formatearMonto(calculada)
+                }
+                disabled={calculada === null}
+                className="h-8 border-primary-foreground/40 bg-background text-right font-mono text-base font-semibold text-foreground tabular-nums"
+            />
+            {valor !== '' && (
+                <button
+                    type="button"
+                    onClick={() => onChange('')}
+                    className="text-[11px] font-normal underline-offset-2 opacity-80 hover:underline"
+                >
+                    Volver a la calculada
+                </button>
+            )}
+        </div>
+    );
+}
+
 /** La cabecera de un bloque, con la fila amarilla donde van días o km. */
 function Seccion({
     titulo,
@@ -352,6 +457,7 @@ function Total({
     etiqueta,
     tasa,
     valores,
+    sufijos,
     destacado,
     separado,
     tenue,
@@ -359,6 +465,8 @@ function Total({
     etiqueta: string;
     tasa?: ReactNode;
     valores: (number | null)[];
+    /** Un texto chico junto a cada valor, como el porcentaje del margen. */
+    sufijos?: (string | null)[];
     destacado?: boolean;
     separado?: boolean;
     tenue?: boolean;
@@ -390,6 +498,11 @@ function Total({
                     className="border-l border-border px-3 py-1.5 text-right font-mono tabular-nums"
                 >
                     {valor === null ? '—' : formatearMonto(valor)}
+                    {sufijos?.[indice] && (
+                        <span className="block text-[11px] leading-tight">
+                            {sufijos[indice]}
+                        </span>
+                    )}
                 </td>
             ))}
         </tr>

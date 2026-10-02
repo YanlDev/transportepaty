@@ -4,6 +4,7 @@ use App\Models\ComponenteCosto;
 use App\Models\Cotizacion;
 use App\Models\ParametroFlota;
 use App\Services\CalculadoraCotizacion;
+use App\Services\ImporteEnLetras;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -195,22 +196,89 @@ it('ignores any totals sent by the client', function (): void {
     expect(Cotizacion::query()->sole()->total)->toBeGreaterThan(1000.0);
 });
 
-it('numbers quotes correlatively within the series', function (): void {
+it('numbers quotes correlatively, right after the last paper proforma', function (): void {
     actingAs(actorConRol('admin'))->post(route('cotizaciones.store'), datosCotizacion());
     actingAs(actorConRol('admin'))->post(route('cotizaciones.store'), datosCotizacion());
 
+    // La 006-0107 fue la última hecha a mano.
     expect(Cotizacion::query()->orderBy('id')->pluck('numero')->all())
-        ->toBe([Cotizacion::SERIE.'-0001', Cotizacion::SERIE.'-0002']);
+        ->toBe([Cotizacion::SERIE.'-0108', Cotizacion::SERIE.'-0109']);
+});
+
+it('skips the paper numbers even when an older system quote has a low number', function (): void {
+    Cotizacion::factory()->create(['numero' => Cotizacion::SERIE.'-0001']);
+
+    expect(Cotizacion::siguienteNumero())->toBe(Cotizacion::SERIE.'-0108');
 });
 
 it('never reuses the number of a deleted quote', function (): void {
-    Cotizacion::factory()->create(['numero' => Cotizacion::SERIE.'-0007'])->delete();
+    Cotizacion::factory()->create(['numero' => Cotizacion::SERIE.'-0207'])->delete();
 
-    expect(Cotizacion::siguienteNumero())->toBe(Cotizacion::SERIE.'-0001');
+    expect(Cotizacion::siguienteNumero())->toBe(Cotizacion::SERIE.'-0108');
 
-    Cotizacion::factory()->create(['numero' => Cotizacion::SERIE.'-0007']);
+    Cotizacion::factory()->create(['numero' => Cotizacion::SERIE.'-0207']);
 
-    expect(Cotizacion::siguienteNumero())->toBe(Cotizacion::SERIE.'-0008');
+    expect(Cotizacion::siguienteNumero())->toBe(Cotizacion::SERIE.'-0208');
+});
+
+it('charges a hand-picked price and keeps the calculated tariff apart', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('cotizaciones.store'), datosCotizacion(['precio_unitario' => 2000]))
+        ->assertRedirect();
+
+    $cotizacion = Cotizacion::query()->sole();
+
+    expect($cotizacion->subtotal)->toBe(2000.0)
+        ->and($cotizacion->igv)->toBe(360.0)
+        ->and($cotizacion->total)->toBe(2360.0)
+        ->and($cotizacion->tarifa_calculada)->toBe(round($cotizacion->costo_operativo / 0.88, 2))
+        // El margen es el real que deja el precio cobrado, no el pedido.
+        ->and($cotizacion->margen)->toBe(round(2000 - $cotizacion->costo_operativo, 2))
+        ->and($cotizacion->rebaja())->toBe(round($cotizacion->tarifa_calculada - 2000, 2));
+});
+
+it('charges per tonne as quantity times unit price', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('cotizaciones.store'), datosCotizacion([
+            'cantidad' => 30,
+            'unidad' => 'TN',
+            'precio_unitario' => 435,
+        ]))
+        ->assertRedirect();
+
+    $cotizacion = Cotizacion::query()->sole();
+
+    expect($cotizacion->unidad)->toBe('TN')
+        ->and($cotizacion->cantidad)->toBe(30.0)
+        ->and($cotizacion->subtotal)->toBe(13050.0)
+        ->and($cotizacion->igv)->toBe(2349.0)
+        ->and($cotizacion->total)->toBe(15399.0);
+});
+
+it('splits the calculated tariff by the quantity when no price is set', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('cotizaciones.store'), datosCotizacion(['cantidad' => 3, 'unidad' => 'TN']))
+        ->assertRedirect();
+
+    $cotizacion = Cotizacion::query()->sole();
+
+    // El subtotal es cantidad × unitario, aunque se pierda algún centavo de
+    // la calculada al repartirla: la proforma tiene que cuadrar a mano.
+    expect($cotizacion->precio_unitario)->toBe(round($cotizacion->tarifa_calculada / 3, 2))
+        ->and($cotizacion->subtotal)->toBe(round(3 * $cotizacion->precio_unitario, 2));
+});
+
+it('rejects an unknown unit', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('cotizaciones.store'), datosCotizacion(['unidad' => 'KG']))
+        ->assertSessionHasErrors('unidad');
+});
+
+it('carries a hand-picked price from the quick sheet into the form', function (): void {
+    actingAs(actorConRol('admin'))
+        ->get(route('cotizaciones.create', ['km' => '1433', 'dias' => '4', 'precio_unitario' => '9000']))
+        ->assertSuccessful()
+        ->assertInertia(fn (Assert $page) => $page->where('borrador.precio_unitario', '9000'));
 });
 
 it('validates the route data', function (): void {
@@ -255,6 +323,12 @@ it('serves the proforma as a pdf', function (): void {
         ->assertSuccessful();
 
     expect($respuesta->headers->get('content-type'))->toContain('application/pdf');
+});
+
+it('writes the total in words like a peruvian invoice', function (): void {
+    expect(ImporteEnLetras::soles(15399))->toBe('QUINCE MIL TRESCIENTOS NOVENTA Y NUEVE CON 00/100 SOLES')
+        ->and(ImporteEnLetras::soles(10806.07))->toBe('DIEZ MIL OCHOCIENTOS SEIS CON 07/100 SOLES')
+        ->and(ImporteEnLetras::soles(21000.5))->toBe('VEINTIÚN MIL CON 50/100 SOLES');
 });
 
 it('lets admins update the cost parameters', function (): void {

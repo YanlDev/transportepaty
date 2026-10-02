@@ -8,6 +8,9 @@ import type { LineaTarifa, ResultadoTarifa } from '@/types/fleet';
  * Cada paso se redondea antes de alimentar al siguiente, como allá, para que
  * los dos lleguen al mismo centavo. El retorno vacío se suma a la ida con las
  * mismas tasas.
+ *
+ * Con un precio unitario fijado, lo que se cobra es cantidad × ese precio y la
+ * tarifa del tarifario queda como referencia (`tarifa_calculada`).
  */
 export function calcularTarifa(
     lineas: LineaTarifa[],
@@ -17,12 +20,17 @@ export function calcularTarifa(
         kmRetorno = 0,
         diasRetorno = 0,
         margenPct,
+        cantidad: cantidadPedida = 1,
+        precioUnitario: precioFijado = 0,
     }: {
         km: number;
         dias: number;
         kmRetorno?: number;
         diasRetorno?: number;
         margenPct: number;
+        cantidad?: number;
+        /** Cero o ausente: se reparte la tarifa calculada entre la cantidad. */
+        precioUnitario?: number;
     },
     igvPct: number,
 ): ResultadoTarifa {
@@ -50,10 +58,16 @@ export function calcularTarifa(
 
     // Margen sobre el precio de venta, como en la hoja: con 12 % el costo es
     // el 88 % de la tarifa.
-    const subtotal =
+    const tarifaCalculada =
         margenPct < 1
             ? redondear(costoOperativo / (1 - margenPct))
             : costoOperativo;
+    const cantidad = cantidadPedida > 0 ? cantidadPedida : 1;
+    const precioUnitario =
+        precioFijado > 0
+            ? redondear(precioFijado)
+            : redondear(tarifaCalculada / cantidad);
+    const subtotal = redondear(cantidad * precioUnitario);
     const igv = redondear(subtotal * igvPct);
 
     return {
@@ -63,6 +77,9 @@ export function calcularTarifa(
         total_variable: totalVariable,
         costo_operativo: costoOperativo,
         margen: redondear(subtotal - costoOperativo),
+        tarifa_calculada: tarifaCalculada,
+        cantidad,
+        precio_unitario: precioUnitario,
         subtotal,
         igv,
         total: redondear(subtotal + igv),

@@ -12,9 +12,13 @@ import type {
 
 type Props = {
     cotizacion: Cotizacion;
-    clientes: Pick<Cliente, 'id' | 'alias' | 'razon_social' | 'ruc'>[];
+    clientes: Pick<
+        Cliente,
+        'id' | 'alias' | 'razon_social' | 'ruc' | 'direccion'
+    >[];
     puntos: Pick<PuntoTraslado, 'id' | 'nombre' | 'direccion'>[];
     estados: EnumOption[];
+    unidades: Record<string, string>;
     flota: { margen_pct_default: number; igv_pct: number };
 };
 
@@ -23,6 +27,7 @@ export default function CotizacionEdit({
     clientes,
     puntos,
     estados,
+    unidades,
     flota,
 }: Props) {
     setLayoutProps({
@@ -45,6 +50,7 @@ export default function CotizacionEdit({
                 clientes={clientes}
                 puntos={puntos}
                 estados={estados}
+                unidades={unidades}
                 flota={flota}
             />
         </div>
