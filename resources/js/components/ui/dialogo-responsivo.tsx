@@ -50,7 +50,10 @@ function DialogContent({
                 data-slot="dialog-content"
                 data-movil={movil}
                 className={cn(
-                    'group/dialogo fixed z-50 grid w-full gap-4 overflow-y-auto overscroll-contain bg-background shadow-lg duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in',
+                    // La columna es minmax(0,1fr) y no auto: con auto crece
+                    // hasta el ancho del texto más largo (un cliente con
+                    // nombre kilométrico) y ningún `truncate` llega a cortar.
+                    'group/dialogo fixed z-50 grid w-full grid-cols-[minmax(0,1fr)] gap-4 overflow-y-auto overscroll-contain bg-background shadow-lg duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in',
                     // Celular: hoja pegada abajo, a lo ancho, con el alto
                     // dinámico (dvh) para no quedar tapada por la barra del
                     // navegador. Anula los max-w que traiga cada diálogo.

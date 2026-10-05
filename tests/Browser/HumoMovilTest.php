@@ -133,3 +133,47 @@ it('ofrece mandar la GR por WhatsApp desde el detalle del viaje', function (): v
         ->assertAttributeContains('a[href^="https://wa.me/?text="]', 'href', 'EG03-00099999')
         ->assertNoJavaScriptErrors();
 });
+
+/** El nombre largo real que rompía el modal y el tablero. */
+const CLIENTE_LARGO = 'IMPORTACIONES DISTRIBUCIONES AGRO VETERINARIA PERU SOCIEDAD ANONIMA CERRADA - IMDAVEPSAC';
+
+/** Ningún diálogo abierto puede tener scroll horizontal propio. */
+const DIALOGO_SIN_DESBORDE = "[...document.querySelectorAll('[data-slot=\"dialog-content\"]')].every((d) => d.scrollWidth <= d.clientWidth)";
+
+it('trunca un cliente de nombre largo en el detalle del viaje sin romper el modal', function (): void {
+    actingAs(actorConRol('admin'));
+    Viaje::factory()->create(['numero_gr' => 'EG03-00012688', 'cliente' => CLIENTE_LARGO]);
+
+    visit('/viajes')
+        ->click('EG03-00012688')
+        ->assertSee('GR Transportista')
+        ->assertScript(DIALOGO_SIN_DESBORDE, true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'detalle-cliente-largo');
+});
+
+it('trunca un cliente de nombre largo en el detalle del viaje en celular', function (): void {
+    actingAs(actorConRol('admin'));
+    Viaje::factory()->create(['numero_gr' => 'EG03-00012688', 'cliente' => CLIENTE_LARGO]);
+
+    visit('/viajes')
+        ->on()->mobile()
+        ->click('EG03-00012688')
+        ->assertSee('GR Transportista')
+        ->assertScript(DIALOGO_SIN_DESBORDE, true)
+        ->assertScript(SIN_DESBORDE, true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-detalle-cliente-largo');
+});
+
+it('no desborda el tablero en celular con un cliente de nombre largo', function (): void {
+    actingAs(actorConRol('admin'));
+    Viaje::factory()->count(2)->create(['cliente' => CLIENTE_LARGO]);
+
+    visit('/dashboard')
+        ->on()->mobile()
+        ->assertSee('Últimos viajes registrados')
+        ->assertScript(SIN_DESBORDE, true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-tablero-cliente-largo');
+});

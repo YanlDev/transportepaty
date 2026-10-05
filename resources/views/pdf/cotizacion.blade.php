@@ -1,7 +1,9 @@
 {{--
-    La proforma con el mismo formato de las que Paty ya hacía a mano (la
-    006-0107 a Calcesur): logo, cliente con RUC y dirección, cantidad ×
-    precio unitario, IGV desagregado, importe en letras y firma de gerencia.
+    La proforma armada como las cartas comerciales que se mandan en el rubro:
+    membrete con los datos de la empresa, el recuadro del RUC y el número (el
+    mismo de una factura), «Señores / Presente», la tabla con bordes con el
+    «SON:» y los totales adentro, las condiciones de la oferta y la firma de
+    gerencia bajo «Atentamente».
 
     El desglose interno (costos fijos y variables, margen, tarifa calculada y
     rebaja) no va acá a propósito: al cliente se le cotiza un precio por el
@@ -15,8 +17,11 @@
     $fecha = fn ($dia): string => $dia->translatedFormat('j \d\e F \d\e Y');
     $cantidad = fn (float $valor): string => fmod($valor, 1.0) === 0.0 ? number_format($valor) : number_format($valor, 2);
     $validez = (int) $cotizacion->fecha->diffInDays($cotizacion->valido_hasta);
+    $telefono = \App\Models\Ajuste::valor(\App\Models\Ajuste::TELEFONO_OFICINA);
+    $tasaIgv = round($cotizacion->subtotal > 0 ? $cotizacion->igv / $cotizacion->subtotal * 100 : 18);
+    $unidad = $cotizacion->unidad === 'TN' ? 'TN' : ($cotizacion->cantidad == 1 ? 'VIAJE' : 'VIAJES');
     $descripcion = collect([
-        'Servicio de traslado',
+        'Servicio de transporte',
         $cotizacion->material ? "de {$cotizacion->material}" : 'de carga',
         "desde {$cotizacion->origen}",
         "con destino a {$cotizacion->destino}",
@@ -28,177 +33,167 @@
     <meta charset="utf-8">
     <title>Cotización {{ $cotizacion->numero }}</title>
     <style>
-        @page { margin: 40px 45px 60px; }
-        body { font-family: DejaVu Sans, sans-serif; font-size: 9.5px; color: #1f2937; }
-        .azul { color: #17365d; }
-        .tenue { color: #6b7280; }
-        .rotulo { font-size: 8px; font-weight: bold; letter-spacing: 2px; color: #6b7280; text-transform: uppercase; }
+        @page { margin: 36px 48px 64px; }
+        body { font-family: Helvetica, Arial, sans-serif; font-size: 10px; color: #222; line-height: 1.35; }
+        p { margin: 0; }
 
-        table.encabezado { width: 100%; border-bottom: 2.5px solid #17365d; padding-bottom: 10px; }
-        table.encabezado td { vertical-align: bottom; }
-        .logo { height: 52px; }
-        .lema { font-size: 7.5px; letter-spacing: .8px; color: #6b7280; margin-top: 4px; }
-        .documento { text-align: right; }
-        .documento .titulo { font-size: 19px; font-weight: bold; letter-spacing: 5px; color: #17365d; }
-        .documento .numero { font-size: 12px; font-weight: bold; color: #2f6db5; margin-top: 4px; }
-        .documento .ruc { font-size: 8.5px; color: #6b7280; margin-top: 2px; }
+        table.membrete { width: 100%; border-collapse: collapse; }
+        table.membrete td { vertical-align: top; }
+        .logo { height: 50px; }
+        .empresa { margin-top: 6px; font-size: 8.5px; color: #444; line-height: 1.45; }
+        .empresa strong { font-size: 9px; color: #222; }
 
-        table.datos { width: 100%; margin-top: 20px; border-collapse: separate; border-spacing: 0; }
-        table.datos > tbody > tr > td { vertical-align: top; width: 50%; padding: 12px 14px; }
-        .cliente { background: #f1f4f8; }
-        table.campos { width: 100%; margin-top: 6px; }
-        table.campos td { padding: 2.5px 0; vertical-align: top; }
-        table.campos td.etiqueta { width: 78px; color: #6b7280; }
-        table.campos td.valor { font-size: 10px; color: #111827; }
+        .recuadro { width: 190px; border: 1.5px solid #17365d; text-align: center; }
+        .recuadro div { padding: 7px 4px; }
+        .recuadro .ruc { font-size: 11px; font-weight: bold; }
+        .recuadro .tipo { background: #17365d; color: #fff; font-size: 12px; font-weight: bold; }
+        .recuadro .numero { font-size: 12px; font-weight: bold; }
 
-        .titulo-detalle { margin-top: 22px; margin-bottom: 5px; }
-        table.detalle { width: 100%; border-collapse: collapse; }
-        table.detalle th { background: #17365d; color: #fff; font-size: 8.5px; letter-spacing: 1px; padding: 8px 10px; text-align: left; }
-        table.detalle th.num { text-align: right; }
-        table.detalle th.centro { text-align: center; }
-        table.detalle td { padding: 10px; vertical-align: top; font-size: 10px; border-bottom: 1px solid #d1d5db; }
+        .lugar-fecha { margin-top: 22px; text-align: right; }
+
+        .destinatario { margin-top: 14px; }
+        .destinatario .cliente { font-weight: bold; font-size: 10.5px; }
+        .destinatario .presente { margin-top: 4px; font-weight: bold; text-decoration: underline; }
+        .referencia { margin-top: 10px; }
+
+        .saludo { margin-top: 14px; }
+        .saludo p + p { margin-top: 6px; }
+
+        table.detalle { width: 100%; margin-top: 12px; border-collapse: collapse; }
+        table.detalle th, table.detalle td { border: 0.75px solid #555; padding: 6px 7px; vertical-align: top; }
+        table.detalle th { background: #e4e9f0; font-size: 8.5px; font-weight: bold; text-align: center; }
+        table.detalle td.descripcion { height: 70px; }
+        table.detalle td.son { vertical-align: middle; font-size: 9px; }
+        table.detalle td.concepto { font-size: 9px; font-weight: bold; }
+        table.detalle tr.total td.concepto,
+        table.detalle tr.total td.num { font-size: 10.5px; }
         .num { text-align: right; white-space: nowrap; }
         .centro { text-align: center; }
-        .unidad { display: block; font-size: 7.5px; color: #6b7280; }
 
-        table.totales { width: 46%; margin-left: 54%; margin-top: 18px; border-collapse: collapse; }
-        table.totales td { padding: 6px 10px; border-bottom: 1px solid #e5e7eb; font-size: 10px; }
-        table.totales td.etiqueta { color: #6b7280; }
-        table.totales tr.total td { background: #17365d; color: #fff; font-weight: bold; font-size: 12px; letter-spacing: 1px; padding: 9px 10px; border: 0; }
+        .condiciones { margin-top: 16px; }
+        .condiciones .titulo { font-weight: bold; text-decoration: underline; }
+        .condiciones ul { margin: 4px 0 0; padding-left: 14px; }
+        .condiciones li { margin-top: 2px; }
 
-        .letras { margin-top: 18px; font-size: 9px; }
-        .letras strong { color: #17365d; }
-        .observaciones { margin-top: 14px; font-size: 9px; line-height: 1.5; }
-        .observaciones div { margin-top: 2px; }
+        .despedida { margin-top: 16px; }
+        .firma { margin-top: 4px; text-align: center; }
+        .firma img { height: 78px; }
 
-        .firma { margin-top: 50px; text-align: center; }
-        .firma img { height: 72px; }
-
-        .pie { position: fixed; bottom: -35px; left: 0; right: 0; border-top: 1px solid #d1d5db; padding-top: 6px; text-align: center; font-size: 7.5px; color: #6b7280; }
+        .pie { position: fixed; bottom: -40px; left: 0; right: 0; border-top: 0.75px solid #999; padding-top: 5px; text-align: center; font-size: 7.5px; color: #555; }
     </style>
 </head>
 <body>
     <div class="pie">
-        Av. Héroes de la Guerra del Pacífico N° 1300 · Juliaca — San Román, Puno · RUC 20364000643
+        Empresa de Transportes Paty S.C.R.L. · Av. Héroes de la Guerra del Pacífico N° 1300, Juliaca — San Román, Puno
+        @if ($telefono)
+            · Telf. {{ $telefono }}
+        @endif
     </div>
 
-    <table class="encabezado">
+    <table class="membrete">
         <tr>
             <td>
                 <img class="logo" src="{{ $imagen('logo-horizontal.png') }}" alt="Empresa de Transportes Paty S.C.R.L.">
-                <div class="lema">BRINDA SERVICIO DE TRANSPORTE DE CARGA A NIVEL NACIONAL</div>
+                <div class="empresa">
+                    <strong>EMPRESA DE TRANSPORTES PATY S.C.R.L.</strong><br>
+                    Transporte de carga a nivel nacional<br>
+                    Av. Héroes de la Guerra del Pacífico N° 1300 — Juliaca, Puno
+                    @if ($telefono)
+                        <br>Telf. {{ $telefono }}
+                    @endif
+                </div>
             </td>
-            <td class="documento">
-                <div class="titulo">COTIZACIÓN</div>
-                <div class="numero">N° {{ $cotizacion->numero }}</div>
-                <div class="ruc">RUC 20364000643</div>
+            <td style="width: 190px;">
+                <div class="recuadro">
+                    <div class="ruc">R.U.C. N° 20364000643</div>
+                    <div class="tipo">COTIZACIÓN</div>
+                    <div class="numero">N° {{ $cotizacion->numero }}</div>
+                </div>
             </td>
         </tr>
     </table>
 
-    <table class="datos">
-        <tr>
-            <td class="cliente">
-                <div class="rotulo">Cliente</div>
-                <table class="campos">
-                    <tr>
-                        <td class="etiqueta">Razón social</td>
-                        <td class="valor">{{ $cotizacion->cliente_nombre }}</td>
-                    </tr>
-                    @if ($cotizacion->cliente_ruc)
-                        <tr>
-                            <td class="etiqueta">RUC</td>
-                            <td class="valor">{{ $cotizacion->cliente_ruc }}</td>
-                        </tr>
-                    @endif
-                    @if ($cotizacion->cliente_direccion)
-                        <tr>
-                            <td class="etiqueta">Dirección</td>
-                            <td class="valor">{{ $cotizacion->cliente_direccion }}</td>
-                        </tr>
-                    @endif
-                </table>
-            </td>
-            <td>
-                <div class="rotulo">Detalles de la cotización</div>
-                <table class="campos">
-                    <tr>
-                        <td class="etiqueta">Fecha</td>
-                        <td class="valor">Juliaca, {{ $fecha($cotizacion->fecha) }}</td>
-                    </tr>
-                    @if ($cotizacion->referencia)
-                        <tr>
-                            <td class="etiqueta">Referencia</td>
-                            <td class="valor">{{ $cotizacion->referencia }}</td>
-                        </tr>
-                    @endif
-                    <tr>
-                        <td class="etiqueta">Validez</td>
-                        <td class="valor">{{ $validez }} {{ $validez === 1 ? 'día' : 'días' }} (hasta el {{ $fecha($cotizacion->valido_hasta) }})</td>
-                    </tr>
-                    <tr>
-                        <td class="etiqueta">Moneda</td>
-                        <td class="valor">Soles (S/)</td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-    </table>
+    <p class="lugar-fecha">Juliaca, {{ $fecha($cotizacion->fecha) }}</p>
 
-    <div class="rotulo titulo-detalle">Detalle del servicio</div>
+    <div class="destinatario">
+        <p>Señores:</p>
+        <p class="cliente">{{ $cotizacion->cliente_nombre }}</p>
+        @if ($cotizacion->cliente_ruc)
+            <p>RUC: {{ $cotizacion->cliente_ruc }}</p>
+        @endif
+        @if ($cotizacion->cliente_direccion)
+            <p>{{ $cotizacion->cliente_direccion }}</p>
+        @endif
+        <p class="presente">Presente.-</p>
+    </div>
+
+    @if ($cotizacion->referencia)
+        <p class="referencia"><strong>Ref.:</strong> {{ $cotizacion->referencia }}</p>
+    @endif
+
+    <div class="saludo">
+        <p>De nuestra consideración:</p>
+        <p>
+            Por medio de la presente le saludamos cordialmente y, atendiendo a su solicitud,
+            le hacemos llegar nuestra propuesta económica por el servicio de transporte de carga
+            que se detalla a continuación:
+        </p>
+    </div>
+
     <table class="detalle">
         <thead>
             <tr>
-                <th style="width: 55px;" class="centro">CANT.</th>
-                <th>DESCRIPCIÓN DEL SERVICIO</th>
-                <th style="width: 95px;" class="num">P. UNITARIO</th>
-                <th style="width: 95px;" class="num">TOTAL</th>
+                <th style="width: 42px;">CANT.</th>
+                <th style="width: 48px;">UNIDAD</th>
+                <th>DESCRIPCIÓN</th>
+                <th style="width: 78px;">P. UNIT. S/</th>
+                <th style="width: 82px;">IMPORTE S/</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td class="centro">
-                    {{ $cantidad($cotizacion->cantidad) }}
-                    <span class="unidad">{{ $cotizacion->unidad === 'TN' ? 'TN' : ($cotizacion->cantidad == 1 ? 'VIAJE' : 'VIAJES') }}</span>
+                <td class="centro">{{ $cantidad($cotizacion->cantidad) }}</td>
+                <td class="centro">{{ $unidad }}</td>
+                <td class="descripcion">{{ $descripcion }}</td>
+                <td class="num">{{ number_format($cotizacion->precio_unitario, 2) }}</td>
+                <td class="num">{{ number_format($cotizacion->subtotal, 2) }}</td>
+            </tr>
+            <tr>
+                <td class="son" colspan="3" rowspan="3">
+                    <strong>SON:</strong> {{ \App\Services\ImporteEnLetras::soles($cotizacion->total) }}
                 </td>
-                <td>{{ $descripcion }}</td>
-                <td class="num">S/ {{ number_format($cotizacion->precio_unitario, 2) }}</td>
-                <td class="num"><strong>S/ {{ number_format($cotizacion->subtotal, 2) }}</strong></td>
+                <td class="concepto">SUBTOTAL</td>
+                <td class="num">{{ number_format($cotizacion->subtotal, 2) }}</td>
+            </tr>
+            <tr>
+                <td class="concepto">I.G.V. {{ $tasaIgv }}%</td>
+                <td class="num">{{ number_format($cotizacion->igv, 2) }}</td>
+            </tr>
+            <tr class="total">
+                <td class="concepto">TOTAL S/</td>
+                <td class="num"><strong>{{ number_format($cotizacion->total, 2) }}</strong></td>
             </tr>
         </tbody>
     </table>
 
-    <table class="totales">
-        <tr>
-            <td class="etiqueta">Subtotal</td>
-            <td class="num">S/ {{ number_format($cotizacion->subtotal, 2) }}</td>
-        </tr>
-        <tr>
-            <td class="etiqueta">IGV ({{ round($cotizacion->subtotal > 0 ? $cotizacion->igv / $cotizacion->subtotal * 100 : 18) }} %)</td>
-            <td class="num">S/ {{ number_format($cotizacion->igv, 2) }}</td>
-        </tr>
-        <tr class="total">
-            <td>TOTAL</td>
-            <td class="num">S/ {{ number_format($cotizacion->total, 2) }}</td>
-        </tr>
-    </table>
-
-    <div class="letras">
-        <span class="tenue">Importe total en letras:</span>
-        <strong>{{ \App\Services\ImporteEnLetras::soles($cotizacion->total) }}</strong>
-    </div>
-
-    @if ($cotizacion->km_retorno > 0 || $cotizacion->notas)
-        <div class="observaciones">
-            <div class="rotulo">Observaciones</div>
+    <div class="condiciones">
+        <p class="titulo">Condiciones de la oferta</p>
+        <ul>
+            <li>Precios expresados en soles; el I.G.V. se muestra por separado.</li>
+            <li>Validez de la oferta: {{ $validez }} {{ $validez === 1 ? 'día' : 'días' }}, hasta el {{ $fecha($cotizacion->valido_hasta) }}.</li>
             @if ($cotizacion->km_retorno > 0)
-                <div>Incluye el retorno de la unidad sin carga.</div>
+                <li>Incluye el retorno de la unidad sin carga.</li>
             @endif
             @if ($cotizacion->notas)
-                <div>{!! nl2br(e($cotizacion->notas)) !!}</div>
+                <li>{!! nl2br(e($cotizacion->notas)) !!}</li>
             @endif
-        </div>
-    @endif
+        </ul>
+    </div>
+
+    <div class="despedida">
+        <p>Sin otro particular, y a la espera de su conformidad, quedamos de ustedes.</p>
+        <p style="margin-top: 10px;">Atentamente,</p>
+    </div>
 
     <div class="firma">
         <img src="{{ $imagen('firma-gerencia.png') }}" alt="Simona Olga Ramírez de Suxo, Gerente General">
