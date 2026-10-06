@@ -408,6 +408,21 @@ it('defaults a new viaje to Particular and lets an admin reclassify it', functio
     expect($viaje->refresh()->tipo_carga)->toBe(TipoCarga::Concentrado);
 });
 
+it('lets a viaje be classified as sacos nuevos, sacos usados or ransa', function (TipoCarga $tipo): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr()]])
+        ->assertSessionHasNoErrors();
+
+    $viaje = Viaje::query()->sole();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('viajes.actualizarTipoCarga', $viaje), ['tipo_carga' => $tipo->value])
+        ->assertSessionHasNoErrors();
+
+    expect($viaje->refresh()->tipo_carga)->toBe($tipo)
+        ->and(array_column(TipoCarga::opcionesDeViaje(), 'value'))->toContain($tipo->value);
+})->with([TipoCarga::SacosNuevos, TipoCarga::SacosUsados, TipoCarga::Ransa]);
+
 it('forbids a visor from reclassifying a viaje and rejects the ride-status-only cargo types', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('viajes.store'), ['archivos' => [gr()]])

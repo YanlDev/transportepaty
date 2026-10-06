@@ -189,6 +189,60 @@ it('falls back to the current month when the periodo is not one of the presets',
         );
 });
 
+it('shows a closed month when one is picked', function (): void {
+    $this->travelTo('2026-10-06 12:00:00');
+
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-09-03']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['periodo' => 'mes', 'mes' => '2026-08']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rango.periodo', 'mes')
+            ->where('rango.mes', '2026-08')
+            ->where('rango.desde', '2026-08-01')
+            ->where('rango.hasta', '2026-08-31')
+            ->where('rango.meses.0', ['valor' => '2026-10', 'label' => 'Octubre 2026'])
+            ->has('rango.meses', 12)
+            ->where('cargaMinsur', fn ($tipos) => collect($tipos)
+                ->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 1
+                && collect($tipos)->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 0)
+        );
+});
+
+it('falls back to the current month when the picked month is not offered', function (string $mes): void {
+    $this->travelTo('2026-10-06 12:00:00');
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['periodo' => 'mes', 'mes' => $mes]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('rango.mes', '2026-10')
+            ->where('rango.desde', '2026-10-01')
+        );
+})->with(['futuro' => '2026-11', 'muy viejo' => '2024-01', 'basura' => 'agosto']);
+
+it('counts the Ajeper and Caral GRs Crisar sends in one truck as a single load', function (): void {
+    $this->travelTo('2026-10-06 12:00:00');
+
+    $ajeper = Viaje::factory()->create([
+        'cliente' => 'CRISAR LOGISTICA S.A.C.',
+        'remitente' => 'AJEPER S.A.',
+        'fecha_traslado' => '2026-09-10',
+    ]);
+    Viaje::factory()->delMismoViajeQue($ajeper)->create([
+        'cliente' => 'CRISAR LOGISTICA S.A.C.',
+        'remitente' => 'EMBOTELLADORA CARAL SAC',
+    ]);
+    Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-09-20']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['periodo' => 'mes', 'mes' => '2026-09']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('viajesPorCliente.0.cliente', 'CRISAR LOGISTICA S.A.C.')
+            ->where('viajesPorCliente.0.valor', 2)
+        );
+});
+
 it('counts one trip for the same unit across two consecutive days (Mur-Wy case)', function (): void {
     $this->travelTo('2026-08-20 12:00:00');
 

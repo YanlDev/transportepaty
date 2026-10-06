@@ -17,6 +17,9 @@ enum TipoCarga: string
     case Metalico = 'metalico';
     case Escoria = 'escoria';
     case Materiales = 'materiales';
+    case SacosNuevos = 'sacos_nuevos';
+    case SacosUsados = 'sacos_usados';
+    case Ransa = 'ransa';
     case Particular = 'particular';
     case Sacos = 'sacos';
     case Vacio = 'vacio';
@@ -28,6 +31,9 @@ enum TipoCarga: string
             self::Metalico => 'Metálico',
             self::Escoria => 'Escoria',
             self::Materiales => 'Materiales',
+            self::SacosNuevos => 'Sacos nuevos',
+            self::SacosUsados => 'Sacos usados',
+            self::Ransa => 'Ransa',
             self::Particular => 'Particular',
             self::Sacos => 'Sacos',
             self::Vacio => 'Vacío',
@@ -35,6 +41,10 @@ enum TipoCarga: string
     }
 
     /**
+     * Sacos nuevos y Sacos usados sí son la carga de un viaje (los que se
+     * llevan a mina); Ransa es la carga de Minsur que se embarca en ese
+     * terminal. El `Sacos` a secas de abajo es otra cosa.
+     *
      * Sacos y Vacío describen el estado de una unidad en ruta abierta (ficha
      * de disponibilidad); no tienen sentido como contenido de un viaje ya
      * cerrado con GR entregada.

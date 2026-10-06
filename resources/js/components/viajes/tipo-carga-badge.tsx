@@ -1,4 +1,12 @@
-import { Layers, Mountain, Package, Sparkles, Tag } from 'lucide-react';
+import {
+    Layers,
+    Mountain,
+    Package,
+    PackageOpen,
+    Sparkles,
+    Tag,
+    Warehouse,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const CLASE_ICONO = 'size-3.5';
@@ -23,6 +31,11 @@ function IconoTipoCarga({ valor }: { valor: string }) {
             return <Sparkles className={CLASE_ICONO} />;
         case 'materiales':
             return <Package className={CLASE_ICONO} />;
+        case 'sacos_nuevos':
+        case 'sacos_usados':
+            return <PackageOpen className={CLASE_ICONO} />;
+        case 'ransa':
+            return <Warehouse className={CLASE_ICONO} />;
         default:
             return <Tag className={CLASE_ICONO} />;
     }

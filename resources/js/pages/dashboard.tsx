@@ -20,6 +20,13 @@ import {
 import { TopLista } from '@/components/dashboard/top-lista';
 import { UltimosViajes } from '@/components/dashboard/ultimos-viajes';
 import { Indicador } from '@/components/ui/indicador';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
@@ -42,7 +49,15 @@ const GraficosViajes = lazy(
 );
 
 type Props = {
-    rango: { periodo: string; desde: string; hasta: string };
+    rango: {
+        periodo: string;
+        desde: string;
+        hasta: string;
+        /** El mes que se está mirando (`2026-08`), solo con el período «mes». */
+        mes: string | null;
+        /** Los meses que ofrece el selector, del más reciente al más viejo. */
+        meses: { valor: string; label: string }[];
+    };
     resumen: ResumenFlota;
     metaConcentrado: MetaConcentrado;
     documentos: Documentos;
@@ -72,13 +87,21 @@ export default function Dashboard({
     topCargas,
     ultimosViajes,
 }: Props) {
-    const cambiarPeriodo = (periodo: string) => {
-        router.get(
-            dashboard().url,
-            { periodo },
-            { preserveState: true, preserveScroll: true, replace: true },
-        );
+    const cambiarPeriodo = (periodo: string, mes?: string) => {
+        router.get(dashboard().url, mes ? { periodo, mes } : { periodo }, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
     };
+
+    // «Este mes» se enciende solo con el mes en curso; un mes anterior
+    // elegido en el selector no es «este mes».
+    const mesEnCurso = rango.meses[0]?.valor;
+    const periodoActivo =
+        rango.periodo === 'mes' && rango.mes !== mesEnCurso
+            ? null
+            : rango.periodo;
 
     return (
         <div className="mx-auto flex h-full w-full max-w-[1600px] flex-1 flex-col gap-4 p-4 md:p-6">
@@ -108,7 +131,7 @@ export default function Dashboard({
                                 onClick={() => cambiarPeriodo(valor)}
                                 className={cn(
                                     'rounded px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
-                                    rango.periodo === valor
+                                    periodoActivo === valor
                                         ? 'bg-primary text-primary-foreground'
                                         : 'text-muted-foreground hover:text-foreground',
                                 )}
@@ -117,6 +140,26 @@ export default function Dashboard({
                             </button>
                         ))}
                     </div>
+
+                    <Select
+                        value={rango.mes ?? ''}
+                        onValueChange={(mes) => cambiarPeriodo('mes', mes)}
+                    >
+                        <SelectTrigger
+                            size="sm"
+                            className="w-40 text-xs"
+                            aria-label="Elegir mes"
+                        >
+                            <SelectValue placeholder="Elegir mes" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {rango.meses.map((mes) => (
+                                <SelectItem key={mes.valor} value={mes.valor}>
+                                    {mes.label}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 

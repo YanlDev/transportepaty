@@ -51,6 +51,9 @@ const cargaMinsurConfig = {
     metalico: { label: 'Metálico', color: 'var(--color-slate-400)' },
     escoria: { label: 'Escoria', color: 'var(--color-stone-600)' },
     materiales: { label: 'Materiales', color: 'var(--color-amber-500)' },
+    sacos_nuevos: { label: 'Sacos nuevos', color: 'var(--color-emerald-500)' },
+    sacos_usados: { label: 'Sacos usados', color: 'var(--color-emerald-800)' },
+    ransa: { label: 'Ransa', color: 'var(--color-violet-500)' },
     particular: { label: 'Particular', color: 'var(--color-zinc-400)' },
 } satisfies ChartConfig;
 
