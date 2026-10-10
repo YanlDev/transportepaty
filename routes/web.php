@@ -123,6 +123,10 @@ Route::middleware('auth')->group(function () {
         ->name('cuentas-bancarias.destroy');
 
     Route::post('facturas', [FacturaController::class, 'store'])->name('facturas.store');
+    // Facturas en PDF: se leen, se registran y se asocian con las GR que citan.
+    Route::post('facturas/importar', [FacturaController::class, 'importar'])->name('facturas.importar');
+    // Asociar a mano, desde la bandeja «Facturas por asociar».
+    Route::post('facturas/{factura}/viajes', [FacturaController::class, 'asociar'])->name('facturas.asociar');
     // PATCH y no PUT: la cobranza se edita celda por celda y cada guardado
     // manda solo el campo que se acaba de tocar.
     Route::patch('facturas/{factura}', [FacturaController::class, 'update'])->name('facturas.update');

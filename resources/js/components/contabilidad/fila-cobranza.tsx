@@ -1,9 +1,8 @@
 import { AccionesFila } from '@/components/contabilidad/acciones-fila';
 import { CeldaGrFisica } from '@/components/contabilidad/celda-gr-fisica';
 import { CeldasCobranza } from '@/components/contabilidad/celdas-cobranza';
+import { DescargarGuia } from '@/components/contabilidad/descargar-guia';
 import { EstadoCobranzaBadge } from '@/components/contabilidad/estado-cobranza-badge';
-import { VerGuia } from '@/components/contabilidad/ver-guia';
-import { Copiable } from '@/components/copiable';
 import { DireccionCelda } from '@/components/direccion-celda';
 import { Checkbox } from '@/components/ui/checkbox';
 import { TableCell, TableRow } from '@/components/ui/table';
@@ -84,7 +83,6 @@ export function FilaCobranza({
                             noFacturable={!esFacturable(viaje)}
                             motivoNoFacturable={viaje.motivo_no_facturable}
                             factura={factura}
-                            agregarOtra={esUltima}
                             cuentas={cuentas}
                             monedas={monedas}
                             editable={puedeFacturar}
@@ -95,6 +93,7 @@ export function FilaCobranza({
                                 viaje={viaje}
                                 factura={factura}
                                 puedeFacturar={puedeFacturar}
+                                agregarOtra={esUltima}
                             />
                         </TableCell>
                     </TableRow>
@@ -148,7 +147,10 @@ function ColumnasOperacion({
                 rowSpan={alto}
                 className="font-mono text-xs whitespace-nowrap text-foreground tabular-nums"
             >
-                <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
+                <div className="flex items-center gap-1">
+                    {viaje.numero_gr}
+                    <DescargarGuia viaje={viaje} />
+                </div>
             </TableCell>
             <TableCell
                 rowSpan={alto}
@@ -218,9 +220,6 @@ function ColumnasOperacion({
             >
                 {formatearPeso(viaje.peso, viaje.unidad_peso)}
             </TableCell>
-            <TableCell rowSpan={alto} className="w-0">
-                <VerGuia viaje={viaje} />
-            </TableCell>
 
             <TableCell
                 rowSpan={alto}
@@ -230,6 +229,7 @@ function ColumnasOperacion({
                     estado={viaje.estado}
                     label={viaje.estado_label}
                     diasVencida={diasVencidaMayor(viaje)}
+                    compacto
                 />
             </TableCell>
         </>

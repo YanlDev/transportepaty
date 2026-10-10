@@ -1,8 +1,9 @@
 import type { ResumenCobranza as Resumen } from '@/types/contabilidad';
 
 /**
- * Lo que el contador viene a ver: cuánto falta cobrar. Va arriba y separado
- * por moneda —sumar soles con dólares da un número que no significa nada— y
+ * Lo que el contador viene a ver: cuánto falta cobrar, en sus dos partes
+ * —el neto, que entra a las cuentas de la empresa, y la detracción, que va al
+ * Banco de la Nación—. Va arriba y separado por moneda —sumar soles con dólares da un número que no significa nada— y
  * responde a los filtros, para que «por cobrar de Minsur» sea una lectura y no
  * una cuenta a mano.
  */
@@ -25,10 +26,20 @@ export function ResumenCobranza({
                 <div key={monto.moneda} className="flex items-end gap-4">
                     <div>
                         <p className="text-xs text-muted-foreground">
-                            Por cobrar ({monto.moneda})
+                            Neto por cobrar ({monto.moneda})
                         </p>
                         <p className="text-xl font-semibold text-amber-700 tabular-nums dark:text-amber-500">
                             {monto.simbolo} {cifra(monto.por_cobrar)}
+                        </p>
+                    </div>
+                    {/* Va aparte del neto porque entra por otro lado: el
+                        cliente la deposita en el Banco de la Nación. */}
+                    <div>
+                        <p className="text-xs text-muted-foreground">
+                            Detracción por cobrar
+                        </p>
+                        <p className="text-xl font-semibold text-sky-700 tabular-nums dark:text-sky-400">
+                            {monto.simbolo} {cifra(monto.detraccion_por_cobrar)}
                         </p>
                     </div>
                     <div>

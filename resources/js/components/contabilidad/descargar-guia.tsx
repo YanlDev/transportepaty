@@ -1,35 +1,47 @@
-import { Eye } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { DocumentoVisorDialog } from '@/components/vehiculos/documento-visor-dialog';
-import { formatearFecha } from '@/lib/format';
 import type { ViajeContable } from '@/types/contabilidad';
 
 /**
- * Abre el PDF de la guía sin salir de la cobranza: es contra ese documento que
- * se factura, así que quien cobra tiene que poder mirarlo mientras llena la
- * fila.
+ * Baja el PDF de la guía de un clic, sin abrir visor: quien cobra la necesita
+ * como archivo, para adjuntarla a la factura o mandarla al cliente.
  *
- * Va pegado al peso, cerrando el bloque de la operación, y no entre las
- * acciones del final: mirar la GR es leer el viaje, no tocar la factura.
+ * Va pegado al N° GR —es el documento de ese número— y no entre las acciones
+ * del final: bajar la GR es leer el viaje, no tocar la factura. El archivo
+ * conserva el nombre con que llegó de SUNAT, el mismo de las carpetas.
  */
-export function VerGuia({ viaje }: { viaje: ViajeContable }) {
+export function DescargarGuia({ viaje }: { viaje: ViajeContable }) {
+    const etiqueta = `Descargar la GR ${viaje.numero_gr}`;
+
+    if (!viaje.archivo_url) {
+        return (
+            <Button
+                variant="ghost"
+                size="icon"
+                disabled
+                className="size-7 text-muted-foreground"
+                aria-label={`La GR ${viaje.numero_gr} no tiene PDF`}
+            >
+                <Download className="size-4" />
+            </Button>
+        );
+    }
+
     return (
-        <DocumentoVisorDialog
-            url={viaje.archivo_url ?? ''}
-            esPdf
-            titulo={`GR ${viaje.numero_gr}`}
-            detalle={`${viaje.cliente} · ${formatearFecha(viaje.fecha_traslado)}`}
-            trigger={
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    disabled={!viaje.archivo_url}
-                    className="size-8 text-muted-foreground"
-                    aria-label={`Vista rápida de la GR ${viaje.numero_gr}`}
-                >
-                    <Eye className="size-4" />
-                </Button>
-            }
-        />
+        <Button
+            asChild
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground hover:text-foreground"
+        >
+            <a
+                href={viaje.archivo_url}
+                download
+                title={etiqueta}
+                aria-label={etiqueta}
+            >
+                <Download className="size-4" />
+            </a>
+        </Button>
     );
 }

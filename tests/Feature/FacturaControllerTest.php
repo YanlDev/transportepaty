@@ -3,6 +3,7 @@
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
+use App\Services\RelojOperativo;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -135,7 +136,7 @@ it('requires at least one viaje', function (): void {
 
 it('records the cobro with its cuenta', function (): void {
     $cuenta = CuentaBancaria::factory()->create();
-    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-01']);
+    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-01', 'monto' => 3500]);
     Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
@@ -150,6 +151,17 @@ it('records the cobro with its cuenta', function (): void {
 
     expect($factura->fecha_pago?->toDateString())->toBe('2026-09-20')
         ->and($factura->cuenta_bancaria_id)->toBe($cuenta->id)
+        // Entró el neto, pero la detracción todavía no.
+        ->and($factura->estado()->value)->toBe('falta_detraccion');
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['fecha_detraccion' => '2026-09-22', 'constancia_detraccion' => '123456789'])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect($factura->fecha_detraccion?->toDateString())->toBe('2026-09-22')
+        ->and($factura->constancia_detraccion)->toBe('123456789')
         ->and($factura->estado()->value)->toBe('pagado');
 });
 
@@ -273,8 +285,8 @@ it('frees a viaje from one factura and keeps the other', function (): void {
         ->assertSessionHasNoErrors();
 
     expect($viaje->facturas()->pluck('facturas.id')->all())->toBe([$flete->id])
-        // Era su único viaje: se anula sola.
-        ->and(Factura::query()->whereKey($estadia->id)->exists())->toBeFalse();
+        // Era su único viaje: no se anula, queda por asociar.
+        ->and(Factura::query()->whereKey($estadia->id)->whereDoesntHave('viajes')->exists())->toBeTrue();
 });
 
 it('refuses to free a viaje from a factura that does not cover it', function (): void {
@@ -291,7 +303,11 @@ it('refuses to free a viaje from a factura that does not cover it', function ():
  * Una factura sin ningún viaje ya no cobra nada y no habría forma de llegar a
  * ella desde la tabla, que se recorre por viaje.
  */
-it('anula the factura when its last viaje is freed', function (): void {
+/**
+ * Sin GR, la factura no se anula sola: pasa a la bandeja «Facturas por
+ * asociar», desde donde se le asignan las correctas o se anula a propósito.
+ */
+it('sends the factura to the bandeja when its last viaje is freed', function (): void {
     $factura = Factura::factory()->create();
     $viaje = Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
@@ -299,8 +315,15 @@ it('anula the factura when its last viaje is freed', function (): void {
         ->delete(route('facturas.desvincular', [$factura, $viaje]))
         ->assertSessionHasNoErrors();
 
-    expect(Factura::query()->count())->toBe(0)
+    expect(Factura::query()->whereKey($factura->id)->exists())->toBeTrue()
         ->and($viaje->facturas()->exists())->toBeFalse();
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page
+            ->has('facturasPorAsociar', 1)
+            ->where('facturasPorAsociar.0.motivo', 'Se quedó sin GR.')
+        );
 });
 
 it('frees every viaje when the factura is anulada', function (): void {
@@ -350,4 +373,132 @@ it('refuses to facturar a GR marked as no facturable', function (): void {
         ->assertSessionHasErrors('viaje_ids');
 
     expect(Factura::query()->count())->toBe(0);
+});
+
+/**
+ * El flete pactado con IGV adentro (Crisar, S/ 8 400): se escribe el total y
+ * el valor sale dividiendo, sin perder un céntimo del total impreso.
+ */
+it('derives the valor from a total pactado con IGV', function (): void {
+    $factura = Factura::factory()->create(['monto' => null]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['total' => 8400])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect([$factura->monto, $factura->igv, $factura->total, $factura->detraccion, $factura->neto])
+        ->toBe(['7118.64', '1281.36', '8400.00', '336.00', '8064.00']);
+});
+
+it('recalculates the whole desglose when the valor changes', function (): void {
+    $factura = Factura::factory()->create(['monto' => 1000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['monto' => 3500])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect([$factura->igv, $factura->total, $factura->detraccion, $factura->neto])
+        ->toBe(['630.00', '4130.00', '165.00', '3965.00']);
+});
+
+it('clears the whole flete when the total is erased', function (): void {
+    $factura = Factura::factory()->create(['monto' => 3500]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['total' => null])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect([$factura->monto, $factura->total, $factura->detraccion, $factura->neto])
+        ->toBe([null, null, null, null]);
+});
+
+it('rejects a total and a valor in the same request', function (): void {
+    $factura = Factura::factory()->create();
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['total' => 8400, 'monto' => 7118.64])
+        ->assertSessionHasErrors('total');
+});
+
+/**
+ * Un flete chico no lleva detracción: con el neto adentro ya está pagado.
+ */
+it('counts a factura under the umbral as pagada with just the neto', function (): void {
+    $factura = Factura::factory()->create(['monto' => 300, 'fecha_emision' => '2026-09-01']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['fecha_pago' => '2026-09-10'])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect($factura->detraccion)->toBe('0.00')
+        ->and($factura->estado()->value)->toBe('pagado');
+});
+
+it('rejects a detraccion dated before the emision', function (): void {
+    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-10']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['fecha_detraccion' => '2026-09-01'])
+        ->assertSessionHasErrors('fecha_detraccion');
+});
+
+/**
+ * Corregir la emisión no puede dejarla después de un cobro ya registrado:
+ * quedaría un pago anterior a su factura.
+ */
+it('rejects an emision moved past a cobro already recorded', function (string $cobro): void {
+    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-01', $cobro => '2026-09-05']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['fecha_emision' => '2026-09-10'])
+        ->assertSessionHasErrors('fecha_emision');
+
+    expect($factura->fresh()->fecha_emision->toDateString())->toBe('2026-09-01');
+})->with(['fecha_pago', 'fecha_detraccion']);
+
+it('refuses to facturar an anulada GR', function (): void {
+    $viaje = Viaje::factory()->create(['anulada_at' => now()]);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.store'), datosFactura(['viaje_ids' => [$viaje->id]]))
+        ->assertSessionHasErrors('viaje_ids.0');
+
+    expect(Factura::query()->count())->toBe(0);
+});
+
+/**
+ * Vence a los 30 días de emitida: antes de eso no está vencida, y desde el
+ * día siguiente cuenta los días de atraso.
+ */
+it('counts the days past due from the vencimiento, not from the emision', function (): void {
+    $hoy = RelojOperativo::fechaDeHoy();
+    $alDia = Factura::factory()->create(['fecha_emision' => $hoy->subDays(20)->toDateString()]);
+    $vencida = Factura::factory()->create(['fecha_emision' => $hoy->subDays(45)->toDateString()]);
+
+    expect($alDia->fechaVencimiento()->toDateString())->toBe($hoy->addDays(10)->toDateString())
+        ->and($alDia->diasVencida())->toBe(-10)
+        ->and($vencida->diasVencida())->toBe(15)
+        ->and(Factura::factory()->pagada()->create()->diasVencida())->toBeNull();
+});
+
+it('desglosa a factura created with just its total', function (): void {
+    $factura = Factura::factory()->create(['monto' => null, 'total' => 8400]);
+
+    expect([$factura->monto, $factura->igv, $factura->total, $factura->neto])
+        ->toBe(['7118.64', '1281.36', '8400.00', '8064.00']);
 });

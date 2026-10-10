@@ -106,19 +106,26 @@ export function TablaCobranza({
                         <TableHead>Destino</TableHead>
                         <TableHead>Tipo de carga</TableHead>
                         <TableHead className="text-right">Peso</TableHead>
-                        {/* Sin título: el ojo se explica solo y así queda
-                            pegado al peso, cerrando el bloque de operación. */}
-                        <TableHead className="w-0" />
                         <TableHead className={INICIO_COBRANZA}>
                             Estado
                         </TableHead>
                         <TableHead className="text-right">
-                            Valor flete fact.
+                            Valor flete
+                        </TableHead>
+                        <TableHead className="text-right">IGV</TableHead>
+                        <TableHead className="text-right">
+                            Total flete
+                        </TableHead>
+                        <TableHead className="text-right">Detracción</TableHead>
+                        <TableHead className="text-right">
+                            Neto a pagar
                         </TableHead>
                         <TableHead>N° factura</TableHead>
                         <TableHead>F. emisión</TableHead>
-                        <TableHead>F. pago</TableHead>
+                        <TableHead>Vence</TableHead>
+                        <TableHead>F. pago neto</TableHead>
                         <TableHead>Entidad</TableHead>
+                        <TableHead>F. detracción</TableHead>
                         <TableHead>Observación</TableHead>
                         <TableHead className="w-0" />
                     </TableRow>

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\EstadoCobranza;
 use App\Enums\MotivoBajaGre;
 use App\Enums\TipoCarga;
+use App\Services\AsociadorFacturas;
 use Database\Factories\ViajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -118,6 +119,10 @@ class Viaje extends Model implements HasMedia
         static::addGlobalScope(self::SIN_ANULADAS, function (Builder $query): void {
             $query->whereNull($query->qualifyColumn('anulada_at'));
         });
+
+        // Una factura subida antes que su GR la estaba esperando: al llegar
+        // la GR, se asocian solas (ver `AsociadorFacturas::alLlegarViaje()`).
+        static::created(fn (Viaje $viaje) => app(AsociadorFacturas::class)->alLlegarViaje($viaje));
     }
 
     /**
@@ -205,10 +210,11 @@ class Viaje extends Model implements HasMedia
     }
 
     /**
-     * En qué punto del cobro está. Con varias facturas, el viaje queda por
-     * cobrar mientras falte cobrar cualquiera de ellas: «pagado» es que ya
-     * entró toda la plata. Requiere `facturas` precargada para no caer en N+1
-     * al recorrer un listado.
+     * En qué punto del cobro está. Con varias facturas, manda la más
+     * atrasada: por cobrar si a alguna le falta el neto, falta detracción si
+     * a alguna solo le falta esa parte, y «pagado» cuando ya entró toda la
+     * plata. Requiere `facturas` precargada para no caer en N+1 al recorrer
+     * un listado.
      */
     public function estadoCobranza(): EstadoCobranza
     {
@@ -218,9 +224,13 @@ class Viaje extends Model implements HasMedia
                 : EstadoCobranza::SinFacturar;
         }
 
-        return $this->facturas->contains(fn (Factura $factura): bool => $factura->fecha_pago === null)
-            ? EstadoCobranza::Facturado
-            : EstadoCobranza::Pagado;
+        $estados = $this->facturas->map(fn (Factura $factura): EstadoCobranza => $factura->estado());
+
+        return match (true) {
+            $estados->contains(EstadoCobranza::Facturado) => EstadoCobranza::Facturado,
+            $estados->contains(EstadoCobranza::FaltaDetraccion) => EstadoCobranza::FaltaDetraccion,
+            default => EstadoCobranza::Pagado,
+        };
     }
 
     /**

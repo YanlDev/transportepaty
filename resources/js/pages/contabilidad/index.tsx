@@ -3,7 +3,10 @@ import { Download, Landmark, Receipt } from 'lucide-react';
 import { useState } from 'react';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cuentas from '@/actions/App/Http/Controllers/CuentaBancariaController';
+import { importar } from '@/actions/App/Http/Controllers/FacturaController';
+import { BandejaPorAsociar } from '@/components/contabilidad/bandeja-por-asociar';
 import { BarraSeleccion } from '@/components/contabilidad/barra-seleccion';
+import { ResultadoImportacion } from '@/components/contabilidad/resultado-importacion';
 import { ResumenCobranza } from '@/components/contabilidad/resumen-cobranza';
 import { TablaCobranza } from '@/components/contabilidad/tabla-cobranza';
 import { TarjetaCobranza } from '@/components/contabilidad/tarjeta-cobranza';
@@ -11,6 +14,8 @@ import { EmptyState } from '@/components/empty-state';
 import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
 import { ListadoResponsivo } from '@/components/listado-responsivo';
+import { BotonSubirPdf, ZonaSoltarPdf } from '@/components/subida-pdf';
+import type { DocumentoPdf } from '@/components/subida-pdf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Paginacion } from '@/components/ui/paginacion';
@@ -20,6 +25,7 @@ import { agruparViajes } from '@/lib/agrupar-viajes';
 import { aSeleccion, esFacturable } from '@/lib/cobranza';
 import type {
     CuentaOpcion,
+    FacturaPorAsociar,
     FiltrosContabilidad,
     ResumenCobranza as Resumen,
     ViajeContable,
@@ -36,6 +42,12 @@ type Props = {
     clientes: EnumOption[];
     meses: EnumOption[];
     cuentas: CuentaOpcion[];
+    facturasPorAsociar: FacturaPorAsociar[];
+};
+
+const FACTURAS: DocumentoPdf = {
+    boton: 'Subir facturas',
+    plural: 'las facturas',
 };
 
 export default function ContabilidadIndex({
@@ -47,6 +59,7 @@ export default function ContabilidadIndex({
     clientes,
     meses,
     cuentas: cuentasBancarias,
+    facturasPorAsociar,
 }: Props) {
     const { puede } = usePermisos();
     const puedeFacturar = puede('cobranza.gestionar');
@@ -92,7 +105,17 @@ export default function ContabilidadIndex({
                     onMes={(mes) => aplicar({ mes, desde: null, hasta: null })}
                 />
 
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                    {/* Las facturas se suben en PDF, con el botón o
+                        soltándolas en la pantalla: el sistema las lee y las
+                        asocia con las GR que citan. */}
+                    {puedeFacturar && (
+                        <BotonSubirPdf
+                            url={importar().url}
+                            documento={FACTURAS}
+                        />
+                    )}
+
                     {/* Un <a> y no un <Link>: la respuesta es un archivo, y
                         una visita de Inertia no sabe qué hacer con eso. */}
                     <Button asChild variant="outline">
@@ -114,6 +137,16 @@ export default function ContabilidadIndex({
                     </Button>
                 </div>
             </div>
+
+            {puedeFacturar && (
+                <ZonaSoltarPdf url={importar().url} documento={FACTURAS} />
+            )}
+            <ResultadoImportacion />
+
+            <BandejaPorAsociar
+                facturas={facturasPorAsociar}
+                puedeGestionar={puedeFacturar}
+            />
 
             <FiltrosBarra
                 buscar={buscar}

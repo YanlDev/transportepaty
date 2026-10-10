@@ -25,10 +25,10 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
  * varios viajes, su número se repite, y cuando un viaje tiene varias
  * facturas, el viaje se repite una vez por cada una.
  *
- * Lo primero que se hace con este archivo es sumar la columna de montos, así
- * que ninguna columna de dinero repite una cifra: «Monto factura» lleva el
- * total solo en la primera fila de cada factura, y «Monto por GR» lo reparte
- * entre sus GR. Cualquiera de las dos suma el total real.
+ * Lo primero que se hace con este archivo es sumar las columnas de dinero, así
+ * que ninguna repite una cifra: el valor, el IGV, el total, la detracción y el
+ * neto van solo en la primera fila de cada factura, y «Valor por GR» reparte
+ * el valor entre sus GR. Cualquiera de las dos columnas de valor suma lo real.
  *
  * Escribe sin paginar. La consulta se recorre con `lazy()` en lugar de
  * `get()` para que el pico de memoria no dependa de cuántos viajes haya
@@ -62,12 +62,19 @@ class ExportadorCobranza
         'Estado',
         'N° factura',
         'Fecha emisión',
-        'Monto factura',
-        'Monto por GR',
+        'Valor flete',
+        'IGV',
+        'Total flete',
+        'Detracción',
+        'Neto a pagar',
+        'Valor por GR',
         'Moneda',
-        'Fecha pago',
+        'Vence',
         'Días vencida',
+        'Fecha pago neto',
         'Cuenta',
+        'Fecha detracción',
+        'Constancia detracción',
         'Observación',
     ];
 
@@ -193,18 +200,30 @@ class ExportadorCobranza
             $viaje->estadoCobranza()->label(),
             $factura?->numero,
             $factura === null ? null : $this->fecha($factura->fecha_emision),
-            $factura?->monto !== null && $primeraVez ? (float) $factura->monto : null,
+            $primeraVez ? $this->cifra($factura?->monto) : null,
+            $primeraVez ? $this->cifra($factura?->igv) : null,
+            $primeraVez ? $this->cifra($factura?->total) : null,
+            $primeraVez ? $this->cifra($factura?->detraccion) : null,
+            $primeraVez ? $this->cifra($factura?->neto) : null,
             $factura === null ? null : $this->montoPorGr($factura, $viaje),
             $factura?->moneda->value,
-            $factura?->fecha_pago === null ? null : $this->fecha($factura->fecha_pago),
+            $factura === null ? null : $this->fecha($factura->fechaVencimiento()),
             $factura?->diasVencida(),
+            $factura?->fecha_pago === null ? null : $this->fecha($factura->fecha_pago),
             $factura?->cuentaBancaria?->alias,
+            $factura?->fecha_detraccion === null ? null : $this->fecha($factura->fecha_detraccion),
+            $factura?->constancia_detraccion,
             $factura === null ? $viaje->motivo_no_facturable : $factura->observacion,
         ];
     }
 
+    private function cifra(?string $valor): ?float
+    {
+        return $valor === null ? null : (float) $valor;
+    }
+
     /**
-     * La parte de la factura que le toca a esta GR, en partes iguales. Se
+     * La parte del valor de la factura que le toca a esta GR, en partes iguales. Se
      * reparte en céntimos y lo que sobra de la división va a las primeras GR
      * (por id), para que la columna sume exactamente el total de la factura:
      * 100.00 entre 3 da 33.34 + 33.33 + 33.33, no tres veces 33.33.
@@ -301,10 +320,13 @@ class ExportadorCobranza
 
         $this->formatear($hoja, 1, $primeraFila, $ultimaFila, NumberFormat::FORMAT_DATE_DDMMYYYY);
         $this->formatear($hoja, 12, $primeraFila, $ultimaFila, '#,##0.00');
-        $this->formatear($hoja, 15, $primeraFila, $ultimaFila, NumberFormat::FORMAT_DATE_DDMMYYYY);
-        $this->formatear($hoja, 16, $primeraFila, $ultimaFila, '#,##0.00');
-        $this->formatear($hoja, 17, $primeraFila, $ultimaFila, '#,##0.00');
-        $this->formatear($hoja, 19, $primeraFila, $ultimaFila, NumberFormat::FORMAT_DATE_DDMMYYYY);
+        foreach ([15, 23, 25, 27] as $columnaFecha) {
+            $this->formatear($hoja, $columnaFecha, $primeraFila, $ultimaFila, NumberFormat::FORMAT_DATE_DDMMYYYY);
+        }
+
+        foreach (range(16, 21) as $columnaDinero) {
+            $this->formatear($hoja, $columnaDinero, $primeraFila, $ultimaFila, '#,##0.00');
+        }
 
         // La columna de GR remitente lleva varias por celda.
         $hoja->getStyle([3, $primeraFila, 3, $ultimaFila])

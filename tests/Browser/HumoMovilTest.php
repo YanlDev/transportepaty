@@ -177,3 +177,20 @@ it('no desborda el tablero en celular con un cliente de nombre largo', function 
         ->assertNoJavaScriptErrors()
         ->screenshot(filename: 'movil-tablero-cliente-largo');
 });
+
+it('muestra «Viajes por cliente» en celular sin salirse de la pantalla ni encimar nombres', function (): void {
+    actingAs(actorConRol('admin'));
+    Viaje::factory()->count(5)->create(['cliente' => 'Minsur S.A.']);
+    Viaje::factory()->count(3)->create(['cliente' => CLIENTE_LARGO]);
+    Viaje::factory()->count(2)->create(['cliente' => 'MOLINORTE TRADING SOCIEDAD ANONIMA CERRADA']);
+    Viaje::factory()->create(['cliente' => 'Paredes Tipo De Olivera Leticia Aurora']);
+
+    visit('/dashboard')
+        ->on()->mobile()
+        ->assertSee('Viajes por cliente')
+        ->assertPresent('.recharts-yAxis .recharts-cartesian-axis-tick')
+        ->assertScript("[...document.querySelectorAll('main section')].every((s) => s.getBoundingClientRect().right <= window.innerWidth)", true)
+        ->assertScript("[...document.querySelectorAll('.recharts-yAxis .recharts-cartesian-axis-tick text')].every((t) => t.querySelectorAll('tspan').length <= 1)", true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-tablero-viajes-por-cliente');
+});

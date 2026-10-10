@@ -58,6 +58,28 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Facturación del flete
+    |--------------------------------------------------------------------------
+    |
+    | La detracción del transporte de carga (SPOT, código 027): el cliente
+    | deposita esa parte del total en la cuenta de detracciones del Banco de
+    | la Nación y el resto —el neto— en la cuenta de la empresa. Solo aplica
+    | cuando el total pasa el umbral. El plazo de crédito es el mismo para
+    | todos los clientes y fija el vencimiento de cada factura.
+    |
+    */
+
+    'facturacion' => [
+        // El RUC con que la empresa emite: una factura subida con otro RUC
+        // emisor no es de Paty y no se registra.
+        'ruc_empresa' => env('SUNAT_SOL_RUC', '20364000643'),
+        'detraccion' => (float) env('TRANSPATY_DETRACCION', 0.04),
+        'umbral_detraccion' => (float) env('TRANSPATY_UMBRAL_DETRACCION', 400),
+        'plazo_credito_dias' => (int) env('TRANSPATY_PLAZO_CREDITO_DIAS', 30),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Áreas y teléfono de la oficina (solo valores iniciales)
     |--------------------------------------------------------------------------
     |

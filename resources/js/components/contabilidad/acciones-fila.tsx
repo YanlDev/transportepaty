@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { Ban, Link2Off, Receipt, Trash2 } from 'lucide-react';
+import { Ban, FilePlus2, Link2Off, Receipt, Trash2 } from 'lucide-react';
 import { marcarNoFacturable } from '@/actions/App/Http/Controllers/ContabilidadController';
 import {
     desvincular,
@@ -10,13 +10,14 @@ import {
     Resaltado,
 } from '@/components/confirmar-borrado-dialog';
 import { NoFacturableDialog } from '@/components/contabilidad/no-facturable-dialog';
+import { OtraFacturaDialog } from '@/components/contabilidad/otra-factura-dialog';
 import { Button } from '@/components/ui/button';
 import { avisarError } from '@/lib/aviso-error';
 import type { FacturaResumen, ViajeContable } from '@/types/contabilidad';
 
 /**
  * Lo que se le puede hacer a una factura del viaje: sacarle este viaje, o
- * anularla entera. Ver la GR no está acá sino junto al peso (`VerGuia`),
+ * anularla entera, o sumarle otra al viaje (la estadía aparte del flete). Bajar la GR no está acá sino junto al N° GR (`DescargarGuia`),
  * porque es leer la operación y no tocar la cobranza.
  *
  * En un viaje sin factura, lo que queda es decidir no cobrarlo (o deshacer
@@ -26,10 +27,13 @@ export function AccionesFila({
     viaje,
     factura,
     puedeFacturar,
+    agregarOtra = false,
 }: {
     viaje: ViajeContable;
     factura: FacturaResumen | null;
     puedeFacturar: boolean;
+    /** En la última factura del viaje: deja sumarle una más. */
+    agregarOtra?: boolean;
 }) {
     if (factura === null) {
         return puedeFacturar ? <AccionesSinFactura viaje={viaje} /> : null;
@@ -37,6 +41,23 @@ export function AccionesFila({
 
     return (
         <div className="flex items-center justify-end gap-1">
+            {puedeFacturar && agregarOtra && (
+                <OtraFacturaDialog
+                    viaje={viaje}
+                    trigger={
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8 text-muted-foreground"
+                            aria-label={`Registrar otra factura para la GR ${viaje.numero_gr}`}
+                            title="Agregar otra factura a este viaje"
+                        >
+                            <FilePlus2 className="size-4" />
+                        </Button>
+                    }
+                />
+            )}
+
             {/* Desvincular solo tiene sentido en una factura de varias GR: si
                 cobra una sola, sacarla la dejaría vacía y eso es anularla. */}
             {puedeFacturar && factura.viajes_count > 1 && (

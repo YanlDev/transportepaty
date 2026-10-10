@@ -97,9 +97,10 @@ it('writes every column of the table, with the money as a number', function (): 
     expect($hoja[0])->toBe([
         'Fecha', 'N° GR', 'GR remitente', 'Tracto', 'Carreta', 'Conductor',
         'Cliente', 'Destinatario', 'Origen', 'Destino', 'Tipo de carga',
-        'Peso (TNE)', 'Estado', 'N° factura', 'Fecha emisión', 'Monto factura',
-        'Monto por GR',
-        'Moneda', 'Fecha pago', 'Días vencida', 'Cuenta', 'Observación',
+        'Peso (TNE)', 'Estado', 'N° factura', 'Fecha emisión', 'Valor flete',
+        'IGV', 'Total flete', 'Detracción', 'Neto a pagar', 'Valor por GR',
+        'Moneda', 'Vence', 'Días vencida', 'Fecha pago neto', 'Cuenta',
+        'Fecha detracción', 'Constancia detracción', 'Observación',
     ]);
 
     $fila = $hoja[1];
@@ -114,12 +115,19 @@ it('writes every column of the table, with the money as a number', function (): 
         // Número y no texto: sobre esta columna se hacen sumas.
         ->and($fila[11])->toBe(23.76)
         ->and($fila[13])->toBe('F001-00042')
+        // El flete descompuesto como en la factura impresa.
         ->and($fila[15])->toBe(4500.5)
+        ->and($fila[16])->toBe(810.09)
+        ->and($fila[17])->toBe(5310.59)
+        ->and($fila[18])->toBe(212.0)
+        ->and($fila[19])->toBe(5098.59)
         // Una sola GR: le toca la factura entera.
-        ->and($fila[16])->toBe(4500.5)
-        ->and($fila[17])->toBe('PEN')
-        ->and($fila[20])->toBe('BCP Soles')
-        ->and($fila[21])->toBe('A 30 días');
+        ->and($fila[20])->toBe(4500.5)
+        ->and($fila[21])->toBe('PEN')
+        // Emitida el 12/09, vence a los 30 días: el 12/10.
+        ->and($fila[22])->toBe(46307.0)
+        ->and($fila[25])->toBe('BCP Soles')
+        ->and($fila[28])->toBe('A 30 días');
 });
 
 it('writes the weight in tonnes even when the guide came in kilos', function (): void {
@@ -172,8 +180,9 @@ it('leaves the billing columns empty when the trip has no invoice', function ():
     expect($hoja[1][12])->toBe('Sin facturar')
         ->and($hoja[1][13])->toBeNull()
         ->and($hoja[1][15])->toBeNull()
-        ->and($hoja[1][16])->toBeNull()
-        ->and($hoja[1][20])->toBeNull();
+        ->and($hoja[1][19])->toBeNull()
+        ->and($hoja[1][20])->toBeNull()
+        ->and($hoja[1][25])->toBeNull();
 });
 
 /**
@@ -212,8 +221,8 @@ it('never repeats a factura total, so both money columns add up to it', function
     expect(array_sum(array_column($filas, 15)))->toBe(100.0)
         ->and(count(array_filter(array_column($filas, 15))))->toBe(1)
         // 33.34 + 33.33 + 33.33: los céntimos sobrantes no se pierden.
-        ->and(round(array_sum(array_column($filas, 16)), 2))->toBe(100.0)
-        ->and(array_column($filas, 16))->toEqualCanonicalizing([33.34, 33.33, 33.33]);
+        ->and(round(array_sum(array_column($filas, 20)), 2))->toBe(100.0)
+        ->and(array_column($filas, 20))->toEqualCanonicalizing([33.34, 33.33, 33.33]);
 });
 
 it('exports only what the filters leave, not the whole table', function (): void {

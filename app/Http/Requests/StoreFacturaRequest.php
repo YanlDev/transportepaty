@@ -35,7 +35,9 @@ class StoreFacturaRequest extends FormRequest
             'monto' => ['nullable', 'numeric', 'min:0.01', 'max:99999999.99'],
             'moneda' => ['nullable', Rule::enum(Moneda::class)],
             'viaje_ids' => ['required', 'array', 'min:1'],
-            'viaje_ids.*' => ['integer', 'distinct', Rule::exists('viajes', 'id')],
+            // Una GR anulada no es un viaje y no se cobra: la factura quedaría
+            // escondida, porque la cobranza no muestra las anuladas.
+            'viaje_ids.*' => ['integer', 'distinct', Rule::exists('viajes', 'id')->whereNull('anulada_at')],
         ];
     }
 

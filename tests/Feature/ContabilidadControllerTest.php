@@ -113,18 +113,28 @@ it('reports a viaje as por cobrar until the factura has a fecha de pago', functi
         ->get(route('contabilidad.index'))
         ->assertInertia(fn ($page) => $page
             ->where('viajes.data.0.estado', 'facturado')
+            // El flete descompuesto como lo imprime SUNAT.
             ->where('viajes.data.0.facturas.0.monto', 4500.50)
-            ->where('resumen.montos.0.por_cobrar', 4500.50)
+            ->where('viajes.data.0.facturas.0.igv', 810.09)
+            ->where('viajes.data.0.facturas.0.total', 5310.59)
+            ->where('viajes.data.0.facturas.0.detraccion', 212)
+            ->where('viajes.data.0.facturas.0.neto', 5098.59)
+            // Por cobrar es lo que falta depositar: el neto a la empresa y la
+            // detracción al Banco de la Nación, por separado.
+            ->where('resumen.montos.0.por_cobrar', 5098.59)
+            ->where('resumen.montos.0.detraccion_por_cobrar', 212)
             ->where('resumen.montos.0.cobrado', 0)
         );
 });
 
-it('reports a viaje as pagado once the factura has a fecha de pago', function (): void {
+it('reports a viaje as pagado once both the neto and the detraccion came in', function (): void {
     $cuenta = CuentaBancaria::factory()->create(['alias' => 'BCP Soles']);
     $factura = Factura::factory()->create([
         'monto' => 3200.75,
+        'fecha_emision' => '2026-08-25',
         'fecha_pago' => '2026-09-01',
         'cuenta_bancaria_id' => $cuenta->id,
+        'fecha_detraccion' => '2026-09-03',
     ]);
     Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
@@ -133,8 +143,10 @@ it('reports a viaje as pagado once the factura has a fecha de pago', function ()
         ->assertInertia(fn ($page) => $page
             ->where('viajes.data.0.estado', 'pagado')
             ->where('viajes.data.0.facturas.0.cuenta', 'BCP Soles')
-            ->where('resumen.montos.0.cobrado', 3200.75)
+            // Cobrado es todo lo que entró: neto 3625.89 + detracción 151.
+            ->where('resumen.montos.0.cobrado', 3776.89)
             ->where('resumen.montos.0.por_cobrar', 0)
+            ->where('resumen.montos.0.detraccion_por_cobrar', 0)
         );
 });
 
@@ -149,7 +161,7 @@ it('counts a factura once in the totals even when it covers several viajes', fun
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index'))
         ->assertInertia(fn ($page) => $page
-            ->where('resumen.montos.0.por_cobrar', 4500.50)
+            ->where('resumen.montos.0.por_cobrar', 5098.59)
             ->where('resumen.facturas', 1)
             ->where('viajes.data.0.facturas.0.viajes_count', 3)
         );
@@ -161,7 +173,7 @@ it('counts a factura once in the totals even when it covers several viajes', fun
  * distintos.
  */
 it('keeps a viaje por cobrar until every one of its facturas is paid', function (): void {
-    $flete = Factura::factory()->create(['monto' => 4000, 'fecha_emision' => '2026-09-01', 'fecha_pago' => '2026-09-20']);
+    $flete = Factura::factory()->create(['monto' => 4000, 'fecha_emision' => '2026-09-01', 'fecha_pago' => '2026-09-20', 'fecha_detraccion' => '2026-09-20']);
     $estadia = Factura::factory()->create(['monto' => 500, 'fecha_emision' => '2026-09-05']);
     Viaje::factory()
         ->hasAttached($flete, relationship: 'facturas')
@@ -176,15 +188,17 @@ it('keeps a viaje por cobrar until every one of its facturas is paid', function 
             ->where('viajes.data.0.facturas.0.id', $flete->id)
             ->where('viajes.data.0.facturas.1.id', $estadia->id)
             ->where('resumen.facturas', 2)
-            ->where('resumen.montos.0.cobrado', 4000)
-            ->where('resumen.montos.0.por_cobrar', 500)
+            // Flete: total 4720 cobrado. Estadía: neto 566 + detracción 24.
+            ->where('resumen.montos.0.cobrado', 4720)
+            ->where('resumen.montos.0.por_cobrar', 566)
+            ->where('resumen.montos.0.detraccion_por_cobrar', 24)
         );
 
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index', ['estado' => 'pagado']))
         ->assertInertia(fn ($page) => $page->has('viajes.data', 0));
 
-    $estadia->update(['fecha_pago' => '2026-09-25']);
+    $estadia->update(['fecha_pago' => '2026-09-25', 'fecha_detraccion' => '2026-09-25']);
 
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index', ['estado' => 'pagado']))
@@ -208,6 +222,9 @@ it('filters by estado de cobranza', function (): void {
     Viaje::factory()->hasAttached(Factura::factory()->create(), relationship: 'facturas')->create([
         'numero_gr' => 'EG03-PORCOBRAR',
     ]);
+    Viaje::factory()->hasAttached(Factura::factory()->faltaDetraccion()->create(), relationship: 'facturas')->create([
+        'numero_gr' => 'EG03-FALTADETRACCION',
+    ]);
     Viaje::factory()->hasAttached(Factura::factory()->pagada()->create(), relationship: 'facturas')->create([
         'numero_gr' => 'EG03-PAGADO',
     ]);
@@ -215,6 +232,7 @@ it('filters by estado de cobranza', function (): void {
     foreach ([
         'sin_facturar' => 'EG03-SINFACT',
         'facturado' => 'EG03-PORCOBRAR',
+        'falta_detraccion' => 'EG03-FALTADETRACCION',
         'pagado' => 'EG03-PAGADO',
     ] as $estado => $esperado) {
         actingAs(actorConRol('contador'))
@@ -316,7 +334,7 @@ it('narrows the totals to the selected month', function (): void {
     actingAs(actorConRol('contador'))
         ->get(route('contabilidad.index', ['mes' => '2026-09']))
         ->assertInertia(fn ($page) => $page
-            ->where('resumen.montos.0.por_cobrar', 1000.50)
+            ->where('resumen.montos.0.por_cobrar', 1133.59)
             ->where('resumen.facturas', 1)
         );
 });

@@ -8,6 +8,7 @@ use App\Models\Factura;
 use App\Models\Viaje;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -58,9 +59,9 @@ class ResumenCobranza
      * una le agrega lo suyo.
      *
      * Los filtros de estado no son una columna: se traducen a la presencia de
-     * facturas y de `fecha_pago`, que son los dos únicos hechos guardados. Con
-     * varias facturas, el viaje está pagado solo cuando no le queda ninguna
-     * por cobrar — la misma regla que `Viaje::estadoCobranza()`.
+     * facturas y de las fechas de cobro del neto y de la detracción. Con
+     * varias facturas manda la más atrasada — la misma regla que
+     * `Viaje::estadoCobranza()`.
      *
      * @param  FiltrosCobranza  $filtros
      * @return Builder<Viaje>
@@ -95,18 +96,43 @@ class ResumenCobranza
                     EstadoCobranza::SinFacturar->value => $query->whereDoesntHave('facturas')->whereNull('no_facturable_at'),
                     EstadoCobranza::NoFacturable->value => $query->whereNotNull('no_facturable_at'),
                     EstadoCobranza::Facturado->value => $query->whereHas('facturas', fn ($query) => $query->whereNull('fecha_pago')),
+                    EstadoCobranza::FaltaDetraccion->value => $query
+                        ->whereDoesntHave('facturas', fn ($query) => $query->whereNull('fecha_pago'))
+                        ->whereHas('facturas', fn ($query) => $this->conDetraccionPendiente($query)),
                     EstadoCobranza::Pagado->value => $query
                         ->whereHas('facturas')
-                        ->whereDoesntHave('facturas', fn ($query) => $query->whereNull('fecha_pago')),
+                        ->whereDoesntHave('facturas', fn ($query) => $query
+                            ->whereNull('fecha_pago')
+                            ->orWhere(function ($query): void {
+                                $this->conDetraccionPendiente($query);
+                            })),
                     default => null,
                 };
             });
     }
 
     /**
+     * Facturas que llevan detracción y todavía no se depositó: la misma
+     * condición que `Factura::faltaDetraccion()`.
+     *
+     * @template TModel of Model
+     *
+     * @param  Builder<TModel>  $query
+     * @return Builder<TModel>
+     */
+    private function conDetraccionPendiente(Builder $query): Builder
+    {
+        return $query->where('detraccion', '>', 0)->whereNull('fecha_detraccion');
+    }
+
+    /**
      * Lo que el contador viene a ver: cuánto hay por cobrar y cuánto ya entró,
      * bajo los mismos filtros de la tabla. Separado por moneda porque sumar
      * soles con dólares da un número que no significa nada.
+     *
+     * Por cobrar es lo que falta que deposite el cliente, en sus dos partes:
+     * el neto a la cuenta de la empresa y la detracción al Banco de la
+     * Nación. Cobrado es la suma de lo que ya entró por cualquiera de los dos.
      *
      * Los totales se calculan sobre facturas distintas, no sobre filas: una
      * factura que cubre tres viajes aparece en tres filas y sumarla tres veces
@@ -123,15 +149,20 @@ class ResumenCobranza
                 'viajes.id',
                 $this->consulta($filtros)->reorder()->select('viajes.id'),
             ))
-            ->get(['id', 'monto', 'moneda', 'fecha_pago']);
+            ->get(['id', 'monto', 'neto', 'detraccion', 'moneda', 'fecha_pago', 'fecha_detraccion']);
 
         $porMoneda = $facturas
             ->groupBy(fn (Factura $factura): string => $factura->moneda->value)
             ->map(fn ($grupo, string $moneda): array => [
                 'moneda' => $moneda,
                 'simbolo' => Moneda::from($moneda)->simbolo(),
-                'por_cobrar' => (float) $grupo->whereNull('fecha_pago')->sum('monto'),
-                'cobrado' => (float) $grupo->whereNotNull('fecha_pago')->sum('monto'),
+                'por_cobrar' => round((float) $grupo->whereNull('fecha_pago')->sum('neto'), 2),
+                'detraccion_por_cobrar' => round((float) $grupo->whereNull('fecha_detraccion')->sum('detraccion'), 2),
+                'cobrado' => round(
+                    (float) $grupo->whereNotNull('fecha_pago')->sum('neto')
+                    + (float) $grupo->whereNotNull('fecha_detraccion')->sum('detraccion'),
+                    2,
+                ),
             ])
             ->values()
             ->all();

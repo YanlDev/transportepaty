@@ -9,6 +9,7 @@ use App\Http\Requests\MarcarNoFacturableRequest;
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
+use App\Services\AsociadorFacturas;
 use App\Services\ExportadorCobranza;
 use App\Services\ResumenCobranza;
 use Illuminate\Http\RedirectResponse;
@@ -34,6 +35,7 @@ class ContabilidadController extends Controller
     public function __construct(
         private readonly ResumenCobranza $cobranza,
         private readonly ExportadorCobranza $exportador,
+        private readonly AsociadorFacturas $asociador,
     ) {}
 
     public function index(Request $request): Response
@@ -61,6 +63,7 @@ class ContabilidadController extends Controller
                 'facturas' => fn ($query) => $query->orderBy('fecha_emision')->orderBy('facturas.id'),
                 'facturas.cuentaBancaria:id,alias,banco',
                 'facturas.viajes:viajes.id',
+                'facturas.media',
             ])
             ->orderByDesc('fecha_traslado')
             ->orderByDesc('numero_gr')
@@ -79,6 +82,9 @@ class ContabilidadController extends Controller
             'clientes' => fn (): array => Viaje::opcionesDeCliente(),
             'meses' => fn (): array => $this->cobranza->opcionesDeMes(),
             'cuentas' => fn (): array => $this->opcionesCuentas(),
+            // No dependen de los filtros: una factura sin GR no cae en ningún
+            // mes ni cliente de la tabla, y por eso va aparte.
+            'facturasPorAsociar' => fn (): array => $this->facturasPorAsociar(),
         ]);
     }
 
@@ -197,14 +203,25 @@ class ContabilidadController extends Controller
             'id' => $factura->id,
             'numero' => $factura->numero,
             'fecha_emision' => $factura->fecha_emision->toDateString(),
-            'monto' => $factura->monto === null ? null : (float) $factura->monto,
+            // El flete descompuesto como lo imprime SUNAT; `monto` es el valor
+            // sin IGV y el resto lo calcula el modelo.
+            'monto' => $this->cifra($factura->monto),
+            'igv' => $this->cifra($factura->igv),
+            'total' => $this->cifra($factura->total),
+            'detraccion' => $this->cifra($factura->detraccion),
+            'neto' => $this->cifra($factura->neto),
             'moneda' => $factura->moneda->value,
             'simbolo' => $factura->moneda->simbolo(),
+            'estado' => $factura->estado()->value,
+            'fecha_vencimiento' => $factura->fechaVencimiento()->toDateString(),
             'fecha_pago' => $factura->fecha_pago?->toDateString(),
             'dias_vencida' => $factura->diasVencida(),
             'cuenta_bancaria_id' => $factura->cuenta_bancaria_id,
             'cuenta' => $factura->cuentaBancaria?->alias,
+            'fecha_detraccion' => $factura->fecha_detraccion?->toDateString(),
+            'constancia_detraccion' => $factura->constancia_detraccion,
             'observacion' => $factura->observacion,
+            'archivo_url' => $factura->getFirstMediaUrl('archivo') ?: null,
             // Cuántos viajes cubre: la fila muestra el monto completo de la
             // factura, y sin esto parecería que cada una de las tres filas de
             // una factura agrupada cobró ese monto por separado.
@@ -214,6 +231,68 @@ class ContabilidadController extends Controller
             // en otra página del listado.
             'viaje_ids' => $factura->viajes->pluck('id')->all(),
         ];
+    }
+
+    /**
+     * Las facturas que no cubren ninguna GR: subidas en PDF sin poder
+     * asociarse solas, o que se quedaron sin viajes. La tabla se recorre por
+     * viaje, así que sin esta bandeja no se verían en ningún lado.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function facturasPorAsociar(): array
+    {
+        return Factura::query()
+            ->whereDoesntHave('viajes')
+            ->with('media')
+            ->orderBy('fecha_emision')
+            ->get()
+            ->map(function (Factura $factura): array {
+                $citadas = $factura->gr_citadas ?? [];
+
+                return [
+                    'id' => $factura->id,
+                    'numero' => $factura->numero,
+                    'fecha_emision' => $factura->fecha_emision->toDateString(),
+                    'cliente' => $factura->cliente_razon_social,
+                    'cliente_ruc' => $factura->cliente_ruc,
+                    'neto' => $this->cifra($factura->neto),
+                    'simbolo' => $factura->moneda->simbolo(),
+                    'archivo_url' => $factura->getFirstMediaUrl('archivo') ?: null,
+                    'gr_citadas' => $citadas,
+                    'periodo_desde' => $factura->periodo_desde?->toDateString(),
+                    'periodo_hasta' => $factura->periodo_hasta?->toDateString(),
+                    'motivo' => $this->motivoSinAsociar($factura, $citadas),
+                    'candidatas' => $this->asociador->candidatas($factura),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Por qué la factura no se asoció sola, dicho para quien la va a resolver.
+     *
+     * @param  list<string>  $citadas
+     */
+    private function motivoSinAsociar(Factura $factura, array $citadas): string
+    {
+        if ($citadas !== []) {
+            return 'Cita '.implode(', ', $citadas).': no están en el sistema o ya tienen otra factura.';
+        }
+
+        if ($factura->periodo_desde !== null && $factura->periodo_hasta !== null) {
+            return 'No cita GR: cobra el período del '.$factura->periodo_desde->format('d/m').' al '.$factura->periodo_hasta->format('d/m/Y').'.';
+        }
+
+        return $factura->desde_pdf
+            ? 'No cita ninguna GR.'
+            : 'Se quedó sin GR.';
+    }
+
+    private function cifra(?string $valor): ?float
+    {
+        return $valor === null ? null : (float) $valor;
     }
 
     /**

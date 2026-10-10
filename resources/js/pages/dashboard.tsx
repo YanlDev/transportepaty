@@ -210,13 +210,13 @@ export default function Dashboard({
                 />
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)_minmax(0,1fr)]">
                 <MetaConcentradoPanel meta={metaConcentrado} />
                 <DocumentosPanel documentos={documentos} />
                 <UnidadesPanel unidades={unidades} />
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
                 <Suspense fallback={<GraficosCargando />}>
                     <GraficosViajes
                         cargaMinsur={cargaMinsur}
@@ -226,7 +226,7 @@ export default function Dashboard({
                 </Suspense>
             </div>
 
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)]">
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.6fr)]">
                 <TopLista
                     titulo="Top 5 clientes por viajes"
                     items={viajesPorCliente

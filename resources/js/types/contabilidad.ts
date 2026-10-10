@@ -11,19 +11,40 @@ export type FacturaResumen = {
     id: number;
     numero: string;
     fecha_emision: string;
-    /** Null mientras no se cargue: la factura puede registrarse solo con su número. */
+    /**
+     * El valor del flete, sin IGV. Null mientras no se cargue: la factura
+     * puede registrarse solo con su número.
+     */
     monto: number | null;
+    /** IGV, total, detracción y neto: los calcula el backend a partir del valor (o del total). */
+    igv: number | null;
+    total: number | null;
+    detraccion: number | null;
+    /** Lo que el cliente deposita en la cuenta de la empresa: total menos detracción. */
+    neto: number | null;
     moneda: string;
     /** `S/` o `$`, ya resuelto en el backend. */
     simbolo: string;
-    /** Null mientras esté por cobrar. */
+    /** `facturado` | `falta_detraccion` | `pagado`. */
+    estado: string;
+    /** Emisión más el plazo de crédito (30 días). */
+    fecha_vencimiento: string;
+    /** Cuándo entró el neto. Null mientras esté por cobrar. */
     fecha_pago: string | null;
-    /** Días desde la emisión sin cobrar. Null si ya se pagó. */
+    /**
+     * Días pasados del vencimiento: positivo si ya venció, negativo mientras
+     * falte. Null si ya se cobró todo.
+     */
     dias_vencida: number | null;
     cuenta_bancaria_id: number | null;
-    /** Alias de la cuenta por la que entró la plata. Null si aún no se cobró. */
+    /** Alias de la cuenta por la que entró el neto. Null si aún no se cobró. */
     cuenta: string | null;
+    /** Cuándo depositó el cliente la detracción en el Banco de la Nación. */
+    fecha_detraccion: string | null;
+    constancia_detraccion: string | null;
     observacion: string | null;
+    /** El PDF de la factura, si se subió. */
+    archivo_url: string | null;
     /** Cuántos viajes cubre esta factura. */
     viajes_count: number;
     /** Todos los viajes que cubre, aunque caigan en otra página del listado. */
@@ -36,7 +57,7 @@ export type FacturaResumen = {
  * estado del cobro y su factura.
  */
 export type ViajeContable = ViajeListItem & {
-    /** `sin_facturar` | `facturado` | `pagado` | `no_facturable`. */
+    /** `sin_facturar` | `facturado` | `falta_detraccion` | `pagado` | `no_facturable`. */
     estado: string;
     estado_label: string;
     /** Por qué se decidió no cobrar esta GR; null si no se dijo o sí se cobra. */
@@ -64,7 +85,11 @@ export type ViajeSeleccionado = Pick<ViajeContable, 'id' | 'numero_gr'> & {
 export type ResumenMoneda = {
     moneda: string;
     simbolo: string;
+    /** El neto que falta que entre a las cuentas de la empresa. */
     por_cobrar: number;
+    /** La detracción que falta que el cliente deposite en el Banco de la Nación. */
+    detraccion_por_cobrar: number;
+    /** Lo que ya entró, neto y detracción. */
     cobrado: number;
 };
 
@@ -116,4 +141,47 @@ export type CuentaBancaria = {
     notas: string | null;
     /** Cuántas facturas se cobraron por acá; con una o más, la cuenta no se borra. */
     facturas_count: number;
+};
+
+/** Una GR que se puede asociar a mano a una factura de la bandeja. */
+export type GrCandidata = {
+    id: number;
+    numero_gr: string;
+    fecha_traslado: string;
+    destino: string | null;
+    /** Cae dentro del período que cobra la factura: viene marcada. */
+    sugerida: boolean;
+};
+
+/**
+ * Una factura que no cubre ninguna GR: se subió en PDF y no se pudo asociar
+ * sola, o se quedó sin viajes. Espera en la bandeja «Facturas por asociar».
+ */
+export type FacturaPorAsociar = {
+    id: number;
+    numero: string;
+    fecha_emision: string;
+    cliente: string | null;
+    cliente_ruc: string | null;
+    neto: number | null;
+    simbolo: string;
+    archivo_url: string | null;
+    /** Las GR que cita el PDF (las que no estaban en el sistema). */
+    gr_citadas: string[];
+    periodo_desde: string | null;
+    periodo_hasta: string | null;
+    /** Por qué no se asoció sola, listo para mostrar. */
+    motivo: string;
+    candidatas: GrCandidata[];
+};
+
+/** Lo que pasó con cada PDF de una subida de facturas. */
+export type ResultadoImportacionFactura = {
+    archivo: string;
+    reconocida: boolean;
+    numero: string | null;
+    /** False si la factura ya existía y se actualizó con el PDF. */
+    nueva: boolean;
+    asociadas: string[];
+    alertas: string[];
 };

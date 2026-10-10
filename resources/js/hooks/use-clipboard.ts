@@ -1,5 +1,5 @@
 // Credit: https://usehooks-ts.com/
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 export type CopiedValue = string | null;
 export type CopyFn = (text: string) => Promise<boolean>;
@@ -44,14 +44,44 @@ function copiarConExecCommand(text: string): boolean {
     return copiado;
 }
 
+/**
+ * Cuánto dura la confirmación de «copiado». Sin un límite el ✓ quedaba para
+ * siempre, y en una tabla terminaba marcando cada número que se copió alguna
+ * vez, como si fuera un estado de la fila.
+ */
+const DURACION_COPIADO_MS = 2000;
+
 export function useClipboard(): UseClipboardReturn {
     const [copiedText, setCopiedText] = useState<CopiedValue>(null);
+    const temporizador = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    useEffect(
+        () => () => {
+            if (temporizador.current !== null) {
+                clearTimeout(temporizador.current);
+            }
+        },
+        [],
+    );
+
+    const marcarCopiado = (text: string): void => {
+        setCopiedText(text);
+
+        if (temporizador.current !== null) {
+            clearTimeout(temporizador.current);
+        }
+
+        temporizador.current = setTimeout(
+            () => setCopiedText(null),
+            DURACION_COPIADO_MS,
+        );
+    };
 
     const copy: CopyFn = async (text) => {
         if (navigator?.clipboard) {
             try {
                 await navigator.clipboard.writeText(text);
-                setCopiedText(text);
+                marcarCopiado(text);
 
                 return true;
             } catch {
@@ -61,7 +91,7 @@ export function useClipboard(): UseClipboardReturn {
         }
 
         if (copiarConExecCommand(text)) {
-            setCopiedText(text);
+            marcarCopiado(text);
 
             return true;
         }

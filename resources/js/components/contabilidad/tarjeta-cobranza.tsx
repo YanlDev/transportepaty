@@ -1,9 +1,8 @@
 import { ArrowRight } from 'lucide-react';
 import { AccionesFila } from '@/components/contabilidad/acciones-fila';
 import { CeldaGrFisica } from '@/components/contabilidad/celda-gr-fisica';
+import { DescargarGuia } from '@/components/contabilidad/descargar-guia';
 import { EstadoCobranzaBadge } from '@/components/contabilidad/estado-cobranza-badge';
-import { VerGuia } from '@/components/contabilidad/ver-guia';
-import { Copiable } from '@/components/copiable';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
 import { diasVencidaMayor, esFacturable } from '@/lib/cobranza';
@@ -49,25 +48,33 @@ export function TarjetaCobranza({
                     label={viaje.estado_label}
                     diasVencida={diasVencidaMayor(viaje)}
                 />
-                {/* Una sola factura: su monto grande, como siempre. Con
-                    varias, el detalle va abajo, una línea por factura. */}
+                {/* Una sola factura: el neto grande —lo que tiene que entrar a
+                    la cuenta—, y debajo de dónde sale. Con varias, el detalle
+                    va abajo, una línea por factura. */}
                 {facturas.length === 1 &&
-                    (facturas[0].monto != null ? (
+                    (facturas[0].neto != null ? (
                         <span className="text-right">
                             <span className="text-base font-semibold tabular-nums">
                                 {facturas[0].simbolo}{' '}
-                                {formatearMonto(facturas[0].monto)}
+                                {formatearMonto(facturas[0].neto)}
                             </span>
-                            {/* El monto es de la factura, no del viaje. */}
-                            {facturas[0].viajes_count > 1 && (
-                                <span className="block text-xs text-muted-foreground">
-                                    {formatearMonto(
-                                        facturas[0].monto /
-                                            facturas[0].viajes_count,
-                                    )}{' '}
-                                    c/u · {facturas[0].viajes_count} GR
-                                </span>
-                            )}
+                            <span className="block text-xs text-muted-foreground tabular-nums">
+                                Total {formatearMonto(facturas[0].total ?? 0)}
+                                {(facturas[0].detraccion ?? 0) > 0 &&
+                                    ` − detr. ${formatearMonto(facturas[0].detraccion ?? 0)}`}
+                            </span>
+                            {/* El valor es de la factura, no del viaje. */}
+                            {facturas[0].viajes_count > 1 &&
+                                facturas[0].monto != null && (
+                                    <span className="block text-xs text-muted-foreground">
+                                        {formatearMonto(
+                                            facturas[0].monto /
+                                                facturas[0].viajes_count,
+                                        )}{' '}
+                                        c/u + IGV · {facturas[0].viajes_count}{' '}
+                                        GR
+                                    </span>
+                                )}
                         </span>
                     ) : (
                         <span className="text-sm text-muted-foreground">
@@ -114,8 +121,9 @@ export function TarjetaCobranza({
                         />
                     )}
                     <span className="min-w-0 font-mono text-xs whitespace-nowrap">
-                        <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
+                        {viaje.numero_gr}
                     </span>
+                    <DescargarGuia viaje={viaje} />
                     {facturas.length === 1 && (
                         <span className="truncate font-mono text-xs text-muted-foreground">
                             · {facturas[0].numero}
@@ -130,12 +138,12 @@ export function TarjetaCobranza({
                         recibidaAt={viaje.gr_fisica_recibida_at}
                         editable={puedeFacturar}
                     />
-                    <VerGuia viaje={viaje} />
                     {facturas.length <= 1 && (
                         <AccionesFila
                             viaje={viaje}
                             factura={facturas[0] ?? null}
                             puedeFacturar={puedeFacturar}
+                            agregarOtra
                         />
                     )}
                 </div>
@@ -143,7 +151,7 @@ export function TarjetaCobranza({
 
             {facturas.length > 1 && (
                 <ul className="flex flex-col gap-1 border-t pt-2">
-                    {facturas.map((factura) => (
+                    {facturas.map((factura, indice) => (
                         <li
                             key={factura.id}
                             className="flex items-center justify-between gap-2 text-sm"
@@ -152,12 +160,17 @@ export function TarjetaCobranza({
                                 {factura.numero}
                             </span>
                             <span className="ml-auto shrink-0 tabular-nums">
-                                {factura.monto != null
-                                    ? `${factura.simbolo} ${formatearMonto(factura.monto)}`
+                                {factura.neto != null
+                                    ? `${factura.simbolo} ${formatearMonto(factura.neto)}`
                                     : 'Sin monto'}
-                                {factura.fecha_pago === null && (
+                                {factura.estado === 'facturado' && (
                                     <span className="ml-1 text-xs text-amber-700 dark:text-amber-500">
                                         por cobrar
+                                    </span>
+                                )}
+                                {factura.estado === 'falta_detraccion' && (
+                                    <span className="ml-1 text-xs text-sky-700 dark:text-sky-400">
+                                        falta detr.
                                     </span>
                                 )}
                             </span>
@@ -165,6 +178,7 @@ export function TarjetaCobranza({
                                 viaje={viaje}
                                 factura={factura}
                                 puedeFacturar={puedeFacturar}
+                                agregarOtra={indice === facturas.length - 1}
                             />
                         </li>
                     ))}

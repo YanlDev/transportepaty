@@ -59,6 +59,18 @@ const cargaMinsurConfig = {
 
 const sinConfig = {} satisfies ChartConfig;
 
+/**
+ * Corta el nombre del cliente a una sola línea: recharts parte en varias
+ * líneas lo que no entra en el ancho del eje, y con razones sociales largas
+ * las etiquetas se enciman unas con otras. El nombre completo queda en el
+ * tooltip.
+ */
+function acortarNombre(nombre: string, maximo: number): string {
+    return nombre.length > maximo
+        ? `${nombre.slice(0, maximo - 1).trimEnd()}…`
+        : nombre;
+}
+
 type Filtro = 'todos' | 'minsur' | 'particulares';
 
 /**
@@ -97,7 +109,7 @@ function Panel({
     children: React.ReactNode;
 }) {
     return (
-        <section className="rounded-xl border border-border bg-card">
+        <section className="min-w-0 rounded-xl border border-border bg-card">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b p-4">
                 <h2 className="text-sm font-semibold">{titulo}</h2>
                 {extra}
@@ -187,12 +199,16 @@ function ViajesPorClientePanel({ viajes }: { viajes: ConteoCliente[] }) {
                                 type="category"
                                 tickLine={false}
                                 axisLine={false}
-                                width={esMovil ? 110 : 240}
+                                width={esMovil ? 104 : 240}
+                                interval={0}
                                 tick={{ fontSize: esMovil ? 10 : 11 }}
+                                tickFormatter={(nombre: string) =>
+                                    acortarNombre(nombre, esMovil ? 17 : 40)
+                                }
                             />
                             <ChartTooltip
                                 cursor={{ fill: 'var(--muted)' }}
-                                content={<ChartTooltipContent hideLabel />}
+                                content={<ChartTooltipContent />}
                             />
                             <Bar dataKey="valor" radius={2} barSize={16}>
                                 {filtrados.map((fila) => (

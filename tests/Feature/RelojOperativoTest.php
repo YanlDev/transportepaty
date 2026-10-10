@@ -49,9 +49,9 @@ it('fecha la factura sin fecha explícita en el día que ve el contador', functi
 });
 
 /**
- * Una factura emitida hoy lleva cero días sin cobrarse. Leída contra el reloj
- * del servidor aparecería con uno, y la cobranza mostraría vencida una factura
- * recién cargada.
+ * Una factura emitida hoy vence dentro de 30 días: le faltan exactamente 30.
+ * Leída contra el reloj del servidor le faltaría uno menos, y la cobranza la
+ * daría por vencida un día antes.
  */
 it('no le cuenta un día de más a la factura emitida hoy', function (): void {
     $factura = Factura::factory()->create([
@@ -59,7 +59,7 @@ it('no le cuenta un día de más a la factura emitida hoy', function (): void {
         'fecha_pago' => null,
     ]);
 
-    expect($factura->diasVencida())->toBe(0);
+    expect($factura->diasVencida())->toBe(-30);
 });
 
 /**

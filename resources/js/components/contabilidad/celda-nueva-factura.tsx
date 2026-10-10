@@ -12,16 +12,10 @@ import { avisarError } from '@/lib/aviso-error';
  * camión, o la quincena de un cliente— se marcan las filas y se usa la barra
  * de selección, que es la única forma de decir «estas van juntas».
  *
- * Con `adicional` aparece debajo de una factura ya emitida y le suma otra al
- * mismo viaje: la estadía aparte del flete, o un cobro partido.
+ * Sumarle otra factura a un viaje que ya tiene una no se hace acá sino desde
+ * las acciones de la fila (`OtraFacturaDialog`).
  */
-export function CeldaNuevaFactura({
-    viajeId,
-    adicional = false,
-}: {
-    viajeId: number;
-    adicional?: boolean;
-}) {
+export function CeldaNuevaFactura({ viajeId }: { viajeId: number }) {
     const [editando, setEditando] = useState(false);
     const [numero, setNumero] = useState('');
     const [guardando, setGuardando] = useState(false);
@@ -85,16 +79,12 @@ export function CeldaNuevaFactura({
         <button
             type="button"
             onClick={() => setEditando(true)}
-            aria-label={
-                adicional
-                    ? 'Registrar otra factura para este viaje'
-                    : 'Registrar la factura de este viaje'
-            }
+            aria-label="Registrar la factura de este viaje"
             className={`w-full rounded-sm px-1 py-0.5 text-left text-muted-foreground/40 hover:bg-accent hover:text-foreground ${
-                adicional ? 'mt-0.5 font-sans text-[11px]' : ''
-            } ${guardando ? 'animate-pulse opacity-60' : ''}`}
+                guardando ? 'animate-pulse opacity-60' : ''
+            }`}
         >
-            {adicional ? '+ otra factura' : '+ factura'}
+            + factura
         </button>
     );
 }

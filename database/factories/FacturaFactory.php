@@ -33,11 +33,30 @@ class FacturaFactory extends Factory
         ];
     }
 
+    /**
+     * Cobrada del todo: el neto en una cuenta de la empresa y la detracción
+     * en el Banco de la Nación, el mismo día.
+     */
     public function pagada(): static
+    {
+        return $this->state(function (): array {
+            $fecha = $this->faker->dateTimeBetween('-2 months', 'now');
+
+            return [
+                'fecha_pago' => $fecha,
+                'cuenta_bancaria_id' => CuentaBancaria::factory(),
+                'fecha_detraccion' => $fecha,
+            ];
+        });
+    }
+
+    /** Cobrado el neto, pero la detracción todavía no se depositó. */
+    public function faltaDetraccion(): static
     {
         return $this->state(fn (): array => [
             'fecha_pago' => $this->faker->dateTimeBetween('-2 months', 'now'),
             'cuenta_bancaria_id' => CuentaBancaria::factory(),
+            'fecha_detraccion' => null,
         ]);
     }
 }
