@@ -4,6 +4,7 @@ use App\Enums\TipoCarga;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Models\Cliente;
 use App\Models\Conductor;
+use App\Models\Factura;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Services\ImportadorViaje;
@@ -697,4 +698,26 @@ it('keeps the GR remitente apart from the cliente Paty bills', function (): void
         ->and($ajeper->datosDeListado()['remitente'])->toBe('AJEPER S.A.')
         // Si el remitente es el cliente, la lista no lo repite.
         ->and($minsur->datosDeListado()['remitente'])->toBeNull();
+});
+
+/**
+ * Desde la GR se llega a la factura con que se cobró, y a su PDF. Solo quien
+ * ve la cobranza: el visor ve la operación, no los documentos de cobro.
+ */
+it('shows the factura of each GR to whoever sees the cobranza', function (): void {
+    $factura = Factura::factory()->create(['numero' => 'E001-14465', 'fecha_emision' => '2026-10-10']);
+    $factura->addMedia(UploadedFile::fake()->createWithContent('factura.pdf', '%PDF-1.4 prueba'))->toMediaCollection('archivo');
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['numero_gr' => 'EG03-00012452']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('viajes.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('viajes.data.0.facturas.0.numero', 'E001-14465')
+            ->where('viajes.data.0.facturas.0.estado', 'facturado')
+            ->where('viajes.data.0.facturas.0.archivo_url', fn (?string $url): bool => str_ends_with((string) $url, 'factura.pdf'))
+        );
+
+    actingAs(actorConRol('visor'))
+        ->get(route('viajes.index'))
+        ->assertInertia(fn ($page) => $page->where('viajes.data.0.facturas', null));
 });

@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\TipoCarga;
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
@@ -501,4 +502,35 @@ it('desglosa a factura created with just its total', function (): void {
 
     expect([$factura->monto, $factura->igv, $factura->total, $factura->neto])
         ->toBe(['7118.64', '1281.36', '8400.00', '8064.00']);
+});
+
+it('does not round the detracción of a Minsur factura', function (): void {
+    $viaje = Viaje::factory()->create(['cliente_ruc' => TipoCarga::RUC_MINSUR]);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.store'), datosFactura(['viaje_ids' => [$viaje->id]]))
+        ->assertSessionHasNoErrors();
+
+    $factura = Factura::query()->sole();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['monto' => 95513.73])
+        ->assertSessionHasNoErrors();
+
+    expect($factura->fresh()->detraccion_redondeada)->toBeFalse()
+        ->and($factura->fresh()->detraccion)->toBe('4508.25');
+});
+
+it('switches the detracción between rounded and with céntimos', function (): void {
+    $factura = Factura::factory()->create(['monto' => 95513.73]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    expect($factura->detraccion)->toBe('4508.00');
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion_redondeada' => false])
+        ->assertSessionHasNoErrors();
+
+    expect($factura->fresh()->detraccion)->toBe('4508.25')
+        ->and($factura->fresh()->neto)->toBe('108197.95');
 });

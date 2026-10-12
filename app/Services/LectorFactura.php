@@ -109,22 +109,38 @@ class LectorFactura
     }
 
     /**
-     * Las GR-transportista citadas en la cabecera, con el número en el mismo
-     * formato que `viajes.numero_gr` (`EG03-00012429`). Sirven las dos
-     * etiquetas que usa SUNAT: «GUIA DE REMISION TRANSPORTISTA» y «GRE
-     * TRANSPORTISTA - BIENES FISCALIZABLES». Las GR-remitente no cuentan:
-     * no son documentos de la empresa.
+     * Las GR-transportista que cita la factura, con el número en el mismo
+     * formato que `viajes.numero_gr` (`EG03-00012429`). Se citan de dos
+     * maneras y se juntan las dos:
+     *
+     * - En la cabecera, con las etiquetas de SUNAT: «GUIA DE REMISION
+     *   TRANSPORTISTA : EG03 12429» o «GRE TRANSPORTISTA - BIENES
+     *   FISCALIZABLES : G010 141».
+     * - En la descripción de cada línea, como hacen las facturas de Minsur:
+     *   «GUIA DE REM. REMITENTE NRO. T007-10001 / G.TRANSP. EG03-12452».
+     *
+     * Las GR-remitente no cuentan: no son documentos de la empresa. Tampoco
+     * las de otro transportista que se mencionan sin el prefijo «G.TRANSP.»
+     * («GUIAS TRANSPORTISTAS SOCORRO: EG03-52982» es una GR de Socorro).
      *
      * @return list<string>
      */
     private function guiasTransportista(string $plano): array
     {
-        preg_match_all('/TRANSPORTISTA(?: - BIENES FISCALIZABLES)?\s*:\s*([A-Z0-9]{4})\s+(\d+)/u', $plano, $coincidencias, PREG_SET_ORDER);
+        $patrones = [
+            '/TRANSPORTISTA(?: - BIENES FISCALIZABLES)?\s*:\s*([A-Z0-9]{4})\s+(\d+)/u',
+            '/\bG\.\s?TRANSP(?:ORTISTA)?\.?\s*(?:NRO\.?\s*)?([A-Z0-9]{4})\s?-\s?(\d+)/u',
+        ];
 
-        $guias = array_map(
-            fn (array $coincidencia): string => sprintf('%s-%08d', $coincidencia[1], (int) $coincidencia[2]),
-            $coincidencias,
-        );
+        $guias = [];
+
+        foreach ($patrones as $patron) {
+            preg_match_all($patron, $plano, $coincidencias, PREG_SET_ORDER);
+
+            foreach ($coincidencias as $coincidencia) {
+                $guias[] = sprintf('%s-%08d', $coincidencia[1], (int) $coincidencia[2]);
+            }
+        }
 
         return array_values(array_unique($guias));
     }

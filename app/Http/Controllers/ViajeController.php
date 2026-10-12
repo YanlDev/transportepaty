@@ -11,6 +11,7 @@ use App\Http\Requests\StoreViajeManualRequest;
 use App\Http\Requests\StoreViajeRequest;
 use App\Http\Requests\UpdateTipoCargaViajeRequest;
 use App\Models\Conductor;
+use App\Models\Factura;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Services\ImportadorViaje;
@@ -38,6 +39,10 @@ class ViajeController extends Controller
             'tipo_carga' => $request->string('tipo_carga')->trim()->value(),
         ];
 
+        // Las facturas de cada GR solo para quien ve la cobranza: el visor ve
+        // la operación, no los montos ni los documentos de cobro.
+        $veFacturas = $request->user()?->can('viewAny', Factura::class) ?? false;
+
         $viajes = Viaje::query()
             // Las GR anuladas se listan igual —en gris— para que se vea que
             // existieron y por qué no cuentan; en el resto del sistema no están.
@@ -52,6 +57,10 @@ class ViajeController extends Controller
                 'media',
                 'anuladaPor:id,name',
             ])
+            ->when($veFacturas, fn ($query) => $query->with([
+                'facturas' => fn ($query) => $query->orderBy('fecha_emision')->orderBy('facturas.id'),
+                'facturas.media',
+            ]))
             ->when($filtros['buscar'], function ($query, string $buscar): void {
                 $query->where(function ($query) use ($buscar): void {
                     $query->whereLike('placa_tracto', "%{$buscar}%", caseSensitive: false)
@@ -92,6 +101,18 @@ class ViajeController extends Controller
                     'motivo' => $viaje->motivo_anulacion,
                     'baja_sunat' => $viaje->baja_sunat_at?->toIso8601String(),
                 ] : null,
+                // Para ver desde la GR con qué factura se cobró. Null para quien
+                // no ve la cobranza; vacío si la GR todavía no se facturó.
+                'facturas' => $veFacturas
+                    ? $viaje->facturas->map(fn (Factura $factura): array => [
+                        'id' => $factura->id,
+                        'numero' => $factura->numero,
+                        'fecha_emision' => $factura->fecha_emision->toDateString(),
+                        'estado' => $factura->estado()->value,
+                        'estado_label' => $factura->estado()->label(),
+                        'archivo_url' => $factura->getFirstMediaUrl('archivo') ?: null,
+                    ])->values()->all()
+                    : null,
             ]);
 
         return Inertia::render('viajes/index', [

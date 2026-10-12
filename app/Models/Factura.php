@@ -48,6 +48,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string|null $total
  * @property string $tasa_detraccion
  * @property string|null $detraccion
+ * @property bool $detraccion_redondeada
  * @property string|null $neto
  * @property Moneda $moneda
  * @property Carbon|null $fecha_pago
@@ -72,6 +73,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'tasa_igv',
     'total',
     'tasa_detraccion',
+    'detraccion_redondeada',
     'moneda',
     'fecha_pago',
     'cuenta_bancaria_id',
@@ -142,7 +144,7 @@ class Factura extends Model implements HasMedia
         }
 
         if ($this->desde_pdf) {
-            if (! $this->isDirty(['monto', 'total', 'tasa_igv', 'tasa_detraccion'])) {
+            if (! $this->isDirty(['monto', 'total', 'tasa_igv', 'tasa_detraccion', 'detraccion_redondeada'])) {
                 return;
             }
 
@@ -152,6 +154,7 @@ class Factura extends Model implements HasMedia
         $tasaIgv = (float) ($this->tasa_igv ?? config('transpaty.igv'));
         $tasaDetraccion = (float) ($this->tasa_detraccion ?? config('transpaty.facturacion.detraccion'));
         $umbral = (float) config('transpaty.facturacion.umbral_detraccion');
+        $redondear = $this->detraccion_redondeada ?? true;
 
         // El total manda cuando es lo que se escribió y no vino a la vez un
         // valor (en una factura nueva, `monto` vacío también cuenta como tocado).
@@ -160,7 +163,7 @@ class Factura extends Model implements HasMedia
             && ($this->monto === null || ! $this->isDirty('monto'));
 
         if ($desdeTotal) {
-            $this->forceFill(DesgloseFactura::desdeTotal((float) $this->total, $tasaIgv, $tasaDetraccion, $umbral));
+            $this->forceFill(DesgloseFactura::desdeTotal((float) $this->total, $tasaIgv, $tasaDetraccion, $umbral, $redondear));
 
             return;
         }
@@ -178,8 +181,8 @@ class Factura extends Model implements HasMedia
         // Con el total ya fijado y solo la detracción en juego, se respeta el
         // total: es el que dice la factura impresa.
         $cifras = $this->isDirty(['monto', 'tasa_igv']) || $this->total === null
-            ? DesgloseFactura::desdeValor((float) $this->monto, $tasaIgv, $tasaDetraccion, $umbral)
-            : DesgloseFactura::desdeTotal((float) $this->total, $tasaIgv, $tasaDetraccion, $umbral);
+            ? DesgloseFactura::desdeValor((float) $this->monto, $tasaIgv, $tasaDetraccion, $umbral, $redondear)
+            : DesgloseFactura::desdeTotal((float) $this->total, $tasaIgv, $tasaDetraccion, $umbral, $redondear);
 
         $this->forceFill($cifras);
     }
@@ -273,6 +276,7 @@ class Factura extends Model implements HasMedia
             'periodo_hasta' => 'date:Y-m-d',
             'gr_citadas' => 'array',
             'desde_pdf' => 'boolean',
+            'detraccion_redondeada' => 'boolean',
             'monto' => 'decimal:2',
             'tasa_igv' => 'decimal:4',
             'igv' => 'decimal:2',

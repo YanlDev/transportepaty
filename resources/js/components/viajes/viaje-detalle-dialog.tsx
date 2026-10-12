@@ -1,4 +1,5 @@
-import { FileText, MapPin } from 'lucide-react';
+import { FileText, MapPin, Receipt } from 'lucide-react';
+import { EstadoCobranzaBadge } from '@/components/contabilidad/estado-cobranza-badge';
 import {
     Dialog,
     DialogContent,
@@ -13,7 +14,7 @@ import {
 } from '@/components/viajes/enviar-gr-whatsapp';
 import { TipoCargaBadge } from '@/components/viajes/tipo-carga-badge';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
-import type { ViajeListItem } from '@/types/fleet';
+import type { FacturaDeViaje, ViajeListItem } from '@/types/fleet';
 
 type Props = {
     /** `null` cierra el diálogo — controlado por quién lo usa, no hay estado propio de "cuál viaje". */
@@ -138,10 +139,92 @@ export function ViajeDetalleDialog({ viaje, onOpenChange }: Props) {
                                 detalle={detalleParaWhatsapp(viaje)}
                             />
                         </div>
+
+                        {/* Solo para quien ve la cobranza: el resto no recibe
+                            `facturas`. */}
+                        {viaje.facturas && (
+                            <FacturasDelViaje
+                                facturas={viaje.facturas}
+                                cliente={viaje.cliente}
+                            />
+                        )}
                     </>
                 )}
             </DialogContent>
         </Dialog>
+    );
+}
+
+/**
+ * Con qué factura se cobró la GR, y su PDF si se subió: desde la GR se llega
+ * a la factura sin pasar por la cobranza.
+ */
+function FacturasDelViaje({
+    facturas,
+    cliente,
+}: {
+    facturas: FacturaDeViaje[];
+    cliente: string;
+}) {
+    return (
+        <div>
+            <p className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                {facturas.length > 1 ? 'Facturas' : 'Factura'}
+            </p>
+
+            {facturas.length === 0 ? (
+                <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                    Esta GR todavía no se facturó.
+                </p>
+            ) : (
+                <ul className="flex flex-col gap-2">
+                    {facturas.map((factura) => (
+                        <li
+                            key={factura.id}
+                            className="flex items-center gap-3 rounded-lg border p-3"
+                        >
+                            <div className="grid size-9 shrink-0 place-items-center rounded-md bg-accent text-primary">
+                                <Receipt className="size-4" />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="font-mono text-sm font-semibold">
+                                    {factura.numero}
+                                </p>
+                                <p className="truncate text-xs text-muted-foreground">
+                                    Emitida el{' '}
+                                    {formatearFecha(factura.fecha_emision)}
+                                </p>
+                            </div>
+                            <EstadoCobranzaBadge
+                                estado={factura.estado}
+                                label={factura.estado_label}
+                                compacto
+                            />
+                            <DocumentoVisorDialog
+                                url={factura.archivo_url ?? ''}
+                                esPdf
+                                titulo={`Factura ${factura.numero}`}
+                                detalle={`${cliente} · ${formatearFecha(factura.fecha_emision)}`}
+                                trigger={
+                                    <button
+                                        type="button"
+                                        disabled={!factura.archivo_url}
+                                        title={
+                                            factura.archivo_url
+                                                ? undefined
+                                                : 'La factura no tiene PDF subido'
+                                        }
+                                        className="h-8 shrink-0 rounded-md border px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-50"
+                                    >
+                                        Ver PDF
+                                    </button>
+                                }
+                            />
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
     );
 }
 

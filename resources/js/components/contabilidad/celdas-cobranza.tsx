@@ -1,3 +1,4 @@
+import { router } from '@inertiajs/react';
 import { FileText } from 'lucide-react';
 import { update } from '@/actions/App/Http/Controllers/FacturaController';
 import { CeldaEntidad } from '@/components/contabilidad/celda-entidad';
@@ -5,6 +6,7 @@ import { CeldaMoneda } from '@/components/contabilidad/celda-moneda';
 import { CeldaNuevaFactura } from '@/components/contabilidad/celda-nueva-factura';
 import { TableCell } from '@/components/ui/table';
 import { ValorEditable } from '@/components/valor-editable';
+import { avisarError } from '@/lib/aviso-error';
 import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { CuentaOpcion, FacturaResumen } from '@/types/contabilidad';
@@ -164,7 +166,7 @@ export function CeldasCobranza({
                 </ValorEditable>
             </TableCell>
 
-            <CeldaCifra valor={factura.detraccion} />
+            <CeldaDetraccion factura={factura} url={url} editable={editable} />
 
             <CeldaCifra valor={factura.neto} destacada />
 
@@ -313,6 +315,59 @@ export function CeldasCobranza({
                 />
             </TableCell>
         </>
+    );
+}
+
+/**
+ * La detracción, con el interruptor de redondeo: casi todos los clientes la
+ * emiten en soles enteros y Minsur con céntimos. En una factura subida en
+ * PDF no se ofrece: la cifra es la impresa.
+ */
+function CeldaDetraccion({
+    factura,
+    url,
+    editable,
+}: {
+    factura: FacturaResumen;
+    url: string;
+    editable: boolean;
+}) {
+    const puedeCambiar =
+        editable && !factura.desde_pdf && (factura.detraccion ?? 0) > 0;
+
+    return (
+        <TableCell className="text-right whitespace-nowrap text-muted-foreground tabular-nums">
+            {factura.detraccion === null ? (
+                <span className="text-muted-foreground/40">—</span>
+            ) : (
+                formatearMonto(factura.detraccion)
+            )}
+            {puedeCambiar && (
+                <button
+                    type="button"
+                    onClick={() =>
+                        router.patch(
+                            url,
+                            {
+                                detraccion_redondeada:
+                                    !factura.detraccion_redondeada,
+                            },
+                            { preserveScroll: true, onError: avisarError },
+                        )
+                    }
+                    className="block w-full text-right text-[11px] text-muted-foreground/70 hover:text-foreground hover:underline"
+                    title={
+                        factura.detraccion_redondeada
+                            ? 'Calcularla con céntimos'
+                            : 'Redondearla a soles enteros'
+                    }
+                >
+                    {factura.detraccion_redondeada
+                        ? 'redondeada'
+                        : 'con céntimos'}
+                </button>
+            )}
+        </TableCell>
     );
 }
 

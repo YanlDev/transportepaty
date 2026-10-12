@@ -38,3 +38,15 @@ it('no aplica detracción hasta pasar el umbral', function (): void {
         ->and(DesgloseFactura::desdeTotal(400.01, 0.18, 0.04, 400))
         ->detraccion->toBe(16.0);
 });
+
+it('keeps the céntimos of the detracción when the client does not round it', function (): void {
+    // E001-14465, Minsur: 4% de 112 706.20 = 4 508.248 → 4 508.25.
+    expect(DesgloseFactura::desdeValor(95513.73, 0.18, 0.04, 400, redondear: false))->toBe([
+        'monto' => 95513.73,
+        'igv' => 17192.47,
+        'total' => 112706.2,
+        'detraccion' => 4508.25,
+        'neto' => 108197.95,
+    ])
+        ->and(DesgloseFactura::desdeValor(95513.73, 0.18, 0.04, 400)['detraccion'])->toBe(4508.0);
+});

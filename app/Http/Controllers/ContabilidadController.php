@@ -209,6 +209,9 @@ class ContabilidadController extends Controller
             'igv' => $this->cifra($factura->igv),
             'total' => $this->cifra($factura->total),
             'detraccion' => $this->cifra($factura->detraccion),
+            'detraccion_redondeada' => $factura->detraccion_redondeada,
+            // Las cifras son las impresas en el PDF: no se recalculan.
+            'desde_pdf' => $factura->desde_pdf,
             'neto' => $this->cifra($factura->neto),
             'moneda' => $factura->moneda->value,
             'simbolo' => $factura->moneda->simbolo(),

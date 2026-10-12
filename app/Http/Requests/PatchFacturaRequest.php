@@ -42,6 +42,9 @@ class PatchFacturaRequest extends FormRequest
             // sigue siendo el total, que es lo que dice la factura.
             'monto_por_viaje' => ['sometimes', 'nullable', 'numeric', 'min:0.01', 'max:99999999.99', 'prohibits:monto'],
             'moneda' => ['sometimes', 'required', Rule::enum(Moneda::class)],
+            // Con o sin céntimos en la detracción: depende de cómo la emite
+            // el cliente (Minsur, con céntimos).
+            'detraccion_redondeada' => ['sometimes', 'boolean'],
 
             // La fecha de pago no exige la cuenta acá —se cargan en celdas
             // distintas y una tiene que poder guardarse antes que la otra—;

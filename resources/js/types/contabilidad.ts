@@ -20,6 +20,10 @@ export type FacturaResumen = {
     igv: number | null;
     total: number | null;
     detraccion: number | null;
+    /** Si la detracción se redondea a soles enteros; Minsur la emite con céntimos. */
+    detraccion_redondeada: boolean;
+    /** Las cifras son las impresas en el PDF subido: no se recalculan. */
+    desde_pdf: boolean;
     /** Lo que el cliente deposita en la cuenta de la empresa: total menos detracción. */
     neto: number | null;
     moneda: string;
@@ -56,7 +60,7 @@ export type FacturaResumen = {
  * `/viajes` —se factura contra el viaje entero, no contra un resumen— más el
  * estado del cobro y su factura.
  */
-export type ViajeContable = ViajeListItem & {
+export type ViajeContable = Omit<ViajeListItem, 'facturas'> & {
     /** `sin_facturar` | `facturado` | `falta_detraccion` | `pagado` | `no_facturable`. */
     estado: string;
     estado_label: string;

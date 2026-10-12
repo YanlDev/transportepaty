@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\TipoCarga;
 use App\Models\Factura;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -68,6 +69,11 @@ class ImportadorFactura
                 'gr_citadas' => $campos['gr_transportista'],
                 'periodo_desde' => $campos['periodo_desde'],
                 'periodo_hasta' => $campos['periodo_hasta'],
+                // Lo que diga el PDF: con céntimos impresos, o si es de Minsur
+                // —que la emite con céntimos—, no se redondea si alguien la
+                // recalcula después.
+                'detraccion_redondeada' => $campos['cliente_ruc'] !== TipoCarga::RUC_MINSUR
+                    && round($campos['detraccion']) === $campos['detraccion'],
             ]);
 
             $factura->guardarCifrasImpresas([

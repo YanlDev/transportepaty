@@ -4,7 +4,9 @@ use App\Enums\Moneda;
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
+use App\Services\RelojOperativo;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -16,12 +18,10 @@ beforeEach(function (): void {
 });
 
 /**
- * Descarga el .xlsx y devuelve su hoja como una matriz de valores, para poder
- * afirmar sobre el contenido y no solo sobre los encabezados de la respuesta.
- *
- * @return array<int, array<int, mixed>>
+ * Descarga el .xlsx y devuelve el libro, para poder afirmar sobre el
+ * contenido y no solo sobre los encabezados de la respuesta.
  */
-function hojaExportada(string $url): array
+function libroExportado(string $url): Spreadsheet
 {
     $respuesta = test()->get($url);
 
@@ -29,11 +29,22 @@ function hojaExportada(string $url): array
 
     // La respuesta es un `BinaryFileResponse`: en una petición de prueba nunca
     // se envía, así que el archivo temporal sigue en disco y se lee de ahí.
-    // `formatData: false` para que las fechas y los montos lleguen como número
-    // y no como el texto ya formateado.
-    $ruta = $respuesta->baseResponse->getFile()->getPathname();
+    return IOFactory::load($respuesta->baseResponse->getFile()->getPathname());
+}
 
-    return IOFactory::load($ruta)->getActiveSheet()->toArray(null, true, false, false);
+/**
+ * Una hoja del .xlsx como matriz de valores, sin su fila «Total»: las
+ * pruebas suman columnas y la contarían dos veces. Las fórmulas llegan ya
+ * calculadas, y con `formatData: false` las fechas y los montos llegan como
+ * número y no como el texto formateado.
+ *
+ * @return array<int, array<int, mixed>>
+ */
+function hojaExportada(string $url, string $hoja = 'Por GR'): array
+{
+    $filas = libroExportado($url)->getSheetByName($hoja)->toArray(null, true, false, false);
+
+    return array_values(array_filter($filas, fn (array $fila): bool => $fila[0] !== 'Total'));
 }
 
 it('redirects guests to login', function (): void {
@@ -287,4 +298,106 @@ it('keeps the same order as the table: fecha, then GR correlativo', function ():
         'EG03-00012409',
         'EG03-00012500',
     ]);
+});
+
+it('opens on the resumen and brings the four sheets', function (): void {
+    actingAs(actorConRol('admin'));
+
+    $libro = libroExportado(route('contabilidad.exportar'));
+
+    expect($libro->getSheetNames())->toBe(['Resumen', 'Facturas', 'Por GR', 'Por asociar'])
+        ->and($libro->getActiveSheet()->getTitle())->toBe('Resumen');
+});
+
+/**
+ * La vista contable: una factura de tres GR es una sola fila, con las GR
+ * juntas y el flete descompuesto. La fila «Total» suma con SUBTOTAL, que
+ * respeta los filtros que se pongan en Excel.
+ */
+it('writes one row per factura with its desglose and a total that follows the filters', function (): void {
+    $factura = Factura::factory()->create(['numero' => 'E001-14411', 'monto' => null, 'total' => 8400, 'fecha_emision' => '2026-09-28']);
+    Viaje::factory()->create(['numero_gr' => 'EG03-00012430'])->facturas()->attach($factura);
+    Viaje::factory()->create(['numero_gr' => 'EG03-00012429'])->facturas()->attach($factura);
+    Viaje::factory()->hasAttached(Factura::factory()->create(['monto' => 3500]), relationship: 'facturas')->create();
+
+    actingAs(actorConRol('admin'));
+
+    $libro = libroExportado(route('contabilidad.exportar'));
+    $hoja = $libro->getSheetByName('Facturas')->toArray(null, true, false, false);
+    $crisar = collect($hoja)->firstWhere(0, 'E001-14411');
+
+    expect($hoja[0])->toBe([
+        'N° factura', 'Fecha emisión', 'Vence', 'Días vencida', 'Estado', 'Cliente', 'RUC', 'GR',
+        'Valor flete', 'IGV', 'Total flete', 'Detracción', 'Neto a pagar', 'Moneda',
+        'Fecha pago neto', 'Cuenta', 'Fecha detracción', 'Constancia detracción', 'Observación',
+    ])
+        ->and($hoja)->toHaveCount(4)
+        ->and($crisar[7])->toBe('EG03-00012429, EG03-00012430')
+        ->and(array_slice($crisar, 8, 5))->toBe([7118.64, 1281.36, 8400.0, 336.0, 8064.0])
+        // Total: 8400 + 4130.
+        ->and($hoja[3][0])->toBe('Total')
+        ->and($hoja[3][10])->toBe(12530.0)
+        ->and($libro->getSheetByName('Facturas')->getCell('K4')->getValue())->toBe('=SUBTOTAL(109,K2:K3)');
+});
+
+it('paints the estado with the semáforo of the screen', function (): void {
+    Viaje::factory()->create(['numero_gr' => 'EG03-SINFACTURA']);
+
+    actingAs(actorConRol('admin'));
+
+    $hoja = libroExportado(route('contabilidad.exportar'))->getSheetByName('Por GR');
+
+    expect($hoja->getCell('M2')->getValue())->toBe('Sin facturar')
+        ->and($hoja->getStyle('M2')->getFill()->getStartColor()->getRGB())->toBe('FEE2E2');
+});
+
+/**
+ * El resumen responde a lo que se viene a mirar: cuánto falta cobrar en sus
+ * dos partes, cuánto está vencido y desde cuándo.
+ */
+it('sums what is still owed in the resumen, split in neto and detracción, and ages it', function (): void {
+    $hoy = RelojOperativo::fechaDeHoy();
+
+    // Por vencer: emitida hace 10 días. Neto 3965 + detracción 165.
+    Viaje::factory()->hasAttached(Factura::factory()->create(['monto' => 3500, 'fecha_emision' => $hoy->subDays(10)->toDateString()]), relationship: 'facturas')
+        ->create(['cliente' => 'SOCORRO CARGO EXPRESS S.A.']);
+    // Vencida hace 15 días, con el neto cobrado: solo falta la detracción (336).
+    Viaje::factory()->hasAttached(Factura::factory()->create([
+        'total' => 8400,
+        'monto' => null,
+        'fecha_emision' => $hoy->subDays(45)->toDateString(),
+        'fecha_pago' => $hoy->subDays(5)->toDateString(),
+    ]), relationship: 'facturas')->create(['cliente' => 'CRISAR LOGISTICA S.A.C.']);
+
+    actingAs(actorConRol('admin'));
+
+    $filas = collect(libroExportado(route('contabilidad.exportar'))->getSheetByName('Resumen')->toArray(null, true, false, false));
+    $valor = fn (string $etiqueta) => $filas->firstWhere(0, $etiqueta)[1] ?? null;
+
+    expect($valor('Facturas'))->toEqual(2)
+        ->and($valor('Neto por cobrar'))->toEqual(3965)
+        ->and($valor('Detracción por cobrar'))->toEqual(501)
+        ->and($valor('Cobrado (neto + detracción)'))->toEqual(8064)
+        ->and($valor('Vencido sin cobrar'))->toEqual(336)
+        ->and(array_slice($filas->firstWhere(0, 'Por vencer'), 0, 5))->toEqual(['Por vencer', 1, 3965, 165, 4130])
+        ->and(array_slice($filas->firstWhere(0, '1 a 30 días'), 0, 5))->toEqual(['1 a 30 días', 1, 0, 336, 336])
+        // Cliente, facturas, facturado, neto y detracción por cobrar, cobrado, vencido.
+        ->and(array_slice($filas->firstWhere(0, 'CRISAR LOGISTICA S.A.C.'), 0, 7))->toEqual(['CRISAR LOGISTICA S.A.C.', 1, 8400, 0, 336, 8064, 336]);
+});
+
+it('lists the facturas por asociar regardless of the filters', function (): void {
+    Factura::factory()->create([
+        'numero' => 'E001-14220',
+        'cliente_razon_social' => 'BUREAU VERITAS COMMODITIES PERÚ S.A.C.',
+        'gr_citadas' => ['G010-00000141'],
+    ]);
+
+    actingAs(actorConRol('admin'));
+
+    $hoja = hojaExportada(route('contabilidad.exportar', ['cliente' => 'NO EXISTE']), 'Por asociar');
+
+    expect($hoja)->toHaveCount(2)
+        ->and($hoja[1][0])->toBe('E001-14220')
+        ->and($hoja[1][2])->toBe('BUREAU VERITAS COMMODITIES PERÚ S.A.C.')
+        ->and($hoja[1][6])->toBe('G010-00000141');
 });

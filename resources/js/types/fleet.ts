@@ -278,6 +278,23 @@ export type ViajeListItem = {
     unidad_peso: string;
     /** Null si por alguna razón el PDF no quedó adjunto. */
     archivo_url: string | null;
+    /**
+     * Con qué factura(s) se cobró la GR. Solo lo manda `/viajes`, y solo a
+     * quien ve la cobranza: null para el resto; vacío si no se facturó.
+     */
+    facturas?: FacturaDeViaje[] | null;
+};
+
+/** Una factura de la GR, vista desde `/viajes`: lo justo para ubicarla y abrirla. */
+export type FacturaDeViaje = {
+    id: number;
+    numero: string;
+    fecha_emision: string;
+    /** `facturado` | `falta_detraccion` | `pagado`. */
+    estado: string;
+    estado_label: string;
+    /** El PDF de la factura, si se subió. */
+    archivo_url: string | null;
 };
 
 /** El estado de un conductor en un día puntual del rooster. */

@@ -257,3 +257,38 @@ it('does not warn about a factura por período that already has its GR', functio
 
     expect(Factura::query()->sole()->monto)->toBe('41097.01');
 });
+
+/**
+ * Minsur no cita las GR en la cabecera sino en la descripción de cada línea:
+ * «GUIA DE REM. REMITENTE NRO. T007-10001 / G.TRANSP. EG03-12452».
+ */
+it('reads the GR cited in the description of each line', function (): void {
+    $campos = (new LectorFactura)->extraerDesdeArchivo(base_path('tests/Fixtures/facturas/factura-minsur-gr-en-descripcion.pdf'));
+
+    expect($campos['gr_transportista'])->toHaveCount(13)
+        ->toContain('EG03-00012452', 'EG03-00012514', 'EG03-00012530')
+        // La detracción de Minsur viene con céntimos: se respeta tal cual.
+        ->and($campos['detraccion'])->toBe(4508.25)
+        ->and($campos['neto'])->toBe(108197.95);
+});
+
+it('ignores the GR of another transportista mentioned in the description', function (): void {
+    $campos = (new LectorFactura)->extraerDesdeArchivo(base_path('tests/Fixtures/facturas/factura-socorro-una-gr.pdf'));
+
+    // «GUIAS TRANSPORTISTAS SOCORRO: EG03-52982» es una GR de Socorro.
+    expect($campos['gr_transportista'])->toBe(['EG03-00012354']);
+});
+
+it('links every GR a Minsur factura cites in its lines', function (): void {
+    $numeros = ['EG03-00012452', 'EG03-00012486', 'EG03-00012489', 'EG03-00012498', 'EG03-00012509', 'EG03-00012510', 'EG03-00012512', 'EG03-00012514', 'EG03-00012515', 'EG03-00012516', 'EG03-00012517', 'EG03-00012528', 'EG03-00012530'];
+
+    foreach ($numeros as $numero) {
+        Viaje::factory()->create(['numero_gr' => $numero]);
+    }
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.importar'), ['archivos' => [facturaPdf('factura-minsur-gr-en-descripcion')]])
+        ->assertInertiaFlash('importacion_facturas.0.alertas', []);
+
+    expect(Factura::query()->sole()->viajes()->count())->toBe(13);
+});

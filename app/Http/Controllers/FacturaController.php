@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\TipoCarga;
 use App\Http\Requests\AsociarFacturaRequest;
 use App\Http\Requests\ImportarFacturasRequest;
 use App\Http\Requests\PatchFacturaRequest;
@@ -53,6 +54,11 @@ class FacturaController extends Controller
                 // siguiente.
                 'fecha_emision' => $datos['fecha_emision'] ?? RelojOperativo::hoy(),
                 'moneda' => $datos['moneda'] ?? 'PEN',
+                // Minsur emite la detracción con céntimos; el resto, redondeada.
+                'detraccion_redondeada' => ! Viaje::query()
+                    ->whereIn('id', $viajeIds)
+                    ->where('cliente_ruc', TipoCarga::RUC_MINSUR)
+                    ->exists(),
             ]);
 
             $factura->viajes()->attach($viajeIds);
