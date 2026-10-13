@@ -127,6 +127,18 @@ it('reports a viaje as por cobrar until the factura has a fecha de pago', functi
         );
 });
 
+it('sends the cliente facturado with each factura', function (): void {
+    $factura = Factura::factory()->create(['cliente_razon_social' => 'MINSUR S. A.', 'cliente_ruc' => '20100136741']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('viajes.data.0.facturas.0.cliente', 'MINSUR S. A.')
+            ->where('viajes.data.0.facturas.0.cliente_ruc', '20100136741')
+        );
+});
+
 it('reports a viaje as pagado once both the neto and the detraccion came in', function (): void {
     $cuenta = CuentaBancaria::factory()->create(['alias' => 'BCP Soles']);
     $factura = Factura::factory()->create([

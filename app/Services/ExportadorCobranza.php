@@ -59,6 +59,7 @@ class ExportadorCobranza
         'Peso (TNE)',
         'Estado',
         'N° factura',
+        'Facturado a',
         'Fecha emisión',
         'Valor flete',
         'IGV',
@@ -85,7 +86,7 @@ class ExportadorCobranza
         'Vence',
         'Días vencida',
         'Estado',
-        'Cliente',
+        'Facturado a',
         'RUC',
         'GR',
         'Valor flete',
@@ -484,7 +485,7 @@ class ExportadorCobranza
                 $this->pintarEstado($hoja, 13, $fila, $viaje->estadoCobranza()->value);
 
                 if (($factura?->diasVencida() ?? 0) > 0) {
-                    $hoja->getStyle([23, $fila, 24, $fila])->getFont()->setBold(true)->getColor()->setRGB(self::COLOR_VENCIDA);
+                    $hoja->getStyle([24, $fila, 25, $fila])->getFont()->setBold(true)->getColor()->setRGB(self::COLOR_VENCIDA);
                 }
             }
         }
@@ -492,14 +493,14 @@ class ExportadorCobranza
         $ultima = $fila;
 
         if ($ultima > 1) {
-            $this->filaTotales($hoja, $ultima + 1, 2, range(16, 21), etiqueta: 1);
+            $this->filaTotales($hoja, $ultima + 1, 2, range(17, 22), etiqueta: 1);
         }
 
         // La misma línea que separa operación de cobranza en la tabla.
         $hoja->getStyle([self::COLUMNA_INICIO_COBRANZA, 1, self::COLUMNA_INICIO_COBRANZA, max($ultima, 1)])
             ->getBorders()->getLeft()->setBorderStyle(Border::BORDER_MEDIUM);
 
-        $this->darFormatoTabla($hoja, count(self::ENCABEZADOS_POR_GR), max($ultima, 1), fechas: [1, 15, 23, 25, 27], dinero: range(16, 21), totales: $ultima > 1);
+        $this->darFormatoTabla($hoja, count(self::ENCABEZADOS_POR_GR), max($ultima, 1), fechas: [1, 16, 24, 26, 28], dinero: range(17, 22), totales: $ultima > 1);
         if ($ultima > 1) {
             $this->formatear($hoja, 12, 2, $ultima, '#,##0.00');
 
@@ -531,6 +532,7 @@ class ExportadorCobranza
             $this->toneladas($viaje),
             $viaje->estadoCobranza()->label(),
             $factura?->numero,
+            $factura?->cliente_razon_social,
             $factura === null ? null : $this->fecha($factura->fecha_emision),
             $primeraVez ? $this->cifra($factura?->monto) : null,
             $primeraVez ? $this->cifra($factura?->igv) : null,
@@ -612,13 +614,13 @@ class ExportadorCobranza
     }
 
     /**
-     * A quién se facturó: el nombre del padrón (el mismo que usa la tabla),
-     * y si la factura no tiene GR, la razón social impresa en el PDF.
+     * A quién se facturó: la razón social de la factura («Facturado a»), y si
+     * no la tiene, el nombre del padrón del cliente de su GR.
      */
     private function clienteDe(Factura $factura): string
     {
-        return $factura->viajes->first()?->nombreCliente()
-            ?? $factura->cliente_razon_social
+        return $factura->cliente_razon_social
+            ?? $factura->viajes->first()?->nombreCliente()
             ?? 'Sin cliente';
     }
 

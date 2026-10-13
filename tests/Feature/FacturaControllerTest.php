@@ -534,3 +534,62 @@ it('switches the detracción between rounded and with céntimos', function (): v
     expect($factura->fresh()->detraccion)->toBe('4508.25')
         ->and($factura->fresh()->neto)->toBe('108197.95');
 });
+
+/**
+ * «Facturado a» nace con el cliente de la GR: es a quien se factura casi
+ * siempre, y la factura cargada a mano no trae PDF de donde leerlo.
+ */
+it('bills a new factura to the cliente of its GR', function (): void {
+    $viaje = Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'cliente_ruc' => '20601234567']);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.store'), datosFactura(['viaje_ids' => [$viaje->id]]))
+        ->assertSessionHasNoErrors();
+
+    $factura = Factura::query()->sole();
+
+    expect($factura->cliente_razon_social)->toBe('CRISAR LOGISTICA S.A.C.')
+        ->and($factura->cliente_ruc)->toBe('20601234567');
+});
+
+it('corrects the cliente facturado from its cell', function (): void {
+    $factura = Factura::factory()->create(['cliente_razon_social' => 'CRISAR LOGISTICA S.A.C.']);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['cliente_razon_social' => 'AJEPER S.A.'])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['cliente_ruc' => '20331061655'])
+        ->assertSessionHasNoErrors();
+
+    expect($factura->fresh()->cliente_razon_social)->toBe('AJEPER S.A.')
+        ->and($factura->fresh()->cliente_ruc)->toBe('20331061655');
+});
+
+it('rejects a RUC facturado that is not eleven digits', function (): void {
+    $factura = Factura::factory()->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['cliente_ruc' => '2033106'])
+        ->assertSessionHasErrors('cliente_ruc');
+});
+
+/**
+ * Las facturas cargadas a mano antes de la columna toman el cliente de su GR;
+ * las que vinieron en PDF conservan el impreso.
+ */
+it('fills the cliente facturado of the old facturas from their GR', function (): void {
+    $aMano = Factura::factory()->create(['cliente_razon_social' => null, 'cliente_ruc' => null]);
+    Viaje::factory()->hasAttached($aMano, relationship: 'facturas')
+        ->create(['cliente' => 'MOLINORTE TRADING S.A.C.', 'cliente_ruc' => '20512345678']);
+
+    $delPdf = Factura::factory()->create(['cliente_razon_social' => 'MINSUR S. A.', 'cliente_ruc' => '20100136741']);
+    Viaje::factory()->hasAttached($delPdf, relationship: 'facturas')->create(['cliente' => 'OTRO']);
+
+    (require database_path('migrations/2026_10_13_140102_llena_facturado_a_de_las_facturas_cargadas_a_mano.php'))->up();
+
+    expect($aMano->fresh()->cliente_razon_social)->toBe('MOLINORTE TRADING S.A.C.')
+        ->and($aMano->fresh()->cliente_ruc)->toBe('20512345678')
+        ->and($delPdf->fresh()->cliente_razon_social)->toBe('MINSUR S. A.');
+});

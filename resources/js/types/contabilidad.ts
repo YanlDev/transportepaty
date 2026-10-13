@@ -47,6 +47,12 @@ export type FacturaResumen = {
     fecha_detraccion: string | null;
     constancia_detraccion: string | null;
     observacion: string | null;
+    /**
+     * «Facturado a»: la razón social y el RUC impresos en la factura. Se leen
+     * del PDF; en las cargadas a mano nacen con el cliente de la GR.
+     */
+    cliente: string | null;
+    cliente_ruc: string | null;
     /** El PDF de la factura, si se subió. */
     archivo_url: string | null;
     /** Cuántos viajes cubre esta factura. */

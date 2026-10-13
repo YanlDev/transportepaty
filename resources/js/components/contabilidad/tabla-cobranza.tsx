@@ -121,6 +121,7 @@ export function TablaCobranza({
                             Neto a pagar
                         </TableHead>
                         <TableHead>N° factura</TableHead>
+                        <TableHead>Facturado a</TableHead>
                         <TableHead>F. emisión</TableHead>
                         <TableHead>Vence</TableHead>
                         <TableHead>F. pago neto</TableHead>

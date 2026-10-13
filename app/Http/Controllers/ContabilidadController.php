@@ -224,6 +224,8 @@ class ContabilidadController extends Controller
             'fecha_detraccion' => $factura->fecha_detraccion?->toDateString(),
             'constancia_detraccion' => $factura->constancia_detraccion,
             'observacion' => $factura->observacion,
+            'cliente' => $factura->cliente_razon_social,
+            'cliente_ruc' => $factura->cliente_ruc,
             'archivo_url' => $factura->getFirstMediaUrl('archivo') ?: null,
             // Cuántos viajes cubre: la fila muestra el monto completo de la
             // factura, y sin esto parecería que cada una de las tres filas de

@@ -13,7 +13,7 @@ import type { CuentaOpcion, FacturaResumen } from '@/types/contabilidad';
 import type { EnumOption } from '@/types/fleet';
 
 /** Cuántas columnas dibuja una factura: tiene que coincidir con el encabezado. */
-const COLUMNAS_FACTURA = 12;
+const COLUMNAS_FACTURA = 13;
 
 /**
  * Las columnas de la hoja del contador para una factura del viaje, editables
@@ -193,6 +193,34 @@ export function CeldasCobranza({
                             <FileText className="size-3.5" />
                         </a>
                     )}
+                </div>
+            </TableCell>
+
+            {/* A quién se emitió, que puede no ser el cliente de la GR. */}
+            <TableCell className="max-w-48">
+                <ValorEditable
+                    url={url}
+                    campo="cliente_razon_social"
+                    valor={factura.cliente}
+                    editable={editable}
+                    className="truncate text-xs"
+                    ancho="min-w-48"
+                    etiqueta="Facturado a (razón social)"
+                >
+                    {factura.cliente === null ? null : (
+                        <span title={factura.cliente}>{factura.cliente}</span>
+                    )}
+                </ValorEditable>
+                <div className="font-mono text-xs text-muted-foreground tabular-nums">
+                    <ValorEditable
+                        url={url}
+                        campo="cliente_ruc"
+                        valor={factura.cliente_ruc}
+                        editable={editable}
+                        ancho="min-w-28"
+                        etiqueta="RUC del cliente facturado"
+                        placeholder="RUC"
+                    />
                 </div>
             </TableCell>
 

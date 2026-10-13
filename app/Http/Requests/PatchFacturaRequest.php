@@ -69,6 +69,11 @@ class PatchFacturaRequest extends FormRequest
             'constancia_detraccion' => ['sometimes', 'nullable', 'string', 'max:30'],
 
             'observacion' => ['sometimes', 'nullable', 'string', 'max:1000'],
+
+            // «Facturado a»: el cliente impreso en la factura, que puede no
+            // ser el de la GR.
+            'cliente_razon_social' => ['sometimes', 'nullable', 'string', 'max:255'],
+            'cliente_ruc' => ['sometimes', 'nullable', 'digits:11'],
         ];
     }
 

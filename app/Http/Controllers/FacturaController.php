@@ -43,7 +43,13 @@ class FacturaController extends Controller
         // enlazados es peor que no haberla creado — se vería como emitida y
         // los viajes seguirían apareciendo por facturar.
         DB::transaction(function () use ($datos, $viajeIds): void {
+            // «Facturado a» nace con el cliente de la GR, que es a quien se
+            // le factura casi siempre; si no, se corrige en la celda.
+            $primerViaje = Viaje::query()->whereIn('id', $viajeIds)->orderBy('id')->first(['cliente', 'cliente_ruc']);
+
             $factura = Factura::create([
+                'cliente_razon_social' => $primerViaje?->cliente,
+                'cliente_ruc' => $primerViaje?->cliente_ruc,
                 ...$datos,
                 'numero' => Str::upper(trim($datos['numero'])),
                 // Sin fecha de emisión explícita se asume hoy: es lo que pasa
