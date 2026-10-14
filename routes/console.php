@@ -13,3 +13,10 @@ Artisan::command('inspire', function () {
 Schedule::command('transpaty:recordatorio-sin-gr')
     ->everyMinute()
     ->withoutOverlapping();
+
+// El respaldo diario, a las 9 p. m. de Lima (el servidor está en hora de Berlín).
+Schedule::command('transpaty:respaldar')
+    ->dailyAt('21:00')
+    ->timezone(config('app.business_timezone'))
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/respaldos.log'));

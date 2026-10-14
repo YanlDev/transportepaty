@@ -115,4 +115,20 @@ return [
         'token' => env('WHATSAPP_SERVICIO_TOKEN'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Respaldos
+    |--------------------------------------------------------------------------
+    |
+    | El respaldo diario de `transpaty:respaldar`: la base y los archivos de
+    | `storage/app`, en una carpeta por día. En producción va fuera de la app
+    | (`/var/backups/transpaty`), y se guardan los últimos `cantidad`.
+    |
+    */
+
+    'respaldos' => [
+        'ruta' => env('TRANSPATY_RESPALDOS_RUTA', storage_path('respaldos')),
+        'cantidad' => (int) env('TRANSPATY_RESPALDOS_CANTIDAD', 30),
+    ],
+
 ];
