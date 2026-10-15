@@ -126,6 +126,24 @@ return [
     |
     */
 
+    /*
+    |--------------------------------------------------------------------------
+    | Mantenimiento
+    |--------------------------------------------------------------------------
+    |
+    | Cuándo un servicio del plan pasa a «próximo» (ámbar): cuando faltan
+    | `aviso_km` kilómetros o menos, o `aviso_dias` días si vence por fecha.
+    | Una lectura de km más vieja que `km_desactualizado_dias` se marca en
+    | pantalla: el cálculo sale de un dato viejo.
+    |
+    */
+
+    'mantenimiento' => [
+        'aviso_km' => (int) env('TRANSPATY_MANTENIMIENTO_AVISO_KM', 3000),
+        'aviso_dias' => (int) env('TRANSPATY_MANTENIMIENTO_AVISO_DIAS', 15),
+        'km_desactualizado_dias' => (int) env('TRANSPATY_MANTENIMIENTO_KM_DESACTUALIZADO_DIAS', 7),
+    ],
+
     'respaldos' => [
         'ruta' => env('TRANSPATY_RESPALDOS_RUTA', storage_path('respaldos')),
         'cantidad' => (int) env('TRANSPATY_RESPALDOS_CANTIDAD', 30),

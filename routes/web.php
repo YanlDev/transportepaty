@@ -12,7 +12,10 @@ use App\Http\Controllers\CuentaBancariaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmisionGreController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\LecturaKilometrajeController;
+use App\Http\Controllers\MantenimientoController;
 use App\Http\Controllers\NovedadController;
+use App\Http\Controllers\OrdenTrabajoController;
 use App\Http\Controllers\ParametroCostoController;
 use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\ReciboWhatsappController;
@@ -163,6 +166,31 @@ Route::middleware('auth')->group(function () {
         ->name('programacion.avisoArea.imagen');
     Route::post('programacion/{programacion}/aviso-area/{area}', [AvisoSalidaController::class, 'enviarArea'])
         ->name('programacion.avisoArea.enviar');
+
+    // Mantenimiento: el semáforo de la flota, el km que se anota al llegar a
+    // base y las órdenes de taller. `ordenes/crear` va antes que
+    // `ordenes/{orden}` para no leerse como una orden.
+    Route::get('mantenimiento', [MantenimientoController::class, 'index'])->name('mantenimiento.index');
+    Route::get('mantenimiento/unidades/{vehiculo}', [MantenimientoController::class, 'show'])
+        ->name('mantenimiento.show');
+    Route::post('mantenimiento/kilometrajes', [LecturaKilometrajeController::class, 'store'])
+        ->name('mantenimiento.kilometrajes.store');
+    Route::delete('mantenimiento/kilometrajes/{lectura}', [LecturaKilometrajeController::class, 'destroy'])
+        ->name('mantenimiento.kilometrajes.destroy');
+    Route::get('mantenimiento/ordenes/crear', [OrdenTrabajoController::class, 'create'])
+        ->name('mantenimiento.ordenes.create');
+    Route::post('mantenimiento/ordenes', [OrdenTrabajoController::class, 'store'])
+        ->name('mantenimiento.ordenes.store');
+    Route::get('mantenimiento/ordenes/{orden}/editar', [OrdenTrabajoController::class, 'edit'])
+        ->name('mantenimiento.ordenes.edit');
+    // PUT con fotos: llega como POST con `_method`, porque PHP no lee
+    // archivos de un PUT multipart.
+    Route::put('mantenimiento/ordenes/{orden}', [OrdenTrabajoController::class, 'update'])
+        ->name('mantenimiento.ordenes.update');
+    Route::delete('mantenimiento/ordenes/{orden}', [OrdenTrabajoController::class, 'destroy'])
+        ->name('mantenimiento.ordenes.destroy');
+    Route::delete('mantenimiento/ordenes/{orden}/fotos/{foto}', [OrdenTrabajoController::class, 'eliminarFoto'])
+        ->name('mantenimiento.ordenes.fotos.destroy');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');

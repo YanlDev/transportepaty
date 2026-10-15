@@ -568,6 +568,18 @@ it('finds a viaje by placa, cliente or GR number', function (): void {
         ->assertInertia(fn ($page) => $page->has('viajes.data', 1));
 });
 
+it('finds a viaje by the conductor name in any word order', function (): void {
+    Viaje::factory()->create(['conductor_nombre' => 'QUISPE QUISPE UBALDO']);
+    Viaje::factory()->create(['conductor_nombre' => 'MAMANI QUISPE JUAN']);
+
+    foreach (['UBALDO QUISPE', 'quispe  ubaldo', 'QUISPE QUISPE UBALD', 'ubaldo'] as $buscar) {
+        actingAs(actorConRol('admin'))
+            ->get(route('viajes.index', ['buscar' => $buscar]))
+            ->assertInertia(fn ($page) => $page->has('viajes.data', 1)
+                ->where('viajes.data.0.conductor_nombre', 'QUISPE QUISPE UBALDO'));
+    }
+});
+
 it('finds a viaje by destino', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('viajes.store'), ['archivos' => [gr()]])

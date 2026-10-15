@@ -6,10 +6,12 @@ import {
     Receipt,
     Route,
     Truck,
+    Wrench,
 } from 'lucide-react';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
+import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import { useCurrentUrl } from '@/hooks/use-current-url';
@@ -59,6 +61,17 @@ export function BottomNav() {
                       title: 'Cobranza',
                       href: contabilidad.index(),
                       icon: Receipt,
+                  },
+              ]
+            : []),
+        // Para el taller, mantenimiento es su pantalla; quien también ve los
+        // viajes lo tiene en el menú lateral, así no pasan de cinco.
+        ...(puede('mantenimiento.ver') && !puede('viajes.ver')
+            ? [
+                  {
+                      title: 'Taller',
+                      href: mantenimiento.index(),
+                      icon: Wrench,
                   },
               ]
             : []),

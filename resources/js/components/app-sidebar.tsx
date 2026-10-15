@@ -9,12 +9,14 @@ import {
     Receipt,
     Route,
     Truck,
+    Wrench,
 } from 'lucide-react';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
+import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
@@ -68,6 +70,13 @@ const flotaNavItems: NavItem[] = [
         icon: Container,
     },
 ];
+
+/** El semáforo de taller: qué unidad necesita servicio y cuál viene. */
+const mantenimientoNavItem: NavItem = {
+    title: 'Mantenimiento',
+    href: mantenimiento.index(),
+    icon: Wrench,
+};
 
 /** Requiere admin o visor: el contador no ve el padrón de choferes. */
 const conductoresNavItem: NavItem = {
@@ -154,6 +163,7 @@ export function AppSidebar() {
 
     const flota = [
         ...(puede('vehiculos.ver') ? flotaNavItems : []),
+        ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
         ...(puede('conductores.ver') ? [conductoresNavItem] : []),
     ];
 

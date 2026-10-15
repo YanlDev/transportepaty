@@ -71,7 +71,15 @@ class ViajeController extends Controller
                         ->orWhereLike('conductor_nombre', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('numero_gr', "%{$buscar}%", caseSensitive: false)
                         ->orWhereLike('origen', "%{$buscar}%", caseSensitive: false)
-                        ->orWhereLike('destino', "%{$buscar}%", caseSensitive: false);
+                        ->orWhereLike('destino', "%{$buscar}%", caseSensitive: false)
+                        // El nombre del conductor viene de la GR en orden
+                        // «apellidos nombres», pero se busca en cualquier
+                        // orden: basta con que estén todas las palabras.
+                        ->orWhere(function ($query) use ($buscar): void {
+                            foreach (preg_split('/\s+/', $buscar) as $palabra) {
+                                $query->whereLike('conductor_nombre', "%{$palabra}%", caseSensitive: false);
+                            }
+                        });
                 });
             })
             ->when($filtros['cliente'], fn ($query, string $cliente) => $query->where('cliente', $cliente))

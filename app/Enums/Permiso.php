@@ -30,6 +30,10 @@ enum Permiso: string
     case ConductoresEditar = 'conductores.editar';
     case ConductoresEliminar = 'conductores.eliminar';
 
+    case MantenimientoVer = 'mantenimiento.ver';
+    case MantenimientoRegistrarKm = 'mantenimiento.registrar_km';
+    case MantenimientoGestionar = 'mantenimiento.gestionar';
+
     case NovedadesRegistrar = 'novedades.registrar';
     case NovedadesLevantar = 'novedades.levantar';
 
@@ -79,6 +83,7 @@ enum Permiso: string
         'tablero' => 'Tablero',
         'vehiculos' => 'Vehículos',
         'conductores' => 'Conductores',
+        'mantenimiento' => 'Mantenimiento',
         'novedades' => 'Novedades de unidades',
         'viajes' => 'Viajes',
         'programacion' => 'Programación',
@@ -108,6 +113,9 @@ enum Permiso: string
             self::ConductoresCrear => 'Registrar conductores',
             self::ConductoresEditar => 'Editar conductores y sus documentos',
             self::ConductoresEliminar => 'Eliminar conductores',
+            self::MantenimientoVer => 'Ver el mantenimiento de la flota',
+            self::MantenimientoRegistrarKm => 'Registrar kilometrajes',
+            self::MantenimientoGestionar => 'Registrar y editar órdenes de trabajo',
             self::NovedadesRegistrar => 'Registrar novedades',
             self::NovedadesLevantar => 'Levantar novedades',
             self::ViajesVer => 'Ver viajes',
