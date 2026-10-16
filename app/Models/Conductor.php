@@ -245,7 +245,7 @@ class Conductor extends Model
 
     /**
      * Los que tienen su lugar en el expediente sin entrar al semáforo
-     * (CertiAdulto). Al externo no se le muestran.
+     * (DILER). Al externo no se le muestran.
      *
      * @return list<TipoDocumentoConductor>
      */
@@ -266,7 +266,7 @@ class Conductor extends Model
      * obligatorio, cargada o vacía, y al final los papeles sueltos. El que falta
      * deja su hueco a la vista en vez de que otro le corra el lugar.
      *
-     * @return list<array{tipo: string, abreviatura: string, label: string, estado: string, estado_label: string, obligatorio: bool, documento: array<string, mixed>|null}>
+     * @return list<array{tipo: string, abreviatura: string, label: string, estado: string, estado_label: string, grupo: string, obligatorio: bool, documento: array<string, mixed>|null}>
      */
     public function ranurasDocumentales(): array
     {
@@ -276,6 +276,7 @@ class Conductor extends Model
 
                 return [
                     ...$detalle,
+                    'grupo' => TipoDocumentoConductor::from($detalle['tipo'])->grupo(),
                     'obligatorio' => true,
                     'documento' => $documento?->toFrontArray(),
                 ];
@@ -295,6 +296,7 @@ class Conductor extends Model
                 'label' => $tipo->label(),
                 'estado' => $estado->value,
                 'estado_label' => $documento === null ? 'No cargado' : $estado->label(),
+                'grupo' => $tipo->grupo(),
                 'obligatorio' => false,
                 'documento' => $documento?->toFrontArray(),
             ];
@@ -313,6 +315,7 @@ class Conductor extends Model
                 'label' => $documento->tipo->label(),
                 'estado' => $documento->estado()->value,
                 'estado_label' => $documento->estado()->label(),
+                'grupo' => $documento->tipo->grupo(),
                 'obligatorio' => false,
                 'documento' => $documento->toFrontArray(),
             ])

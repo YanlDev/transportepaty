@@ -47,11 +47,8 @@ enum TipoDocumentoConductor: string
     /** Inducción básica (Anexo 4) en la U.M. San Rafael. Vence al año. */
     case Anexo4SanRafael = 'anexo4_san_rafael';
 
-    /** Curso «Conducción eficaz» de Scania (DILER). Vence al año. */
+    /** Curso «Conducción eficaz» de Scania (DILER). No vence. */
     case Diler = 'diler';
-
-    /** Certificado Único Laboral del MTPE (antecedentes). No vence. */
-    case CertiAdulto = 'certiadulto';
 
     /** Certificado de competencias que emite la empresa. Vale 6 meses desde
      * la evaluación, según el propio certificado. */
@@ -74,7 +71,6 @@ enum TipoDocumentoConductor: string
             self::Anexo4Pisco => 'Anexo 4 · Pisco',
             self::Anexo4SanRafael => 'Anexo 4 · San Rafael',
             self::Diler => 'DILER (conducción eficaz Scania)',
-            self::CertiAdulto => 'CertiAdulto (certificado único laboral)',
             self::CertificadoCompetencias => 'Certificado de competencias',
             self::Otro => 'Otro',
         };
@@ -97,20 +93,34 @@ enum TipoDocumentoConductor: string
             self::Anexo4Pisco => 'A4 Pisco',
             self::Anexo4SanRafael => 'A4 S. Rafael',
             self::Diler => 'DILER',
-            self::CertiAdulto => 'CertiAdulto',
             self::CertificadoCompetencias => 'Competencias',
             self::Otro => 'Otro',
         };
     }
 
     /**
-     * Si entra en el semáforo: faltar pinta de rojo. Todos salvo el
-     * CertiAdulto —que no vence y tiene su lugar en el expediente sin ser un
-     * requisito para salir— y «Otro».
+     * Si entra en el semáforo: faltar pinta de rojo. Todos salvo el DILER
+     * —que no vence y tiene su lugar en el expediente sin ser un requisito
+     * para salir— y «Otro».
      */
     public function esObligatorio(): bool
     {
-        return $this->tieneRanura() && $this !== self::CertiAdulto;
+        return $this->tieneRanura() && $this !== self::Diler;
+    }
+
+    /**
+     * El bloque en que se muestra en la ficha del conductor: con trece
+     * papeles, agruparlos es lo que permite encontrar uno sin leerlos todos.
+     */
+    public function grupo(): string
+    {
+        return match ($this) {
+            self::Dni, self::LicenciaConducir, self::LicenciaEspecial => 'Identidad y licencias',
+            self::Pic, self::Anexo4SanRafael, self::Anexo4Pisco, self::ManejoDefensivo => 'Accesos a mina',
+            self::ExamenMedico, self::ExamenManejo, self::CertificadoCompetencias => 'Salud y evaluaciones',
+            self::Matpel, self::Diler => 'Capacitaciones',
+            self::Otro => 'Otros papeles',
+        };
     }
 
     /**

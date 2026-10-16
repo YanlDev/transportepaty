@@ -99,7 +99,6 @@ class ConductorController extends Controller
 
         return Inertia::render('conductores/show', [
             'conductor' => $conductor,
-            'documentacion' => $conductor->estadoDocumental(),
             'ranuras' => $conductor->ranurasDocumentales(),
             'tiposDocumento' => TipoDocumentoConductor::options(),
             'asistencia' => $puedeVerAsistencia

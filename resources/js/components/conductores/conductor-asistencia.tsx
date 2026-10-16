@@ -1,6 +1,6 @@
 import { Link } from '@inertiajs/react';
 import { CalendarCheck, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { asistencia as rutaAsistencia } from '@/actions/App/Http/Controllers/ConductorController';
 import { Button } from '@/components/ui/button';
 import { estadoConfig } from '@/lib/asistencia';
@@ -12,10 +12,9 @@ import type {
 } from '@/types/fleet';
 
 /**
- * La asistencia del conductor en la ficha: solo un mes a la vez, con su
- * resumen al lado. El año completo —doce calendarios, para marcar de
- * corrido— vive en su propia pantalla: desplegado acá empujaba el resto del
- * expediente y dejaba las celdas demasiado apretadas para marcar en ellas.
+ * La asistencia del conductor en la ficha: una semana a la vez, a lo ancho,
+ * con el resumen del mes al lado. El año completo —para marcar de corrido—
+ * vive en su propia pantalla; acá solo se lee.
  */
 export function ConductorAsistencia({
     conductorId,
@@ -24,13 +23,43 @@ export function ConductorAsistencia({
     conductorId: number;
     asistencia: AsistenciaCalendarioAnual;
 }) {
-    // Arranca en el mes en curso si el año mostrado es el actual; si se está
-    // mirando otro año, en enero.
-    const hoy = new Date();
-    const [indiceMes, setIndiceMes] = useState(() =>
-        hoy.getFullYear() === asistencia.anio ? hoy.getMonth() : 0,
+    // Todos los días reales del año con su mes, para poder caminar por
+    // semanas sin importar en qué mes caen.
+    const dias = useMemo(
+        () =>
+            asistencia.calendarios.flatMap((mes, indiceMes) =>
+                mes.dias
+                    .filter((dia) => !dia.es_relleno)
+                    .map((dia) => ({ dia, indiceMes })),
+            ),
+        [asistencia],
     );
+
+    // Arranca en la semana de hoy si el año mostrado es el actual; si no, en
+    // la primera semana del año.
+    const hoy = fechaLocal(new Date());
+    const [lunes, setLunes] = useState(() => {
+        const referencia = dias.some(({ dia }) => dia.fecha === hoy)
+            ? hoy
+            : (dias[0]?.dia.fecha ?? hoy);
+
+        return lunesDe(referencia);
+    });
+
+    const semana = Array.from({ length: 7 }, (_, indice) => {
+        const fecha = sumarDias(lunes, indice);
+
+        return {
+            fecha,
+            encontrado: dias.find(({ dia }) => dia.fecha === fecha),
+        };
+    });
+
+    const indiceMes =
+        semana.find((dia) => dia.encontrado)?.encontrado?.indiceMes ?? 0;
     const mes = asistencia.calendarios[indiceMes];
+    const primera = dias[0]?.dia.fecha ?? lunes;
+    const ultima = dias[dias.length - 1]?.dia.fecha ?? lunes;
 
     if (!mes) {
         return null;
@@ -38,26 +67,90 @@ export function ConductorAsistencia({
 
     return (
         <section className="rounded-xl border border-border bg-card">
-            <div className="border-b p-3">
+            <div className="flex items-center justify-between gap-2 border-b p-3">
                 <h2 className="flex items-center gap-2 text-sm font-semibold">
                     <CalendarCheck className="size-4 text-muted-foreground" />
                     Asistencia
                 </h2>
+                <div className="flex items-center gap-1">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => setLunes(sumarDias(lunes, -7))}
+                        disabled={lunes <= primera}
+                        aria-label="Semana anterior"
+                    >
+                        <ChevronLeft className="size-4" />
+                    </Button>
+                    <span className="min-w-40 text-center text-sm font-medium tabular-nums">
+                        {rangoSemana(lunes)}
+                    </span>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => setLunes(sumarDias(lunes, 7))}
+                        disabled={sumarDias(lunes, 6) >= ultima}
+                        aria-label="Semana siguiente"
+                    >
+                        <ChevronRight className="size-4" />
+                    </Button>
+                </div>
             </div>
 
-            <div className="grid gap-4 p-3 lg:grid-cols-[minmax(0,1fr)_200px]">
-                <MesCompacto
-                    mes={mes}
-                    puedeRetroceder={indiceMes > 0}
-                    puedeAvanzar={indiceMes < asistencia.calendarios.length - 1}
-                    onRetroceder={() => setIndiceMes((i) => i - 1)}
-                    onAvanzar={() => setIndiceMes((i) => i + 1)}
-                />
+            <div className="flex flex-col gap-3 p-3">
+                <ol className="grid grid-cols-7 gap-1.5">
+                    {semana.map(({ fecha, encontrado }) => {
+                        const marca = encontrado
+                            ? asistencia.calendarios[encontrado.indiceMes]
+                                  .marcas[fecha]
+                            : undefined;
+                        const info = marca ? estadoConfig[marca.estado] : null;
+                        const esHoy = fecha === hoy;
 
-                <div className="flex flex-col gap-3">
-                    <ResumenMes mes={mes} />
+                        return (
+                            <li
+                                key={fecha}
+                                title={info ? info.label : 'Sin marcar'}
+                                className={cn(
+                                    'flex flex-col items-center gap-1.5 rounded-lg border py-2.5',
+                                    esHoy
+                                        ? 'border-primary bg-primary/5'
+                                        : 'border-transparent',
+                                    !encontrado && 'opacity-30',
+                                )}
+                            >
+                                <span className="text-[11px] font-medium text-muted-foreground uppercase">
+                                    {nombreDia(fecha)}
+                                </span>
+                                <span
+                                    className={cn(
+                                        'grid size-9 place-items-center rounded-full text-sm font-semibold tabular-nums',
+                                        info
+                                            ? info.solido
+                                            : 'border border-dashed border-border text-muted-foreground',
+                                    )}
+                                >
+                                    {Number(fecha.slice(8, 10))}
+                                </span>
+                                <span className="hidden text-[11px] text-muted-foreground sm:block">
+                                    {info ? info.letra : '—'}
+                                </span>
+                            </li>
+                        );
+                    })}
+                </ol>
 
-                    <Button asChild variant="outline" className="w-full">
+                <div className="flex flex-col gap-3 border-t pt-3 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-col gap-1.5">
+                        <p className="text-xs font-medium text-muted-foreground capitalize">
+                            {formatearMes(mes.mes)}
+                        </p>
+                        <ResumenMes mes={mes} />
+                    </div>
+
+                    <Button asChild variant="outline" size="sm">
                         <Link href={rutaAsistencia(conductorId)}>
                             Ver detalle de asistencia
                         </Link>
@@ -68,101 +161,44 @@ export function ConductorAsistencia({
     );
 }
 
-/**
- * Un mes en chico, solo para leer: cada día marcado se pinta como un círculo
- * lleno del color de su estado, y el día de hoy va anillado. Marcar y
- * corregir se hace en la vista del año o en el rooster, donde las celdas son
- * grandes y están pensadas para eso.
- */
-function MesCompacto({
-    mes,
-    puedeRetroceder,
-    puedeAvanzar,
-    onRetroceder,
-    onAvanzar,
-}: {
-    mes: AsistenciaCalendarioMes;
-    puedeRetroceder: boolean;
-    puedeAvanzar: boolean;
-    onRetroceder: () => void;
-    onAvanzar: () => void;
-}) {
-    const hoy = new Date().toISOString().slice(0, 10);
-    const nombresDias = mes.dias.slice(0, 7).map((dia) => dia.dia_semana);
+function fechaLocal(fecha: Date): string {
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, '0');
 
-    return (
-        <div>
-            <div className="mb-2 flex items-center justify-between gap-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={onRetroceder}
-                    disabled={!puedeRetroceder}
-                    aria-label="Mes anterior"
-                >
-                    <ChevronLeft className="size-4" />
-                </Button>
-                <p className="text-sm font-medium text-primary capitalize">
-                    {formatearMes(mes.mes)}
-                </p>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={onAvanzar}
-                    disabled={!puedeAvanzar}
-                    aria-label="Mes siguiente"
-                >
-                    <ChevronRight className="size-4" />
-                </Button>
-            </div>
-
-            <div className="grid grid-cols-7 justify-items-center gap-y-1">
-                {nombresDias.map((nombre, indice) => (
-                    <span
-                        key={indice}
-                        className="pb-1 text-[11px] font-medium text-muted-foreground"
-                    >
-                        {nombre}
-                    </span>
-                ))}
-
-                {mes.dias.map((dia) => {
-                    const marca = mes.marcas[dia.fecha];
-                    const info = marca ? estadoConfig[marca.estado] : null;
-                    const esHoy = dia.fecha === hoy;
-
-                    return (
-                        <span
-                            key={dia.fecha}
-                            title={`${dia.numero} — ${info ? info.label : 'Sin marcar'}`}
-                            className={cn(
-                                'grid size-7 place-items-center rounded-full text-xs font-medium tabular-nums',
-                                dia.es_relleno && 'text-muted-foreground/30',
-                                !dia.es_relleno &&
-                                    !info &&
-                                    'text-muted-foreground',
-                                !dia.es_relleno && info && info.solido,
-                                // Hoy sin marcar se pinta igual, en el color de
-                                // la app, para ubicarse en el mes de un vistazo.
-                                esHoy &&
-                                    !info &&
-                                    'bg-primary text-primary-foreground',
-                                esHoy &&
-                                    info &&
-                                    'ring-2 ring-primary ring-offset-1 ring-offset-card',
-                            )}
-                        >
-                            {dia.numero}
-                        </span>
-                    );
-                })}
-            </div>
-        </div>
-    );
+    return `${fecha.getFullYear()}-${mes}-${dia}`;
 }
 
+function sumarDias(fecha: string, dias: number): string {
+    const fechaObjeto = new Date(`${fecha}T12:00:00`);
+    fechaObjeto.setDate(fechaObjeto.getDate() + dias);
+
+    return fechaLocal(fechaObjeto);
+}
+
+/** El lunes de la semana de esa fecha (la semana va de lunes a domingo). */
+function lunesDe(fecha: string): string {
+    const diaSemana = new Date(`${fecha}T12:00:00`).getDay();
+
+    return sumarDias(fecha, diaSemana === 0 ? -6 : 1 - diaSemana);
+}
+
+function nombreDia(fecha: string): string {
+    return new Date(`${fecha}T12:00:00`)
+        .toLocaleDateString('es-PE', { weekday: 'short' })
+        .replace('.', '');
+}
+
+function rangoSemana(lunes: string): string {
+    const formato = (fecha: string) =>
+        new Date(`${fecha}T12:00:00`).toLocaleDateString('es-PE', {
+            day: 'numeric',
+            month: 'short',
+        });
+
+    return `${formato(lunes)} – ${formato(sumarDias(lunes, 6))}`;
+}
+
+/** El mes en una fila: cuántos días de cada estado y el balance. */
 function ResumenMes({ mes }: { mes: AsistenciaCalendarioMes }) {
     const conteos = Object.values(mes.marcas).reduce<
         Record<EstadoAsistencia, number>
@@ -176,42 +212,36 @@ function ResumenMes({ mes }: { mes: AsistenciaCalendarioMes }) {
     );
 
     return (
-        <div className="divide-y rounded-lg border border-border">
+        <ul className="flex flex-wrap gap-x-5 gap-y-1.5 text-sm">
             {(Object.keys(estadoConfig) as EstadoAsistencia[]).map((estado) => (
-                <div
-                    key={estado}
-                    className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
-                >
-                    <span className="flex items-center gap-2.5">
-                        <span
-                            className={cn(
-                                'size-2.5 shrink-0 rounded-full',
-                                estadoConfig[estado].punto,
-                            )}
-                            aria-hidden
-                        />
+                <li key={estado} className="flex items-center gap-2">
+                    <span
+                        className={cn(
+                            'size-2.5 shrink-0 rounded-full',
+                            estadoConfig[estado].punto,
+                        )}
+                        aria-hidden
+                    />
+                    <span className="text-muted-foreground">
                         {estadoConfig[estado].labelResumen}
                     </span>
                     <span className="font-semibold tabular-nums">
                         {conteos[estado]}
                     </span>
-                </div>
+                </li>
             ))}
-
-            <div className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
-                <span className="flex items-center gap-2.5 text-muted-foreground">
-                    <span
-                        className="size-2.5 shrink-0 rounded-full bg-muted-foreground/40"
-                        aria-hidden
-                    />
-                    Balance del mes
-                </span>
+            <li className="flex items-center gap-2">
+                <span
+                    className="size-2.5 shrink-0 rounded-full bg-muted-foreground/40"
+                    aria-hidden
+                />
+                <span className="text-muted-foreground">Balance del mes</span>
                 <span className="font-semibold tabular-nums">
                     {mes.dias_debidos > 0 && '+'}
                     {mes.dias_debidos}
                 </span>
-            </div>
-        </div>
+            </li>
+        </ul>
     );
 }
 

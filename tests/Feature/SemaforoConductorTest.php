@@ -148,19 +148,20 @@ it('only lets the licencias block the conductor when they expire', function (): 
 });
 
 /**
- * El CertiAdulto no vence ni es requisito: tiene su lugar en el expediente,
- * pero faltar no pinta de rojo.
+ * El DILER no vence ni es requisito: tiene su lugar en el expediente, pero
+ * faltar no pinta de rojo.
  */
 it('shows the documents that do not expire without turning the semáforo red', function (): void {
     $conductor = expedienteConductor();
 
     expect($conductor->estadoDocumental()['semaforo'])->toBe('verde');
 
-    $ranura = collect($conductor->ranurasDocumentales())->firstWhere('tipo', 'certiadulto');
+    $ranura = collect($conductor->ranurasDocumentales())->firstWhere('tipo', 'diler');
 
     expect($ranura['obligatorio'])->toBeFalse()
         ->and($ranura['documento'])->toBeNull()
-        ->and($ranura['estado_label'])->toBe('No cargado');
+        ->and($ranura['estado_label'])->toBe('No cargado')
+        ->and($ranura['grupo'])->toBe('Capacitaciones');
 });
 
 it('asks an externo only for the DNI and the licencias', function (): void {

@@ -12,6 +12,7 @@ type Props = {
     conductorId: number;
     tipos: EnumOption[];
     puedeEditar: boolean;
+    compacta?: boolean;
 };
 
 /**
@@ -23,11 +24,13 @@ export function DocumentoRanuraConductor({
     conductorId,
     tipos,
     puedeEditar,
+    compacta = false,
 }: Props) {
     return (
         <DocumentoTarjeta
             ranura={ranura}
             puedeEditar={puedeEditar}
+            compacta={compacta}
             urlVencimiento={
                 ranura.documento === null
                     ? null

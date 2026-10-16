@@ -158,6 +158,8 @@ export type RanuraDocumental = {
     estado_label: string;
     /** false para los papeles sueltos («Otro»), que van al final. */
     obligatorio: boolean;
+    /** El bloque de la ficha en que se muestra; solo en los del conductor. */
+    grupo?: string;
     documento: VehiculoDocumentoItem | null;
 };
 

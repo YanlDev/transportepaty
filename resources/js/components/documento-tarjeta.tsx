@@ -36,6 +36,8 @@ type Props = {
      * quien la usa pone el diálogo.
      */
     renderCargar: (trigger: React.ReactNode) => React.ReactNode;
+    /** En una sola fila, delgada y con el estado siempre a la vista, para cuadrículas. */
+    compacta?: boolean;
 };
 
 /**
@@ -49,6 +51,7 @@ export function DocumentoTarjeta({
     urlVencimiento,
     onEliminar,
     renderCargar,
+    compacta = false,
 }: Props) {
     const { documento, estado } = ranura;
 
@@ -63,6 +66,189 @@ export function DocumentoTarjeta({
           ? 'Sin vencimiento'
           : 'No cargado';
 
+    const icono = (
+        <span
+            className={cn(
+                'grid size-9 shrink-0 place-items-center rounded-md',
+                tema.icono,
+            )}
+            aria-hidden
+        >
+            <FileText className="size-4.5" />
+        </span>
+    );
+
+    // El vencimiento es el dato por el que se mira esta pantalla, así que
+    // nunca se trunca: si falta ancho, se corta el número de documento, que se
+    // puede leer en el visor.
+    const detalle = (
+        <p className="flex min-w-0 items-baseline gap-1 text-xs text-muted-foreground">
+            {documento?.numero && (
+                <>
+                    <span className="truncate font-mono">
+                        {documento.numero}
+                    </span>
+                    <span aria-hidden>·</span>
+                </>
+            )}
+            {/* El vencimiento se corrige acá mismo, de un clic: es el
+                dato que más se carga mal y el que cambia al renovar,
+                y hasta ahora arreglarlo obligaba a volver a subir el
+                archivo escaneado. */}
+            {documento !== null && puedeEditar && urlVencimiento !== null ? (
+                <ValorEditable
+                    url={urlVencimiento}
+                    campo="fecha_vencimiento"
+                    valor={documento.fecha_vencimiento}
+                    tipo="fecha"
+                    editable
+                    etiqueta={`el vencimiento de ${ranura.label}`}
+                    className="group/fecha flex w-auto shrink-0 items-center gap-1.5 text-xs tabular-nums"
+                    ancho="min-w-32"
+                    editando={editandoVencimiento}
+                    onEditandoChange={setEditandoVencimiento}
+                >
+                    {fecha}
+                    <Pencil
+                        aria-hidden
+                        className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/fecha:opacity-100 group-hover/fecha:opacity-100 pointer-coarse:opacity-100"
+                    />
+                </ValorEditable>
+            ) : (
+                <span className="shrink-0 tabular-nums">{fecha}</span>
+            )}
+        </p>
+    );
+
+    const acciones = (
+        <div className="flex shrink-0 items-center gap-0.5">
+            {documento === null
+                ? puedeEditar &&
+                  renderCargar(
+                      <button
+                          type="button"
+                          title={`Cargar ${ranura.label}`}
+                          aria-label={`Cargar ${ranura.label}`}
+                          className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
+                      >
+                          <Upload className="size-4" />
+                      </button>,
+                  )
+                : null}
+
+            {documento !== null && (
+                <>
+                    <DocumentoVisorDialog
+                        url={documento.url}
+                        esPdf={documento.es_pdf}
+                        titulo={ranura.label}
+                        detalle={[
+                            documento.numero,
+                            documento.fecha_vencimiento
+                                ? `Vence ${formatearFecha(documento.fecha_vencimiento)}`
+                                : null,
+                        ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        trigger={
+                            <button
+                                type="button"
+                                title={`Ver ${ranura.label}`}
+                                aria-label={`Ver ${ranura.label}`}
+                                className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                            >
+                                <Eye className="size-4" />
+                            </button>
+                        }
+                    />
+
+                    {/* Eliminar vive en el menú y no como un botón suelto:
+                        es destructivo y no hace falta tenerlo a un toque de
+                        distancia mientras se revisa el expediente. */}
+                    {puedeEditar && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger
+                                title={`Acciones de ${ranura.label}`}
+                                aria-label={`Acciones de ${ranura.label}`}
+                                className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                            >
+                                <MoreVertical className="size-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                {urlVencimiento !== null && (
+                                    <DropdownMenuItem
+                                        onSelect={() =>
+                                            setEditandoVencimiento(true)
+                                        }
+                                    >
+                                        <Pencil className="size-4" />
+                                        Editar vencimiento
+                                    </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem
+                                    variant="destructive"
+                                    onSelect={onEliminar}
+                                >
+                                    <Trash2 className="size-4" />
+                                    Eliminar
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
+                </>
+            )}
+        </div>
+    );
+
+    // Un opcional sin cargar (el DILER) no está «vigente»: va en neutro.
+    const chipEstado = (
+        <span
+            className={cn(
+                'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
+                documento === null && estado === 'vigente'
+                    ? estiloDocumento.faltante.chip
+                    : tema.chip,
+            )}
+        >
+            {ranura.estado_label}
+        </span>
+    );
+
+    // Compacta: para cuadrículas anchas, en una sola fila y delgada. Dice
+    // siempre su estado —también «Vigente»—, y el nombre largo se corta con
+    // su texto completo al pasar el mouse.
+    if (compacta) {
+        return (
+            <div
+                className={cn(
+                    'flex items-center gap-2.5 rounded-lg border px-2.5 py-2 shadow-sm transition-all hover:shadow-md',
+                    tema.tarjeta,
+                )}
+            >
+                <span
+                    className={cn(
+                        'grid size-7 shrink-0 place-items-center rounded-md',
+                        tema.icono,
+                    )}
+                    aria-hidden
+                >
+                    <FileText className="size-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                    <p
+                        className="truncate text-sm leading-tight font-medium text-foreground"
+                        title={ranura.label}
+                    >
+                        {ranura.label}
+                    </p>
+                    {detalle}
+                </div>
+                {chipEstado}
+                {acciones}
+            </div>
+        );
+    }
+
     return (
         <div
             className={cn(
@@ -70,155 +256,22 @@ export function DocumentoTarjeta({
                 tema.tarjeta,
             )}
         >
-            <span
-                className={cn(
-                    'grid size-9 shrink-0 place-items-center rounded-md',
-                    tema.icono,
-                )}
-                aria-hidden
-            >
-                <FileText className="size-4.5" />
-            </span>
+            {icono}
 
             <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-sm leading-tight font-medium text-foreground">
                     {ranura.label}
                 </p>
-                {/* El vencimiento es el dato por el que se mira esta pantalla,
-                    así que nunca se trunca: si falta ancho, se corta el número
-                    de documento, que se puede leer en el visor. */}
-                <p className="mt-0.5 flex items-baseline gap-1 text-xs text-muted-foreground">
-                    {documento?.numero && (
-                        <>
-                            <span className="truncate font-mono">
-                                {documento.numero}
-                            </span>
-                            <span aria-hidden>·</span>
-                        </>
-                    )}
-                    {/* El vencimiento se corrige acá mismo, de un clic: es el
-                        dato que más se carga mal y el que cambia al renovar,
-                        y hasta ahora arreglarlo obligaba a volver a subir el
-                        archivo escaneado. */}
-                    {documento !== null &&
-                    puedeEditar &&
-                    urlVencimiento !== null ? (
-                        <ValorEditable
-                            url={urlVencimiento}
-                            campo="fecha_vencimiento"
-                            valor={documento.fecha_vencimiento}
-                            tipo="fecha"
-                            editable
-                            etiqueta={`el vencimiento de ${ranura.label}`}
-                            className="group/fecha flex w-auto shrink-0 items-center gap-1.5 text-xs tabular-nums"
-                            ancho="min-w-32"
-                            editando={editandoVencimiento}
-                            onEditandoChange={setEditandoVencimiento}
-                        >
-                            {fecha}
-                            <Pencil
-                                aria-hidden
-                                className="size-3 shrink-0 text-muted-foreground opacity-0 transition-opacity group-focus-within/fecha:opacity-100 group-hover/fecha:opacity-100 pointer-coarse:opacity-100"
-                            />
-                        </ValorEditable>
-                    ) : (
-                        <span className="shrink-0 tabular-nums">{fecha}</span>
-                    )}
-                </p>
+                <div className="mt-0.5">{detalle}</div>
             </div>
 
             {/* El chip solo aparece cuando hay algo que avisar. Un «Vigente»
                 en cada fila es ruido —lo normal es que todo esté al día— y
                 encima se comía el ancho del número y la fecha, que es lo que
                 de verdad se viene a leer acá. */}
-            {estado !== 'vigente' && (
-                <span
-                    className={cn(
-                        'shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                        tema.chip,
-                    )}
-                >
-                    {ranura.estado_label}
-                </span>
-            )}
+            {estado !== 'vigente' && chipEstado}
 
-            <div className="flex shrink-0 items-center gap-0.5">
-                {documento === null
-                    ? puedeEditar &&
-                      renderCargar(
-                          <button
-                              type="button"
-                              title={`Cargar ${ranura.label}`}
-                              aria-label={`Cargar ${ranura.label}`}
-                              className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-primary hover:text-primary-foreground"
-                          >
-                              <Upload className="size-4" />
-                          </button>,
-                      )
-                    : null}
-
-                {documento !== null && (
-                    <>
-                        <DocumentoVisorDialog
-                            url={documento.url}
-                            esPdf={documento.es_pdf}
-                            titulo={ranura.label}
-                            detalle={[
-                                documento.numero,
-                                documento.fecha_vencimiento
-                                    ? `Vence ${formatearFecha(documento.fecha_vencimiento)}`
-                                    : null,
-                            ]
-                                .filter(Boolean)
-                                .join(' · ')}
-                            trigger={
-                                <button
-                                    type="button"
-                                    title={`Ver ${ranura.label}`}
-                                    aria-label={`Ver ${ranura.label}`}
-                                    className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                                >
-                                    <Eye className="size-4" />
-                                </button>
-                            }
-                        />
-
-                        {/* Eliminar vive en el menú y no como un botón suelto:
-                            es destructivo y no hace falta tenerlo a un toque de
-                            distancia mientras se revisa el expediente. */}
-                        {puedeEditar && (
-                            <DropdownMenu>
-                                <DropdownMenuTrigger
-                                    title={`Acciones de ${ranura.label}`}
-                                    aria-label={`Acciones de ${ranura.label}`}
-                                    className="grid size-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-                                >
-                                    <MoreVertical className="size-4" />
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    {urlVencimiento !== null && (
-                                        <DropdownMenuItem
-                                            onSelect={() =>
-                                                setEditandoVencimiento(true)
-                                            }
-                                        >
-                                            <Pencil className="size-4" />
-                                            Editar vencimiento
-                                        </DropdownMenuItem>
-                                    )}
-                                    <DropdownMenuItem
-                                        variant="destructive"
-                                        onSelect={onEliminar}
-                                    >
-                                        <Trash2 className="size-4" />
-                                        Eliminar
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                        )}
-                    </>
-                )}
-            </div>
+            {acciones}
         </div>
     );
 }

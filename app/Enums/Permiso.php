@@ -33,6 +33,7 @@ enum Permiso: string
     case MantenimientoVer = 'mantenimiento.ver';
     case MantenimientoRegistrarKm = 'mantenimiento.registrar_km';
     case MantenimientoGestionar = 'mantenimiento.gestionar';
+    case MantenimientoConfigurar = 'mantenimiento.configurar';
 
     case NovedadesRegistrar = 'novedades.registrar';
     case NovedadesLevantar = 'novedades.levantar';
@@ -116,6 +117,7 @@ enum Permiso: string
             self::MantenimientoVer => 'Ver el mantenimiento de la flota',
             self::MantenimientoRegistrarKm => 'Registrar kilometrajes',
             self::MantenimientoGestionar => 'Registrar y editar órdenes de trabajo',
+            self::MantenimientoConfigurar => 'Configurar el plan de cada marca',
             self::NovedadesRegistrar => 'Registrar novedades',
             self::NovedadesLevantar => 'Levantar novedades',
             self::ViajesVer => 'Ver viajes',

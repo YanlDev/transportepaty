@@ -27,6 +27,7 @@ export type Permiso =
     | 'mantenimiento.ver'
     | 'mantenimiento.registrar_km'
     | 'mantenimiento.gestionar'
+    | 'mantenimiento.configurar'
     | 'novedades.registrar'
     | 'novedades.levantar'
     | 'viajes.ver'
