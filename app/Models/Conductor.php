@@ -230,8 +230,8 @@ class Conductor extends Model
     }
 
     /**
-     * Los documentos que se le exigen a este conductor. Al externo no se le
-     * pide el PIC de la mina: solo DNI y licencias.
+     * Los documentos que se le exigen a este conductor. Al externo solo DNI y
+     * licencias (ver `TipoDocumentoConductor::seExigeAExterno`).
      *
      * @return list<TipoDocumentoConductor>
      */
@@ -239,7 +239,25 @@ class Conductor extends Model
     {
         return array_values(array_filter(
             TipoDocumentoConductor::obligatorios(),
-            fn (TipoDocumentoConductor $tipo): bool => ! ($this->externo && $tipo === TipoDocumentoConductor::Pic),
+            fn (TipoDocumentoConductor $tipo): bool => ! $this->externo || $tipo->seExigeAExterno(),
+        ));
+    }
+
+    /**
+     * Los que tienen su lugar en el expediente sin entrar al semáforo
+     * (CertiAdulto). Al externo no se le muestran.
+     *
+     * @return list<TipoDocumentoConductor>
+     */
+    private function tiposOpcionales(): array
+    {
+        if ($this->externo) {
+            return [];
+        }
+
+        return array_values(array_filter(
+            TipoDocumentoConductor::cases(),
+            fn (TipoDocumentoConductor $tipo): bool => $tipo->tieneRanura() && ! $tipo->esObligatorio(),
         ));
     }
 
@@ -265,8 +283,30 @@ class Conductor extends Model
             $this->estadoDocumental()['documentos'],
         );
 
+        // Los opcionales tienen su lugar aunque estén vacíos, pero un hueco
+        // ahí no es una falta: se muestra «No cargado» sin color de alerta.
+        $opcionales = array_map(function (TipoDocumentoConductor $tipo): array {
+            $documento = $this->documentoDe($tipo);
+            $estado = $documento?->estado() ?? EstadoDocumento::Vigente;
+
+            return [
+                'tipo' => $tipo->value,
+                'abreviatura' => $tipo->abreviatura(),
+                'label' => $tipo->label(),
+                'estado' => $estado->value,
+                'estado_label' => $documento === null ? 'No cargado' : $estado->label(),
+                'obligatorio' => false,
+                'documento' => $documento?->toFrontArray(),
+            ];
+        }, $this->tiposOpcionales());
+
+        $enRanura = array_map(
+            fn (array $ranura): string => $ranura['tipo'],
+            [...$obligatorias, ...$opcionales],
+        );
+
         $sueltas = $this->documentos
-            ->reject(fn (ConductorDocumento $documento): bool => $documento->tipo->esObligatorio())
+            ->reject(fn (ConductorDocumento $documento): bool => in_array($documento->tipo->value, $enRanura, true))
             ->map(fn (ConductorDocumento $documento): array => [
                 'tipo' => $documento->tipo->value,
                 'abreviatura' => $documento->tipo->abreviatura(),
@@ -279,7 +319,7 @@ class Conductor extends Model
             ->values()
             ->all();
 
-        return [...$obligatorias, ...$sueltas];
+        return [...$obligatorias, ...$opcionales, ...$sueltas];
     }
 
     /**

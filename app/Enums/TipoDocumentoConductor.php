@@ -28,6 +28,35 @@ enum TipoDocumentoConductor: string
      * `vencimientoInhabilita`). */
     case Pic = 'pic';
 
+    /** Certificado de aptitud médico ocupacional (EMO), anual. */
+    case ExamenMedico = 'examen_medico';
+
+    /** Evaluación práctica de manejo, con su fecha de revalidación. */
+    case ExamenManejo = 'examen_manejo';
+
+    /** Curso de manejo y transporte de materiales peligrosos (MATPEL). */
+    case Matpel = 'matpel';
+
+    /** Curso del Reglamento Interno de Tránsito (RITRAN) de San Rafael.
+     * Vence al año del curso. */
+    case ManejoDefensivo = 'manejo_defensivo';
+
+    /** Inducción básica (Anexo 4) en la refinería de Pisco. */
+    case Anexo4Pisco = 'anexo4_pisco';
+
+    /** Inducción básica (Anexo 4) en la U.M. San Rafael. Vence al año. */
+    case Anexo4SanRafael = 'anexo4_san_rafael';
+
+    /** Curso «Conducción eficaz» de Scania (DILER). Vence al año. */
+    case Diler = 'diler';
+
+    /** Certificado Único Laboral del MTPE (antecedentes). No vence. */
+    case CertiAdulto = 'certiadulto';
+
+    /** Certificado de competencias que emite la empresa. Vale 6 meses desde
+     * la evaluación, según el propio certificado. */
+    case CertificadoCompetencias = 'certificado_competencias';
+
     /** Cajón para papeles sueltos: no entra en el semáforo. */
     case Otro = 'otro';
 
@@ -38,6 +67,15 @@ enum TipoDocumentoConductor: string
             self::LicenciaConducir => 'Licencia de conducir A-IIIc',
             self::LicenciaEspecial => 'Licencia especial',
             self::Pic => 'PIC (permiso interno de conducir)',
+            self::ExamenMedico => 'Examen médico ocupacional',
+            self::ExamenManejo => 'Examen de manejo',
+            self::Matpel => 'MATPEL',
+            self::ManejoDefensivo => 'Manejo defensivo (RITRAN)',
+            self::Anexo4Pisco => 'Anexo 4 · Pisco',
+            self::Anexo4SanRafael => 'Anexo 4 · San Rafael',
+            self::Diler => 'DILER (conducción eficaz Scania)',
+            self::CertiAdulto => 'CertiAdulto (certificado único laboral)',
+            self::CertificadoCompetencias => 'Certificado de competencias',
             self::Otro => 'Otro',
         };
     }
@@ -52,17 +90,45 @@ enum TipoDocumentoConductor: string
             self::LicenciaConducir => 'Licencia',
             self::LicenciaEspecial => 'Especial',
             self::Pic => 'PIC',
+            self::ExamenMedico => 'EMO',
+            self::ExamenManejo => 'Ex. manejo',
+            self::Matpel => 'MATPEL',
+            self::ManejoDefensivo => 'RITRAN',
+            self::Anexo4Pisco => 'A4 Pisco',
+            self::Anexo4SanRafael => 'A4 S. Rafael',
+            self::Diler => 'DILER',
+            self::CertiAdulto => 'CertiAdulto',
+            self::CertificadoCompetencias => 'Competencias',
             self::Otro => 'Otro',
         };
     }
 
     /**
-     * Indica si el documento es exigible para que el conductor pueda salir a
-     * ruta. Todos lo son salvo «Otro», que no es un requisito.
+     * Si entra en el semáforo: faltar pinta de rojo. Todos salvo el
+     * CertiAdulto —que no vence y tiene su lugar en el expediente sin ser un
+     * requisito para salir— y «Otro».
      */
     public function esObligatorio(): bool
     {
+        return $this->tieneRanura() && $this !== self::CertiAdulto;
+    }
+
+    /**
+     * Si tiene su lugar fijo en el expediente, cargado o vacío. Todos salvo
+     * «Otro», que es el cajón de papeles sueltos.
+     */
+    public function tieneRanura(): bool
+    {
         return $this !== self::Otro;
+    }
+
+    /**
+     * Al conductor externo solo se le piden el DNI y las licencias: el PIC,
+     * los exámenes y los cursos de la mina son para el personal de la casa.
+     */
+    public function seExigeAExterno(): bool
+    {
+        return in_array($this, [self::Dni, self::LicenciaConducir, self::LicenciaEspecial], true);
     }
 
     /**
@@ -74,15 +140,16 @@ enum TipoDocumentoConductor: string
      * fecha se guarda y se avisa en ámbar en vez de pintar al conductor de
      * rojo y sacarlo de la programación por algo que no lo inhabilita.
      *
-     * El PIC va igual por decisión de la empresa: su vencimiento se avisa en
-     * ámbar para renovarlo a tiempo, sin sacar al conductor de la programación.
+     * El PIC, los exámenes y los cursos van igual por decisión de la
+     * empresa: su vencimiento se avisa en ámbar para renovarlo a tiempo, sin
+     * sacar al conductor de la programación. Solo las licencias inhabilitan.
      *
      * Faltar es otra cosa: el papel tiene que estar en el expediente, y un DNI
      * ausente sigue siendo rojo.
      */
     public function vencimientoInhabilita(): bool
     {
-        return ! in_array($this, [self::Dni, self::Pic], true);
+        return in_array($this, [self::LicenciaConducir, self::LicenciaEspecial], true);
     }
 
     /**

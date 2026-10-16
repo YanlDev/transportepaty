@@ -125,3 +125,49 @@ it('does not ask an externo for the PIC', function (): void {
         ->and($estado['faltantes'])->toBe([])
         ->and(collect($estado['documentos'])->pluck('tipo')->all())->not->toContain('pic');
 });
+
+/**
+ * Los exámenes y cursos de la mina van como el PIC: vencidos avisan en ámbar.
+ * Solo las licencias sacan de la programación.
+ */
+it('only lets the licencias block the conductor when they expire', function (): void {
+    $bloquean = collect(TipoDocumentoConductor::cases())
+        ->filter(fn (TipoDocumentoConductor $tipo): bool => $tipo->vencimientoInhabilita())
+        ->values()
+        ->all();
+
+    expect($bloquean)->toBe([TipoDocumentoConductor::LicenciaConducir, TipoDocumentoConductor::LicenciaEspecial]);
+
+    $estado = expedienteConductor([
+        TipoDocumentoConductor::ExamenMedico->value => ayer(),
+        TipoDocumentoConductor::Matpel->value => ayer(),
+    ])->estadoDocumental();
+
+    expect($estado['semaforo'])->toBe('ambar')
+        ->and($estado['vencidos'])->toBe(['Examen médico ocupacional', 'MATPEL']);
+});
+
+/**
+ * El CertiAdulto no vence ni es requisito: tiene su lugar en el expediente,
+ * pero faltar no pinta de rojo.
+ */
+it('shows the documents that do not expire without turning the semáforo red', function (): void {
+    $conductor = expedienteConductor();
+
+    expect($conductor->estadoDocumental()['semaforo'])->toBe('verde');
+
+    $ranura = collect($conductor->ranurasDocumentales())->firstWhere('tipo', 'certiadulto');
+
+    expect($ranura['obligatorio'])->toBeFalse()
+        ->and($ranura['documento'])->toBeNull()
+        ->and($ranura['estado_label'])->toBe('No cargado');
+});
+
+it('asks an externo only for the DNI and the licencias', function (): void {
+    $conductor = Conductor::factory()->create(['externo' => true]);
+
+    expect(collect($conductor->tiposObligatorios())->map->value->all())
+        ->toBe(['dni', 'licencia_conducir', 'licencia_especial'])
+        ->and(collect($conductor->fresh(['documentos'])->ranurasDocumentales())->pluck('tipo')->all())
+        ->toBe(['dni', 'licencia_conducir', 'licencia_especial']);
+});
