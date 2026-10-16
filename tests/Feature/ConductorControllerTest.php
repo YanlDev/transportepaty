@@ -422,6 +422,16 @@ it('allows an admin to update a conductor', function (): void {
     expect($conductor->fresh()->nombres)->toBe('Carlos Editado');
 });
 
+it('marks a conductor as externo', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->put(route('conductores.update', $conductor), datosConductor(['externo' => true]))
+        ->assertSessionHasNoErrors();
+
+    expect($conductor->fresh()->externo)->toBeTrue();
+});
+
 it('keeps its own documento when updating', function (): void {
     $conductor = Conductor::factory()->create(['documento' => '87654321']);
 

@@ -23,6 +23,11 @@ enum TipoDocumentoConductor: string
     /** Habilitación especial para el transporte de materiales peligrosos. */
     case LicenciaEspecial = 'licencia_especial';
 
+    /** Permiso Interno de Conducir de la Unidad Minera San Rafael (Minsur).
+     * Tiene que estar en el expediente, pero vencido solo avisa (ver
+     * `vencimientoInhabilita`). */
+    case Pic = 'pic';
+
     /** Cajón para papeles sueltos: no entra en el semáforo. */
     case Otro = 'otro';
 
@@ -32,6 +37,7 @@ enum TipoDocumentoConductor: string
             self::Dni => 'DNI',
             self::LicenciaConducir => 'Licencia de conducir A-IIIc',
             self::LicenciaEspecial => 'Licencia especial',
+            self::Pic => 'PIC (permiso interno de conducir)',
             self::Otro => 'Otro',
         };
     }
@@ -45,6 +51,7 @@ enum TipoDocumentoConductor: string
             self::Dni => 'DNI',
             self::LicenciaConducir => 'Licencia',
             self::LicenciaEspecial => 'Especial',
+            self::Pic => 'PIC',
             self::Otro => 'Otro',
         };
     }
@@ -67,12 +74,15 @@ enum TipoDocumentoConductor: string
      * fecha se guarda y se avisa en ámbar en vez de pintar al conductor de
      * rojo y sacarlo de la programación por algo que no lo inhabilita.
      *
+     * El PIC va igual por decisión de la empresa: su vencimiento se avisa en
+     * ámbar para renovarlo a tiempo, sin sacar al conductor de la programación.
+     *
      * Faltar es otra cosa: el papel tiene que estar en el expediente, y un DNI
      * ausente sigue siendo rojo.
      */
     public function vencimientoInhabilita(): bool
     {
-        return $this !== self::Dni;
+        return ! in_array($this, [self::Dni, self::Pic], true);
     }
 
     /**

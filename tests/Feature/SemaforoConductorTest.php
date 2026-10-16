@@ -88,6 +88,40 @@ it('pone en rojo al conductor sin DNI cargado', function (): void {
 
 it('sabe qué documentos inhabilitan al vencer y cuáles no', function (): void {
     expect(TipoDocumentoConductor::Dni->vencimientoInhabilita())->toBeFalse()
+        ->and(TipoDocumentoConductor::Pic->vencimientoInhabilita())->toBeFalse()
         ->and(TipoDocumentoConductor::LicenciaConducir->vencimientoInhabilita())->toBeTrue()
         ->and(TipoDocumentoConductor::LicenciaEspecial->vencimientoInhabilita())->toBeTrue();
+});
+
+/**
+ * El PIC de la mina va como el DNI, por decisión de la empresa: vencido
+ * avisa en ámbar para renovarlo, sin sacar al conductor de la programación.
+ */
+it('pone en ámbar y no en rojo al conductor con el PIC vencido', function (): void {
+    $estado = expedienteConductor([TipoDocumentoConductor::Pic->value => ayer()])->estadoDocumental();
+
+    expect($estado['semaforo'])->toBe('ambar')
+        ->and($estado['vencidos'])->toBe(['PIC (permiso interno de conducir)']);
+});
+
+it('pone en rojo al conductor sin PIC cargado', function (): void {
+    $estado = expedienteConductor([TipoDocumentoConductor::Pic->value => 'sin'])->estadoDocumental();
+
+    expect($estado['semaforo'])->toBe('rojo')
+        ->and($estado['faltantes'])->toBe(['PIC (permiso interno de conducir)']);
+});
+
+/**
+ * Al externo no se le exige el PIC de la mina: sin él sigue en verde si sus
+ * DNI y licencias están en regla.
+ */
+it('does not ask an externo for the PIC', function (): void {
+    $conductor = expedienteConductor([TipoDocumentoConductor::Pic->value => 'sin']);
+    $conductor->update(['externo' => true]);
+
+    $estado = $conductor->fresh(['documentos'])->estadoDocumental();
+
+    expect($estado['semaforo'])->toBe('verde')
+        ->and($estado['faltantes'])->toBe([])
+        ->and(collect($estado['documentos'])->pluck('tipo')->all())->not->toContain('pic');
 });

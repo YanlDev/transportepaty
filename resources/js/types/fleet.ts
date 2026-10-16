@@ -20,6 +20,8 @@ export type Conductor = {
     fecha_nacimiento: string | null;
     procedencia: string | null;
     activo: boolean;
+    /** No es de la casa: se le exigen DNI y licencias, no el PIC. */
+    externo: boolean;
     fecha_baja: string | null;
     motivo_baja: string | null;
     nombre_completo: string;

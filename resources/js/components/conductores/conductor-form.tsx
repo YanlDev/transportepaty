@@ -46,6 +46,7 @@ type FormData = {
     fecha_nacimiento: string;
     procedencia: string;
     activo: boolean;
+    externo: boolean;
     fecha_baja: string;
     motivo_baja: string;
 };
@@ -65,11 +66,13 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
         fecha_nacimiento: conductor?.fecha_nacimiento ?? '',
         procedencia: conductor?.procedencia ?? '',
         activo: conductor?.activo ?? true,
+        externo: conductor?.externo ?? false,
         fecha_baja: conductor?.fecha_baja ?? '',
         motivo_baja: conductor?.motivo_baja ?? '',
     });
 
     const activoId = useId();
+    const externoId = useId();
 
     // El listado agrega su página y búsqueda actuales a la URL de edición
     // (?page=2&buscar=...) para poder volver ahí mismo tras guardar, en vez
@@ -314,6 +317,27 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                         </Label>
                     </div>
                     <InputError message={errors.activo} />
+
+                    <div className="flex items-start gap-2 sm:col-span-2">
+                        <Checkbox
+                            id={externoId}
+                            checked={data.externo}
+                            onCheckedChange={(value) =>
+                                setData('externo', value === true)
+                            }
+                        />
+                        <Label
+                            htmlFor={externoId}
+                            className="flex flex-col items-start gap-0.5 font-normal"
+                        >
+                            Conductor externo
+                            <span className="text-xs text-muted-foreground">
+                                No es de la casa: se le exigen DNI y licencias,
+                                no el PIC.
+                            </span>
+                        </Label>
+                    </div>
+                    <InputError message={errors.externo} />
 
                     {!data.activo && (
                         <Field

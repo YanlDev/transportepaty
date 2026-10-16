@@ -34,6 +34,8 @@ abstract class ConductorRequest extends FormRequest
             'fecha_nacimiento' => ['nullable', 'date'],
             'procedencia' => ['nullable', 'string', 'max:100'],
             'activo' => ['required', 'boolean'],
+            // No es de la casa: no se le exige el PIC de la mina.
+            'externo' => ['sometimes', 'boolean'],
             'fecha_baja' => ['nullable', 'date'],
             'motivo_baja' => ['nullable', 'string', 'max:255', 'required_if:activo,false'],
         ];

@@ -39,6 +39,7 @@ use Illuminate\Support\Carbon;
  * `Illuminate\Support\Carbon`, y acá además se asigna en el `saving`.
  * @property CarbonInterface|null $fecha_baja
  * @property string|null $motivo_baja
+ * @property bool $externo No es de la casa: se le exigen DNI y licencias, no el PIC.
  * @property-read string $nombre_completo
  */
 #[Fillable([
@@ -55,6 +56,7 @@ use Illuminate\Support\Carbon;
     'fecha_nacimiento',
     'procedencia',
     'activo',
+    'externo',
     'fecha_baja',
     'motivo_baja',
 ])]
@@ -158,7 +160,7 @@ class Conductor extends Model
     /**
      * Estado de la documentación obligatoria del conductor. Rojo si falta algún
      * documento o si venció alguno de los que inhabilitan; ámbar si alguno
-     * vence dentro del plazo de aviso, o si caducó el DNI —que se avisa pero
+     * vence dentro del plazo de aviso, o si caducó el DNI o el PIC —que se avisan pero
      * no saca a nadie de ruta (ver `TipoDocumentoConductor::vencimientoInhabilita`)—;
      * verde si está todo en regla.
      *
@@ -187,7 +189,7 @@ class Conductor extends Model
         // porque esa lista es para mostrar y esta para decidir el color.
         $inhabilitan = [];
 
-        foreach (TipoDocumentoConductor::obligatorios() as $tipo) {
+        foreach ($this->tiposObligatorios() as $tipo) {
             $documento = $this->documentoDe($tipo);
             $estado = $documento?->estado() ?? EstadoDocumento::Faltante;
 
@@ -225,6 +227,20 @@ class Conductor extends Model
             'por_vencer' => $porVencer,
             'documentos' => $detalle,
         ];
+    }
+
+    /**
+     * Los documentos que se le exigen a este conductor. Al externo no se le
+     * pide el PIC de la mina: solo DNI y licencias.
+     *
+     * @return list<TipoDocumentoConductor>
+     */
+    public function tiposObligatorios(): array
+    {
+        return array_values(array_filter(
+            TipoDocumentoConductor::obligatorios(),
+            fn (TipoDocumentoConductor $tipo): bool => ! ($this->externo && $tipo === TipoDocumentoConductor::Pic),
+        ));
     }
 
     /**
@@ -284,6 +300,7 @@ class Conductor extends Model
             'fecha_nacimiento' => 'date:Y-m-d',
             'fecha_baja' => 'date:Y-m-d',
             'activo' => 'boolean',
+            'externo' => 'boolean',
         ];
     }
 }
