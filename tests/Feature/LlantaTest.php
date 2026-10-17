@@ -5,6 +5,7 @@ use App\Enums\Permiso;
 use App\Enums\TipoMovimientoLlanta;
 use App\Models\Llanta;
 use App\Models\MovimientoLlanta;
+use App\Models\ParametroMantenimiento;
 use App\Models\User;
 use App\Models\Vehiculo;
 use App\Services\EstadoLlantas;
@@ -41,7 +42,7 @@ it('numbers 10 positions on a tracto and 12 plus two spares on a carreta', funct
 });
 
 it('colours each position from its last measurement, and leaves empty ones without state', function (): void {
-    config(['transpaty.mantenimiento.llantas_revisar_mm' => 5, 'transpaty.mantenimiento.llantas_cambiar_mm' => 3]);
+    ParametroMantenimiento::vigentes()->update(['llantas_revisar_mm' => 5, 'llantas_cambiar_mm' => 3]);
 
     $tracto = Vehiculo::factory()->create();
     $gastada = llantaEn($tracto, '1', 12);
@@ -190,4 +191,119 @@ it('lets whoever sees mantenimiento look at the tires, but only the llantero reg
         ->assertForbidden();
 
     actingAs(User::factory()->create())->get(route('mantenimiento.llantas.index'))->assertForbidden();
+});
+
+// ─── Correcciones ───────────────────────────────────────────────────────────
+
+it('corrects the data of an installed tire', function (): void {
+    $llanta = llantaEn(Vehiculo::factory()->create(), '1');
+
+    actingAs(llantero())
+        ->put(route('mantenimiento.llantas.update', $llanta), ['marca' => 'Goodyear', 'medida' => '315/80R22.5', 'codigo' => 'G-77', 'condicion' => 'reencauchada'])
+        ->assertSessionHasNoErrors();
+
+    expect($llanta->refresh()->only(['marca', 'medida', 'codigo']))->toBe(['marca' => 'Goodyear', 'medida' => '315/80R22.5', 'codigo' => 'G-77'])
+        ->and($llanta->condicion->value)->toBe('reencauchada');
+});
+
+it('corrects a badly typed measurement, and the date of an installation on the tire too', function (): void {
+    $tracto = Vehiculo::factory()->create();
+    $llanta = llantaEn($tracto, '2');
+    $instalacion = MovimientoLlanta::factory()->create(['llanta_id' => $llanta->id, 'tipo' => TipoMovimientoLlanta::Instalacion, 'profundidad_mm' => 16]);
+    $medicion = MovimientoLlanta::factory()->create(['llanta_id' => $llanta->id, 'profundidad_mm' => 25, 'fecha' => now()->toDateString()]);
+
+    actingAs(llantero())
+        ->put(route('mantenimiento.llantas.movimientos.update', $medicion), ['fecha' => now()->toDateString(), 'profundidad_mm' => 2.5])
+        ->assertSessionHasNoErrors();
+
+    expect(app(EstadoLlantas::class)->paraVehiculo($tracto)[1]['estado'])->toBe(EstadoLlanta::Cambiar);
+
+    actingAs(llantero())
+        ->put(route('mantenimiento.llantas.movimientos.update', $instalacion), ['fecha' => '2026-08-01', 'kilometraje' => 290000, 'profundidad_mm' => 16])
+        ->assertSessionHasNoErrors();
+
+    expect($llanta->refresh()->instalada_el->toDateString())->toBe('2026-08-01')
+        ->and($llanta->km_instalacion)->toBe(290000);
+
+    actingAs(llantero())
+        ->put(route('mantenimiento.llantas.movimientos.update', $medicion), ['fecha' => now()->toDateString()])
+        ->assertSessionHasErrors('profundidad_mm');
+});
+
+it('deletes only what can be undone cleanly', function (): void {
+    $tracto = Vehiculo::factory()->create();
+
+    // Una llanta cargada por error: su instalación se elimina con ella.
+    $porError = llantaEn($tracto, '1');
+    $instalacion = MovimientoLlanta::factory()->create(['llanta_id' => $porError->id, 'tipo' => TipoMovimientoLlanta::Instalacion]);
+
+    actingAs(llantero())->delete(route('mantenimiento.llantas.movimientos.destroy', $instalacion))->assertSessionHasNoErrors();
+    expect(Llanta::query()->find($porError->id))->toBeNull();
+
+    // Con una medición después, la instalación ya no se elimina, la medición sí.
+    $llanta = llantaEn($tracto, '2');
+    $instalada = MovimientoLlanta::factory()->create(['llanta_id' => $llanta->id, 'tipo' => TipoMovimientoLlanta::Instalacion, 'fecha' => now()->subDay()->toDateString()]);
+    $medicion = MovimientoLlanta::factory()->create(['llanta_id' => $llanta->id, 'fecha' => now()->toDateString()]);
+
+    actingAs(llantero())->delete(route('mantenimiento.llantas.movimientos.destroy', $instalada))->assertSessionHasErrors('movimiento');
+    actingAs(llantero())->delete(route('mantenimiento.llantas.movimientos.destroy', $medicion))->assertSessionHasNoErrors();
+    expect(MovimientoLlanta::query()->find($medicion->id))->toBeNull();
+
+    // Un retiro se deshace mientras la posición siga libre.
+    actingAs(llantero())->post(route('mantenimiento.llantas.store', $tracto), ['tipo' => 'retiro', 'posicion' => '2', 'fecha' => now()->toDateString(), 'motivo_retiro' => 'dano']);
+    $retiro = MovimientoLlanta::query()->where('tipo', TipoMovimientoLlanta::Retiro)->sole();
+
+    actingAs(llantero())->delete(route('mantenimiento.llantas.movimientos.destroy', $retiro))->assertSessionHasNoErrors();
+    expect($llanta->refresh()->retirada_el)->toBeNull()
+        ->and($llanta->motivo_retiro)->toBeNull();
+
+    // Una rotación nunca.
+    actingAs(llantero())->post(route('mantenimiento.llantas.store', $tracto), ['tipo' => 'rotacion', 'posicion' => '2', 'posicion_destino' => '3', 'fecha' => now()->toDateString()]);
+    $rotacion = MovimientoLlanta::query()->where('tipo', TipoMovimientoLlanta::Rotacion)->sole();
+
+    actingAs(llantero())->delete(route('mantenimiento.llantas.movimientos.destroy', $rotacion))->assertSessionHasErrors('movimiento');
+
+    actingAs(llantero())
+        ->get(route('mantenimiento.llantas.show', $tracto))
+        ->assertInertia(fn ($page) => $page
+            ->where('movimientos.0.tipo', 'rotacion')
+            ->where('movimientos.0.eliminable', false)
+        );
+});
+
+it('lets only whoever configures the plans change the cuts of the semáforo', function (): void {
+    actingAs(llantero())
+        ->put(route('mantenimiento.llantas.parametros.update'), ['llantas_revisar_mm' => 6, 'llantas_cambiar_mm' => 4])
+        ->assertForbidden();
+
+    $rol = Role::findOrCreate('jefe_taller', 'web');
+    $rol->syncPermissions([Permiso::MantenimientoVer->value, Permiso::MantenimientoConfigurar->value]);
+    $jefe = User::factory()->create()->assignRole($rol);
+
+    actingAs($jefe)
+        ->put(route('mantenimiento.llantas.parametros.update'), ['llantas_revisar_mm' => 4, 'llantas_cambiar_mm' => 4])
+        ->assertSessionHasErrors('llantas_cambiar_mm');
+
+    actingAs($jefe)
+        ->put(route('mantenimiento.llantas.parametros.update'), ['llantas_revisar_mm' => '6.5', 'llantas_cambiar_mm' => 4])
+        ->assertSessionHasNoErrors();
+
+    $tracto = Vehiculo::factory()->create();
+    llantaEn($tracto, '1', 6);
+
+    expect(ParametroMantenimiento::vigentes()->umbralesLlanta())->toBe(['revisar_mm' => 6.5, 'cambiar_mm' => 4.0])
+        ->and(app(EstadoLlantas::class)->paraVehiculo($tracto)[0]['estado'])->toBe(EstadoLlanta::Revisar);
+});
+
+it('keeps corrections for the llantero', function (): void {
+    $rol = Role::findOrCreate('mirador', 'web');
+    $rol->syncPermissions([Permiso::MantenimientoVer->value]);
+    $mirador = User::factory()->create()->assignRole($rol);
+
+    $llanta = llantaEn(Vehiculo::factory()->create(), '1', 10);
+    $medicion = $llanta->movimientos()->sole();
+
+    actingAs($mirador)->put(route('mantenimiento.llantas.update', $llanta), ['condicion' => 'nueva'])->assertForbidden();
+    actingAs($mirador)->put(route('mantenimiento.llantas.movimientos.update', $medicion), ['fecha' => now()->toDateString(), 'profundidad_mm' => 3])->assertForbidden();
+    actingAs($mirador)->delete(route('mantenimiento.llantas.movimientos.destroy', $medicion))->assertForbidden();
 });

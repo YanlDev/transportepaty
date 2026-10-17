@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\EstadoLlanta;
 use App\Models\Llanta;
 use App\Models\MovimientoLlanta;
+use App\Models\ParametroMantenimiento;
 use App\Models\Vehiculo;
 use Illuminate\Support\Collection;
 
@@ -46,7 +47,7 @@ class EstadoLlantas
     }
 
     /**
-     * Con dos consultas en total, no por unidad. Una posición vacía queda con
+     * Con un puñado de consultas en total, no por unidad. Una posición vacía queda con
      * `llanta` y `estado` en null.
      *
      * @param  Collection<int, Vehiculo>  $vehiculos
@@ -68,13 +69,14 @@ class EstadoLlantas
             ->unique('llanta_id')
             ->keyBy('llanta_id');
 
+        $parametros = ParametroMantenimiento::vigentes();
         $porVehiculo = $montadas->groupBy('vehiculo_id');
         $resultado = [];
 
         foreach ($vehiculos as $vehiculo) {
             $enUnidad = $porVehiculo->get($vehiculo->id, collect())->keyBy('posicion');
 
-            $resultado[$vehiculo->id] = array_map(function (array $posicion) use ($enUnidad, $ultimasMedidas): array {
+            $resultado[$vehiculo->id] = array_map(function (array $posicion) use ($enUnidad, $ultimasMedidas, $parametros): array {
                 $llanta = $enUnidad->get($posicion['codigo']);
 
                 if ($llanta === null) {
@@ -98,7 +100,7 @@ class EstadoLlantas
                         'profundidad_mm' => $profundidad,
                         'medida_el' => $medida?->fecha->toDateString(),
                     ],
-                    'estado' => EstadoLlanta::deProfundidad($profundidad),
+                    'estado' => $parametros->estadoLlanta($profundidad),
                 ];
             }, PosicionesLlanta::para($vehiculo->tipo));
         }

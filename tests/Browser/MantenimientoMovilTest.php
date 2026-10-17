@@ -144,6 +144,11 @@ it('instala y mide una llanta desde el esquema en el celular', function (): void
         ->type('#mm-3', '2.5')
         ->click('Guardar medición')
         ->assertSee('Cambiar · 2.5 mm')
+        ->click('[aria-label="Corregir medición"]')
+        ->clear('#corregir-mm')
+        ->type('#corregir-mm', '9')
+        ->click('Guardar')
+        ->assertSee('Bien · 9 mm')
         ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
         ->assertNoJavaScriptErrors()
         ->screenshot(filename: 'movil-llantas-unidad');
@@ -153,7 +158,7 @@ it('instala y mide una llanta desde el esquema en el celular', function (): void
     visit('/mantenimiento')
         ->on()->mobile()
         ->click('a[href$="/mantenimiento/llantas"]')
-        ->assertSee('1 para cambiar')
+        ->assertSee('Ajustar cortes')
         ->assertNoJavaScriptErrors()
         ->screenshot(filename: 'movil-llantas');
 });

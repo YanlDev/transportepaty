@@ -6,8 +6,8 @@ use App\Enums\Concerns\HasLabel;
 
 /**
  * El semáforo de una llanta según la profundidad del dibujo en su última
- * medición. No es una columna: se deriva de los movimientos. Los umbrales
- * están en `transpaty.mantenimiento.llantas_*_mm`.
+ * medición. No es una columna: se deriva de los movimientos, con los cortes
+ * que el taller ajusta en `ParametroMantenimiento`.
  */
 enum EstadoLlanta: string
 {
@@ -37,22 +37,5 @@ enum EstadoLlanta: string
             self::Bien => 2,
             self::SinMedir => 3,
         };
-    }
-
-    public static function deProfundidad(?float $milimetros): self
-    {
-        if ($milimetros === null) {
-            return self::SinMedir;
-        }
-
-        if ($milimetros <= (float) config('transpaty.mantenimiento.llantas_cambiar_mm')) {
-            return self::Cambiar;
-        }
-
-        if ($milimetros <= (float) config('transpaty.mantenimiento.llantas_revisar_mm')) {
-            return self::Revisar;
-        }
-
-        return self::Bien;
     }
 }

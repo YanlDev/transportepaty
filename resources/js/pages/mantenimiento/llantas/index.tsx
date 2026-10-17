@@ -4,8 +4,10 @@ import { useState } from 'react';
 import llantas from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import { EmptyState } from '@/components/empty-state';
+import { CortesLlantasDialog } from '@/components/llantas/cortes-llantas-dialog';
 import { formatearMm } from '@/components/llantas/esquema-llantas';
 import { Input } from '@/components/ui/input';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { UmbralesLlanta, UnidadLlantas } from '@/types/llantas';
@@ -26,6 +28,7 @@ const tipos = [
  * cuántas hay que cambiar o revisar. Lo urgente viene arriba.
  */
 export default function LlantasIndex({ unidades, umbrales }: Props) {
+    const { puede } = usePermisos();
     const [tipo, setTipo] = useState<'tracto' | 'carreta'>('tracto');
     const [buscar, setBuscar] = useState('');
 
@@ -74,14 +77,19 @@ export default function LlantasIndex({ unidades, umbrales }: Props) {
                         </button>
                     ))}
                 </div>
-                <div className="relative sm:w-64">
-                    <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                        placeholder="Buscar placa"
-                        value={buscar}
-                        onChange={(e) => setBuscar(e.target.value)}
-                        className="pl-9"
-                    />
+                <div className="flex gap-2">
+                    <div className="relative flex-1 sm:w-64">
+                        <Search className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            placeholder="Buscar placa"
+                            value={buscar}
+                            onChange={(e) => setBuscar(e.target.value)}
+                            className="pl-9"
+                        />
+                    </div>
+                    {puede('mantenimiento.configurar') && (
+                        <CortesLlantasDialog umbrales={umbrales} />
+                    )}
                 </div>
             </div>
 

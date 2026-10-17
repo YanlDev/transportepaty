@@ -9,10 +9,15 @@ use App\Enums\TipoMovimientoLlanta;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\StoreMedicionLlantasRequest;
 use App\Http\Requests\StoreMovimientoLlantaRequest;
+use App\Http\Requests\UpdateLlantaRequest;
+use App\Http\Requests\UpdateMovimientoLlantaRequest;
+use App\Http\Requests\UpdateParametrosLlantasRequest;
 use App\Models\Llanta;
 use App\Models\MovimientoLlanta;
+use App\Models\ParametroMantenimiento;
 use App\Models\Vehiculo;
 use App\Services\EstadoLlantas;
+use App\Services\HistorialLlantas;
 use App\Services\ProximoMantenimiento;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
@@ -31,7 +36,10 @@ use Inertia\Response;
  */
 class LlantaController extends Controller
 {
-    public function __construct(private readonly EstadoLlantas $llantas) {}
+    public function __construct(
+        private readonly EstadoLlantas $llantas,
+        private readonly HistorialLlantas $historial,
+    ) {}
 
     public function index(): Response
     {
@@ -67,6 +75,16 @@ class LlantaController extends Controller
     {
         $this->authorize('viewAny', Llanta::class);
 
+        $movimientos = MovimientoLlanta::query()
+            ->where('vehiculo_id', $vehiculo->id)
+            ->with(['llanta:id,marca,medida,codigo', 'user:id,name'])
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->limit(80)
+            ->get();
+
+        $eliminables = $this->historial->eliminables($movimientos);
+
         return Inertia::render('mantenimiento/llantas/show', [
             'unidad' => [
                 'id' => $vehiculo->id,
@@ -83,27 +101,21 @@ class LlantaController extends Controller
                 fn (array $posicion): array => $this->posicion($posicion),
                 $this->llantas->paraVehiculo($vehiculo),
             ),
-            'movimientos' => MovimientoLlanta::query()
-                ->where('vehiculo_id', $vehiculo->id)
-                ->with(['llanta:id,marca,medida,codigo', 'user:id,name'])
-                ->orderByDesc('fecha')
-                ->orderByDesc('id')
-                ->limit(80)
-                ->get()
-                ->map(fn (MovimientoLlanta $movimiento): array => [
-                    'id' => $movimiento->id,
-                    'llanta_id' => $movimiento->llanta_id,
-                    'tipo' => $movimiento->tipo->value,
-                    'tipo_label' => $movimiento->tipo->label(),
-                    'fecha' => $movimiento->fecha->toDateString(),
-                    'posicion' => $movimiento->posicion,
-                    'posicion_destino' => $movimiento->posicion_destino,
-                    'kilometraje' => $movimiento->kilometraje,
-                    'profundidad_mm' => $movimiento->profundidad_mm === null ? null : (float) $movimiento->profundidad_mm,
-                    'observacion' => $movimiento->observacion,
-                    'llanta' => trim(implode(' ', array_filter([$movimiento->llanta->marca, $movimiento->llanta->medida]))) ?: null,
-                    'usuario' => $movimiento->user?->name,
-                ])
+            'movimientos' => $movimientos->map(fn (MovimientoLlanta $movimiento): array => [
+                'id' => $movimiento->id,
+                'llanta_id' => $movimiento->llanta_id,
+                'tipo' => $movimiento->tipo->value,
+                'tipo_label' => $movimiento->tipo->label(),
+                'fecha' => $movimiento->fecha->toDateString(),
+                'posicion' => $movimiento->posicion,
+                'posicion_destino' => $movimiento->posicion_destino,
+                'kilometraje' => $movimiento->kilometraje,
+                'profundidad_mm' => $movimiento->profundidad_mm === null ? null : (float) $movimiento->profundidad_mm,
+                'observacion' => $movimiento->observacion,
+                'llanta' => trim(implode(' ', array_filter([$movimiento->llanta->marca, $movimiento->llanta->medida]))) ?: null,
+                'usuario' => $movimiento->user?->name,
+                'eliminable' => $eliminables[$movimiento->id] ?? false,
+            ])
                 ->all(),
             'hoy' => RelojOperativo::hoy(),
             'condiciones' => CondicionLlanta::options(),
@@ -209,10 +221,11 @@ class LlantaController extends Controller
             }
         });
 
+        $parametros = ParametroMantenimiento::vigentes();
         $profundidades = Arr::pluck($datos['mediciones'], 'profundidad_mm');
         $cambiar = count(array_filter(
             $profundidades,
-            fn (mixed $milimetros): bool => EstadoLlanta::deProfundidad((float) $milimetros) === EstadoLlanta::Cambiar,
+            fn (mixed $milimetros): bool => $parametros->estadoLlanta((float) $milimetros) === EstadoLlanta::Cambiar,
         ));
 
         $cantidad = count($profundidades);
@@ -222,6 +235,63 @@ class LlantaController extends Controller
             'message' => "Medición de {$cantidad} ".($cantidad === 1 ? 'llanta' : 'llantas').' registrada.'
                 .($cambiar > 0 ? " {$cambiar} ".($cambiar === 1 ? 'está' : 'están').' para cambiar.' : ''),
         ]);
+    }
+
+    /**
+     * Corregir los datos de la llanta que se escribieron mal al instalarla.
+     */
+    public function update(UpdateLlantaRequest $request, Llanta $llanta): RedirectResponse
+    {
+        $this->authorize('update', Llanta::class);
+
+        $llanta->update($request->validated());
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Datos de la llanta de la posición {$llanta->posicion} corregidos."]);
+    }
+
+    public function corregirMovimiento(UpdateMovimientoLlantaRequest $request, MovimientoLlanta $movimiento): RedirectResponse
+    {
+        $this->authorize('update', Llanta::class);
+
+        $this->historial->corregir(
+            $movimiento,
+            fecha: $request->string('fecha')->value(),
+            kilometraje: $request->filled('kilometraje') ? $request->integer('kilometraje') : null,
+            profundidad: $request->filled('profundidad_mm') ? $request->float('profundidad_mm') : null,
+            observacion: $request->filled('observacion') ? $request->string('observacion')->value() : null,
+        );
+
+        return back()->with('toast', ['type' => 'success', 'message' => "{$movimiento->tipo->label()} corregida."]);
+    }
+
+    public function eliminarMovimiento(MovimientoLlanta $movimiento): RedirectResponse
+    {
+        $this->authorize('update', Llanta::class);
+
+        $this->historial->eliminar($movimiento);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => match ($movimiento->tipo) {
+                TipoMovimientoLlanta::Instalacion => "Instalación eliminada: la posición {$movimiento->posicion} queda libre.",
+                TipoMovimientoLlanta::Retiro => "Retiro eliminado: la llanta vuelve a la posición {$movimiento->posicion}.",
+                default => "{$movimiento->tipo->label()} eliminada.",
+            },
+        ]);
+    }
+
+    /**
+     * Los cortes del semáforo, para toda la flota.
+     */
+    public function actualizarParametros(UpdateParametrosLlantasRequest $request): RedirectResponse
+    {
+        $parametros = ParametroMantenimiento::vigentes();
+
+        $this->authorize('update', $parametros);
+
+        $parametros->update($request->validated());
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Cortes del semáforo de llantas guardados.']);
     }
 
     /**
@@ -298,9 +368,6 @@ class LlantaController extends Controller
      */
     private function umbrales(): array
     {
-        return [
-            'revisar_mm' => (float) config('transpaty.mantenimiento.llantas_revisar_mm'),
-            'cambiar_mm' => (float) config('transpaty.mantenimiento.llantas_cambiar_mm'),
-        ];
+        return ParametroMantenimiento::vigentes()->umbralesLlanta();
     }
 }

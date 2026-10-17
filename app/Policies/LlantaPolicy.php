@@ -22,4 +22,12 @@ class LlantaPolicy
     {
         return $user->checkPermissionTo(Permiso::MantenimientoLlantas);
     }
+
+    /**
+     * Corregir lo anotado: los datos de una llanta o un movimiento.
+     */
+    public function update(User $user): bool
+    {
+        return $user->checkPermissionTo(Permiso::MantenimientoLlantas);
+    }
 }

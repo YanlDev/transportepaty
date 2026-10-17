@@ -203,6 +203,14 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.llantas.store');
     Route::post('mantenimiento/llantas/{vehiculo}/mediciones', [LlantaController::class, 'medir'])
         ->name('mantenimiento.llantas.medir');
+    Route::put('mantenimiento/llantas/montadas/{llanta}', [LlantaController::class, 'update'])
+        ->name('mantenimiento.llantas.update');
+    Route::put('mantenimiento/llantas/movimientos/{movimiento}', [LlantaController::class, 'corregirMovimiento'])
+        ->name('mantenimiento.llantas.movimientos.update');
+    Route::delete('mantenimiento/llantas/movimientos/{movimiento}', [LlantaController::class, 'eliminarMovimiento'])
+        ->name('mantenimiento.llantas.movimientos.destroy');
+    Route::put('mantenimiento/llantas-parametros', [LlantaController::class, 'actualizarParametros'])
+        ->name('mantenimiento.llantas.parametros.update');
     Route::get('mantenimiento/planes/{plan}/editar', [PlanMantenimientoController::class, 'edit'])
         ->name('mantenimiento.planes.edit');
     Route::put('mantenimiento/planes/{plan}', [PlanMantenimientoController::class, 'update'])

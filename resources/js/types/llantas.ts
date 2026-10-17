@@ -42,6 +42,8 @@ export type MovimientoLlanta = {
     /** «Michelin 295/80R22.5». */
     llanta: string | null;
     usuario: string | null;
+    /** Se puede deshacer sin dejar la unidad en un estado que no existió. */
+    eliminable: boolean;
 };
 
 /** Una unidad en la lista de llantas. */

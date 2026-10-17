@@ -1,8 +1,20 @@
 import { Head, setLayoutProps } from '@inertiajs/react';
-import { ArrowLeftRight, Ruler, Trash2, Wrench, Plus } from 'lucide-react';
+import {
+    ArrowLeftRight,
+    Pencil,
+    Plus,
+    Ruler,
+    Trash2,
+    Wrench,
+} from 'lucide-react';
 import { useState } from 'react';
-import llantas from '@/actions/App/Http/Controllers/LlantaController';
+import llantas, {
+    eliminarMovimiento,
+} from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
+import { ConfirmarBorradoDialog } from '@/components/confirmar-borrado-dialog';
+import { CorregirMovimientoDialog } from '@/components/llantas/corregir-movimiento-dialog';
+import { EditarLlantaDialog } from '@/components/llantas/editar-llanta-dialog';
 import {
     colorLlanta,
     EsquemaLlantas,
@@ -64,7 +76,12 @@ export default function LlantasUnidad({
     const [elegida, setElegida] = useState<string | null>(
         () => posiciones.find((p) => p.estado === 'cambiar')?.codigo ?? null,
     );
-    const [accion, setAccion] = useState<TipoMovimiento | null>(null);
+    const [accion, setAccion] = useState<TipoMovimiento | 'editar' | null>(
+        null,
+    );
+    const [corrigiendo, setCorrigiendo] = useState<MovimientoLlanta | null>(
+        null,
+    );
     const [midiendo, setMidiendo] = useState(false);
     const [soloElegida, setSoloElegida] = useState(false);
 
@@ -162,6 +179,10 @@ export default function LlantasUnidad({
                                     <FilaMovimiento
                                         key={movimiento.id}
                                         movimiento={movimiento}
+                                        puedeCorregir={puedeRegistrar}
+                                        onCorregir={() =>
+                                            setCorrigiendo(movimiento)
+                                        }
                                     />
                                 ))}
                             </ul>
@@ -170,7 +191,30 @@ export default function LlantasUnidad({
                 </div>
             </div>
 
-            {posicion && accion && (
+            {posicion?.llanta && accion === 'editar' && (
+                <EditarLlantaDialog
+                    key={`editar-${posicion.llanta.id}`}
+                    posicion={{ ...posicion, llanta: posicion.llanta }}
+                    condiciones={condiciones}
+                    abierto
+                    onAbiertoChange={(abierto) => !abierto && setAccion(null)}
+                />
+            )}
+
+            {corrigiendo && (
+                <CorregirMovimientoDialog
+                    key={corrigiendo.id}
+                    movimiento={corrigiendo}
+                    esTracto={esTracto}
+                    hoy={hoy}
+                    abierto
+                    onAbiertoChange={(abierto) =>
+                        !abierto && setCorrigiendo(null)
+                    }
+                />
+            )}
+
+            {posicion && accion && accion !== 'editar' && (
                 <MovimientoLlantaDialog
                     key={`${accion}-${posicion.codigo}`}
                     vehiculoId={unidad.id}
@@ -214,7 +258,7 @@ function DetallePosicion({
     esTracto: boolean;
     kmActual: number | null;
     puedeRegistrar: boolean;
-    onAccion: (accion: TipoMovimiento) => void;
+    onAccion: (accion: TipoMovimiento | 'editar') => void;
 }) {
     if (posicion === null) {
         return (
@@ -317,6 +361,13 @@ function DetallePosicion({
                                 <Trash2 className="size-4" />
                                 Retirar
                             </Button>
+                            <Button
+                                variant="ghost"
+                                onClick={() => onAccion('editar')}
+                            >
+                                <Pencil className="size-4" />
+                                Editar datos
+                            </Button>
                         </>
                     )}
                 </div>
@@ -334,33 +385,79 @@ function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
     );
 }
 
-function FilaMovimiento({ movimiento }: { movimiento: MovimientoLlanta }) {
+function FilaMovimiento({
+    movimiento,
+    puedeCorregir,
+    onCorregir,
+}: {
+    movimiento: MovimientoLlanta;
+    puedeCorregir: boolean;
+    onCorregir: () => void;
+}) {
     return (
-        <li className="flex flex-col gap-0.5 px-4 py-3 text-sm">
-            <div className="flex items-baseline justify-between gap-2">
-                <span className="font-medium">
-                    {movimiento.tipo_label} · posición {movimiento.posicion}
-                    {movimiento.posicion_destino &&
-                        ` → ${movimiento.posicion_destino}`}
+        <li className="flex items-start gap-2 px-4 py-3 text-sm">
+            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <div className="flex items-baseline justify-between gap-2">
+                    <span className="font-medium">
+                        {movimiento.tipo_label} · posición {movimiento.posicion}
+                        {movimiento.posicion_destino &&
+                            ` → ${movimiento.posicion_destino}`}
+                    </span>
+                    <span className="shrink-0 text-xs text-muted-foreground">
+                        {formatearFecha(movimiento.fecha)}
+                    </span>
+                </div>
+                <span className="text-xs text-muted-foreground">
+                    {[
+                        movimiento.llanta,
+                        movimiento.profundidad_mm !== null &&
+                            formatearMm(movimiento.profundidad_mm),
+                        movimiento.kilometraje !== null &&
+                            formatearKm(movimiento.kilometraje),
+                        movimiento.usuario,
+                    ]
+                        .filter(Boolean)
+                        .join(' · ')}
                 </span>
-                <span className="shrink-0 text-xs text-muted-foreground">
-                    {formatearFecha(movimiento.fecha)}
-                </span>
+                {movimiento.observacion && (
+                    <span className="text-xs">{movimiento.observacion}</span>
+                )}
             </div>
-            <span className="text-xs text-muted-foreground">
-                {[
-                    movimiento.llanta,
-                    movimiento.profundidad_mm !== null &&
-                        formatearMm(movimiento.profundidad_mm),
-                    movimiento.kilometraje !== null &&
-                        formatearKm(movimiento.kilometraje),
-                    movimiento.usuario,
-                ]
-                    .filter(Boolean)
-                    .join(' · ')}
-            </span>
-            {movimiento.observacion && (
-                <span className="text-xs">{movimiento.observacion}</span>
+            {puedeCorregir && (
+                <div className="-my-1 flex shrink-0">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        onClick={onCorregir}
+                        aria-label={`Corregir ${movimiento.tipo_label.toLowerCase()}`}
+                    >
+                        <Pencil className="size-3.5" />
+                    </Button>
+                    {movimiento.eliminable && (
+                        <ConfirmarBorradoDialog
+                            url={eliminarMovimiento(movimiento.id).url}
+                            titulo={`¿Eliminar esta ${movimiento.tipo_label.toLowerCase()}?`}
+                            descripcion={
+                                movimiento.tipo === 'instalacion'
+                                    ? 'Se borra la llanta y la posición queda libre. Úsalo solo si se cargó por error.'
+                                    : movimiento.tipo === 'retiro'
+                                      ? 'La llanta vuelve a quedar puesta en su posición.'
+                                      : 'Se borra del historial. El semáforo vuelve a la medida anterior.'
+                            }
+                            trigger={
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8"
+                                    aria-label={`Eliminar ${movimiento.tipo_label.toLowerCase()}`}
+                                >
+                                    <Trash2 className="size-3.5" />
+                                </Button>
+                            }
+                        />
+                    )}
+                </div>
             )}
         </li>
     );

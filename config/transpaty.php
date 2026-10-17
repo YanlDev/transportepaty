@@ -142,10 +142,6 @@ return [
         'aviso_km' => (int) env('TRANSPATY_MANTENIMIENTO_AVISO_KM', 3000),
         'aviso_dias' => (int) env('TRANSPATY_MANTENIMIENTO_AVISO_DIAS', 15),
         'km_desactualizado_dias' => (int) env('TRANSPATY_MANTENIMIENTO_KM_DESACTUALIZADO_DIAS', 7),
-        // Profundidad del dibujo de las llantas: hasta acá ámbar, y hasta
-        // acá rojo. Valores de referencia mientras no haya una política.
-        'llantas_revisar_mm' => (float) env('TRANSPATY_LLANTAS_REVISAR_MM', 5),
-        'llantas_cambiar_mm' => (float) env('TRANSPATY_LLANTAS_CAMBIAR_MM', 3),
     ],
 
     'respaldos' => [
