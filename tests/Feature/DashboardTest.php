@@ -150,7 +150,7 @@ it('defaults the range to the current month', function (): void {
     actingAs(actorConRol('admin'))
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('rango.periodo', 'mes')
+            ->where('rango.mes', '2026-08')
             ->where('rango.desde', '2026-08-01')
             ->where('rango.hasta', '2026-08-31')
             // Julio queda fuera del rango: solo cuenta el viaje de agosto.
@@ -160,33 +160,33 @@ it('defaults the range to the current month', function (): void {
         );
 });
 
-it('widens the range to the last three months when asked', function (): void {
-    $this->travelTo('2026-08-20 12:00:00');
+/**
+ * El selector ofrece del mes en curso hacia atrás hasta el primer mes con
+ * viajes: antes de eso no hay nada que mirar.
+ */
+it('offers only the months since the first trip', function (): void {
+    $this->travelTo('2026-10-06 12:00:00');
 
-    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-06-05']);
-    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Metalico)->create(['fecha_traslado' => '2026-08-12']);
+    Viaje::factory()->create(['fecha_traslado' => '2026-07-15']);
 
     actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['periodo' => 'trimestre']))
+        ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('rango.periodo', 'trimestre')
-            ->where('rango.desde', '2026-06-01')
-            ->where('rango.hasta', '2026-08-31')
-            ->where('cargaMinsur', fn ($tipos) => collect($tipos)
-                ->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 1
-                && collect($tipos)->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 1)
+            ->where('rango.meses', [
+                ['valor' => '2026-10', 'label' => 'Octubre 2026'],
+                ['valor' => '2026-09', 'label' => 'Septiembre 2026'],
+                ['valor' => '2026-08', 'label' => 'Agosto 2026'],
+                ['valor' => '2026-07', 'label' => 'Julio 2026'],
+            ])
         );
 });
 
-it('falls back to the current month when the periodo is not one of the presets', function (): void {
-    $this->travelTo('2026-08-20 12:00:00');
+it('offers only the current month when there are no trips yet', function (): void {
+    $this->travelTo('2026-10-06 12:00:00');
 
     actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['periodo' => 'inventado']))
-        ->assertInertia(fn (Assert $page) => $page
-            ->where('rango.periodo', 'mes')
-            ->where('rango.desde', '2026-08-01')
-        );
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page->has('rango.meses', 1));
 });
 
 it('shows a closed month when one is picked', function (): void {
@@ -196,14 +196,13 @@ it('shows a closed month when one is picked', function (): void {
     Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-09-03']);
 
     actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['periodo' => 'mes', 'mes' => '2026-08']))
+        ->get(route('dashboard', ['mes' => '2026-08']))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('rango.periodo', 'mes')
             ->where('rango.mes', '2026-08')
             ->where('rango.desde', '2026-08-01')
             ->where('rango.hasta', '2026-08-31')
             ->where('rango.meses.0', ['valor' => '2026-10', 'label' => 'Octubre 2026'])
-            ->has('rango.meses', 12)
+            ->has('rango.meses', 3)
             ->where('cargaMinsur', fn ($tipos) => collect($tipos)
                 ->firstWhere('tipo', TipoCarga::Metalico->value)['valor'] === 1
                 && collect($tipos)->firstWhere('tipo', TipoCarga::Concentrado->value)['valor'] === 0)
@@ -214,7 +213,7 @@ it('falls back to the current month when the picked month is not offered', funct
     $this->travelTo('2026-10-06 12:00:00');
 
     actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['periodo' => 'mes', 'mes' => $mes]))
+        ->get(route('dashboard', ['mes' => $mes]))
         ->assertInertia(fn (Assert $page) => $page
             ->where('rango.mes', '2026-10')
             ->where('rango.desde', '2026-10-01')
@@ -236,7 +235,7 @@ it('counts the Ajeper and Caral GRs Crisar sends in one truck as a single load',
     Viaje::factory()->create(['cliente' => 'CRISAR LOGISTICA S.A.C.', 'fecha_traslado' => '2026-09-20']);
 
     actingAs(actorConRol('admin'))
-        ->get(route('dashboard', ['periodo' => 'mes', 'mes' => '2026-09']))
+        ->get(route('dashboard', ['mes' => '2026-09']))
         ->assertInertia(fn (Assert $page) => $page
             ->where('viajesPorCliente.0.cliente', 'CRISAR LOGISTICA S.A.C.')
             ->where('viajesPorCliente.0.valor', 2)
@@ -398,6 +397,38 @@ it('tracks progress toward the monthly concentrado goal for the current month, c
             ->where('metaConcentrado.diasRestantes', 21)
             ->where('metaConcentrado.proyeccion', 6)
             ->where('metaConcentrado.ritmoNecesario', 5.6)
+        );
+});
+
+/**
+ * La meta sigue al mes elegido: septiembre muestra cómo cerró septiembre, sin
+ * ritmo ni proyección, que en un mes terminado no significan nada.
+ */
+it('shows how a closed month ended against the goal', function (): void {
+    $this->travelTo('2026-10-06 12:00:00');
+
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-09-03']);
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-09-25']);
+    // Del mes en curso: no cuenta para septiembre.
+    Viaje::factory()->deMinsur()->tipoCarga(TipoCarga::Concentrado)->create(['fecha_traslado' => '2026-10-02']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard', ['mes' => '2026-09']))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('metaConcentrado.mes', 'Septiembre 2026')
+            ->where('metaConcentrado.cerrado', true)
+            ->where('metaConcentrado.realizados', 2)
+            ->where('metaConcentrado.faltantes', 118)
+            ->where('metaConcentrado.diasRestantes', 0)
+            ->where('metaConcentrado.proyeccion', 2)
+            ->where('metaConcentrado.ritmoNecesario', null)
+        );
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('metaConcentrado.cerrado', false)
+            ->where('metaConcentrado.realizados', 1)
         );
 });
 

@@ -5,6 +5,10 @@
 
 /** El compromiso del mes: 120 viajes de concentrado y a qué ritmo va. */
 export type MetaConcentrado = {
+    /** El mes que se mide, ya escrito («Septiembre 2026»). */
+    mes: string;
+    /** Un mes que ya terminó: se muestra cómo cerró, sin ritmo ni proyección. */
+    cerrado: boolean;
     meta: number;
     realizados: number;
     faltantes: number;

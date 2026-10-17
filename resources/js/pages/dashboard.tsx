@@ -27,7 +27,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
 import type {
@@ -50,12 +49,14 @@ const GraficosViajes = lazy(
 
 type Props = {
     rango: {
-        periodo: string;
         desde: string;
         hasta: string;
-        /** El mes que se está mirando (`2026-08`), solo con el período «mes». */
-        mes: string | null;
-        /** Los meses que ofrece el selector, del más reciente al más viejo. */
+        /** El mes que se está mirando (`2026-08`). */
+        mes: string;
+        /**
+         * Los meses que ofrece el selector, del en curso hacia atrás hasta el
+         * primero con viajes.
+         */
         meses: { valor: string; label: string }[];
     };
     resumen: ResumenFlota;
@@ -69,12 +70,6 @@ type Props = {
     ultimosViajes: ConductorViajeItem[];
 };
 
-const PERIODOS = [
-    ['mes', 'Este mes'],
-    ['trimestre', 'Últimos 3 meses'],
-    ['anio', 'Este año'],
-] as const;
-
 export default function Dashboard({
     rango,
     resumen,
@@ -87,21 +82,15 @@ export default function Dashboard({
     topCargas,
     ultimosViajes,
 }: Props) {
-    const cambiarPeriodo = (periodo: string, mes?: string) => {
-        router.get(dashboard().url, mes ? { periodo, mes } : { periodo }, {
+    // Todo el tablero se lee por mes: el en curso o uno que ya cerró.
+    const mesEnCurso = rango.meses[0]?.valor;
+    const verMes = (mes: string) => {
+        router.get(dashboard().url, mes === mesEnCurso ? {} : { mes }, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
         });
     };
-
-    // «Este mes» se enciende solo con el mes en curso; un mes anterior
-    // elegido en el selector no es «este mes».
-    const mesEnCurso = rango.meses[0]?.valor;
-    const periodoActivo =
-        rango.periodo === 'mes' && rango.mes !== mesEnCurso
-            ? null
-            : rango.periodo;
 
     return (
         <div className="mx-auto flex h-full w-full max-w-[1600px] flex-1 flex-col gap-4 p-4 md:p-6">
@@ -117,34 +106,21 @@ export default function Dashboard({
                     </p>
                 </div>
 
-                <div className="flex flex-col items-start gap-2 sm:flex-row sm:items-center">
-                    <span className="rounded-md border border-border px-3 py-1.5 text-xs text-muted-foreground tabular-nums">
-                        {formatearFecha(rango.desde)} —{' '}
-                        {formatearFecha(rango.hasta)}
-                    </span>
-
-                    <div className="flex rounded-md border border-border p-0.5">
-                        {PERIODOS.map(([valor, label]) => (
-                            <button
-                                key={valor}
-                                type="button"
-                                onClick={() => cambiarPeriodo(valor)}
-                                className={cn(
-                                    'rounded px-2.5 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
-                                    periodoActivo === valor
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'text-muted-foreground hover:text-foreground',
-                                )}
-                            >
-                                {label}
-                            </button>
-                        ))}
-                    </div>
-
-                    <Select
-                        value={rango.mes ?? ''}
-                        onValueChange={(mes) => cambiarPeriodo('mes', mes)}
+                <div className="flex items-center gap-2">
+                    <button
+                        type="button"
+                        onClick={() => mesEnCurso && verMes(mesEnCurso)}
+                        className={cn(
+                            'rounded-md border px-3 py-1.5 text-xs font-medium whitespace-nowrap transition-colors',
+                            rango.mes === mesEnCurso
+                                ? 'border-primary bg-primary text-primary-foreground'
+                                : 'border-border text-muted-foreground hover:text-foreground',
+                        )}
                     >
+                        Este mes
+                    </button>
+
+                    <Select value={rango.mes} onValueChange={verMes}>
                         <SelectTrigger
                             size="sm"
                             className="w-40 text-xs"

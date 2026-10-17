@@ -11,6 +11,7 @@ use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
 use App\Models\Viaje;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 
@@ -65,7 +66,6 @@ class ResumenTablero
                 'novedadesActivas' => Novedad::vigentes()->count(),
                 'documentosVencidos' => $documentos['vencidos'],
             ],
-            'metaConcentrado' => $this->metaConcentrado(),
             'documentos' => $documentos,
             'unidades' => $this->unidades(),
             'viajesPorCliente' => $this->viajesPorCliente($viajes),
@@ -99,16 +99,20 @@ class ResumenTablero
     }
 
     /**
-     * Avance del mes en curso contra la meta mensual de concentrado: cuántos
-     * viajes reales van, cuántos faltan, y a qué ritmo diario hay que cerrar
-     * los días que quedan para llegar. La proyección asume que el ritmo de lo
-     * que va del mes se mantiene igual hasta el cierre —una estimación, no
-     * una promesa— para poder reaccionar a tiempo si el mes viene flojo.
+     * El mes elegido contra la meta mensual de concentrado: cuántos viajes
+     * reales van y cuántos faltan.
      *
-     * Siempre es el mes en curso, sin importar el rango elegido arriba: es un
-     * compromiso mensual, no una lectura del período que se esté mirando.
+     * - **Mes en curso:** además, a qué ritmo diario hay que cerrar los días
+     *   que quedan, y la proyección si el ritmo de lo que va del mes se
+     *   mantiene hasta el cierre —una estimación, no una promesa—, para
+     *   reaccionar a tiempo si el mes viene flojo.
+     * - **Mes cerrado:** cómo terminó. No hay días restantes ni ritmo, y la
+     *   proyección es lo que se hizo.
      *
+     * @param  string  $mes  `YYYY-MM`
      * @return array{
+     *     mes: string,
+     *     cerrado: bool,
      *     meta: int,
      *     realizados: int,
      *     faltantes: int,
@@ -117,33 +121,33 @@ class ResumenTablero
      *     ritmoNecesario: float|null,
      * }
      */
-    private function metaConcentrado(): array
+    public function metaConcentrado(string $mes): array
     {
         // El día del mes sale del calendario de Lima y no del servidor: de
         // noche, en UTC ya es el día siguiente, y eso adelantaba un día tanto
         // los días transcurridos como los que quedan para cerrar la meta.
         $hoy = RelojOperativo::ahora();
+        $inicio = CarbonImmutable::parse("{$mes}-01")->startOfMonth();
+        $cerrado = $inicio->format('Y-m') < $hoy->format('Y-m');
 
         $viajesDelMes = Viaje::query()
             ->where('cliente', 'like', self::CLIENTE_MINSUR_PREFIJO.'%')
             ->where('tipo_carga', TipoCarga::Concentrado)
-            ->whereBetween('fecha_traslado', [
-                RelojOperativo::inicioDelMes()->toDateString(),
-                RelojOperativo::finDelMes()->toDateString(),
-            ])
+            ->whereBetween('fecha_traslado', [$inicio->toDateString(), $inicio->endOfMonth()->toDateString()])
             ->get(['fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni']);
 
         $realizados = Viaje::contarViajesReales($viajesDelMes);
         $faltantes = max(0, self::META_MENSUAL_CONCENTRADO - $realizados);
-        $diasTranscurridos = $hoy->day;
-        $diasRestantes = $hoy->daysInMonth - $diasTranscurridos;
+        $diasRestantes = $cerrado ? 0 : $hoy->daysInMonth - $hoy->day;
 
         return [
+            'mes' => ucfirst($inicio->settings(['locale' => 'es'])->translatedFormat('F Y')),
+            'cerrado' => $cerrado,
             'meta' => self::META_MENSUAL_CONCENTRADO,
             'realizados' => $realizados,
             'faltantes' => $faltantes,
             'diasRestantes' => $diasRestantes,
-            'proyeccion' => (int) round($realizados / $diasTranscurridos * $hoy->daysInMonth),
+            'proyeccion' => $cerrado ? $realizados : (int) round($realizados / $hoy->day * $hoy->daysInMonth),
             'ritmoNecesario' => $diasRestantes > 0 ? round($faltantes / $diasRestantes, 1) : null,
         ];
     }
