@@ -39,7 +39,7 @@ import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
 /**
- * El menú va por secciones —Flota, Operación, Administración, Sistema— y no
+ * El menú va por áreas —Flota, RRHH, Programación, Contabilidad— y no
  * como una lista corrida: con doce destinos, los títulos son lo que permite
  * saltar al bloque que se busca sin leerlos todos. Cada entrada sigue siendo
  * de un clic; agrupar es para leer, no para esconder.
@@ -161,29 +161,35 @@ export function AppSidebar() {
                 : item,
         );
 
+    // Las secciones son las áreas de la empresa —las mismas de los roles y
+    // del panel de permisos (`Permiso::AREAS`)—, así cada rol ve justo su
+    // bloque del menú.
     const flota = [
         ...(puede('vehiculos.ver') ? flotaNavItems : []),
         ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
-        ...(puede('conductores.ver') ? [conductoresNavItem] : []),
     ];
 
-    const operacion = [
-        ...(puede('viajes.ver') ? [viajesNavItem] : []),
-        ...(puede('programacion.ver') ? [programacionNavItem] : []),
+    const rrhh = [
+        ...(puede('conductores.ver') ? [conductoresNavItem] : []),
         ...(puede('asistencia.ver') ? [asistenciaNavItem] : []),
     ];
 
-    const administracion = [
-        ...gestion,
-        ...(puede('cobranza.ver') ? [contabilidadNavItem] : []),
+    const programacionArea = [
+        ...(puede('programacion.ver') ? [programacionNavItem] : []),
+        ...(puede('viajes.ver') ? [viajesNavItem] : []),
+        // Cotizaciones antes que Clientes: es lo que se usa a diario.
+        ...[...gestion].reverse(),
     ];
+
+    const contabilidadArea = puede('cobranza.ver') ? [contabilidadNavItem] : [];
 
     // Con roles armados a mano una sección puede quedar vacía: no se pinta
     // el título solo.
     const secciones = [
         { label: 'Flota', items: flota },
-        { label: 'Operación', items: operacion },
-        { label: 'Administración', items: administracion },
+        { label: 'RRHH', items: rrhh },
+        { label: 'Programación', items: programacionArea },
+        { label: 'Contabilidad', items: contabilidadArea },
     ];
 
     return (

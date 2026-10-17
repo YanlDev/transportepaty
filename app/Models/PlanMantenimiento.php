@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Str;
 
 /**
  * El plan preventivo de una marca. Una unidad sigue el plan de su marca
@@ -33,6 +34,17 @@ class PlanMantenimiento extends Model
     public function servicios(): HasMany
     {
         return $this->hasMany(ServicioMantenimiento::class)->orderBy('nivel');
+    }
+
+    /**
+     * El logo de la marca, si está en `public/images/marcas` con el nombre de
+     * la marca en minúsculas y con guiones (`mercedes-benz.png`).
+     */
+    public function logoUrl(): ?string
+    {
+        $archivo = 'images/marcas/'.Str::slug($this->marca).'.png';
+
+        return file_exists(public_path($archivo)) ? asset($archivo) : null;
     }
 
     public static function deMarca(?string $marca): ?self

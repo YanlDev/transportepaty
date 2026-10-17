@@ -28,6 +28,7 @@ export type Permiso =
     | 'mantenimiento.registrar_km'
     | 'mantenimiento.gestionar'
     | 'mantenimiento.configurar'
+    | 'mantenimiento.llantas'
     | 'novedades.registrar'
     | 'novedades.levantar'
     | 'viajes.ver'
@@ -63,6 +64,8 @@ export type Permiso =
 export type ModuloPermisos = {
     clave: string;
     nombre: string;
+    /** El área de la empresa a la que pertenece (Flota, RRHH…): agrupa el panel. */
+    area: string;
     permisos: { value: Permiso; label: string }[];
 };
 

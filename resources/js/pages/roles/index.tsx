@@ -31,6 +31,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { nombreRol } from '@/lib/roles';
 import { cn } from '@/lib/utils';
 import type { ModuloPermisos, Permiso } from '@/types';
 
@@ -125,7 +126,7 @@ export default function RolesIndex({ roles: lista, modulos }: Props) {
                                 ) : (
                                     <ShieldCheck className="size-3.5 text-muted-foreground" />
                                 )}
-                                {rol.name}
+                                {nombreRol(rol.name)}
                             </span>
                             <span className="flex items-center gap-3 text-xs text-muted-foreground">
                                 <span className="inline-flex items-center gap-1">
@@ -271,7 +272,7 @@ function EditorRol({
                         descripcion={
                             <>
                                 ¿Seguro que deseas eliminar el rol{' '}
-                                <Resaltado>{rol.name}</Resaltado>?
+                                <Resaltado>{nombreRol(rol.name)}</Resaltado>?
                             </>
                         }
                     />
@@ -383,7 +384,7 @@ function NuevoRolDialog({
                                         >
                                             <span className="inline-flex items-center gap-2 capitalize">
                                                 <Copy className="size-3.5" />
-                                                {rol.name}
+                                                {nombreRol(rol.name)}
                                             </span>
                                         </SelectItem>
                                     ))}

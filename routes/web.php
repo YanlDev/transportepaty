@@ -13,10 +13,12 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmisionGreController;
 use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\LecturaKilometrajeController;
+use App\Http\Controllers\LlantaController;
 use App\Http\Controllers\MantenimientoController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\OrdenTrabajoController;
 use App\Http\Controllers\ParametroCostoController;
+use App\Http\Controllers\PlanMantenimientoController;
 use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\RolController;
@@ -171,6 +173,8 @@ Route::middleware('auth')->group(function () {
     // base y las órdenes de taller. `ordenes/crear` va antes que
     // `ordenes/{orden}` para no leerse como una orden.
     Route::get('mantenimiento', [MantenimientoController::class, 'index'])->name('mantenimiento.index');
+    Route::get('mantenimiento/preventivo', [MantenimientoController::class, 'preventivo'])
+        ->name('mantenimiento.preventivo');
     Route::get('mantenimiento/unidades/{vehiculo}', [MantenimientoController::class, 'show'])
         ->name('mantenimiento.show');
     Route::post('mantenimiento/kilometrajes', [LecturaKilometrajeController::class, 'store'])
@@ -191,6 +195,18 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.ordenes.destroy');
     Route::delete('mantenimiento/ordenes/{orden}/fotos/{foto}', [OrdenTrabajoController::class, 'eliminarFoto'])
         ->name('mantenimiento.ordenes.fotos.destroy');
+    Route::get('mantenimiento/llantas', [LlantaController::class, 'index'])
+        ->name('mantenimiento.llantas.index');
+    Route::get('mantenimiento/llantas/{vehiculo}', [LlantaController::class, 'show'])
+        ->name('mantenimiento.llantas.show');
+    Route::post('mantenimiento/llantas/{vehiculo}/movimientos', [LlantaController::class, 'store'])
+        ->name('mantenimiento.llantas.store');
+    Route::post('mantenimiento/llantas/{vehiculo}/mediciones', [LlantaController::class, 'medir'])
+        ->name('mantenimiento.llantas.medir');
+    Route::get('mantenimiento/planes/{plan}/editar', [PlanMantenimientoController::class, 'edit'])
+        ->name('mantenimiento.planes.edit');
+    Route::put('mantenimiento/planes/{plan}', [PlanMantenimientoController::class, 'update'])
+        ->name('mantenimiento.planes.update');
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');

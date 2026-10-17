@@ -1,61 +1,61 @@
-import { Head, Link, router, setLayoutProps } from '@inertiajs/react';
-import { ClipboardPlus, Gauge, Wrench } from 'lucide-react';
+import { Head, Link, setLayoutProps } from '@inertiajs/react';
+import {
+    ChevronRight,
+    CircleDot,
+    ClipboardCheck,
+    ClipboardPlus,
+    Clock,
+    Gauge,
+    Wrench,
+} from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
+import llantas from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import { create as crearOrden } from '@/actions/App/Http/Controllers/OrdenTrabajoController';
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
-import { EmptyState } from '@/components/empty-state';
-import { ListadoResponsivo } from '@/components/listado-responsivo';
 import {
-    bordeEstado,
-    EstadoMantenimientoBadge,
-    FaltanKm,
-    formatearKm,
-} from '@/components/mantenimiento/estado-mantenimiento';
+    colorEstado,
+    TarjetaMarca,
+} from '@/components/mantenimiento/marca-tarjeta';
+import type { ConteoEstados } from '@/components/mantenimiento/marca-tarjeta';
 import { RegistrarKmDialog } from '@/components/mantenimiento/registrar-km-dialog';
 import { Button } from '@/components/ui/button';
-import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { usePermisos } from '@/hooks/use-permisos';
-import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type {
-    EstadoMantenimiento,
+    MarcaMantenimiento,
     ResumenMantenimiento,
     TractoKm,
-    UnidadMantenimiento,
 } from '@/types/mantenimiento';
 
 type Props = {
-    unidades: UnidadMantenimiento[];
+    /** El semáforo de toda la flota con plan. */
     resumen: ResumenMantenimiento;
-    /** Las marcas que ya tienen plan. */
-    planes: string[];
+    marcas: (MarcaMantenimiento & { conteo: ConteoEstados })[];
+    /** Los tractos con plan. */
+    unidades: number;
+    /** Cuántos tienen el último km viejo. */
+    desactualizados: number;
     tractos: TractoKm[];
 };
 
-const fondoResumen: Record<EstadoMantenimiento, string> = {
-    vencido: 'text-red-700 dark:text-red-400',
-    proximo: 'text-amber-700 dark:text-amber-400',
-    al_dia: 'text-emerald-700 dark:text-emerald-400',
-    sin_datos: 'text-muted-foreground',
-};
-
 /**
- * El semáforo de mantenimiento: qué unidad necesita taller y cuál viene
- * después. Viene ordenado del servidor —lo vencido primero, luego lo que
- * está por tocar— para que lo urgente quede arriba sin filtrar nada.
+ * La portada de mantenimiento: cómo está la flota de un vistazo y los
+ * accesos a cada parte del módulo. El detalle unidad por unidad está en
+ * Preventivo; desde acá se llega ya filtrado por estado o por marca.
  */
 export default function MantenimientoIndex({
-    unidades,
     resumen,
-    planes,
+    marcas,
+    unidades,
+    desactualizados,
     tractos,
 }: Props) {
     const { puede } = usePermisos();
     const puedeKm = puede('mantenimiento.registrar_km');
     const puedeOrdenes = puede('mantenimiento.gestionar');
     const [kmAbierto, setKmAbierto] = useState(false);
-    const [filtro, setFiltro] = useState<EstadoMantenimiento | null>(null);
 
     setLayoutProps({
         breadcrumbs: [
@@ -63,23 +63,15 @@ export default function MantenimientoIndex({
         ],
     });
 
-    const visibles =
-        filtro === null
-            ? unidades
-            : unidades.filter((unidad) => unidad.estado === filtro);
-
-    const irA = (unidad: UnidadMantenimiento) =>
-        router.visit(mantenimiento.show(unidad.id));
-
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Mantenimiento" />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-muted-foreground">
-                    Plan preventivo de {planes.join(', ') || 'ninguna marca'} ·{' '}
-                    {unidades.length}{' '}
-                    {unidades.length === 1 ? 'unidad' : 'unidades'}
+                    {unidades} {unidades === 1 ? 'tracto' : 'tractos'} con plan
+                    preventivo · {marcas.length}{' '}
+                    {marcas.length === 1 ? 'marca' : 'marcas'}
                 </p>
 
                 <div className="flex gap-2 max-md:hidden">
@@ -95,28 +87,20 @@ export default function MantenimientoIndex({
                 </div>
             </div>
 
-            {/* El resumen también filtra: tocar «Vencido» deja solo esas. */}
+            {/* Cada número lleva al preventivo ya filtrado por ese estado. */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 {resumen.map((item) => (
-                    <button
+                    <Link
                         key={item.estado}
-                        type="button"
-                        onClick={() =>
-                            setFiltro(
-                                filtro === item.estado ? null : item.estado,
-                            )
-                        }
-                        aria-pressed={filtro === item.estado}
-                        className={cn(
-                            'flex flex-col items-start rounded-xl border bg-card p-3 text-left transition-colors hover:bg-accent/50',
-                            filtro === item.estado &&
-                                'ring-2 ring-primary ring-offset-1 ring-offset-background',
-                        )}
+                        href={mantenimiento.preventivo({
+                            query: { estado: item.estado },
+                        })}
+                        className="flex flex-col items-start rounded-xl border bg-card p-3 transition-colors hover:bg-accent/50"
                     >
                         <span
                             className={cn(
                                 'text-2xl font-semibold tabular-nums',
-                                fondoResumen[item.estado],
+                                colorEstado[item.estado],
                             )}
                         >
                             {item.cantidad}
@@ -124,121 +108,87 @@ export default function MantenimientoIndex({
                         <span className="text-xs text-muted-foreground">
                             {item.label}
                         </span>
-                    </button>
+                    </Link>
                 ))}
             </div>
 
-            <ListadoResponsivo
-                items={visibles}
-                clave={(unidad) => unidad.id}
-                vacio={
-                    <EmptyState
-                        icono={<Wrench className="size-7" />}
-                        titulo={
-                            filtro === null
-                                ? 'Ninguna unidad con plan de mantenimiento'
-                                : 'Ninguna unidad en este estado'
-                        }
-                        descripcion={
-                            filtro === null
-                                ? 'Las unidades aparecen acá cuando su marca tiene un plan cargado.'
-                                : 'Quita el filtro para ver toda la flota.'
-                        }
+            {desactualizados > 0 && (
+                <Link
+                    href={mantenimiento.preventivo({
+                        query: { desactualizados: 1 },
+                    })}
+                    className="flex items-center gap-2 self-start rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-800 transition-colors hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300 dark:hover:bg-amber-950/70"
+                >
+                    <Clock className="size-4" />
+                    {desactualizados}{' '}
+                    {desactualizados === 1
+                        ? 'unidad con el km desactualizado'
+                        : 'unidades con el km desactualizado'}
+                    <ChevronRight className="size-4" />
+                </Link>
+            )}
+
+            <section className="flex flex-col gap-3">
+                <h2 className="text-sm font-medium text-muted-foreground">
+                    Accesos rápidos
+                </h2>
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5">
+                    <AccesoRapido
+                        icono={<Wrench />}
+                        titulo="Preventivo"
+                        descripcion="Qué servicio le toca a cada tracto"
+                        href={mantenimiento.preventivo().url}
                     />
-                }
-                tarjeta={(unidad) => (
-                    <Link
-                        href={mantenimiento.show(unidad.id)}
-                        className={cn(
-                            'flex flex-col gap-2 rounded-xl border border-l-4 bg-card p-4 active:bg-accent/50',
-                            bordeEstado[unidad.estado],
-                        )}
-                    >
-                        <div className="flex items-center justify-between gap-2">
-                            <span className="text-lg font-semibold tracking-wide">
-                                {formatearPlaca(unidad.placa)}
-                            </span>
-                            <EstadoMantenimientoBadge
-                                estado={unidad.estado}
-                                label={unidad.estado_label}
-                            />
-                        </div>
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                            <span>
-                                {unidad.proximo ? (
-                                    <>
-                                        Próximo:{' '}
-                                        <strong>{unidad.proximo.nombre}</strong>
-                                    </>
-                                ) : (
-                                    <span className="text-muted-foreground">
-                                        Sin servicios registrados
-                                    </span>
-                                )}
-                            </span>
-                            {unidad.proximo && (
-                                <FaltanKm
-                                    faltan={unidad.proximo.faltan_km}
-                                    estado={unidad.proximo.estado}
-                                />
-                            )}
-                        </div>
-                        <KmActual unidad={unidad} />
-                    </Link>
-                )}
-                encabezado={
-                    <TableRow className="hover:bg-transparent">
-                        <TableHead>Placa</TableHead>
-                        <TableHead>Marca</TableHead>
-                        <TableHead className="text-right">Km actual</TableHead>
-                        <TableHead>Próximo servicio</TableHead>
-                        <TableHead className="text-right">A los</TableHead>
-                        <TableHead className="text-right">Faltan</TableHead>
-                        <TableHead>Estado</TableHead>
-                    </TableRow>
-                }
-                fila={(unidad) => (
-                    <TableRow
-                        onClick={() => irA(unidad)}
-                        className="cursor-pointer"
-                    >
-                        <TableCell className="font-medium">
-                            <Link
-                                href={mantenimiento.show(unidad.id)}
-                                className="hover:underline"
-                            >
-                                {formatearPlaca(unidad.placa)}
-                            </Link>
-                        </TableCell>
-                        <TableCell className="text-muted-foreground">
-                            {unidad.marca}
-                        </TableCell>
-                        <TableCell className="text-right">
-                            <KmActual unidad={unidad} alineado />
-                        </TableCell>
-                        <TableCell>{unidad.proximo?.nombre ?? '—'}</TableCell>
-                        <TableCell className="text-right text-muted-foreground tabular-nums">
-                            {formatearKm(unidad.proximo?.proximo_km)}
-                        </TableCell>
-                        <TableCell className="text-right">
-                            {unidad.proximo ? (
-                                <FaltanKm
-                                    faltan={unidad.proximo.faltan_km}
-                                    estado={unidad.proximo.estado}
-                                />
-                            ) : (
-                                '—'
-                            )}
-                        </TableCell>
-                        <TableCell>
-                            <EstadoMantenimientoBadge
-                                estado={unidad.estado}
-                                label={unidad.estado_label}
-                            />
-                        </TableCell>
-                    </TableRow>
-                )}
-            />
+                    {puedeKm && (
+                        <AccesoRapido
+                            icono={<Gauge />}
+                            titulo="Registrar km"
+                            descripcion="Al llegar la unidad a base"
+                            onClick={() => setKmAbierto(true)}
+                        />
+                    )}
+                    {puedeOrdenes && (
+                        <AccesoRapido
+                            icono={<ClipboardPlus />}
+                            titulo="Nueva orden"
+                            descripcion="Preventiva o correctiva, con fotos"
+                            href={crearOrden().url}
+                        />
+                    )}
+                    <AccesoRapido
+                        icono={<CircleDot />}
+                        titulo="Llantas"
+                        descripcion="Tractos 10 · carretas 12 + 2 de repuesto"
+                        href={llantas.index().url}
+                    />
+                    <AccesoRapido
+                        icono={<ClipboardCheck />}
+                        titulo="Checklist del conductor"
+                        descripcion="Fallas con fotos que abren una orden"
+                        proximamente
+                    />
+                </div>
+            </section>
+
+            <section className="flex flex-col gap-3">
+                <h2 className="text-sm font-medium text-muted-foreground">
+                    Por marca
+                </h2>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
+                    {marcas.map((marca) => (
+                        <TarjetaMarca
+                            key={marca.id}
+                            marca={marca}
+                            conteo={marca.conteo}
+                            href={
+                                mantenimiento.preventivo({
+                                    query: { marca: marca.marca },
+                                }).url
+                            }
+                        />
+                    ))}
+                </div>
+            </section>
 
             {puedeKm && (
                 <>
@@ -259,41 +209,82 @@ export default function MantenimientoIndex({
     );
 }
 
-/** El último km con su fecha, avisando si ya es viejo. */
-function KmActual({
-    unidad,
-    alineado = false,
+/**
+ * Una entrada del módulo. Las que todavía no existen se muestran igual, sin
+ * enlace, para que se vea hacia dónde va el módulo.
+ */
+function AccesoRapido({
+    icono,
+    titulo,
+    descripcion,
+    href,
+    onClick,
+    proximamente = false,
 }: {
-    unidad: UnidadMantenimiento;
-    alineado?: boolean;
+    icono: ReactNode;
+    titulo: string;
+    descripcion: string;
+    href?: string;
+    onClick?: () => void;
+    proximamente?: boolean;
 }) {
-    if (unidad.km_actual === null) {
-        return (
-            <span className="text-xs text-muted-foreground">
-                Sin km registrado
+    const contenido = (
+        <>
+            <span
+                className={cn(
+                    'flex size-10 items-center justify-center rounded-lg [&_svg]:size-5',
+                    proximamente
+                        ? 'bg-muted text-muted-foreground'
+                        : 'bg-primary/10 text-primary',
+                )}
+            >
+                {icono}
             </span>
+            <span className="flex flex-col gap-0.5">
+                <span className="flex flex-wrap items-center gap-x-2 font-medium">
+                    {titulo}
+                    {proximamente && (
+                        <span className="rounded-full bg-muted px-1.5 py-0.5 text-[11px] font-normal text-muted-foreground">
+                            Próximamente
+                        </span>
+                    )}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                    {descripcion}
+                </span>
+            </span>
+        </>
+    );
+
+    const clases =
+        'flex flex-col items-start gap-3 rounded-xl border bg-card p-3 text-left sm:p-4';
+
+    if (proximamente) {
+        return (
+            <div className={cn(clases, 'border-dashed opacity-75')}>
+                {contenido}
+            </div>
+        );
+    }
+
+    if (href !== undefined) {
+        return (
+            <Link
+                href={href}
+                className={cn(clases, 'transition-colors hover:bg-accent/50')}
+            >
+                {contenido}
+            </Link>
         );
     }
 
     return (
-        <span
-            className={cn(
-                'flex flex-col text-xs text-muted-foreground',
-                alineado && 'items-end',
-            )}
+        <button
+            type="button"
+            onClick={onClick}
+            className={cn(clases, 'transition-colors hover:bg-accent/50')}
         >
-            <span className="text-sm text-foreground tabular-nums">
-                {formatearKm(unidad.km_actual)}
-            </span>
-            <span
-                className={cn(
-                    unidad.km_desactualizado &&
-                        'font-medium text-amber-700 dark:text-amber-400',
-                )}
-            >
-                {unidad.km_desactualizado ? 'Desactualizado · ' : ''}
-                {formatearFecha(unidad.km_fecha)}
-            </span>
-        </span>
+            {contenido}
+        </button>
     );
 }

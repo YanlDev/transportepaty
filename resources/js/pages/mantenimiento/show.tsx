@@ -65,6 +65,7 @@ export default function MantenimientoShow({
     setLayoutProps({
         breadcrumbs: [
             { title: 'Mantenimiento', href: mantenimiento.index().url },
+            { title: 'Preventivo', href: mantenimiento.preventivo().url },
             { title: placa, href: mantenimiento.show(unidad.id).url },
         ],
     });

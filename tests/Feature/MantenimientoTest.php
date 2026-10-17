@@ -148,15 +148,15 @@ it('takes the km from an orden when it is ahead of the last lectura', function (
 
 it('says sin datos instead of guessing, and leaves brands without a plan out', function (): void {
     $sinNada = scania();
-    $volvo = Vehiculo::factory()->create(['marca' => 'VOLVO']);
-    km($volvo, 100000);
+    $foton = Vehiculo::factory()->create(['marca' => 'FOTON']);
+    km($foton, 100000);
 
-    $estados = app(ProximoMantenimiento::class)->paraFlota(collect([$sinNada, $volvo]));
+    $estados = app(ProximoMantenimiento::class)->paraFlota(collect([$sinNada, $foton]));
 
     expect($estados[$sinNada->id]['estado'])->toBe(EstadoMantenimiento::SinDatos)
         ->and($estados[$sinNada->id]['proximo'])->toBeNull()
-        ->and($estados[$volvo->id]['plan'])->toBeNull()
-        ->and($estados[$volvo->id]['km_actual'])->toBe(100000);
+        ->and($estados[$foton->id]['plan'])->toBeNull()
+        ->and($estados[$foton->id]['km_actual'])->toBe(100000);
 });
 
 // ─── Pantallas ──────────────────────────────────────────────────────────────
@@ -188,12 +188,12 @@ it('lists the units with a plan, the overdue ones first', function (): void {
     hecho($vencida, 'S', 300000);
     km($vencida, 345000);
 
-    Vehiculo::factory()->create(['marca' => 'VOLVO']);
+    Vehiculo::factory()->create(['marca' => 'FOTON']);
 
     actingAs(tallerista())
-        ->get(route('mantenimiento.index'))
+        ->get(route('mantenimiento.preventivo'))
         ->assertInertia(fn ($page) => $page
-            ->component('mantenimiento/index')
+            ->component('mantenimiento/preventivo')
             ->has('unidades', 2)
             ->where('unidades.0.id', $vencida->id)
             ->where('unidades.0.estado', 'vencido')
@@ -305,7 +305,7 @@ it('asks for the km of a finished preventiva', function (): void {
 
 it('rejects a service from another plan and a preventiva for a brand without plan', function (): void {
     $otroPlan = ServicioMantenimiento::factory()->create();
-    $volvo = Vehiculo::factory()->create(['marca' => 'VOLVO']);
+    $foton = Vehiculo::factory()->create(['marca' => 'FOTON']);
 
     $datos = ['tipo' => 'preventiva', 'estado' => 'pendiente', 'fecha' => '2026-10-14', 'trabajo' => 'Servicio'];
 
@@ -314,16 +314,16 @@ it('rejects a service from another plan and a preventiva for a brand without pla
         ->assertSessionHasErrors('servicio_mantenimiento_id');
 
     actingAs(tallerista())
-        ->post(route('mantenimiento.ordenes.store'), [...$datos, 'vehiculo_id' => $volvo->id, 'servicio_mantenimiento_id' => servicioScania('S')->id])
+        ->post(route('mantenimiento.ordenes.store'), [...$datos, 'vehiculo_id' => $foton->id, 'servicio_mantenimiento_id' => servicioScania('S')->id])
         ->assertSessionHasErrors('servicio_mantenimiento_id');
 });
 
 it('registers a correctiva for any tracto without touching the plan', function (): void {
-    $volvo = Vehiculo::factory()->create(['marca' => 'VOLVO']);
+    $foton = Vehiculo::factory()->create(['marca' => 'FOTON']);
 
     actingAs(tallerista())
         ->post(route('mantenimiento.ordenes.store'), [
-            'vehiculo_id' => $volvo->id,
+            'vehiculo_id' => $foton->id,
             'tipo' => 'correctiva',
             'estado' => 'en_proceso',
             'fecha' => '2026-10-14',

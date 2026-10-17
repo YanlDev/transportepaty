@@ -16,13 +16,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { nombreRol } from '@/lib/roles';
 import type { ModuloPermisos, Permiso, RolConPermisos } from '@/types';
-
-const ROLE_LABELS: Record<string, string> = {
-    admin: 'Administrador',
-    visor: 'Visor',
-    contador: 'Contador',
-};
 
 /**
  * Qué habilita el rol, en una línea. Se muestra al elegirlo porque el nombre
@@ -192,7 +187,7 @@ export function UserForm({ mode, usuario, roles, modulos }: Props) {
                                             key={rol.name}
                                             value={rol.name}
                                         >
-                                            {ROLE_LABELS[rol.name] ?? rol.name}
+                                            {nombreRol(rol.name)}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

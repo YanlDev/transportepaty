@@ -100,9 +100,10 @@ class RolController extends Controller
     }
 
     /**
-     * El catálogo agrupado como lo pinta la matriz: un bloque por módulo.
+     * El catálogo agrupado como lo pinta la matriz: un bloque por módulo, con
+     * el área a la que pertenece para agruparlos.
      *
-     * @return list<array{clave: string, nombre: string, permisos: list<array{value: string, label: string}>}>
+     * @return list<array{clave: string, nombre: string, area: string, permisos: list<array{value: string, label: string}>}>
      */
     public static function modulos(): array
     {
@@ -116,6 +117,7 @@ class RolController extends Controller
             fn (string $clave, string $nombre): array => [
                 'clave' => $clave,
                 'nombre' => $nombre,
+                'area' => Permiso::areaDeModulo($clave),
                 'permisos' => $porModulo[$clave] ?? [],
             ],
             array_keys(Permiso::MODULOS),

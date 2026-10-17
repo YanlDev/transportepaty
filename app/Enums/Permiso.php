@@ -34,6 +34,7 @@ enum Permiso: string
     case MantenimientoRegistrarKm = 'mantenimiento.registrar_km';
     case MantenimientoGestionar = 'mantenimiento.gestionar';
     case MantenimientoConfigurar = 'mantenimiento.configurar';
+    case MantenimientoLlantas = 'mantenimiento.llantas';
 
     case NovedadesRegistrar = 'novedades.registrar';
     case NovedadesLevantar = 'novedades.levantar';
@@ -83,19 +84,50 @@ enum Permiso: string
     public const MODULOS = [
         'tablero' => 'Tablero',
         'vehiculos' => 'Vehículos',
-        'conductores' => 'Conductores',
         'mantenimiento' => 'Mantenimiento',
         'novedades' => 'Novedades de unidades',
-        'viajes' => 'Viajes',
-        'programacion' => 'Programación',
+        'conductores' => 'Conductores',
         'asistencia' => 'Asistencia',
-        'clientes' => 'Clientes',
+        'programacion' => 'Programación',
+        'viajes' => 'Viajes',
         'cotizaciones' => 'Cotizaciones',
+        'clientes' => 'Clientes',
         'costos' => 'Parámetros de costo',
         'cobranza' => 'Cobranza',
         'cuentas' => 'Cuentas bancarias',
         'whatsapp' => 'WhatsApp',
     ];
+
+    /**
+     * Las áreas de la empresa y sus módulos. Es la misma división que el menú
+     * y que los roles: cada área tiene su rol (Flota la ve Gerencia y la
+     * maneja el admin), y el panel de permisos se agrupa así para que se vea
+     * de un vistazo qué área toca cada rol.
+     *
+     * @var array<string, array{nombre: string, modulos: list<string>}>
+     */
+    public const AREAS = [
+        'general' => ['nombre' => 'General', 'modulos' => ['tablero']],
+        'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades']],
+        'rrhh' => ['nombre' => 'RRHH', 'modulos' => ['conductores', 'asistencia']],
+        'programacion' => ['nombre' => 'Programación', 'modulos' => ['programacion', 'viajes', 'cotizaciones', 'clientes', 'costos']],
+        'contabilidad' => ['nombre' => 'Contabilidad', 'modulos' => ['cobranza', 'cuentas']],
+        'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp']],
+    ];
+
+    /**
+     * El nombre del área a la que pertenece un módulo.
+     */
+    public static function areaDeModulo(string $modulo): string
+    {
+        foreach (self::AREAS as $area) {
+            if (in_array($modulo, $area['modulos'], true)) {
+                return $area['nombre'];
+            }
+        }
+
+        return 'Otros';
+    }
 
     public function modulo(): string
     {
@@ -118,6 +150,7 @@ enum Permiso: string
             self::MantenimientoRegistrarKm => 'Registrar kilometrajes',
             self::MantenimientoGestionar => 'Registrar y editar órdenes de trabajo',
             self::MantenimientoConfigurar => 'Configurar el plan de cada marca',
+            self::MantenimientoLlantas => 'Registrar instalaciones, mediciones y cambios de llantas',
             self::NovedadesRegistrar => 'Registrar novedades',
             self::NovedadesLevantar => 'Levantar novedades',
             self::ViajesVer => 'Ver viajes',
@@ -162,7 +195,7 @@ enum Permiso: string
      */
     public function rolesPorDefecto(): array
     {
-        return match ($this) {
+        $roles = match ($this) {
             self::TableroVer,
             self::VehiculosVer,
             self::ViajesVer => ['visor', 'contador'],
@@ -176,6 +209,19 @@ enum Permiso: string
             self::CuentasGestionar => ['contador'],
             default => [],
         };
+
+        // Gerencia ve todo y no toca nada: recibe cada «ver», también los de
+        // los módulos que se agreguen después.
+        if (str_ends_with($this->value, '.ver')) {
+            $roles[] = 'gerencia';
+        }
+
+        // El tablero también: es la pantalla a la que se llega al entrar.
+        if (in_array($this->modulo(), ['tablero', 'conductores', 'asistencia'], true)) {
+            $roles[] = 'rrhh';
+        }
+
+        return $roles;
     }
 
     /**

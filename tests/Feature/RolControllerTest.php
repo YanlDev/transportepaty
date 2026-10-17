@@ -44,7 +44,35 @@ it('shows the roles with their permissions and the catalog grouped by module', f
             ->where('roles.0.bloqueado', true)
             ->has('modulos', count(Permiso::MODULOS))
             ->where('modulos.0.clave', 'tablero')
+            // Cada módulo dice su área, para que el panel se agrupe como el menú.
+            ->where('modulos.1.clave', 'vehiculos')
+            ->where('modulos.1.area', 'Flota')
+            ->where('modulos.4.clave', 'conductores')
+            ->where('modulos.4.area', 'RRHH')
         );
+});
+
+/**
+ * Gerencia ve todo y no toca nada; RRHH maneja conductores y asistencia, y
+ * entra por el tablero como todos.
+ */
+it('creates the gerencia and rrhh roles by area', function (): void {
+    $permisosDe = fn (string $rol): array => Role::findByName($rol, 'web')->permissions->pluck('name')->sort()->values()->all();
+
+    $todosLosVer = collect(Permiso::valores())->filter(fn (string $permiso): bool => str_ends_with($permiso, '.ver'))->sort()->values()->all();
+
+    expect($permisosDe('gerencia'))->toBe($todosLosVer)
+        ->and($permisosDe('rrhh'))->toBe(collect([
+            'tablero.ver',
+            'conductores.ver', 'conductores.crear', 'conductores.editar', 'conductores.eliminar',
+            'asistencia.ver', 'asistencia.marcar', 'asistencia.ajustar',
+        ])->sort()->values()->all());
+});
+
+it('gives every module an area', function (): void {
+    foreach (array_keys(Permiso::MODULOS) as $modulo) {
+        expect(Permiso::areaDeModulo($modulo))->not->toBe('Otros');
+    }
 });
 
 it('keeps the roles panel for admins only', function (string $rol): void {

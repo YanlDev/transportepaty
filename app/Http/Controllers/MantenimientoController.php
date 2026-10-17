@@ -12,6 +12,7 @@ use App\Models\Vehiculo;
 use App\Services\ProximoMantenimiento;
 use App\Services\RelojOperativo;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -28,16 +29,66 @@ class MantenimientoController extends Controller
 {
     public function __construct(private readonly ProximoMantenimiento $mantenimiento) {}
 
+    /**
+     * La portada del módulo: cómo está la flota de un vistazo y los accesos
+     * a cada parte. El listado de unidades vive en `preventivo`.
+     */
     public function index(): Response
     {
         $this->authorize('viewAny', OrdenTrabajo::class);
 
         $tractos = $this->tractosActivos();
         $estados = $this->mantenimiento->paraFlota($tractos);
+        $unidades = $this->unidadesConPlan($tractos, $estados);
 
-        // En el semáforo solo las marcas con plan; las demás igual pueden
-        // registrar su km, que queda listo para cuando tengan el suyo.
-        $unidades = $tractos
+        return Inertia::render('mantenimiento/index', [
+            'resumen' => $this->resumen($unidades),
+            'marcas' => array_map(fn (array $marca): array => [
+                ...$marca,
+                'conteo' => $this->conteoPorEstado($unidades->where('plan_id', $marca['id'])),
+            ], $this->marcas()),
+            'unidades' => $unidades->count(),
+            'desactualizados' => $unidades->where('km_desactualizado', true)->count(),
+            'tractos' => $this->opcionesTractos($tractos, $estados),
+        ]);
+    }
+
+    /**
+     * Las unidades frente a su plan, con las tarjetas de marca como filtro.
+     * Se puede abrir ya filtrado: `marca`, `estado` y `desactualizados`.
+     */
+    public function preventivo(Request $request): Response
+    {
+        $this->authorize('viewAny', OrdenTrabajo::class);
+
+        $tractos = $this->tractosActivos();
+        $estados = $this->mantenimiento->paraFlota($tractos);
+        $unidades = $this->unidadesConPlan($tractos, $estados);
+
+        return Inertia::render('mantenimiento/preventivo', [
+            'unidades' => $unidades->all(),
+            'resumen' => $this->resumen($unidades),
+            'marcas' => $this->marcas(),
+            'filtros' => [
+                'marca' => $request->string('marca')->upper()->trim()->value() ?: null,
+                'estado' => EstadoMantenimiento::tryFrom($request->string('estado')->value())?->value,
+                'desactualizados' => $request->boolean('desactualizados'),
+            ],
+            'tractos' => $this->opcionesTractos($tractos, $estados),
+        ]);
+    }
+
+    /**
+     * En el semáforo solo las marcas con plan; las demás igual pueden
+     * registrar su km, que queda listo para cuando tengan el suyo.
+     *
+     * @param  Collection<int, Vehiculo>  $tractos
+     * @param  array<int, EstadoUnidad>  $estados
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function unidadesConPlan(Collection $tractos, array $estados): Collection
+    {
+        return $tractos
             ->filter(fn (Vehiculo $vehiculo): bool => $estados[$vehiculo->id]['plan'] !== null)
             ->map(fn (Vehiculo $vehiculo): array => $this->filaUnidad($vehiculo, $estados[$vehiculo->id]))
             ->sortBy([
@@ -45,19 +96,34 @@ class MantenimientoController extends Controller
                 fn (array $a, array $b): int => ($a['proximo']['faltan_km'] ?? PHP_INT_MAX) <=> ($b['proximo']['faltan_km'] ?? PHP_INT_MAX),
             ])
             ->values();
+    }
 
-        return Inertia::render('mantenimiento/index', [
-            'unidades' => $unidades->all(),
-            'resumen' => collect(EstadoMantenimiento::cases())
-                ->map(fn (EstadoMantenimiento $estado): array => [
-                    'estado' => $estado->value,
-                    'label' => $estado->label(),
-                    'cantidad' => $unidades->where('estado', $estado->value)->count(),
-                ])
-                ->all(),
-            'planes' => PlanMantenimiento::query()->orderBy('marca')->pluck('marca')->all(),
-            'tractos' => $this->opcionesTractos($tractos, $estados),
-        ]);
+    /**
+     * @param  Collection<int, array<string, mixed>>  $unidades
+     * @return list<array{estado: string, label: string, cantidad: int}>
+     */
+    private function resumen(Collection $unidades): array
+    {
+        return array_map(fn (EstadoMantenimiento $estado): array => [
+            'estado' => $estado->value,
+            'label' => $estado->label(),
+            'cantidad' => $unidades->where('estado', $estado->value)->count(),
+        ], EstadoMantenimiento::cases());
+    }
+
+    /**
+     * @param  Collection<int, array<string, mixed>>  $unidades
+     * @return array<string, int>
+     */
+    private function conteoPorEstado(Collection $unidades): array
+    {
+        $conteo = [];
+
+        foreach (EstadoMantenimiento::cases() as $estado) {
+            $conteo[$estado->value] = $unidades->where('estado', $estado->value)->count();
+        }
+
+        return $conteo;
     }
 
     public function show(Vehiculo $vehiculo): Response
@@ -116,6 +182,34 @@ class MantenimientoController extends Controller
     }
 
     /**
+     * Las marcas con plan, para las tarjetas del tablero: su logo y los km de
+     * cada nivel. Lo que cuenta cada tarjeta sale de las unidades.
+     *
+     * @return list<array{id: int, marca: string, nombre: string, logo_url: string|null, niveles: list<array{codigo: string, intervalo_km: int, intervalo_meses: int|null}>}>
+     */
+    private function marcas(): array
+    {
+        return array_values(PlanMantenimiento::query()
+            ->with('servicios')
+            ->orderBy('marca')
+            ->get()
+            ->map(fn (PlanMantenimiento $plan): array => [
+                'id' => $plan->id,
+                'marca' => $plan->marca,
+                'nombre' => $plan->nombre,
+                'logo_url' => $plan->logoUrl(),
+                'niveles' => array_values($plan->servicios
+                    ->map(fn (ServicioMantenimiento $servicio): array => [
+                        'codigo' => $servicio->codigo,
+                        'intervalo_km' => $servicio->intervalo_km,
+                        'intervalo_meses' => $servicio->intervalo_meses,
+                    ])
+                    ->all()),
+            ])
+            ->all());
+    }
+
+    /**
      * @return Collection<int, Vehiculo>
      */
     private function tractosActivos(): Collection
@@ -136,6 +230,7 @@ class MantenimientoController extends Controller
             'id' => $vehiculo->id,
             'placa' => $vehiculo->placa,
             'marca' => $vehiculo->marca,
+            'plan_id' => $estado['plan']['id'] ?? null,
             'modelo' => $vehiculo->modelo,
             'anio' => $vehiculo->anio,
             'km_actual' => $estado['km_actual'],

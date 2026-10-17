@@ -65,15 +65,15 @@ it('imports the services done, taking the package from the row', function (): vo
 
 it('does not duplicate when run twice, and skips brands without a plan', function (): void {
     Vehiculo::factory()->create(['placa' => 'TCD-854', 'marca' => 'SCANIA']);
-    Vehiculo::factory()->create(['placa' => 'ABC-123', 'marca' => 'VOLVO']);
+    Vehiculo::factory()->create(['placa' => 'ABC-123', 'marca' => 'FOTON']);
 
     $ruta = registroMantenimiento([
         ['TCD854', 'SCANIA', 'S', [['2026-05-15', 'S', 299219]]],
-        ['ABC123', 'VOLVO', 'S', [['2026-05-15', 'PM', 100000]]],
+        ['ABC123', 'FOTON', 'S', [['2026-05-15', 'PM', 100000]]],
     ]);
 
     $this->artisan('mantenimiento:importar-historial', ['archivo' => $ruta])
-        ->expectsOutputToContain('Saltadas (marca VOLVO sin plan): 1')
+        ->expectsOutputToContain('Saltadas (marca FOTON sin plan): 1')
         ->assertSuccessful();
     $this->artisan('mantenimiento:importar-historial', ['archivo' => $ruta])
         ->expectsOutputToContain('Ya estaban: 1')

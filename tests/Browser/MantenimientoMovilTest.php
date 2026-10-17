@@ -3,6 +3,7 @@
 use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\TipoOrdenTrabajo;
 use App\Models\LecturaKilometraje;
+use App\Models\Llanta;
 use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\Vehiculo;
@@ -35,6 +36,14 @@ it('muestra el semáforo, la ficha y la orden en celular sin desbordarse', funct
     actingAs(actorConRol('admin'));
 
     visit('/mantenimiento')
+        ->on()->mobile()
+        ->assertSee('Accesos rápidos')
+        ->assertSee('Llantas')
+        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-mantenimiento-tablero');
+
+    visit('/mantenimiento/preventivo')
         ->on()->mobile()
         ->assertSee('TCD928')
         ->assertSee('Faltan 1,500 km')
@@ -74,4 +83,77 @@ it('registra el km desde el botón flotante del celular', function (): void {
         ->assertNoJavaScriptErrors();
 
     expect(LecturaKilometraje::query()->max('kilometraje'))->toBe(319200);
+});
+
+it('filtra por marca desde su tarjeta y configura su plan', function (): void {
+    actingAs(actorConRol('admin'));
+
+    Vehiculo::factory()->create(['placa' => 'BUK-717', 'marca' => 'VOLVO']);
+
+    visit('/mantenimiento')
+        ->assertSee('MERCEDES BENZ')
+        ->assertSee('X 25 mil · S 75 mil · M 150 mil')
+        ->assertDontSee('TCD928')
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'mantenimiento-tablero')
+        ->click('SCANIA')
+        ->assertPathIs('/mantenimiento/preventivo')
+        ->assertSee('TCD928')
+        ->assertDontSee('BUK717')
+        ->assertSee('Configurar plan')
+        ->screenshot(filename: 'mantenimiento-tablero-scania')
+        ->click('Configurar plan')
+        ->assertSee('Plan preventivo SCANIA')
+        ->assertSee('Cómo queda el calendario')
+        ->screenshot(filename: 'mantenimiento-plan')
+        ->clear('#km-X')
+        ->type('#km-X', '15000')
+        ->click('Guardar plan')
+        ->assertSee('X 15 mil · S 40 mil')
+        ->assertNoJavaScriptErrors();
+
+    expect(PlanMantenimiento::deMarca('SCANIA')->servicios()->where('codigo', 'X')->value('intervalo_km'))->toBe(15000);
+});
+
+it('muestra el plan de una marca en celular sin desbordarse', function (): void {
+    actingAs(actorConRol('admin'));
+
+    visit('/mantenimiento/planes/'.PlanMantenimiento::deMarca('INTERNATIONAL')->id.'/editar')
+        ->on()->mobile()
+        ->assertSee('Plan preventivo INTERNATIONAL')
+        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-mantenimiento-plan');
+});
+
+it('instala y mide una llanta desde el esquema en el celular', function (): void {
+    actingAs(actorConRol('admin'));
+
+    visit('/mantenimiento/llantas/'.$this->unidad->id)
+        ->on()->mobile()
+        ->assertSee('0 de 10 llantas')
+        ->click('[aria-label^="Posición 3:"]')
+        ->assertSee('Eje 2, exterior izquierda')
+        ->click('Instalar llanta')
+        ->type('#llanta-marca', 'Michelin')
+        ->type('#llanta-mm', '15')
+        ->screenshot(filename: 'movil-llantas-instalar')
+        ->click('Guardar')
+        ->assertSee('1 de 10 llantas')
+        ->click('Medir llantas')
+        ->type('#mm-3', '2.5')
+        ->click('Guardar medición')
+        ->assertSee('Cambiar · 2.5 mm')
+        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-llantas-unidad');
+
+    expect(Llanta::query()->sole()->posicion)->toBe('3');
+
+    visit('/mantenimiento')
+        ->on()->mobile()
+        ->click('a[href$="/mantenimiento/llantas"]')
+        ->assertSee('1 para cambiar')
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-llantas');
 });

@@ -50,6 +50,21 @@ const ROLE_BADGES: Record<string, { label: string; className: string }> = {
         className:
             'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-950 dark:text-amber-300',
     },
+    gerencia: {
+        label: 'Gerencia',
+        className:
+            'bg-violet-50 text-violet-700 ring-1 ring-violet-600/20 dark:bg-violet-950 dark:text-violet-300',
+    },
+    operaciones: {
+        label: 'Operaciones',
+        className:
+            'bg-sky-50 text-sky-700 ring-1 ring-sky-600/20 dark:bg-sky-950 dark:text-sky-300',
+    },
+    rrhh: {
+        label: 'RRHH',
+        className:
+            'bg-rose-50 text-rose-700 ring-1 ring-rose-600/20 dark:bg-rose-950 dark:text-rose-300',
+    },
 };
 
 export default function UsuariosIndex({ usuarios: paginador, filtros }: Props) {

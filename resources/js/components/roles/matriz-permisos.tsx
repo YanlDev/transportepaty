@@ -70,111 +70,130 @@ export function MatrizPermisos({
         onChange([...nuevos]);
     };
 
-    return (
-        <div
-            className={cn(
-                'grid gap-3 sm:grid-cols-2 xl:grid-cols-3',
-                className,
-            )}
-        >
-            {modulos.map((modulo) => {
-                const marcados = modulo.permisos.filter((p) =>
-                    activos.has(p.value),
-                ).length;
-                const total = modulo.permisos.length;
-                const estadoModulo =
-                    marcados === 0
-                        ? false
-                        : marcados === total
-                          ? true
-                          : 'indeterminate';
-                const idModulo = `modulo-${modulo.clave}`;
+    // Los módulos agrupados por área, en el orden en que llegan: el panel se
+    // lee igual que el menú.
+    const areas = modulos.reduce<{ area: string; modulos: ModuloPermisos[] }[]>(
+        (grupos, modulo) => {
+            const grupo = grupos.find((g) => g.area === modulo.area);
 
-                return (
-                    <fieldset
-                        key={modulo.clave}
+            if (grupo) {
+                grupo.modulos.push(modulo);
+            } else {
+                grupos.push({ area: modulo.area, modulos: [modulo] });
+            }
+
+            return grupos;
+        },
+        [],
+    );
+
+    const dibujarModulo = (modulo: ModuloPermisos) => {
+        const marcados = modulo.permisos.filter((p) =>
+            activos.has(p.value),
+        ).length;
+        const total = modulo.permisos.length;
+        const estadoModulo =
+            marcados === 0
+                ? false
+                : marcados === total
+                  ? true
+                  : 'indeterminate';
+        const idModulo = `modulo-${modulo.clave}`;
+
+        return (
+            <fieldset
+                key={modulo.clave}
+                className={cn(
+                    'rounded-xl border bg-card p-4 transition-colors',
+                    marcados > 0 ? 'border-marca-600/30' : 'border-border',
+                )}
+            >
+                <legend className="sr-only">{modulo.nombre}</legend>
+                <div className="mb-3 flex items-center gap-2.5 border-b border-border pb-3">
+                    <Checkbox
+                        id={idModulo}
+                        checked={estadoModulo}
+                        disabled={bloqueado}
+                        onCheckedChange={(valor) =>
+                            alternarModulo(modulo, valor === true)
+                        }
+                    />
+                    <label
+                        htmlFor={idModulo}
+                        className="flex-1 cursor-pointer text-sm font-semibold text-foreground"
+                    >
+                        {modulo.nombre}
+                    </label>
+                    <span
                         className={cn(
-                            'rounded-xl border bg-card p-4 transition-colors',
+                            'rounded-full px-2 py-0.5 text-xs tabular-nums',
                             marcados > 0
-                                ? 'border-marca-600/30'
-                                : 'border-border',
+                                ? 'bg-marca-50 text-marca-700 dark:bg-marca-950 dark:text-marca-300'
+                                : 'bg-muted text-muted-foreground',
                         )}
                     >
-                        <legend className="sr-only">{modulo.nombre}</legend>
-                        <div className="mb-3 flex items-center gap-2.5 border-b border-border pb-3">
-                            <Checkbox
-                                id={idModulo}
-                                checked={estadoModulo}
-                                disabled={bloqueado}
-                                onCheckedChange={(valor) =>
-                                    alternarModulo(modulo, valor === true)
-                                }
-                            />
-                            <label
-                                htmlFor={idModulo}
-                                className="flex-1 cursor-pointer text-sm font-semibold text-foreground"
+                        {marcados}/{total}
+                    </span>
+                </div>
+
+                <ul className="flex flex-col gap-2">
+                    {modulo.permisos.map((permiso) => {
+                        const heredado = heredados.includes(permiso.value);
+                        const id = `permiso-${permiso.value}`;
+
+                        return (
+                            <li
+                                key={permiso.value}
+                                className="flex items-center gap-2.5"
                             >
-                                {modulo.nombre}
-                            </label>
-                            <span
-                                className={cn(
-                                    'rounded-full px-2 py-0.5 text-xs tabular-nums',
-                                    marcados > 0
-                                        ? 'bg-marca-50 text-marca-700 dark:bg-marca-950 dark:text-marca-300'
-                                        : 'bg-muted text-muted-foreground',
+                                <Checkbox
+                                    id={id}
+                                    checked={activos.has(permiso.value)}
+                                    disabled={bloqueado || heredado}
+                                    onCheckedChange={(valor) =>
+                                        alternar(
+                                            modulo,
+                                            permiso.value,
+                                            valor === true,
+                                        )
+                                    }
+                                />
+                                <label
+                                    htmlFor={id}
+                                    className={cn(
+                                        'flex-1 text-sm',
+                                        bloqueado || heredado
+                                            ? 'text-muted-foreground'
+                                            : 'cursor-pointer text-foreground',
+                                    )}
+                                >
+                                    {permiso.label}
+                                </label>
+                                {heredado && (
+                                    <span className="text-[11px] text-muted-foreground">
+                                        del rol
+                                    </span>
                                 )}
-                            >
-                                {marcados}/{total}
-                            </span>
-                        </div>
+                            </li>
+                        );
+                    })}
+                </ul>
+            </fieldset>
+        );
+    };
 
-                        <ul className="flex flex-col gap-2">
-                            {modulo.permisos.map((permiso) => {
-                                const heredado = heredados.includes(
-                                    permiso.value,
-                                );
-                                const id = `permiso-${permiso.value}`;
-
-                                return (
-                                    <li
-                                        key={permiso.value}
-                                        className="flex items-center gap-2.5"
-                                    >
-                                        <Checkbox
-                                            id={id}
-                                            checked={activos.has(permiso.value)}
-                                            disabled={bloqueado || heredado}
-                                            onCheckedChange={(valor) =>
-                                                alternar(
-                                                    modulo,
-                                                    permiso.value,
-                                                    valor === true,
-                                                )
-                                            }
-                                        />
-                                        <label
-                                            htmlFor={id}
-                                            className={cn(
-                                                'flex-1 text-sm',
-                                                bloqueado || heredado
-                                                    ? 'text-muted-foreground'
-                                                    : 'cursor-pointer text-foreground',
-                                            )}
-                                        >
-                                            {permiso.label}
-                                        </label>
-                                        {heredado && (
-                                            <span className="text-[11px] text-muted-foreground">
-                                                del rol
-                                            </span>
-                                        )}
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    </fieldset>
-                );
-            })}
+    return (
+        <div className={cn('flex flex-col gap-5', className)}>
+            {areas.map(({ area, modulos: delArea }) => (
+                <section key={area} className="flex flex-col gap-2">
+                    <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                        {area}
+                    </h3>
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                        {delArea.map(dibujarModulo)}
+                    </div>
+                </section>
+            ))}
         </div>
     );
 }

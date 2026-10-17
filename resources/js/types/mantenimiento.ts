@@ -30,6 +30,8 @@ export type UnidadMantenimiento = {
     id: number;
     placa: string;
     marca: string | null;
+    /** El plan de su marca. */
+    plan_id: number | null;
     modelo: string | null;
     anio: number | null;
     km_actual: number | null;
@@ -100,4 +102,45 @@ export type FotoOrden = {
     id: number;
     coleccion: 'antes' | 'despues';
     url: string;
+};
+
+/** Los km (y meses) de un nivel X · S · M · L de una marca. */
+export type NivelPlan = {
+    codigo: string;
+    intervalo_km: number;
+    intervalo_meses: number | null;
+};
+
+/** Una marca con plan, para las tarjetas del tablero. */
+export type MarcaMantenimiento = {
+    id: number;
+    marca: string;
+    nombre: string;
+    logo_url: string | null;
+    niveles: NivelPlan[];
+};
+
+export type RepuestoPlan = {
+    descripcion: string;
+    codigo: string | null;
+    cantidad: number | null;
+    unidad: string | null;
+};
+
+/** Un nivel del plan tal como se edita. */
+export type ServicioEditable = NivelPlan & {
+    nombre: string;
+    /** Las órdenes ya registradas con este nivel: si hay, no se puede quitar. */
+    ordenes: number;
+    repuestos: RepuestoPlan[];
+};
+
+export type PlanEditable = {
+    id: number;
+    marca: string;
+    nombre: string;
+    logo_url: string | null;
+    /** Los tractos de la marca que siguen este plan. */
+    unidades: number;
+    servicios: ServicioEditable[];
 };
