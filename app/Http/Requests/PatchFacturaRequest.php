@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\Moneda;
 use App\Models\Factura;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -28,9 +29,8 @@ class PatchFacturaRequest extends FormRequest
         return [
             'numero' => ['sometimes', 'required', 'string', 'max:30', Rule::unique('facturas', 'numero')->ignore($this->factura())],
             // Corregible pero no borrable: la columna no admite null y una
-            // factura sin fecha de emisión no existe. Tampoco puede quedar
-            // después de un cobro ya registrado.
-            'fecha_emision' => ['sometimes', 'required', 'date', ...$this->noDespuesDeLosCobros()],
+            // factura sin fecha de emisión no existe.
+            'fecha_emision' => ['sometimes', 'required', 'date'],
             // El valor del flete, sin IGV. El IGV, el total, la detracción y
             // el neto se calculan solos.
             'monto' => ['sometimes', 'nullable', 'numeric', 'min:0.01', 'max:99999999.99'],
@@ -45,27 +45,30 @@ class PatchFacturaRequest extends FormRequest
             // Con o sin céntimos en la detracción: depende de cómo la emite
             // el cliente (Minsur, con céntimos).
             'detraccion_redondeada' => ['sometimes', 'boolean'],
+            // La detracción a mano, cuando el cálculo no coincide con lo que
+            // depositó el cliente. Vacía vuelve al cálculo. Va sola: con el
+            // valor o el total en la misma petición no se sabría cuál manda.
+            'detraccion' => [
+                'sometimes',
+                'nullable',
+                'numeric',
+                'min:0',
+                'prohibits:monto,total,monto_por_viaje,detraccion_redondeada',
+                $this->detraccionDentroDelTotal(...),
+            ],
 
             // La fecha de pago no exige la cuenta acá —se cargan en celdas
             // distintas y una tiene que poder guardarse antes que la otra—;
-            // la fila avisa en pantalla mientras falte una de las dos. Lo que
-            // sí se impide es cobrar antes de emitir.
-            'fecha_pago' => [
-                'sometimes',
-                'nullable',
-                'date',
-                'after_or_equal:'.$this->emisionVigente(),
-            ],
+            // la fila avisa en pantalla mientras falte una de las dos. Puede
+            // ser anterior a la emisión: hay clientes que pagan el 20 y la
+            // factura recién sale el 22; la fila lo marca.
+            'fecha_pago' => ['sometimes', 'nullable', 'date'],
             'cuenta_bancaria_id' => ['sometimes', 'nullable', Rule::exists('cuentas_bancarias', 'id')],
 
             // La otra mitad del cobro: lo que el cliente depositó en la cuenta
-            // de detracciones del Banco de la Nación.
-            'fecha_detraccion' => [
-                'sometimes',
-                'nullable',
-                'date',
-                'after_or_equal:'.$this->emisionVigente(),
-            ],
+            // de detracciones del Banco de la Nación. Como el neto, puede
+            // llegar antes de que se emita la factura.
+            'fecha_detraccion' => ['sometimes', 'nullable', 'date'],
             'constancia_detraccion' => ['sometimes', 'nullable', 'string', 'max:30'],
 
             'observacion' => ['sometimes', 'nullable', 'string', 'max:1000'],
@@ -78,42 +81,26 @@ class PatchFacturaRequest extends FormRequest
     }
 
     /**
-     * Contra qué fecha de emisión se mide el pago: la que viene en esta misma
-     * petición si se está corrigiendo, y si no la guardada.
-     *
-     * Mirar siempre la guardada dejaba pasar un pago anterior a la emisión
-     * cuando ambas celdas se mandaban juntas, que es justo lo que la regla
-     * quiere impedir.
+     * La detracción a mano necesita un total del que descontarse y no puede
+     * pasarlo.
      */
-    private function emisionVigente(): string
+    private function detraccionDentroDelTotal(string $attribute, mixed $value, Closure $fail): void
     {
-        $entrante = $this->date('fecha_emision');
+        if ($value === null) {
+            return;
+        }
 
-        return $entrante !== null
-            ? $entrante->toDateString()
-            : $this->factura()->fecha_emision->toDateString();
-    }
-
-    /**
-     * La emisión no puede quedar después de un cobro ya guardado, del neto o
-     * de la detracción. Sin esto, corregir la emisión dejaba un pago anterior
-     * a la factura, que es lo que la regla de las fechas de pago impide.
-     *
-     * Un cobro que llega en la misma petición se mide por su propia regla.
-     *
-     * @return array<int, string>
-     */
-    private function noDespuesDeLosCobros(): array
-    {
         $factura = $this->factura();
 
-        return collect(['fecha_pago', 'fecha_detraccion'])
-            ->reject(fn (string $campo): bool => $this->has($campo))
-            ->map(fn (string $campo) => $factura->{$campo})
-            ->filter()
-            ->map(fn ($fecha): string => 'before_or_equal:'.$fecha->toDateString())
-            ->values()
-            ->all();
+        if ($factura->total === null) {
+            $fail('Primero carga el valor o el total de la factura.');
+
+            return;
+        }
+
+        if ((float) $value > (float) $factura->total) {
+            $fail('La detracción no puede pasar el total de la factura.');
+        }
     }
 
     private function factura(): Factura

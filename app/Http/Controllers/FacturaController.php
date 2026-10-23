@@ -163,6 +163,17 @@ class FacturaController extends Controller
             $datos['cuenta_bancaria_id'] = null;
         }
 
+        // La detracción no es fillable: se escribe a mano solo por acá, y
+        // borrarla devuelve el cálculo.
+        if (array_key_exists('detraccion', $datos)) {
+            $detraccion = $datos['detraccion'];
+            unset($datos['detraccion']);
+
+            $factura->forceFill($detraccion === null
+                ? ['detraccion_manual' => false]
+                : ['detraccion' => $detraccion, 'detraccion_manual' => true]);
+        }
+
         $factura->update($datos);
 
         return back();

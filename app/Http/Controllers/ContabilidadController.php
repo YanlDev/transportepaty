@@ -210,6 +210,10 @@ class ContabilidadController extends Controller
             'total' => $this->cifra($factura->total),
             'detraccion' => $this->cifra($factura->detraccion),
             'detraccion_redondeada' => $factura->detraccion_redondeada,
+            // Escrita a mano porque el cálculo no coincidía con lo depositado.
+            'detraccion_manual' => $factura->detraccion_manual,
+            // La del PDF, para mostrarla cuando se corrigió a mano.
+            'detraccion_impresa' => $this->cifra($factura->detraccion_impresa),
             // Las cifras son las impresas en el PDF: no se recalculan.
             'desde_pdf' => $factura->desde_pdf,
             'neto' => $this->cifra($factura->neto),

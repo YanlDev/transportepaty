@@ -274,6 +274,10 @@ export function CeldasCobranza({
                         ? formatearFecha(factura.fecha_pago)
                         : null}
                 </ValorEditable>
+                <AvisoAntesDeEmitir
+                    fecha={factura.fecha_pago}
+                    emision={factura.fecha_emision}
+                />
             </TableCell>
 
             <TableCell className="whitespace-nowrap text-muted-foreground">
@@ -313,6 +317,10 @@ export function CeldasCobranza({
                                 ? formatearFecha(factura.fecha_detraccion)
                                 : null}
                         </ValorEditable>
+                        <AvisoAntesDeEmitir
+                            fecha={factura.fecha_detraccion}
+                            emision={factura.fecha_emision}
+                        />
                         <div className="text-xs text-muted-foreground">
                             <ValorEditable
                                 url={url}
@@ -348,8 +356,10 @@ export function CeldasCobranza({
 
 /**
  * La detracción, con el interruptor de redondeo: casi todos los clientes la
- * emiten en soles enteros y Minsur con céntimos. En una factura subida en
- * PDF no se ofrece: la cifra es la impresa.
+ * emiten en soles enteros y Minsur con céntimos. Cuando el cálculo no
+ * coincide con lo depositado se escribe a mano —el neto sale de ella— y
+ * «recalcular» la devuelve al cálculo. En una factura subida en PDF también se
+ * corrige, pero no se redondea, y lo que se recupera es la impresa.
  */
 function CeldaDetraccion({
     factura,
@@ -360,28 +370,61 @@ function CeldaDetraccion({
     url: string;
     editable: boolean;
 }) {
-    const puedeCambiar =
-        editable && !factura.desde_pdf && (factura.detraccion ?? 0) > 0;
+    const puedeEscribir = editable && factura.total !== null;
+    const puedeRedondear =
+        puedeEscribir &&
+        !factura.desde_pdf &&
+        !factura.detraccion_manual &&
+        (factura.detraccion ?? 0) > 0;
+
+    const guardar = (datos: Record<string, boolean | null>) =>
+        router.patch(url, datos, {
+            preserveScroll: true,
+            onError: avisarError,
+        });
 
     return (
         <TableCell className="text-right whitespace-nowrap text-muted-foreground tabular-nums">
-            {factura.detraccion === null ? (
-                <span className="text-muted-foreground/40">—</span>
-            ) : (
-                formatearMonto(factura.detraccion)
+            <ValorEditable
+                url={url}
+                campo="detraccion"
+                valor={factura.detraccion}
+                tipo="numero"
+                editable={puedeEscribir}
+                className="text-right"
+                ancho="min-w-24"
+                etiqueta="Detracción"
+            >
+                {factura.detraccion === null ? (
+                    <span className="text-muted-foreground/40">—</span>
+                ) : (
+                    formatearMonto(factura.detraccion)
+                )}
+            </ValorEditable>
+            {puedeEscribir && factura.detraccion_manual && (
+                <button
+                    type="button"
+                    onClick={() => guardar({ detraccion: null })}
+                    className="block w-full text-right text-[11px] text-amber-700 hover:underline dark:text-amber-500"
+                    title={
+                        factura.desde_pdf && factura.detraccion_impresa !== null
+                            ? `Escrita a mano. Clic para volver a la impresa (${formatearMonto(factura.detraccion_impresa)})`
+                            : 'Escrita a mano. Clic para volver al cálculo'
+                    }
+                >
+                    {factura.desde_pdf
+                        ? 'manual · volver a la impresa'
+                        : 'manual · recalcular'}
+                </button>
             )}
-            {puedeCambiar && (
+            {puedeRedondear && (
                 <button
                     type="button"
                     onClick={() =>
-                        router.patch(
-                            url,
-                            {
-                                detraccion_redondeada:
-                                    !factura.detraccion_redondeada,
-                            },
-                            { preserveScroll: true, onError: avisarError },
-                        )
+                        guardar({
+                            detraccion_redondeada:
+                                !factura.detraccion_redondeada,
+                        })
                     }
                     className="block w-full text-right text-[11px] text-muted-foreground/70 hover:text-foreground hover:underline"
                     title={
@@ -396,6 +439,32 @@ function CeldaDetraccion({
                 </button>
             )}
         </TableCell>
+    );
+}
+
+/**
+ * Un cobro que entró antes de emitirse la factura: pasa —hay clientes que
+ * pagan el 20 y la factura sale el 22—, pero se marca para que un error de
+ * tipeo en la fecha no pase desapercibido.
+ */
+function AvisoAntesDeEmitir({
+    fecha,
+    emision,
+}: {
+    fecha: string | null;
+    emision: string;
+}) {
+    if (fecha === null || fecha >= emision) {
+        return null;
+    }
+
+    return (
+        <span
+            className="block text-xs text-amber-700 dark:text-amber-500"
+            title={`Factura emitida el ${formatearFecha(emision)}`}
+        >
+            antes de emitir
+        </span>
     );
 }
 

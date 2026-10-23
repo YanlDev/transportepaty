@@ -34,6 +34,11 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * entra a una cuenta de la empresa (`fecha_pago`), y la detracción, que el
  * cliente deposita en el Banco de la Nación (`fecha_detraccion`).
  *
+ * La detracción puede escribirse a mano (`detraccion_manual`) cuando el
+ * cálculo no coincide con lo que depositó el cliente: el neto sale de ella
+ * hasta que se corrija el valor o el total, que la vuelven a calcular. En
+ * una subida en PDF, quitarla devuelve la impresa (`detraccion_impresa`).
+ *
  * Una factura subida en PDF (`desde_pdf`) guarda las cifras impresas sin
  * recalcularlas, trae el PDF en la colección `archivo` y recuerda las GR que
  * cita (`gr_citadas`) o el período que cobra, para asociarse a sus viajes.
@@ -49,6 +54,8 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $tasa_detraccion
  * @property string|null $detraccion
  * @property bool $detraccion_redondeada
+ * @property bool $detraccion_manual
+ * @property string|null $detraccion_impresa
  * @property string|null $neto
  * @property Moneda $moneda
  * @property Carbon|null $fecha_pago
@@ -74,6 +81,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'total',
     'tasa_detraccion',
     'detraccion_redondeada',
+    'detraccion_manual',
     'moneda',
     'fecha_pago',
     'cuenta_bancaria_id',
@@ -108,7 +116,12 @@ class Factura extends Model implements HasMedia
      */
     public function guardarCifrasImpresas(array $cifras): void
     {
-        $this->forceFill([...$cifras, 'desde_pdf' => true]);
+        $this->forceFill([
+            ...$cifras,
+            'detraccion_impresa' => $cifras['detraccion'],
+            'detraccion_manual' => false,
+            'desde_pdf' => true,
+        ]);
         $this->guardandoCifrasImpresas = true;
     }
 
@@ -143,8 +156,26 @@ class Factura extends Model implements HasMedia
             return;
         }
 
+        // La detracción escrita a mano manda y el neto sale de ella, hasta que
+        // se corrija el valor, el total o una tasa: entonces vuelve el cálculo.
+        if ($this->detraccion_manual) {
+            if (! $this->isDirty(['monto', 'total', 'tasa_igv', 'tasa_detraccion', 'detraccion_redondeada'])) {
+                $this->neto = (string) round((float) $this->total - (float) $this->detraccion, 2);
+
+                return;
+            }
+
+            $this->detraccion_manual = false;
+        }
+
         if ($this->desde_pdf) {
             if (! $this->isDirty(['monto', 'total', 'tasa_igv', 'tasa_detraccion', 'detraccion_redondeada'])) {
+                // Se quitó la detracción a mano: vuelve la impresa.
+                if ($this->isDirty('detraccion_manual') && $this->detraccion_impresa !== null) {
+                    $this->detraccion = $this->detraccion_impresa;
+                    $this->neto = (string) round((float) $this->total - (float) $this->detraccion_impresa, 2);
+                }
+
                 return;
             }
 
@@ -277,12 +308,14 @@ class Factura extends Model implements HasMedia
             'gr_citadas' => 'array',
             'desde_pdf' => 'boolean',
             'detraccion_redondeada' => 'boolean',
+            'detraccion_manual' => 'boolean',
             'monto' => 'decimal:2',
             'tasa_igv' => 'decimal:4',
             'igv' => 'decimal:2',
             'total' => 'decimal:2',
             'tasa_detraccion' => 'decimal:4',
             'detraccion' => 'decimal:2',
+            'detraccion_impresa' => 'decimal:2',
             'neto' => 'decimal:2',
             'moneda' => Moneda::class,
         ];

@@ -22,6 +22,10 @@ export type FacturaResumen = {
     detraccion: number | null;
     /** Si la detracción se redondea a soles enteros; Minsur la emite con céntimos. */
     detraccion_redondeada: boolean;
+    /** La detracción se escribió a mano: el neto sale de ella. */
+    detraccion_manual: boolean;
+    /** La impresa en el PDF; null en las cargadas a mano. */
+    detraccion_impresa: number | null;
     /** Las cifras son las impresas en el PDF subido: no se recalculan. */
     desde_pdf: boolean;
     /** Lo que el cliente deposita en la cuenta de la empresa: total menos detracción. */

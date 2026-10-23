@@ -213,30 +213,32 @@ it('drops the cuenta when the fecha de pago is cleared', function (): void {
         ->and($factura->estado()->value)->toBe('facturado');
 });
 
-it('rejects a cobro dated before the emision', function (): void {
-    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-01']);
+/**
+ * Hay clientes que pagan antes de que salga la factura: depositan el 20 y la
+ * facturadora emite el 22. El cobro se registra igual, neto o detracción.
+ */
+it('records a cobro that arrived before the factura was emitted', function (string $cobro): void {
+    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-22', 'monto' => 3500]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
-        ->patch(route('facturas.update', $factura), ['fecha_pago' => '2026-08-01'])
-        ->assertSessionHasErrors('fecha_pago');
-});
+        ->patch(route('facturas.update', $factura), [$cobro => '2026-09-20'])
+        ->assertSessionHasNoErrors();
 
-/**
- * Cuando las dos fechas se corrigen juntas, la regla tiene que medir contra la
- * emisión que viene en la misma petición. Mirando la guardada dejaba pasar un
- * pago anterior a la emisión, que es justo lo que quiere impedir.
- */
-it('measures the cobro against the emision sent in the same request', function (): void {
+    expect($factura->fresh()->{$cobro}?->toDateString())->toBe('2026-09-20');
+})->with(['fecha_pago', 'fecha_detraccion']);
+
+it('accepts an emision and an earlier cobro in the same request', function (): void {
     $factura = Factura::factory()->create(['fecha_emision' => '2026-09-01']);
 
     actingAs(actorConRol('contador'))
         ->patch(route('facturas.update', $factura), [
-            'fecha_emision' => '2026-09-20',
-            'fecha_pago' => '2026-09-10',
+            'fecha_emision' => '2026-09-22',
+            'fecha_pago' => '2026-09-20',
         ])
-        ->assertSessionHasErrors('fecha_pago');
+        ->assertSessionHasNoErrors();
 
-    expect($factura->fresh()->fecha_pago)->toBeNull();
+    expect($factura->fresh()->fecha_pago?->toDateString())->toBe('2026-09-20');
 });
 
 it('accepts both dates when the cobro follows the new emision', function (): void {
@@ -448,28 +450,19 @@ it('counts a factura under the umbral as pagada with just the neto', function ()
         ->and($factura->estado()->value)->toBe('pagado');
 });
 
-it('rejects a detraccion dated before the emision', function (): void {
-    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-10']);
-    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
-
-    actingAs(actorConRol('contador'))
-        ->patch(route('facturas.update', $factura), ['fecha_detraccion' => '2026-09-01'])
-        ->assertSessionHasErrors('fecha_detraccion');
-});
-
 /**
- * Corregir la emisión no puede dejarla después de un cobro ya registrado:
- * quedaría un pago anterior a su factura.
+ * La factura emitida tarde, con el cobro ya cargado: corregir la emisión a la
+ * fecha real no puede chocar con el pago que llegó antes.
  */
-it('rejects an emision moved past a cobro already recorded', function (string $cobro): void {
-    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-01', $cobro => '2026-09-05']);
+it('lets the emision move past a cobro already recorded', function (string $cobro): void {
+    $factura = Factura::factory()->create(['fecha_emision' => '2026-09-01', $cobro => '2026-09-20']);
     Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
 
     actingAs(actorConRol('contador'))
-        ->patch(route('facturas.update', $factura), ['fecha_emision' => '2026-09-10'])
-        ->assertSessionHasErrors('fecha_emision');
+        ->patch(route('facturas.update', $factura), ['fecha_emision' => '2026-09-22'])
+        ->assertSessionHasNoErrors();
 
-    expect($factura->fresh()->fecha_emision->toDateString())->toBe('2026-09-01');
+    expect($factura->fresh()->fecha_emision->toDateString())->toBe('2026-09-22');
 })->with(['fecha_pago', 'fecha_detraccion']);
 
 it('refuses to facturar an anulada GR', function (): void {
@@ -533,6 +526,140 @@ it('switches the detracción between rounded and with céntimos', function (): v
 
     expect($factura->fresh()->detraccion)->toBe('4508.25')
         ->and($factura->fresh()->neto)->toBe('108197.95');
+});
+
+/**
+ * A veces el 4% no coincide con lo que depositó el cliente: la detracción se
+ * escribe a mano y el neto sale de ella.
+ */
+it('takes a detracción written by hand and derives the neto from it', function (): void {
+    $factura = Factura::factory()->create(['monto' => 10000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    expect([$factura->total, $factura->detraccion])->toBe(['11800.00', '472.00']);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => 470.5])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect($factura->detraccion_manual)->toBeTrue()
+        ->and([$factura->monto, $factura->total, $factura->detraccion, $factura->neto])
+        ->toBe(['10000.00', '11800.00', '470.50', '11329.50']);
+});
+
+it('keeps the detracción by hand while other cells are saved', function (): void {
+    $factura = Factura::factory()->create(['monto' => 10000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => 470.5]);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['fecha_pago' => '2026-09-20', 'observacion' => 'ok'])
+        ->assertSessionHasNoErrors();
+
+    expect([$factura->fresh()->detraccion, $factura->fresh()->neto])->toBe(['470.50', '11329.50']);
+});
+
+/**
+ * Corregir el flete deja la detracción a mano sin sentido: vuelve el cálculo.
+ */
+it('recalculates the detracción by hand when the valor changes', function (): void {
+    $factura = Factura::factory()->create(['monto' => 10000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => 470.5]);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['monto' => 20000])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect($factura->detraccion_manual)->toBeFalse()
+        ->and([$factura->detraccion, $factura->neto])->toBe(['944.00', '22656.00']);
+});
+
+it('goes back to the calculated detracción when it is cleared', function (): void {
+    $factura = Factura::factory()->create(['monto' => 10000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => 470.5]);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => null])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect($factura->detraccion_manual)->toBeFalse()
+        ->and([$factura->detraccion, $factura->neto])->toBe(['472.00', '11328.00']);
+});
+
+it('rejects a detracción by hand above the total', function (): void {
+    $factura = Factura::factory()->create(['monto' => 10000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => 12000])
+        ->assertSessionHasErrors('detraccion');
+
+    expect($factura->fresh()->detraccion)->toBe('472.00');
+});
+
+it('rejects a detracción by hand on a factura without flete', function (): void {
+    $factura = Factura::factory()->create(['monto' => null]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => 100])
+        ->assertSessionHasErrors('detraccion');
+});
+
+it('rejects a detracción by hand together with the valor', function (): void {
+    $factura = Factura::factory()->create(['monto' => 10000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => 470.5, 'monto' => 20000])
+        ->assertSessionHasErrors('detraccion');
+});
+
+/**
+ * En una factura subida en PDF la detracción también se corrige a mano: el
+ * resto de las cifras siguen siendo las impresas, y quitarla devuelve la del
+ * PDF, no un cálculo.
+ */
+it('corrects the detracción of a factura subida en PDF and goes back to the printed one', function (): void {
+    $factura = Factura::factory()->create();
+    $factura->guardarCifrasImpresas(['monto' => 10000, 'igv' => 1800, 'total' => 11800, 'detraccion' => 471, 'neto' => 11329]);
+    $factura->save();
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => 470.5])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect($factura->desde_pdf)->toBeTrue()
+        ->and($factura->detraccion_manual)->toBeTrue()
+        ->and([$factura->total, $factura->detraccion, $factura->neto, $factura->detraccion_impresa])
+        ->toBe(['11800.00', '470.50', '11329.50', '471.00']);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion' => null])
+        ->assertSessionHasNoErrors();
+
+    $factura->refresh();
+
+    expect($factura->desde_pdf)->toBeTrue()
+        ->and($factura->detraccion_manual)->toBeFalse()
+        ->and([$factura->detraccion, $factura->neto])->toBe(['471.00', '11329.00']);
 });
 
 /**
