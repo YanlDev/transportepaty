@@ -3,6 +3,7 @@ import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import { BottomNav } from '@/components/bottom-nav';
+import { FranjaAmbientePrueba } from '@/components/franja-ambiente-prueba';
 import type { AppLayoutProps } from '@/types';
 
 export default function AppSidebarLayout({
@@ -19,6 +20,7 @@ export default function AppSidebarLayout({
                 // contenido; en `md` esa barra no existe y se quita.
                 className="overflow-x-hidden pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:pb-0"
             >
+                <FranjaAmbientePrueba />
                 <AppSidebarHeader breadcrumbs={breadcrumbs} />
                 {children}
             </AppContent>

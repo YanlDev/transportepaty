@@ -40,6 +40,9 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            // trpatytest.aveja.cloud corre con los datos copiados de prod: sin
+            // la franja de aviso, alguien podría cargar ahí algo real.
+            'esAmbientePrueba' => app()->environment('staging'),
             'auth' => [
                 'user' => $user,
                 'roles' => $user ? $user->getRoleNames()->all() : [],
