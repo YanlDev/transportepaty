@@ -11,6 +11,7 @@ use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\CuentaBancariaController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmisionGreController;
+use App\Http\Controllers\EquipamientoCarretaController;
 use App\Http\Controllers\FacturaController;
 use App\Http\Controllers\LecturaKilometrajeController;
 use App\Http\Controllers\LlantaController;
@@ -211,6 +212,16 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.llantas.movimientos.destroy');
     Route::put('mantenimiento/llantas-parametros', [LlantaController::class, 'actualizarParametros'])
         ->name('mantenimiento.llantas.parametros.update');
+    Route::get('mantenimiento/equipamiento', [EquipamientoCarretaController::class, 'index'])
+        ->name('mantenimiento.equipamiento.index');
+    Route::put('mantenimiento/equipamiento/catalogo', [EquipamientoCarretaController::class, 'actualizarCatalogo'])
+        ->name('mantenimiento.equipamiento.catalogo');
+    Route::get('mantenimiento/equipamiento/{vehiculo}', [EquipamientoCarretaController::class, 'show'])
+        ->name('mantenimiento.equipamiento.show');
+    Route::post('mantenimiento/equipamiento/{vehiculo}/conteos', [EquipamientoCarretaController::class, 'store'])
+        ->name('mantenimiento.equipamiento.store');
+    Route::delete('mantenimiento/equipamiento/conteos/{conteo}', [EquipamientoCarretaController::class, 'destroy'])
+        ->name('mantenimiento.equipamiento.destroy');
     Route::get('mantenimiento/planes/{plan}/editar', [PlanMantenimientoController::class, 'edit'])
         ->name('mantenimiento.planes.edit');
     Route::put('mantenimiento/planes/{plan}', [PlanMantenimientoController::class, 'update'])

@@ -29,6 +29,7 @@ export type Permiso =
     | 'mantenimiento.gestionar'
     | 'mantenimiento.configurar'
     | 'mantenimiento.llantas'
+    | 'mantenimiento.equipamiento'
     | 'novedades.registrar'
     | 'novedades.levantar'
     | 'viajes.ver'

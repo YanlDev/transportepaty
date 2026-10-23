@@ -2,6 +2,8 @@
 
 use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\TipoOrdenTrabajo;
+use App\Models\ConteoEquipamiento;
+use App\Models\ItemEquipamiento;
 use App\Models\LecturaKilometraje;
 use App\Models\Llanta;
 use App\Models\OrdenTrabajo;
@@ -161,4 +163,27 @@ it('instala y mide una llanta desde el esquema en el celular', function (): void
         ->assertSee('Ajustar cortes')
         ->assertNoJavaScriptErrors()
         ->screenshot(filename: 'movil-llantas');
+});
+
+it('cuenta las fajas de una carreta desde el celular', function (): void {
+    actingAs(actorConRol('admin'));
+
+    ItemEquipamiento::query()->where('nombre', 'Faja de 4" con chicharra')->update(['minimo' => 2]);
+    $carreta = Vehiculo::factory()->carreta()->create(['placa' => 'TAB-123']);
+
+    visit('/mantenimiento/equipamiento')
+        ->on()->mobile()
+        ->assertSee('TAB123')
+        ->assertSee('Nunca se contó')
+        ->click('TAB123')
+        ->click('Contar equipamiento')
+        ->click('[aria-label="Buenas de Faja de 4\" con chicharra: una más"]')
+        ->screenshot(filename: 'movil-equipamiento-conteo')
+        ->click('Guardar conteo')
+        ->assertSee('Le falta')
+        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-equipamiento-carreta');
+
+    expect(ConteoEquipamiento::query()->where('vehiculo_id', $carreta->id)->count())->toBe(1);
 });

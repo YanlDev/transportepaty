@@ -6,10 +6,12 @@ import {
     ClipboardPlus,
     Clock,
     Gauge,
+    Package,
     Wrench,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import equipamiento from '@/actions/App/Http/Controllers/EquipamientoCarretaController';
 import llantas from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import { create as crearOrden } from '@/actions/App/Http/Controllers/OrdenTrabajoController';
@@ -132,7 +134,7 @@ export default function MantenimientoIndex({
                 <h2 className="text-sm font-medium text-muted-foreground">
                     Accesos rápidos
                 </h2>
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-5">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 sm:gap-3 xl:grid-cols-6">
                     <AccesoRapido
                         icono={<Wrench />}
                         titulo="Preventivo"
@@ -160,6 +162,12 @@ export default function MantenimientoIndex({
                         titulo="Llantas"
                         descripcion="Tractos 10 · carretas 12 + 2 de repuesto"
                         href={llantas.index().url}
+                    />
+                    <AccesoRapido
+                        icono={<Package />}
+                        titulo="Equipamiento"
+                        descripcion="Fajas de las carretas, con y sin chicharra"
+                        href={equipamiento.index().url}
                     />
                     <AccesoRapido
                         icono={<ClipboardCheck />}

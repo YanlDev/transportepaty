@@ -35,6 +35,7 @@ enum Permiso: string
     case MantenimientoGestionar = 'mantenimiento.gestionar';
     case MantenimientoConfigurar = 'mantenimiento.configurar';
     case MantenimientoLlantas = 'mantenimiento.llantas';
+    case MantenimientoEquipamiento = 'mantenimiento.equipamiento';
 
     case NovedadesRegistrar = 'novedades.registrar';
     case NovedadesLevantar = 'novedades.levantar';
@@ -151,6 +152,7 @@ enum Permiso: string
             self::MantenimientoGestionar => 'Registrar y editar órdenes de trabajo',
             self::MantenimientoConfigurar => 'Configurar el plan de cada marca',
             self::MantenimientoLlantas => 'Registrar instalaciones, mediciones y cambios de llantas',
+            self::MantenimientoEquipamiento => 'Contar el equipamiento de las carretas',
             self::NovedadesRegistrar => 'Registrar novedades',
             self::NovedadesLevantar => 'Levantar novedades',
             self::ViajesVer => 'Ver viajes',
