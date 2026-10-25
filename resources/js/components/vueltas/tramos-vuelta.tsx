@@ -39,7 +39,8 @@ function Parada({
         <li
             className={cn(
                 'flex flex-col gap-1 rounded-md border px-3 py-2 text-sm',
-                vacio && 'border-dashed text-muted-foreground',
+                (vacio || parada.pendiente) &&
+                    'border-dashed text-muted-foreground',
             )}
         >
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -58,6 +59,12 @@ function Parada({
                     <span className="text-xs text-muted-foreground tabular-nums">
                         {formatearFecha(parada.fecha)}
                     </span>
+                )}
+                {parada.pendiente && (
+                    <StatusBadge label="Sin GR aún" tone="info" />
+                )}
+                {parada.fuera_de_programa && (
+                    <StatusBadge label="No programada" tone="warning" />
                 )}
             </div>
             {parada.cliente && (

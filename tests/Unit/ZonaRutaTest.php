@@ -1,5 +1,6 @@
 <?php
 
+use App\Enums\PlantillaVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\ZonaRuta;
 
@@ -28,3 +29,15 @@ it('sends whatever ends in the highlands to the outbound leg', function (): void
         ->and(SentidoTramo::hacia(ZonaRuta::Pisco))->toBe(SentidoTramo::Regreso)
         ->and(SentidoTramo::hacia(ZonaRuta::Lima))->toBe(SentidoTramo::Regreso);
 });
+
+it('starts every template going up and ends it coming down', function (PlantillaVuelta $plantilla): void {
+    $paradas = $plantilla->paradas();
+
+    expect($paradas[0]['sentido'])->toBe(SentidoTramo::Ida)
+        ->and(end($paradas)['sentido'])->toBe(SentidoTramo::Regreso);
+
+    // Cada parada arranca donde terminó la anterior: la plantilla no salta.
+    foreach (array_slice($paradas, 1) as $indice => $parada) {
+        expect($parada['zona_origen'])->toBe($paradas[$indice]['zona_destino']);
+    }
+})->with(PlantillaVuelta::cases());

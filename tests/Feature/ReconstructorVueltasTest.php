@@ -129,7 +129,11 @@ it('never touches programmed trips nor their GR', function (): void {
 });
 
 it('does not save anything on a dry run', function (): void {
+    // Una GR de antes de que existieran las vueltas: hoy se asignaría sola
+    // al registrarse, así que se la suelta para simularlo.
     guia($this->tracto, '2026-09-02', MINA, PISCO, TipoCarga::Concentrado);
+    Viaje::query()->update(['parada_vuelta_id' => null]);
+    Vuelta::query()->delete();
 
     $this->artisan('transpaty:reconstruir-vueltas', ['--dry-run' => true])
         ->expectsOutputToContain('[dry-run] Vueltas: 1')

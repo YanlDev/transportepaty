@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\EstadoCobranza;
 use App\Enums\MotivoBajaGre;
 use App\Enums\TipoCarga;
+use App\Services\AsignadorVueltas;
 use App\Services\AsociadorFacturas;
 use Database\Factories\ViajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -18,6 +19,7 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
+use Throwable;
 
 /**
  * Un viaje registrado a partir de la GR-transportista que Paty emite. Una fila
@@ -125,6 +127,17 @@ class Viaje extends Model implements HasMedia
         // Una factura subida antes que su GR la estaba esperando: al llegar
         // la GR, se asocian solas (ver `AsociadorFacturas::alLlegarViaje()`).
         static::created(fn (Viaje $viaje) => app(AsociadorFacturas::class)->alLlegarViaje($viaje));
+
+        // Y cae en la vuelta de su unidad: en la parada programada que le
+        // corresponde, o sigue armando el historial. La GR manda: si armar la
+        // vuelta falla, se registra igual y el error queda en el log.
+        static::created(function (Viaje $viaje): void {
+            try {
+                app(AsignadorVueltas::class)->asignar($viaje);
+            } catch (Throwable $error) {
+                report($error);
+            }
+        });
     }
 
     /**

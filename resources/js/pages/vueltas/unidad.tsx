@@ -1,13 +1,18 @@
 import { Head, setLayoutProps } from '@inertiajs/react';
+import { CalendarPlus, Pencil } from 'lucide-react';
+import { useState } from 'react';
 import vueltasRutas from '@/actions/App/Http/Controllers/VueltaController';
+import { Button } from '@/components/ui/button';
+import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
 import {
     EstadoVueltaBadge,
     TramosVuelta,
 } from '@/components/vueltas/tramos-vuelta';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
-import type { Vuelta } from '@/types/vueltas';
+import type { OpcionesVuelta, Vuelta } from '@/types/vueltas';
 
-type Props = {
+type Props = OpcionesVuelta & {
     tracto: { id: number; placa: string };
     /** De la más reciente a la más antigua. */
     vueltas: Vuelta[];
@@ -15,8 +20,13 @@ type Props = {
 
 /**
  * La historia de una unidad, vuelta por vuelta, con las GR de cada parada.
+ * Desde acá también se le programa la siguiente.
  */
-export default function VueltasUnidad({ tracto, vueltas }: Props) {
+export default function VueltasUnidad({ tracto, vueltas, ...opciones }: Props) {
+    const { puede } = usePermisos();
+    const [dialogo, setDialogo] = useState<{ vuelta: Vuelta | null } | null>(
+        null,
+    );
     const placa = formatearPlaca(tracto.placa);
 
     setLayoutProps({
@@ -30,10 +40,19 @@ export default function VueltasUnidad({ tracto, vueltas }: Props) {
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title={`Vueltas ${placa}`} />
 
-            <p className="text-sm text-muted-foreground">
-                {vueltas.length} {vueltas.length === 1 ? 'vuelta' : 'vueltas'}{' '}
-                de <span className="font-mono">{placa}</span>
-            </p>
+            <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                    {vueltas.length}{' '}
+                    {vueltas.length === 1 ? 'vuelta' : 'vueltas'} de{' '}
+                    <span className="font-mono">{placa}</span>
+                </p>
+                {puede('programacion.crear') && (
+                    <Button onClick={() => setDialogo({ vuelta: null })}>
+                        <CalendarPlus className="size-4" />
+                        Programar vuelta
+                    </Button>
+                )}
+            </div>
 
             {vueltas.length === 0 ? (
                 <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
@@ -66,12 +85,34 @@ export default function VueltasUnidad({ tracto, vueltas }: Props) {
                                     {vuelta.carreta &&
                                         ` · carreta ${formatearPlaca(vuelta.carreta)}`}
                                 </span>
+                                {vuelta.editable && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="ml-auto h-7"
+                                        onClick={() => setDialogo({ vuelta })}
+                                    >
+                                        <Pencil className="size-3.5" />
+                                        Editar
+                                    </Button>
+                                )}
                             </header>
 
                             <TramosVuelta vuelta={vuelta} conGuias />
                         </li>
                     ))}
                 </ol>
+            )}
+
+            {dialogo && (
+                <ProgramarVueltaDialog
+                    key={dialogo.vuelta?.id ?? 'nueva'}
+                    open
+                    onOpenChange={(abierto) => !abierto && setDialogo(null)}
+                    vuelta={dialogo.vuelta}
+                    tractoInicial={tracto.id}
+                    opciones={opciones}
+                />
             )}
         </div>
     );

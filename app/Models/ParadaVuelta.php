@@ -31,12 +31,13 @@ use Illuminate\Support\Carbon;
  * @property int|null $cliente_id
  * @property string|null $cliente
  * @property Carbon|null $fecha
+ * @property bool $fuera_de_programa Entró por una GR que no calzaba con lo programado.
  * @property-read Vuelta $vuelta
  * @property-read Collection<int, Viaje> $viajes
  */
 #[Fillable([
     'vuelta_id', 'sentido', 'orden', 'zona_origen', 'zona_destino', 'lugar_origen',
-    'lugar_destino', 'tipo_carga', 'cliente_id', 'cliente', 'fecha',
+    'lugar_destino', 'tipo_carga', 'cliente_id', 'cliente', 'fecha', 'fuera_de_programa',
 ])]
 class ParadaVuelta extends Model
 {
@@ -78,6 +79,7 @@ class ParadaVuelta extends Model
             'zona_destino' => ZonaRuta::class,
             'tipo_carga' => TipoCarga::class,
             'fecha' => 'date',
+            'fuera_de_programa' => 'boolean',
         ];
     }
 }
