@@ -26,9 +26,9 @@ class ImagenesDeAviso
     /** El aviso de salida que recibe el conductor. */
     public function conductor(Programacion $programacion): string
     {
-        return $this->lienzo($programacion->fecha)
+        return $this->conTicket($this->lienzo($programacion->fecha)
             ->banda('PROGRAMACIÓN DE SALIDA', self::AZUL)
-            ->destacado('Unidad', $programacion->vehiculo->placa)
+            ->destacado('Unidad', $programacion->vehiculo->placa), $programacion)
             ->fila('Conductor', $this->nombreConductor($programacion))
             ->fila('Cliente', $programacion->cliente->alias)
             ->fila('Destino', $programacion->destino)
@@ -143,9 +143,9 @@ class ImagenesDeAviso
 
     private function datosDeSalida(Programacion $programacion, string $titulo): Lienzo
     {
-        $lienzo = $this->lienzo($programacion->fecha)
+        $lienzo = $this->conTicket($this->lienzo($programacion->fecha)
             ->banda($titulo, self::AZUL)
-            ->destacado('Unidad', $programacion->vehiculo->placa)
+            ->destacado('Unidad', $programacion->vehiculo->placa), $programacion)
             ->fila('Conductor', $this->nombreConductor($programacion))
             ->fila('Cliente', $programacion->cliente->alias);
 
@@ -164,6 +164,14 @@ class ImagenesDeAviso
             public_path('marca/logo-horizontal.png'),
             $fecha === null ? null : ucfirst(CarbonImmutable::instance($fecha)->settings(['locale' => 'es'])->isoFormat('dddd D [de] MMMM')),
         );
+    }
+
+    /** El código del ticket, si la salida ya tiene su vuelta. */
+    private function conTicket(Lienzo $lienzo, Programacion $programacion): Lienzo
+    {
+        $codigo = $this->aviso->codigoDeVuelta($programacion);
+
+        return $codigo === null ? $lienzo : $lienzo->fila('Ticket', $codigo);
     }
 
     private function nombreConductor(Programacion $programacion): string

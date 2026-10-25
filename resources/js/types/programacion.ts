@@ -32,6 +32,8 @@ export type ProgramacionTarjeta = {
     destino: string;
     /** Escrito a mano; null si el aviso lo deduce de las GR del cliente. */
     lugar_carga: string | null;
+    /** El ticket (V-00001) de la vuelta que nació al programarla. */
+    vuelta_codigo: string | null;
     /**
      * Como en una pantalla de salidas, a partir de las GR del día: con guía
      * ya salió; sin guía sigue programada, o queda para revisar si el día ya

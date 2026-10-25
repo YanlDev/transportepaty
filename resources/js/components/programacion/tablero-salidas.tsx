@@ -1,4 +1,6 @@
+import { Link } from '@inertiajs/react';
 import { Pencil, Trash2 } from 'lucide-react';
+import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { IconoWhatsapp } from '@/components/icono-whatsapp';
 import {
     abrirWhatsapp,
@@ -36,6 +38,25 @@ const ESTADOS: Record<EstadoSalida, { texto: string; tono: StatusTone }> = {
  * En pantalla ancha es una tabla; en el teléfono, una tarjeta por unidad, que
  * es como lo mira quien está en el patio.
  */
+/**
+ * El ticket de la vuelta que nació al programar la salida; lleva a la
+ * historia de la unidad.
+ */
+function Ticket({ programacion }: { programacion: ProgramacionTarjeta }) {
+    if (!programacion.vuelta_codigo) {
+        return null;
+    }
+
+    return (
+        <Link
+            href={vueltas.unidad(programacion.vehiculo_id).url}
+            className="font-mono text-xs text-primary hover:underline"
+        >
+            {programacion.vuelta_codigo}
+        </Link>
+    );
+}
+
 export function TableroSalidas({
     programaciones,
     avisoOperaciones,
@@ -105,8 +126,11 @@ export function TableroSalidas({
                         className="flex flex-col gap-2 rounded-xl border bg-card p-3 shadow-sm"
                     >
                         <div className="flex items-center justify-between gap-2">
-                            <span className="font-mono font-semibold">
-                                {programacion.placa}
+                            <span className="flex items-center gap-2">
+                                <span className="font-mono font-semibold">
+                                    {programacion.placa}
+                                </span>
+                                <Ticket programacion={programacion} />
                             </span>
                             <Estado programacion={programacion} />
                         </div>
@@ -153,8 +177,13 @@ export function TableroSalidas({
                     <TableBody>
                         {programaciones.map((programacion) => (
                             <TableRow key={programacion.id}>
-                                <TableCell className="font-mono font-medium whitespace-nowrap">
-                                    {programacion.placa}
+                                <TableCell className="whitespace-nowrap">
+                                    <span className="flex flex-col">
+                                        <span className="font-mono font-medium">
+                                            {programacion.placa}
+                                        </span>
+                                        <Ticket programacion={programacion} />
+                                    </span>
                                 </TableCell>
                                 <TableCell className="max-w-[180px]">
                                     <ClienteChip

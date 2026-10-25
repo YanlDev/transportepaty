@@ -51,6 +51,7 @@ class ProgramacionController extends Controller
                 'conductor:id,nombres,apellidos,telefono,telefono_alterno',
                 'cliente:id,alias,razon_social',
                 'avisadoPor:id,name',
+                'parada.vuelta:id,codigo',
                 // Pocos por salida: el más reciente de cada destino se elige
                 // en PHP (ver `ultimosEnvios()`).
                 'envios' => fn ($query) => $query->latest('id'),
@@ -226,6 +227,8 @@ class ProgramacionController extends Controller
             'cliente' => $programacion->cliente->alias,
             'destino' => $programacion->destino,
             'lugar_carga' => $programacion->lugar_carga,
+            // El ticket de la vuelta que nació al programar la salida.
+            'vuelta_codigo' => $programacion->parada?->vuelta?->codigo,
             'telefono' => $programacion->conductor->telefono,
             'telefono_alterno' => $programacion->conductor->telefono_alterno,
             'whatsapp_adicional' => $programacion->whatsapp_adicional,

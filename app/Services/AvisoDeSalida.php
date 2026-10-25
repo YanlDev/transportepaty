@@ -45,6 +45,7 @@ class AvisoDeSalida
         $lineas = [
             '*PROGRAMACIÓN — TRANSPORTES PATY*',
             "Fecha: {$programacion->fecha->format('d/m/Y')}",
+            ...array_filter([$this->lineaDelTicket($programacion)]),
             "Unidad: *{$programacion->vehiculo->placa}*",
             "Conductor: {$conductor}",
             "Cliente: {$programacion->cliente->alias}",
@@ -96,6 +97,7 @@ class AvisoDeSalida
         return implode("\n", array_filter([
             '*UNIDAD PROGRAMADA — CARGA PARTICULAR*',
             "Fecha: {$programacion->fecha->format('d/m/Y')}",
+            $this->lineaDelTicket($programacion),
             "Unidad: *{$programacion->vehiculo->placa}*",
             "Conductor: {$programacion->conductor->nombres} {$programacion->conductor->apellidos}",
             "Cliente: {$programacion->cliente->alias}",
@@ -103,6 +105,22 @@ class AvisoDeSalida
             "Destino: {$programacion->destino}",
             $area->ve_flete ? $this->lineaDelFlete($programacion) : '',
         ]));
+    }
+
+    /**
+     * El código de la vuelta que nació al programar la salida: es la
+     * referencia con la que las áreas hablan de este viaje.
+     */
+    public function codigoDeVuelta(Programacion $programacion): ?string
+    {
+        return $programacion->parada?->vuelta?->codigo;
+    }
+
+    private function lineaDelTicket(Programacion $programacion): string
+    {
+        $codigo = $this->codigoDeVuelta($programacion);
+
+        return $codigo === null ? '' : "Ticket: *{$codigo}*";
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\ProgramadorVueltas;
 use Carbon\CarbonImmutable;
 use Database\Factories\ProgramacionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -12,6 +13,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
+use Throwable;
 
 /**
  * Una unidad programada con carga particular para un día.
@@ -37,6 +39,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $aviso_enviado_at
  * @property int|null $aviso_enviado_por
  * @property CarbonImmutable|null $datos_cambiados_at
+ * @property int|null $parada_vuelta_id La ida de la vuelta que nació al programar la salida.
+ * @property-read ParadaVuelta|null $parada
  * @property-read User|null $avisadoPor
  * @property-read Vehiculo $vehiculo
  * @property-read Conductor $conductor
@@ -80,6 +84,25 @@ class Programacion extends Model
         static::saving(function (Programacion $programacion): void {
             if ($programacion->exists && $programacion->isDirty(self::DATOS_DEL_AVISO)) {
                 $programacion->datos_cambiados_at = now();
+            }
+        });
+
+        // Programar la unidad hace nacer el ticket de su vuelta (o la engancha
+        // a la que ya estaba programada). La salida manda: si eso falla, se
+        // guarda igual y el error queda en el log.
+        static::saved(function (Programacion $programacion): void {
+            try {
+                app(ProgramadorVueltas::class)->enlazarSalida($programacion);
+            } catch (Throwable $error) {
+                report($error);
+            }
+        });
+
+        static::deleting(function (Programacion $programacion): void {
+            try {
+                app(ProgramadorVueltas::class)->soltarSalida($programacion);
+            } catch (Throwable $error) {
+                report($error);
             }
         });
     }
@@ -130,6 +153,14 @@ class Programacion extends Model
             ->all();
 
         return $delDia + $deMadrugada;
+    }
+
+    /**
+     * @return BelongsTo<ParadaVuelta, $this>
+     */
+    public function parada(): BelongsTo
+    {
+        return $this->belongsTo(ParadaVuelta::class, 'parada_vuelta_id');
     }
 
     /**
