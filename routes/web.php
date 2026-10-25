@@ -27,6 +27,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
 use App\Http\Controllers\ViajeController;
+use App\Http\Controllers\VueltaController;
 use App\Http\Controllers\WhatsappController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
@@ -149,6 +150,10 @@ Route::middleware('auth')->group(function () {
 
     // Qué unidades salen con carga particular cada día. Se carga antes de
     // que exista la GR, así que no se deduce de `viajes`.
+    // La vuelta de cada unidad —ida y regreso— armada desde sus GR.
+    Route::get('vueltas', [VueltaController::class, 'index'])->name('vueltas.index');
+    Route::get('vueltas/unidades/{vehiculo}', [VueltaController::class, 'unidad'])->name('vueltas.unidad');
+
     Route::get('programacion', [ProgramacionController::class, 'index'])->name('programacion.index');
     Route::post('programacion', [ProgramacionController::class, 'store'])->name('programacion.store');
     Route::put('programacion/{programacion}', [ProgramacionController::class, 'update'])

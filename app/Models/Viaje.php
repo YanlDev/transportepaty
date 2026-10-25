@@ -50,6 +50,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $conductor_nombre
  * @property string|null $conductor_dni
  * @property int|null $conductor_id
+ * @property int|null $parada_vuelta_id
  * @property string|null $observaciones
  * @property Carbon|null $gr_fisica_recibida_at
  * @property Carbon|null $no_facturable_at
@@ -63,6 +64,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
+ * @property-read ParadaVuelta|null $parada
  * @property-read Cliente|null $clienteDelPadron
  * @property-read User|null $anuladaPor
  */
@@ -194,6 +196,16 @@ class Viaje extends Model implements HasMedia
     public function carreta(): BelongsTo
     {
         return $this->belongsTo(Vehiculo::class, 'carreta_id')->withTrashed();
+    }
+
+    /**
+     * La parada de la vuelta en la que se hizo esta carga.
+     *
+     * @return BelongsTo<ParadaVuelta, $this>
+     */
+    public function parada(): BelongsTo
+    {
+        return $this->belongsTo(ParadaVuelta::class, 'parada_vuelta_id');
     }
 
     /**

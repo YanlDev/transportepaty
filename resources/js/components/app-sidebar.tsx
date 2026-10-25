@@ -7,6 +7,7 @@ import {
     IdCard,
     LayoutGrid,
     Receipt,
+    Repeat,
     Route,
     Truck,
     Wrench,
@@ -21,6 +22,7 @@ import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoContro
 import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
+import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -102,6 +104,13 @@ const programacionNavItem: NavItem = {
     icon: CalendarCheck,
 };
 
+/** La ida y el regreso de cada unidad, armados desde sus GR. */
+const vueltasNavItem: NavItem = {
+    title: 'Vueltas',
+    href: vueltas.index(),
+    icon: Repeat,
+};
+
 /** El control del personal. */
 const asistenciaNavItem: NavItem = {
     title: 'Asistencia',
@@ -175,7 +184,9 @@ export function AppSidebar() {
     ];
 
     const programacionArea = [
-        ...(puede('programacion.ver') ? [programacionNavItem] : []),
+        ...(puede('programacion.ver')
+            ? [programacionNavItem, vueltasNavItem]
+            : []),
         ...(puede('viajes.ver') ? [viajesNavItem] : []),
         // Cotizaciones antes que Clientes: es lo que se usa a diario.
         ...[...gestion].reverse(),
