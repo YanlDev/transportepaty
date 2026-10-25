@@ -52,7 +52,9 @@ enum ZonaRuta: string
     private const PALABRAS = [
         'mina' => ['ANTAUTA', 'SAN RAFAEL'],
         'pisco' => ['PARACAS', 'PISCO', 'CHINCHA'],
-        'lima' => ['CALLAO', 'LIMA', 'HUARAL', 'CHILCA', 'LURIN', 'VENTANILLA', 'HUAURA', 'VEGUETA', 'HUAROCHIRI', 'CAÑETE'],
+        // Villa El Salvador aparece en direcciones cortadas que no llegan a
+        // decir «Lima».
+        'lima' => ['CALLAO', 'LIMA', 'HUARAL', 'CHILCA', 'LURIN', 'VENTANILLA', 'HUAURA', 'VEGUETA', 'HUAROCHIRI', 'CAÑETE', 'VILLA EL SALVADOR'],
         'juliaca' => ['JULIACA', 'SAN ROMAN', 'PUNO', 'CHUCUITO', 'EL COLLAO'],
         'cusco' => ['CUSCO', 'QUISPICANCHI'],
         'sur' => ['AREQUIPA', 'CAYLLOMA', 'CASTILLA', 'ISLAY', 'CAMANA', 'TACNA', 'MOQUEGUA', 'MARISCAL NIETO', 'ILO'],

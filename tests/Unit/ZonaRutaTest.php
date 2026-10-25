@@ -12,6 +12,7 @@ it('reads the circuit zone from a GR address', function (string $direccion, ?Zon
     'la mina, aunque diga Juliaca' => ['CAR. DESVIO C.JULIACA-MACUSANI KM. 102 ASIENTO MINERO SAN RAFAEL KM.102.6 PUNO-MELGAR-ANTAUTA MELGAR ANTAUTA Puno - ANTAUTA - MELGAR - PUNO', ZonaRuta::Mina],
     'Paracas' => ['CAR. PANAMERICANA SUR KM 245 - PARACAS - PISCO - ICA', ZonaRuta::Pisco],
     'Callao' => ['AV. ELMER FAUCETT N 3348 Lima y Callao - CALLAO - PROV. CONST. DEL CALLAO - PROV. CONST. DEL CALLAO', ZonaRuta::Lima],
+    'Villa El Salvador sin decir Lima' => ['TABLADA DE LURN NRO 224 -MZ. M1 LOTE 4-B- VILLA EL SALVADOR - VILLA EL', ZonaRuta::Lima],
     'Huaral' => ['PARCELA NRO 55 ZONA CAMPO GRAN - HUARAL - HUARAL - LIMA', ZonaRuta::Lima],
     'Juliaca' => ['JR. 8 NOVIEMBRE NRO. 615 OTR. CERCADO - JULIACA - SAN ROMAN - PUNO', ZonaRuta::Juliaca],
     'Arequipa' => ['VIA EVITAMIENTO KM 3.9 - CERRO COLORADO - AREQUIPA - AREQUIPA', ZonaRuta::Sur],

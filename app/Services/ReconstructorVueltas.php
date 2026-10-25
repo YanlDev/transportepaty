@@ -78,6 +78,14 @@ class ReconstructorVueltas
             ->update(['parada_vuelta_id' => null]);
 
         Vuelta::query()->whereIn('id', $vueltas)->delete();
+
+        // Mientras nadie haya programado una vuelta a mano, rehacer todo el
+        // historial vuelve a numerar desde V-00001: si no, cada prueba dejaría
+        // los códigos más arriba. Con programadas no se toca, para no repetir
+        // un código que ya se le dio a alguien.
+        if (DB::getDriverName() === 'pgsql' && ! Vuelta::query()->exists()) {
+            DB::statement("select setval(pg_get_serial_sequence('vueltas', 'id'), 1, false)");
+        }
     }
 
     /**
