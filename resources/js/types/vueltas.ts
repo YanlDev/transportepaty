@@ -55,15 +55,6 @@ export type Vuelta = {
     regreso: ParadaVuelta[];
 };
 
-export type UnidadConVuelta = {
-    tracto: { id: number; placa: string };
-    vueltas: number;
-    /** La que está andando o, si no hay, la última que cerró. */
-    vuelta: Vuelta | null;
-    /** La siguiente programada, si ya hay. */
-    proxima: Vuelta | null;
-};
-
 export type Opcion = { value: string; label: string };
 
 export type PlantillaVuelta = Opcion & {
@@ -93,19 +84,36 @@ export type OpcionesVuelta = {
     clientes: { id: number; alias: string; ruc: string | null }[];
 };
 
-/** Una vuelta que sale el día elegido, con sus avisos armados. */
-export type SalidaDelDia = Vuelta & {
-    aviso: {
-        /** El texto para el conductor; lo arma el servidor para que sea uno solo. */
-        mensaje: string;
-        destinatarios: { etiqueta: string; numero: string }[];
-        areas: { id: number; area: string; numero: string; mensaje: string }[];
-        envios: {
-            conductor: ResumenEnvio | null;
-            /** Por id del área. */
-            areas: Record<number, ResumenEnvio>;
-        };
+/** Los avisos de una vuelta ya armados y hasta dónde llegó cada uno. */
+export type AvisoVuelta = {
+    /** El texto para el conductor; lo arma el servidor para que sea uno solo. */
+    mensaje: string;
+    destinatarios: { etiqueta: string; numero: string }[];
+    areas: { id: number; area: string; numero: string; mensaje: string }[];
+    envios: {
+        conductor: ResumenEnvio | null;
+        /** Por id del área. */
+        areas: Record<number, ResumenEnvio>;
     };
+};
+
+/** Una vuelta que sale el día elegido, con sus avisos armados. */
+export type SalidaDelDia = Vuelta & { aviso: AvisoVuelta };
+
+export type EtapaVuelta = 'programada' | 'bajando' | 'subiendo' | 'cerrada';
+
+/** Una tarjeta del kanban de programación. */
+export type TarjetaVuelta = Vuelta & {
+    etapa: EtapaVuelta;
+    /** La última parada con GR o, si todavía no salió, la primera del plan. */
+    actual: {
+        texto: string;
+        carga: string;
+        fecha: string | null;
+        hecha: boolean;
+    } | null;
+    dias_en_ruta: number | null;
+    aviso: AvisoVuelta;
 };
 
 export type DiaDeSemana = { fecha: string; programadas: number };

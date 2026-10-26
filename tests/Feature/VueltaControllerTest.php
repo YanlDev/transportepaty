@@ -36,25 +36,42 @@ it('is read by whoever reads the programación', function (): void {
         ->assertSuccessful();
 });
 
-it('shows each unit with its latest trip split into legs', function (): void {
-    $vieja = Vuelta::factory()->create(['inicio' => '2026-09-01']);
-    $actual = Vuelta::factory()->create(['tracto_id' => $vieja->tracto_id, 'inicio' => '2026-09-15']);
+/**
+ * El kanban: cada vuelta en su etapa. Una en curso está «bajando» hasta que
+ * su regreso tiene GR; ahí pasa a «subiendo». Las cerradas se quedan unos
+ * días y después salen del tablero.
+ */
+it('places each trip in its stage on the board', function (): void {
+    $programada = Vuelta::factory()->programada()->create(['inicio' => now()->addDay()->toDateString()]);
+    $bajando = Vuelta::factory()->create(['inicio' => now()->subDays(2)->toDateString()]);
+    $subiendo = Vuelta::factory()->create(['inicio' => now()->subDays(8)->toDateString()]);
+    $recien = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(15)->toDateString(), 'fin' => now()->subDay()->toDateString()]);
+    $vieja = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(30)->toDateString(), 'fin' => now()->subDays(20)->toDateString()]);
+
     ParadaVuelta::factory()->create([
-        'vuelta_id' => $actual->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1,
-        'tipo_carga' => TipoCarga::Vacio, 'lugar_origen' => 'Juliaca', 'lugar_destino' => 'Antauta',
+        'vuelta_id' => $bajando->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1,
+        'lugar_origen' => 'Antauta', 'lugar_destino' => 'Paracas',
     ]);
-    ParadaVuelta::factory()->create(['vuelta_id' => $actual->id, 'orden' => 2]);
+    $regreso = ParadaVuelta::factory()->create([
+        'vuelta_id' => $subiendo->id, 'sentido' => SentidoTramo::Regreso, 'orden' => 1,
+        'zona_origen' => ZonaRuta::Pisco, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Escoria,
+    ]);
+    Viaje::factory()->create(['tracto_id' => null])->forceFill(['parada_vuelta_id' => $regreso->id])->save();
 
     actingAs(actorConRol('admin'))
         ->get(route('vueltas.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('vueltas/index')
-            ->has('unidades', 1)
-            ->where('unidades.0.vueltas', 2)
-            ->where('unidades.0.vuelta.codigo', $actual->fresh()->codigo)
-            ->where('unidades.0.vuelta.ida.0.tipo_carga', 'vacio')
-            ->where('unidades.0.vuelta.ida.0.origen', 'Juliaca')
-            ->where('unidades.0.vuelta.regreso.0.tipo_carga', 'concentrado'));
+            ->has('tablero', 4)
+            ->where('tablero', fn ($tablero): bool => collect($tablero)->pluck('etapa', 'id')->all() === [
+                $recien->id => 'cerrada',
+                $subiendo->id => 'subiendo',
+                $bajando->id => 'bajando',
+                $programada->id => 'programada',
+            ])
+            ->where('tablero', fn ($tablero): bool => collect($tablero)->firstWhere('id', $bajando->id)['actual']['texto'] === 'Antauta → Paracas'
+                && collect($tablero)->firstWhere('id', $bajando->id)['dias_en_ruta'] === 3
+                && ! collect($tablero)->contains('id', $vieja->id)));
 });
 
 it('lists the history of a unit with the GR of each stop', function (): void {

@@ -1,16 +1,12 @@
 import { Head, Link, router, setLayoutProps, usePoll } from '@inertiajs/react';
-import {
-    CalendarPlus,
-    ChevronRight,
-    Pencil,
-    Search,
-    Truck,
-} from 'lucide-react';
+import { CalendarPlus, Pencil, Search, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { AvisosVuelta } from '@/components/vueltas/avisos-vuelta';
+import { DetalleVuelta } from '@/components/vueltas/detalle-vuelta';
+import { KanbanVueltas } from '@/components/vueltas/kanban-vueltas';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
 import {
     EstadoVueltaBadge,
@@ -23,7 +19,7 @@ import type {
     DiaDeSemana,
     OpcionesVuelta,
     SalidaDelDia,
-    UnidadConVuelta,
+    TarjetaVuelta,
     Vuelta,
 } from '@/types/vueltas';
 
@@ -32,73 +28,46 @@ type Props = OpcionesVuelta & {
     semana: DiaDeSemana[];
     /** Las vueltas que salen el día elegido, con sus avisos. */
     salidas: SalidaDelDia[];
+    /** El kanban: cada vuelta abierta en su etapa y las recién cerradas. */
+    tablero: TarjetaVuelta[];
     whatsappConectado: boolean;
-    /** Cada unidad con la vuelta en que va y la próxima programada. */
-    unidades: UnidadConVuelta[];
 };
 
-type Vista = 'salidas' | 'unidades';
+type Vista = 'tablero' | 'salidas';
 
 /** El diálogo abierto: para programar una nueva o editar una existente. */
 type Dialogo = { vuelta: Vuelta | null } | null;
 
 const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
-function CabeceraVuelta({
-    vuelta,
-    onEditar,
-}: {
-    vuelta: Vuelta;
-    onEditar: (vuelta: Vuelta) => void;
-}) {
-    return (
-        <div className="flex flex-wrap items-center gap-2">
-            <EstadoVueltaBadge vuelta={vuelta} />
-            <span className="text-xs text-muted-foreground">
-                {vuelta.codigo} · {vuelta.tipo_label}
-                {vuelta.inicio &&
-                    ` · ${vuelta.estado === 'programada' ? 'sale' : 'desde'} ${formatearFecha(vuelta.inicio)}`}
-            </span>
-            {vuelta.editable && (
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    className="ml-auto h-7"
-                    onClick={() => onEditar(vuelta)}
-                >
-                    <Pencil className="size-3.5" />
-                    Editar
-                </Button>
-            )}
-        </div>
-    );
-}
+const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
 
 /**
- * La programación: todo nace acá. Se programa la vuelta de cada unidad (el
- * ticket), se ve qué sale cada día y se avisa por WhatsApp al conductor y a
- * las áreas. La vista de unidades muestra en qué anda cada una.
+ * La programación: todo nace acá. El tablero muestra cada vuelta en su
+ * etapa (programada, bajando, subiendo, cerrada); las salidas del día son
+ * desde donde se avisa por WhatsApp al conductor y a las áreas.
  */
 export default function Programacion({
     fecha,
     semana,
     salidas,
+    tablero,
     whatsappConectado,
-    unidades,
     ...opciones
 }: Props) {
     const { puede } = usePermisos();
-    const [vista, setVista] = useState<Vista>('salidas');
+    const [vista, setVista] = useState<Vista>('tablero');
     const [buscar, setBuscar] = useState('');
     const [dialogo, setDialogo] = useState<Dialogo>(null);
+    const [abiertaId, setAbiertaId] = useState<number | null>(null);
 
     setLayoutProps({
         breadcrumbs: [{ title: 'Programación', href: vueltas.index().url }],
     });
 
-    // Cada 15 segundos las salidas del día: así el ✓✓ de un aviso aparece
-    // solo y se ven las vueltas que programa otra persona.
-    usePoll(15_000, { only: ['salidas', 'semana'] });
+    // Cada 15 segundos: las vueltas cambian de columna solas cuando llegan
+    // sus GR, y el ✓✓ de un aviso aparece sin recargar.
+    usePoll(15_000, { only: ['tablero', 'salidas', 'semana'] });
 
     const irA = (nuevaFecha: string) =>
         router.get(
@@ -107,33 +76,37 @@ export default function Programacion({
             { preserveScroll: true, preserveState: true },
         );
 
-    const unidadesFiltradas = useMemo(() => {
-        const texto = buscar.trim().toLowerCase().replace(/-/g, '');
+    const filtradas = useMemo(() => {
+        const texto = sinGuion(buscar.trim());
 
         if (texto === '') {
-            return unidades;
+            return tablero;
         }
 
-        return unidades.filter(
-            ({ tracto, vuelta, proxima }) =>
-                tracto.placa.toLowerCase().replace(/-/g, '').includes(texto) ||
-                (vuelta?.conductor ?? '').toLowerCase().includes(texto) ||
-                (proxima?.conductor ?? '').toLowerCase().includes(texto),
+        return tablero.filter(
+            (vuelta) =>
+                sinGuion(vuelta.placa).includes(texto) ||
+                sinGuion(vuelta.codigo ?? '').includes(texto) ||
+                (vuelta.conductor ?? '').toLowerCase().includes(texto),
         );
-    }, [buscar, unidades]);
+    }, [buscar, tablero]);
+
+    // Se busca por id en lo último que llegó: si la vuelta cambia mientras el
+    // panel está abierto (llega una GR, se manda un aviso), se ve al día.
+    const abierta = tablero.find((vuelta) => vuelta.id === abiertaId) ?? null;
 
     const editar = (vuelta: Vuelta) => setDialogo({ vuelta });
 
     return (
-        <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
+        <div className="flex h-full flex-1 flex-col gap-5 p-4 md:p-6">
             <Head title="Programación" />
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex rounded-lg border p-0.5">
+                <div className="inline-flex self-start rounded-lg border p-0.5">
                     {(
                         [
+                            ['tablero', 'Tablero'],
                             ['salidas', 'Salidas del día'],
-                            ['unidades', 'Unidades'],
                         ] as const
                     ).map(([valor, etiqueta]) => (
                         <button
@@ -153,7 +126,19 @@ export default function Programacion({
                 </div>
 
                 <div className="flex gap-2">
-                    {vista === 'salidas' ? (
+                    {vista === 'tablero' ? (
+                        <div className="relative flex-1 sm:w-64">
+                            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={buscar}
+                                onChange={(evento) =>
+                                    setBuscar(evento.target.value)
+                                }
+                                placeholder="Placa, ticket o conductor"
+                                className="pl-8"
+                            />
+                        </div>
+                    ) : (
                         <Input
                             type="date"
                             value={fecha}
@@ -162,18 +147,6 @@ export default function Programacion({
                             }
                             className="w-44"
                         />
-                    ) : (
-                        <div className="relative flex-1 sm:w-64">
-                            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                            <Input
-                                value={buscar}
-                                onChange={(evento) =>
-                                    setBuscar(evento.target.value)
-                                }
-                                placeholder="Placa o conductor"
-                                className="pl-8"
-                            />
-                        </div>
                     )}
                     {puede('programacion.crear') && (
                         <Button onClick={() => setDialogo({ vuelta: null })}>
@@ -186,7 +159,12 @@ export default function Programacion({
                 </div>
             </div>
 
-            {vista === 'salidas' ? (
+            {vista === 'tablero' ? (
+                <KanbanVueltas
+                    vueltas={filtradas}
+                    onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
+                />
+            ) : (
                 <>
                     {/* La semana del día elegido, con cuántas vueltas salen
                         cada uno: se ve de un vistazo qué días ya tienen plan. */}
@@ -248,30 +226,38 @@ export default function Programacion({
                                     key={salida.id}
                                     className="flex flex-col gap-3 rounded-xl border bg-card p-4"
                                 >
-                                    <header className="flex items-start justify-between gap-3">
-                                        <div className="flex min-w-0 flex-col gap-0.5">
-                                            <Link
-                                                href={
-                                                    vueltas.unidad(
-                                                        salida.tracto_id,
-                                                    ).url
-                                                }
-                                                className="font-mono text-base font-semibold hover:underline"
+                                    <header className="flex flex-wrap items-center gap-2">
+                                        <Link
+                                            href={
+                                                vueltas.unidad(salida.tracto_id)
+                                                    .url
+                                            }
+                                            className="font-mono text-base font-semibold hover:underline"
+                                        >
+                                            {formatearPlaca(salida.placa)}
+                                        </Link>
+                                        <span className="font-mono text-xs text-muted-foreground">
+                                            {salida.codigo}
+                                        </span>
+                                        <EstadoVueltaBadge vuelta={salida} />
+                                        <span className="truncate text-xs text-muted-foreground">
+                                            {salida.conductor ??
+                                                'Sin conductor'}
+                                            {salida.inicio &&
+                                                ` · ${formatearFecha(salida.inicio)}`}
+                                        </span>
+                                        {salida.editable && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="ml-auto h-7"
+                                                onClick={() => editar(salida)}
                                             >
-                                                {formatearPlaca(salida.placa)}
-                                            </Link>
-                                            <span className="truncate text-xs text-muted-foreground">
-                                                {salida.conductor ??
-                                                    'Sin conductor'}
-                                                {salida.carreta &&
-                                                    ` · carreta ${formatearPlaca(salida.carreta)}`}
-                                            </span>
-                                        </div>
+                                                <Pencil className="size-3.5" />
+                                                Editar
+                                            </Button>
+                                        )}
                                     </header>
-                                    <CabeceraVuelta
-                                        vuelta={salida}
-                                        onEditar={editar}
-                                    />
                                     <TramosVuelta vuelta={salida} />
                                     <AvisosVuelta
                                         salida={salida}
@@ -285,64 +271,15 @@ export default function Programacion({
                         </div>
                     )}
                 </>
-            ) : unidadesFiltradas.length === 0 ? (
-                <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                    {unidades.length === 0
-                        ? 'Todavía no hay vueltas.'
-                        : 'Ninguna unidad coincide con la búsqueda.'}
-                </p>
-            ) : (
-                <div className="grid gap-4 xl:grid-cols-2">
-                    {unidadesFiltradas.map(
-                        ({ tracto, vueltas: total, vuelta, proxima }) => (
-                            <section
-                                key={tracto.id}
-                                className="flex flex-col gap-4 rounded-xl border bg-card p-4"
-                            >
-                                <header className="flex items-start justify-between gap-3">
-                                    <div className="flex min-w-0 flex-col gap-1">
-                                        <span className="font-mono text-base font-semibold">
-                                            {formatearPlaca(tracto.placa)}
-                                        </span>
-                                        <span className="truncate text-xs text-muted-foreground">
-                                            {(vuelta ?? proxima)?.conductor ??
-                                                'Sin conductor'}
-                                        </span>
-                                    </div>
-                                    <Link
-                                        href={vueltas.unidad(tracto.id).url}
-                                        className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary hover:underline"
-                                    >
-                                        {total}{' '}
-                                        {total === 1 ? 'vuelta' : 'vueltas'}
-                                        <ChevronRight className="size-3.5" />
-                                    </Link>
-                                </header>
-
-                                {vuelta && (
-                                    <div className="flex flex-col gap-3">
-                                        <CabeceraVuelta
-                                            vuelta={vuelta}
-                                            onEditar={editar}
-                                        />
-                                        <TramosVuelta vuelta={vuelta} />
-                                    </div>
-                                )}
-
-                                {proxima && (
-                                    <div className="flex flex-col gap-3 border-t pt-4">
-                                        <CabeceraVuelta
-                                            vuelta={proxima}
-                                            onEditar={editar}
-                                        />
-                                        <TramosVuelta vuelta={proxima} />
-                                    </div>
-                                )}
-                            </section>
-                        ),
-                    )}
-                </div>
             )}
+
+            <DetalleVuelta
+                vuelta={abierta}
+                onCerrar={() => setAbiertaId(null)}
+                onEditar={editar}
+                conectado={whatsappConectado}
+                puedeAvisar={puede('programacion.avisar')}
+            />
 
             {dialogo && (
                 <ProgramarVueltaDialog

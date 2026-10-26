@@ -28,7 +28,6 @@ use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -39,6 +38,9 @@ use Inertia\Response;
  */
 class VueltaController extends Controller
 {
+    /** Cuántos días se quedan en el tablero las vueltas ya cerradas. */
+    private const DIAS_CERRADAS_EN_TABLERO = 3;
+
     public function __construct(
         private readonly ProgramadorVueltas $programador,
         private readonly AvisoDeVuelta $aviso,
@@ -50,35 +52,14 @@ class VueltaController extends Controller
     {
         $this->authorize('viewAny', Vuelta::class);
 
-        // Lo abierto (programado o andando) y, para las unidades que no
-        // tienen nada abierto, su última vuelta cerrada.
-        $vueltas = Vuelta::query()
-            ->where(fn ($query) => $query
-                ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
-                ->orWhereIn('id', Vuelta::query()->selectRaw('max(id)')->groupBy('tracto_id')))
-            ->with($this->relaciones())
-            ->orderBy('inicio')
-            ->orderBy('id')
-            ->get();
-
-        $cantidades = Vuelta::query()
-            ->selectRaw('tracto_id, count(*) as total')
-            ->groupBy('tracto_id')
-            ->pluck('total', 'tracto_id');
-
         $fecha = $this->fechaPedida($request);
 
         return Inertia::render('vueltas/index', [
             'fecha' => $fecha->toDateString(),
             'semana' => $this->semanaDe($fecha),
             'salidas' => $this->salidasDelDia($fecha, $request),
+            'tablero' => $this->tablero($request),
             'whatsappConectado' => fn (): bool => $this->whatsapp->conectado(),
-            'unidades' => $vueltas
-                ->groupBy('tracto_id')
-                ->map(fn (Collection $deLaUnidad): array => $this->unidadEnTablero($deLaUnidad, (int) ($cantidades[$deLaUnidad->first()->tracto_id] ?? 0), $request))
-                ->sortBy(fn (array $unidad): string => $unidad['tracto']['placa'])
-                ->values()
-                ->all(),
             ...$this->opcionesDelFormulario(),
         ]);
     }
@@ -191,16 +172,93 @@ class VueltaController extends Controller
             ->with([...$this->relaciones(), 'envios'])
             ->get()
             ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa)
+            ->map(fn (Vuelta $vuelta): array => [...$this->vuelta($vuelta, $request), 'aviso' => $this->avisoDe($vuelta)])
+            ->all());
+    }
+
+    /**
+     * El kanban: cada vuelta abierta en su etapa —programada, bajando,
+     * subiendo— y las que cerraron en los últimos días. Las vueltas pasan
+     * solas de columna a medida que llegan sus GR.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function tablero(Request $request): array
+    {
+        $hoy = RelojOperativo::fechaDeHoy();
+
+        return array_values(Vuelta::query()
+            ->where(fn ($query) => $query
+                ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
+                ->orWhere(fn ($query) => $query
+                    ->where('estado', EstadoVuelta::Cerrada)
+                    ->whereDate('fin', '>=', $hoy->subDays(self::DIAS_CERRADAS_EN_TABLERO)->toDateString())))
+            ->with([...$this->relaciones(), 'envios'])
+            ->get()
+            ->sortBy(fn (Vuelta $vuelta): string => $vuelta->inicio?->toDateString().'|'.$vuelta->tracto->placa)
             ->map(fn (Vuelta $vuelta): array => [
                 ...$this->vuelta($vuelta, $request),
-                'aviso' => [
-                    'mensaje' => $this->aviso->mensajeParaConductor($vuelta),
-                    'destinatarios' => $this->aviso->destinatarios($vuelta),
-                    'areas' => $this->aviso->avisosDeArea($vuelta),
-                    'envios' => $this->ultimosEnvios($vuelta),
-                ],
+                'etapa' => $this->etapa($vuelta),
+                'actual' => $this->dondeVa($vuelta),
+                'dias_en_ruta' => $vuelta->inicio && $vuelta->estado === EstadoVuelta::EnCurso
+                    ? (int) $vuelta->inicio->diffInDays($hoy) + 1
+                    : null,
+                'aviso' => $this->avisoDe($vuelta),
             ])
             ->all());
+    }
+
+    /**
+     * @return 'programada'|'bajando'|'subiendo'|'cerrada'
+     */
+    private function etapa(Vuelta $vuelta): string
+    {
+        return match ($vuelta->estado) {
+            EstadoVuelta::Programada => 'programada',
+            EstadoVuelta::Cerrada, EstadoVuelta::Anulada => 'cerrada',
+            EstadoVuelta::EnCurso => $vuelta->paradasDe(SentidoTramo::Regreso)
+                ->contains(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty())
+                ? 'subiendo'
+                : 'bajando',
+        };
+    }
+
+    /**
+     * Dónde va la unidad: la última parada con GR o, si todavía no salió, la
+     * primera del plan.
+     *
+     * @return array{texto: string, carga: string, fecha: string|null, hecha: bool}|null
+     */
+    private function dondeVa(Vuelta $vuelta): ?array
+    {
+        $hecha = $vuelta->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
+        $parada = $hecha ?? $vuelta->paradas->first();
+
+        if ($parada === null) {
+            return null;
+        }
+
+        return [
+            'texto' => ($parada->lugar_origen ?? $parada->zona_origen?->label() ?? '¿?').' → '.($parada->lugar_destino ?? $parada->zona_destino?->label() ?? '¿?'),
+            'carga' => $parada->tipo_carga->label(),
+            'fecha' => $parada->fecha?->toDateString(),
+            'hecha' => $hecha !== null,
+        ];
+    }
+
+    /**
+     * Los avisos de la vuelta ya armados y hasta dónde llegó cada uno.
+     *
+     * @return array<string, mixed>
+     */
+    private function avisoDe(Vuelta $vuelta): array
+    {
+        return [
+            'mensaje' => $this->aviso->mensajeParaConductor($vuelta),
+            'destinatarios' => $this->aviso->destinatarios($vuelta),
+            'areas' => $this->aviso->avisosDeArea($vuelta),
+            'envios' => $this->ultimosEnvios($vuelta),
+        ];
     }
 
     /**
@@ -259,28 +317,6 @@ class VueltaController extends Controller
         return preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) === 1
             ? CarbonImmutable::parse($fecha)
             : RelojOperativo::fechaDeHoy();
-    }
-
-    /**
-     * Una unidad en la portada: la vuelta en la que va y la que tiene
-     * programada después, si hay.
-     *
-     * @param  Collection<int, Vuelta>  $vueltas  las de la unidad, de la más vieja a la más nueva
-     * @return array<string, mixed>
-     */
-    private function unidadEnTablero(Collection $vueltas, int $total, Request $request): array
-    {
-        $proxima = $vueltas->first(fn (Vuelta $vuelta): bool => $vuelta->estado === EstadoVuelta::Programada);
-        $actual = $vueltas->last(fn (Vuelta $vuelta): bool => $vuelta->estado === EstadoVuelta::EnCurso)
-            ?? $vueltas->last(fn (Vuelta $vuelta): bool => $vuelta->estado !== EstadoVuelta::Programada);
-        $tracto = $vueltas->first()->tracto;
-
-        return [
-            'tracto' => ['id' => $tracto->id, 'placa' => $tracto->placa],
-            'vueltas' => $total,
-            'vuelta' => $actual ? $this->vuelta($actual, $request) : null,
-            'proxima' => $proxima ? $this->vuelta($proxima, $request) : null,
-        ];
     }
 
     /**
