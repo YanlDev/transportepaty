@@ -852,7 +852,15 @@ export function ProgramarVueltaDialog({
                                         conGuias
                                             ? 'Ya tiene GR: no se cambia.'
                                             : zonaActual
-                                              ? `Está en ${etiquetaZona(zonaActual)}.`
+                                              ? `Está en ${etiquetaZona(zonaActual)}${
+                                                    unidadElegida?.llego_a &&
+                                                    unidadElegida.llego_a.toLowerCase() !==
+                                                        etiquetaZona(
+                                                            zonaActual,
+                                                        ).toLowerCase()
+                                                        ? ` (su última GR fue a ${unidadElegida.llego_a})`
+                                                        : ''
+                                                }.`
                                               : undefined
                                     }
                                 >

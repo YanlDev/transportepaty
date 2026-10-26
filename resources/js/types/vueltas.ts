@@ -89,8 +89,10 @@ export type OpcionesVuelta = {
         placa: string;
         carreta_id: number | null;
         conductor_id: number | null;
-        /** Dónde la dejó su última GR. */
+        /** Dónde quedó: la zona de su última GR (del Sur o Cusco, Juliaca). */
         zona_actual: string | null;
+        /** El distrito al que fue su última GR, para explicarlo. */
+        llego_a: string | null;
         /** Lo que dice esa GR, aunque no calce con el padrón. */
         ultima_gr: {
             numero: string;

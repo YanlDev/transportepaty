@@ -20,6 +20,7 @@ use App\Models\ParadaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
+use App\Services\AsignadorVueltas;
 use App\Services\AvisoDeVuelta;
 use App\Services\AvisosPorWhatsapp;
 use App\Services\ProgramadorVueltas;
@@ -451,7 +452,8 @@ class VueltaController extends Controller
                     'placa' => $tracto->placa,
                     'carreta_id' => $ultima?->carreta_id,
                     'conductor_id' => $ultima?->conductor_id,
-                    'zona_actual' => $ultima ? ZonaRuta::desdeDireccion($ultima->destino)?->value : null,
+                    'zona_actual' => $ultima ? $this->dondeQuedo($ultima->destino)?->value : null,
+                    'llego_a' => $ultima ? app(AsignadorVueltas::class)->lugar($ultima->destino) : null,
                     // Lo que dice el papel, aunque no calce con el padrón:
                     // así se ve de dónde salió lo que se dejó puesto.
                     'ultima_gr' => $ultima ? [
@@ -464,6 +466,18 @@ class VueltaController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * Dónde quedó la unidad según el destino de su última GR. El Sur y Cusco
+     * son de paso: de ahí sigue a Juliaca, así que la unidad cuenta como en
+     * Juliaca y el ticket siguiente arranca ahí.
+     */
+    private function dondeQuedo(string $destino): ?ZonaRuta
+    {
+        $zona = ZonaRuta::desdeDireccion($destino);
+
+        return $zona !== null && $zona->esSierra() && ! $zona->esBase() ? ZonaRuta::Juliaca : $zona;
     }
 
     /**

@@ -283,3 +283,22 @@ it('fills the trailer and driver from the latest GR by date', function (): void 
                 return $elegido['tracto_id'] === $tracto->id && $elegido['carreta_id'] === $carretaNueva->id;
             }));
 });
+
+it('places a unit back in Juliaca when its last GR went to the south', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    Viaje::factory()->create([
+        'tracto_id' => $tracto->id,
+        'fecha_traslado' => '2026-10-20',
+        'origen' => 'AV. ELMER FAUCETT 3348 - CALLAO - PROV. CONST. DEL CALLAO - PROV. CONST. DEL CALLAO',
+        'destino' => 'CAR. TACNA ALTO PERU KM 88 - PALCA - TACNA - TACNA',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('tractos', function ($tractos) use ($tracto): bool {
+            $unidad = collect($tractos)->firstWhere('id', $tracto->id);
+
+            // De Tacna sigue a Juliaca: el ticket siguiente arranca ahí.
+            return $unidad['zona_actual'] === 'juliaca' && $unidad['llego_a'] === 'Palca';
+        }));
+});
