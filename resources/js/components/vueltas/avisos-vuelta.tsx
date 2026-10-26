@@ -5,7 +5,7 @@ import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { IconoWhatsapp } from '@/components/icono-whatsapp';
 import { EstadoEnvio } from '@/components/programacion/estado-envio';
 import { Button } from '@/components/ui/button';
-import type { SalidaDelDia } from '@/types/vueltas';
+import type { AvisoVuelta } from '@/types/vueltas';
 
 /**
  * Los avisos por WhatsApp de una vuelta: al conductor (o su alterno) y a
@@ -17,7 +17,7 @@ export function AvisosVuelta({
     conectado,
     puedeAvisar,
 }: {
-    salida: SalidaDelDia;
+    salida: { id: number; aviso: AvisoVuelta };
     conectado: boolean;
     puedeAvisar: boolean;
 }) {

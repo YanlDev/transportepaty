@@ -56,8 +56,8 @@ it('writes the trip for the driver with its ticket and both legs', function (): 
         ->toContain("Ticket: *{$this->vuelta->codigo}*")
         ->toContain('Unidad: *BYM-861*')
         ->toContain('Conductor: Alberto Machaca')
-        ->toContain("*Ida (bajada)*\n• Juliaca → Mina San Rafael · vacío\n• Mina San Rafael → Pisco · Concentrado")
-        ->toContain("*Regreso (subida)*\n• Pisco → Mina San Rafael · Escoria")
+        ->toContain("*Ida*\n• Juliaca → Mina San Rafael · vacío\n• Mina San Rafael → Pisco · Concentrado")
+        ->toContain("*Vuelta*\n• Pisco → Mina San Rafael · Escoria")
         ->toContain('No inicies el viaje sin documentación validada');
 });
 

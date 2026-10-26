@@ -110,12 +110,9 @@ export type AvisoVuelta = {
     };
 };
 
-/** Una vuelta que sale el día elegido, con sus avisos armados. */
-export type SalidaDelDia = Vuelta & { aviso: AvisoVuelta };
+export type EtapaVuelta = 'programada' | 'en_ida' | 'en_vuelta' | 'en_base';
 
-export type EtapaVuelta = 'programada' | 'bajando' | 'subiendo' | 'en_base';
-
-/** Una tarjeta del kanban de programación. */
+/** Una fila de la tabla de programación. */
 export type TarjetaVuelta = Vuelta & {
     etapa: EtapaVuelta;
     /** La última parada con GR o, si todavía no salió, la primera del plan. */

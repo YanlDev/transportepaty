@@ -78,8 +78,8 @@ class ConfiguracionAbastecimientoController extends Controller
             'opciones' => [
                 'zonas' => ZonaRuta::options(),
                 'sentidos' => [
-                    ['value' => SentidoTramo::Ida->value, 'label' => 'Ida · bajada'],
-                    ['value' => SentidoTramo::Regreso->value, 'label' => 'Regreso · subida'],
+                    ['value' => SentidoTramo::Ida->value, 'label' => 'Ida'],
+                    ['value' => SentidoTramo::Regreso->value, 'label' => 'Vuelta'],
                 ],
                 'cargas' => TipoCarga::options(),
                 'tiposLinea' => TipoLineaAbastecimiento::options(),

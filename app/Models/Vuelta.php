@@ -131,6 +131,33 @@ class Vuelta extends Model
     }
 
     /**
+     * En qué anda la unidad con este ticket: por salir, en ida hasta que la
+     * vuelta (el regreso) tiene GR, en vuelta hasta que esa GR llega a la
+     * base (Juliaca o la mina), y en base cuando ya está disponible para el
+     * siguiente. Necesita `paradas.viajes` cargadas.
+     *
+     * @return 'programada'|'en_ida'|'en_vuelta'|'en_base'
+     */
+    public function etapa(): string
+    {
+        if ($this->estado === EstadoVuelta::Programada) {
+            return 'programada';
+        }
+
+        if ($this->estado !== EstadoVuelta::EnCurso) {
+            return 'en_base';
+        }
+
+        $ultima = $this->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
+
+        if ($ultima?->sentido !== SentidoTramo::Regreso) {
+            return 'en_ida';
+        }
+
+        return $ultima->zona_destino?->esBase() ? 'en_base' : 'en_vuelta';
+    }
+
+    /**
      * Las de una unidad que están programadas o andando y que ya arrancaron
      * (o arrancan) hasta ese día.
      *

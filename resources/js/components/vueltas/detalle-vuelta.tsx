@@ -108,7 +108,7 @@ export function DetalleVuelta({
                                 />
                                 {vuelta.regreso.length === 0 && (
                                     <p className="mt-3 text-xs text-muted-foreground">
-                                        Regreso por definir.
+                                        Vuelta por definir.
                                     </p>
                                 )}
                             </div>

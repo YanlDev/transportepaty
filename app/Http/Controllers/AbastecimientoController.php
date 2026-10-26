@@ -43,6 +43,9 @@ class AbastecimientoController extends Controller
                 'paradas.viajes:id,parada_vuelta_id,numero_gr,origen,destino,peso,unidad_peso',
             ])
             ->get()
+            // La que ya volvió a la base no espera más combustible: lo que
+            // cargue para salir es del ticket siguiente.
+            ->reject(fn (Vuelta $vuelta): bool => $vuelta->etapa() === 'en_base')
             ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa.'|'.$vuelta->inicio?->toDateString())
             ->values();
 
@@ -61,6 +64,7 @@ class AbastecimientoController extends Controller
                     'inicio' => $vuelta->inicio?->toDateString(),
                     'tracto' => ['id' => $vuelta->tracto->id, 'placa' => $vuelta->tracto->placa],
                     'conductor' => $vuelta->conductor ? "{$vuelta->conductor->nombres} {$vuelta->conductor->apellidos}" : null,
+                    'etapa' => $vuelta->etapa(),
                     'recorrido' => $this->recorrido($vuelta),
                     ...$this->dotacion->de($vuelta, $registrados->where('vuelta_id', $vuelta->id)->values()),
                 ])

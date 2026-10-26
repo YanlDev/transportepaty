@@ -88,16 +88,21 @@ const POR_DEFINIR = 'por_definir';
 const ZONAS_DE_PASO = ['juliaca', 'sur', 'cusco'];
 
 const ICONOS: Record<string, ReactNode> = {
-    concentrado_pisco: <Mountain className="size-4" />,
-    concentrado_metalico: <Layers className="size-4" />,
-    particular_lima: <Tag className="size-4" />,
-    vacio_lima: <Truck className="size-4" />,
-    escoria_mina: <Sparkles className="size-4" />,
-    materiales_mina: <Package className="size-4" />,
+    concentrado: <Mountain className="size-4" />,
+    metalico: <Layers className="size-4" />,
     particular: <Tag className="size-4" />,
-    vacio_juliaca: <Truck className="size-4" />,
-    [POR_DEFINIR]: <CircleHelp className="size-4" />,
+    vacio: <Truck className="size-4" />,
+    escoria: <Sparkles className="size-4" />,
+    materiales: <Package className="size-4" />,
 };
+
+/** El ícono de una opción: el de su carga principal (la última con carga). */
+function iconoDe(paradas: { tipo_carga: string }[]): ReactNode {
+    const conCarga = paradas.filter((parada) => parada.tipo_carga !== 'vacio');
+    const carga = (conCarga.at(-1) ?? paradas.at(-1))?.tipo_carga;
+
+    return (carga && ICONOS[carga]) ?? <CircleHelp className="size-4" />;
+}
 
 function desdeParada(parada: ParadaVuelta): ParadaForm {
     return {
@@ -225,14 +230,14 @@ function SelectOpciones({
 
 /** Una opción de tramo como tarjeta elegible. */
 function TarjetaOpcion({
-    valor,
+    icono,
     titulo,
     descripcion,
     elegida,
     sentido,
     onElegir,
 }: {
-    valor: string;
+    icono: ReactNode;
     titulo: string;
     descripcion: string;
     elegida: boolean;
@@ -263,7 +268,7 @@ function TarjetaOpcion({
                         : 'bg-muted text-muted-foreground',
                 )}
             >
-                {ICONOS[valor]}
+                {icono}
             </span>
             <span className="min-w-0">
                 <span className="block text-sm font-medium">{titulo}</span>
@@ -456,7 +461,10 @@ export function ProgramarVueltaDialog({
 
     const elegirDestino = (lugar: string) => {
         setDestino(lugar);
-        elegirOpcion('regreso', 'particular', lugar);
+
+        if (elegida.regreso) {
+            elegirOpcion('regreso', elegida.regreso, lugar);
+        }
     };
 
     /** El cliente va en las paradas con carga particular del tramo. */
@@ -635,7 +643,7 @@ export function ProgramarVueltaDialog({
                     ) : (
                         <ArrowDownRight className="size-4" />
                     )}
-                    {subiendo ? 'Regreso · subida' : 'Ida · bajada'}
+                    {subiendo ? 'Vuelta' : 'Ida'}
                 </h3>
 
                 {fijas.length > 0 && (
@@ -649,7 +657,17 @@ export function ProgramarVueltaDialog({
                     {lista.map((opcion) => (
                         <TarjetaOpcion
                             key={opcion.value}
-                            valor={opcion.value}
+                            icono={
+                                opcion.value === POR_DEFINIR ? (
+                                    <CircleHelp className="size-4" />
+                                ) : (
+                                    iconoDe(
+                                        'paradas' in opcion
+                                            ? opcion.paradas
+                                            : [],
+                                    )
+                                )
+                            }
                             titulo={opcion.label}
                             descripcion={opcion.descripcion}
                             sentido={sentido}
@@ -659,34 +677,37 @@ export function ProgramarVueltaDialog({
                     ))}
                 </div>
 
-                {subiendo && elegida.regreso === 'particular' && (
-                    <div className="flex flex-col gap-2">
-                        <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                            <MapPin className="size-3.5" />
-                            ¿A dónde va? Si no es Juliaca, de ahí sigue a
-                            Juliaca.
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                            {opciones.tramos.destinos.map((candidato) => (
-                                <button
-                                    key={candidato.lugar}
-                                    type="button"
-                                    onClick={() =>
-                                        elegirDestino(candidato.lugar)
-                                    }
-                                    className={cn(
-                                        'rounded-full border px-3 py-1 text-xs transition',
-                                        destino === candidato.lugar
-                                            ? 'border-violet-500 bg-violet-500 text-white'
-                                            : 'hover:bg-accent',
-                                    )}
-                                >
-                                    {candidato.lugar}
-                                </button>
-                            ))}
+                {subiendo &&
+                    opciones.tramos.regreso.find(
+                        (opcion) => opcion.value === elegida.regreso,
+                    )?.pide_destino && (
+                        <div className="flex flex-col gap-2">
+                            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                                <MapPin className="size-3.5" />
+                                ¿A dónde va? Si no es Juliaca, de ahí sigue a
+                                Juliaca.
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {opciones.tramos.destinos.map((candidato) => (
+                                    <button
+                                        key={candidato.lugar}
+                                        type="button"
+                                        onClick={() =>
+                                            elegirDestino(candidato.lugar)
+                                        }
+                                        className={cn(
+                                            'rounded-full border px-3 py-1 text-xs transition',
+                                            destino === candidato.lugar
+                                                ? 'border-violet-500 bg-violet-500 text-white'
+                                                : 'hover:bg-accent',
+                                        )}
+                                    >
+                                        {candidato.lugar}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                )}
+                    )}
 
                 {conParticular && (
                     <Field label="Cliente">
@@ -734,12 +755,12 @@ export function ProgramarVueltaDialog({
                         <DialogHeader className="border-b px-6 pt-6 pb-4">
                             <DialogTitle className="text-lg">
                                 {vuelta
-                                    ? `Vuelta ${vuelta.codigo ?? ''}`
-                                    : 'Programar vuelta'}
+                                    ? `Ticket ${vuelta.codigo ?? ''}`
+                                    : 'Nuevo ticket'}
                             </DialogTitle>
                             <DialogDescription>
-                                Programa la ida al salir; el regreso, cuando se
-                                sepa con qué vuelve. Las GR caen solas en su
+                                Programa la ida al salir; la vuelta, cuando se
+                                sepa con qué regresa. Las GR caen solas en su
                                 parada.
                             </DialogDescription>
                         </DialogHeader>
@@ -1051,8 +1072,8 @@ export function ProgramarVueltaDialog({
                                     }
                                 >
                                     {confirmandoQuitar
-                                        ? '¿Seguro? Quitar vuelta'
-                                        : 'Quitar vuelta'}
+                                        ? '¿Seguro? Quitar ticket'
+                                        : 'Quitar ticket'}
                                 </Button>
                             ) : (
                                 <span />

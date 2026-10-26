@@ -49,7 +49,7 @@ export default function VueltasUnidad({ tracto, vueltas, ...opciones }: Props) {
                 {puede('programacion.crear') && (
                     <Button onClick={() => setDialogo({ vuelta: null })}>
                         <CalendarPlus className="size-4" />
-                        Programar vuelta
+                        Nuevo ticket
                     </Button>
                 )}
             </div>

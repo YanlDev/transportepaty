@@ -49,7 +49,7 @@ class AvisoDeVuelta
     public function mensajeParaArea(Vuelta $vuelta): string
     {
         return implode("\n", array_filter([
-            '*VUELTA PROGRAMADA*',
+            '*TICKET PROGRAMADO*',
             ...$this->cabecera($vuelta),
             '',
             ...$this->recorrido($vuelta),
@@ -133,7 +133,7 @@ class AvisoDeVuelta
     {
         $lineas = [];
 
-        foreach ([[SentidoTramo::Ida, '*Ida (bajada)*'], [SentidoTramo::Regreso, '*Regreso (subida)*']] as [$sentido, $titulo]) {
+        foreach ([[SentidoTramo::Ida, '*Ida*'], [SentidoTramo::Regreso, '*Vuelta*']] as [$sentido, $titulo]) {
             $paradas = $vuelta->paradasDe($sentido);
 
             if ($paradas->isEmpty()) {

@@ -20,7 +20,7 @@ enum SentidoTramo: string
     {
         return match ($this) {
             self::Ida => 'Ida',
-            self::Regreso => 'Regreso',
+            self::Regreso => 'Vuelta',
         };
     }
 

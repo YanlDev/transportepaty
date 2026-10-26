@@ -74,8 +74,8 @@ it('places each trip in its stage on the board', function (): void {
                 $etapas = collect($tablero)->pluck('etapa', 'id');
 
                 return $etapas->get($programada->id) === 'programada'
-                    && $etapas->get($bajando->id) === 'bajando'
-                    && $etapas->get($subiendo->id) === 'subiendo'
+                    && $etapas->get($bajando->id) === 'en_ida'
+                    && $etapas->get($subiendo->id) === 'en_vuelta'
                     && $etapas->get($llego->id) === 'en_base'
                     && $etapas->get($cerrada->id) === 'en_base'
                     && $etapas->get($siguiente->id) === 'programada'

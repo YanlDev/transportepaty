@@ -52,6 +52,7 @@ enum Permiso: string
     case ProgramacionEditar = 'programacion.editar';
     case ProgramacionEliminar = 'programacion.eliminar';
     case ProgramacionAvisar = 'programacion.avisar';
+    case ProgramacionConfigurar = 'programacion.configurar';
 
     case AbastecimientoVer = 'abastecimiento.ver';
     case AbastecimientoRegistrar = 'abastecimiento.registrar';
@@ -172,6 +173,7 @@ enum Permiso: string
             self::ProgramacionEditar => 'Editar salidas',
             self::ProgramacionEliminar => 'Quitar salidas',
             self::ProgramacionAvisar => 'Avisar salidas por WhatsApp',
+            self::ProgramacionConfigurar => 'Configurar opciones de tramo, destinos y zonas',
             self::AbastecimientoVer => 'Ver el abastecimiento',
             self::AbastecimientoRegistrar => 'Registrar el combustible autorizado',
             self::AbastecimientoConfigurar => 'Configurar puntos y reglas de dotación',

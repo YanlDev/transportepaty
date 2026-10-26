@@ -17,6 +17,7 @@ export type VueltaAbastecimiento = {
     codigo: string | null;
     estado: 'programada' | 'en_curso';
     estado_label: string;
+    etapa: 'programada' | 'en_ida' | 'en_vuelta' | 'en_base';
     inicio: string | null;
     tracto: { id: number; placa: string };
     conductor: string | null;

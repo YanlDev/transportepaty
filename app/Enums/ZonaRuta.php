@@ -3,14 +3,15 @@
 namespace App\Enums;
 
 use App\Enums\Concerns\HasLabel;
+use App\Services\PalabrasDeZona;
 
 /**
  * Las zonas en las que se mueve la flota, tan gruesas como hace falta para
  * leer el circuito: dónde carga y descarga la unidad, no la dirección exacta.
  *
- * El lado (sierra o costa) es lo que parte la vuelta en dos: la ida sale de
- * Juliaca o de la mina y termina en la costa (la bajada), y el regreso
- * termina de vuelta en la sierra (la subida). El Sur y Cusco cuentan como
+ * El lado (sierra o costa) es lo que parte el ticket en dos: la ida sale de
+ * Juliaca o de la mina y termina en la costa, y la vuelta (el regreso)
+ * termina de nuevo en la sierra. El Sur y Cusco cuentan como
  * sierra porque se llega a ellos subiendo y desde ahí la unidad sigue a mina.
  */
 enum ZonaRuta: string
@@ -52,23 +53,27 @@ enum ZonaRuta: string
     }
 
     /**
-     * Las palabras de la dirección de la GR que delatan cada zona, en el
-     * orden en que se prueban. La mina va primero porque su dirección dice
-     * «Juliaca-Macusani» y se leería como Juliaca; Pisco antes que Lima
-     * porque algunas direcciones de Paracas citan la Panamericana «Lima».
+     * Las palabras de siempre, por si la tabla `palabras_zona` todavía no
+     * existe o no se puede leer (los tests unitarios corren sin base).
      *
      * @var array<string, list<string>>
      */
     private const PALABRAS = [
         'mina' => ['ANTAUTA', 'SAN RAFAEL'],
         'pisco' => ['PARACAS', 'PISCO', 'CHINCHA'],
-        // Villa El Salvador aparece en direcciones cortadas que no llegan a
-        // decir «Lima».
         'lima' => ['CALLAO', 'LIMA', 'HUARAL', 'CHILCA', 'LURIN', 'VENTANILLA', 'HUAURA', 'VEGUETA', 'HUAROCHIRI', 'CAÑETE', 'VILLA EL SALVADOR'],
         'juliaca' => ['JULIACA', 'SAN ROMAN', 'PUNO', 'CHUCUITO', 'EL COLLAO', 'ILAVE', 'DESAGUADERO'],
         'cusco' => ['CUSCO', 'QUISPICANCHI'],
         'sur' => ['AREQUIPA', 'CAYLLOMA', 'CASTILLA', 'ISLAY', 'CAMANA', 'TACNA', 'MOQUEGUA', 'MARISCAL NIETO', 'ILO'],
     ];
+
+    /**
+     * El orden en que se prueban las zonas. La mina va primero porque su
+     * dirección dice «Juliaca-Macusani» y se leería como Juliaca; Pisco
+     * antes que Lima porque algunas direcciones de Paracas citan la
+     * Panamericana «Lima».
+     */
+    private const ORDEN = ['mina', 'pisco', 'lima', 'juliaca', 'cusco', 'sur'];
 
     /**
      * La zona de una dirección tal como viene en la GR («… - PARACAS - PISCO
@@ -78,11 +83,12 @@ enum ZonaRuta: string
     public static function desdeDireccion(string $direccion): ?self
     {
         $texto = mb_strtoupper($direccion);
+        $palabras = app(PalabrasDeZona::class)->todas(self::PALABRAS);
 
-        foreach (self::PALABRAS as $zona => $palabras) {
-            foreach ($palabras as $palabra) {
+        foreach (self::ORDEN as $zona) {
+            foreach ($palabras[$zona] ?? [] as $palabra) {
                 // Palabra entera: «ILO» no debe saltar con «KILOMETRO».
-                if (preg_match('/\b'.preg_quote($palabra, '/').'\b/u', $texto) === 1) {
+                if (preg_match('/\b'.preg_quote(mb_strtoupper($palabra), '/').'\b/u', $texto) === 1) {
                     return self::from($zona);
                 }
             }

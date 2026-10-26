@@ -135,13 +135,13 @@ export function TramosVuelta({
     return (
         <div className="grid gap-4 md:grid-cols-2">
             <Tramo
-                titulo="Ida · bajada"
+                titulo="Ida"
                 subida={false}
                 paradas={vuelta.ida}
                 conGuias={conGuias}
             />
             <Tramo
-                titulo="Regreso · subida"
+                titulo="Vuelta"
                 subida
                 paradas={vuelta.regreso}
                 conGuias={conGuias}

@@ -8,6 +8,7 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\ConfiguracionAbastecimientoController;
+use App\Http\Controllers\ConfiguracionProgramacionController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\CuentaBancariaController;
@@ -173,6 +174,28 @@ Route::middleware('auth')->group(function () {
         ->name('abastecimiento.reglas.update');
     Route::delete('abastecimiento/reglas/{regla}', [ConfiguracionAbastecimientoController::class, 'destroyRegla'])
         ->name('abastecimiento.reglas.destroy');
+
+    // La configuración de la programación: opciones de tramo, destinos de
+    // la carga particular y palabras de cada zona. Antes que las rutas con
+    // {vuelta} para que «configuracion» no se lea como una vuelta.
+    Route::get('vueltas/configuracion', [ConfiguracionProgramacionController::class, 'index'])
+        ->name('programacion.configuracion');
+    Route::post('vueltas/configuracion/opciones', [ConfiguracionProgramacionController::class, 'storeOpcion'])
+        ->name('programacion.opciones.store');
+    Route::put('vueltas/configuracion/opciones/{opcion}', [ConfiguracionProgramacionController::class, 'updateOpcion'])
+        ->name('programacion.opciones.update');
+    Route::delete('vueltas/configuracion/opciones/{opcion}', [ConfiguracionProgramacionController::class, 'destroyOpcion'])
+        ->name('programacion.opciones.destroy');
+    Route::post('vueltas/configuracion/destinos', [ConfiguracionProgramacionController::class, 'storeDestino'])
+        ->name('programacion.destinos.store');
+    Route::put('vueltas/configuracion/destinos/{destino}', [ConfiguracionProgramacionController::class, 'updateDestino'])
+        ->name('programacion.destinos.update');
+    Route::delete('vueltas/configuracion/destinos/{destino}', [ConfiguracionProgramacionController::class, 'destroyDestino'])
+        ->name('programacion.destinos.destroy');
+    Route::post('vueltas/configuracion/palabras', [ConfiguracionProgramacionController::class, 'storePalabra'])
+        ->name('programacion.palabras.store');
+    Route::delete('vueltas/configuracion/palabras/{palabra}', [ConfiguracionProgramacionController::class, 'destroyPalabra'])
+        ->name('programacion.palabras.destroy');
 
     // La vuelta de cada unidad —ida y regreso— armada desde sus GR.
     Route::get('vueltas', [VueltaController::class, 'index'])->name('vueltas.index');

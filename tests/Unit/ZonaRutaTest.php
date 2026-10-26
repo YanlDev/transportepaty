@@ -1,6 +1,5 @@
 <?php
 
-use App\Enums\OpcionTramo;
 use App\Enums\SentidoTramo;
 use App\Enums\ZonaRuta;
 
@@ -32,23 +31,6 @@ it('sends whatever ends on the coast to the outbound leg', function (): void {
         ->and(SentidoTramo::hacia(ZonaRuta::Juliaca))->toBe(SentidoTramo::Regreso)
         ->and(SentidoTramo::hacia(ZonaRuta::Sur))->toBe(SentidoTramo::Regreso);
 });
-
-it('builds every leg option in one direction and without jumps', function (OpcionTramo $opcion): void {
-    $paradas = $opcion->paradas();
-
-    // Cada parada arranca donde terminó la anterior: el tramo no salta.
-    foreach (array_slice($paradas, 1) as $indice => $parada) {
-        expect($parada['zona_origen'])->toBe($paradas[$indice]['zona_destino']);
-    }
-
-    // Y cada una cae en el tramo de la opción: la ida baja, el regreso sube.
-    foreach ($paradas as $parada) {
-        if ($parada['zona_destino'] !== null) {
-            expect(SentidoTramo::entre($parada['zona_origen'], $parada['zona_destino'], $opcion->sentido() === SentidoTramo::Regreso))
-                ->toBe($opcion->sentido());
-        }
-    }
-})->with(OpcionTramo::cases());
 
 /**
  * La vuelta empieza al salir de la sierra (ahí se abastece) y termina al

@@ -43,6 +43,7 @@ export type Permiso =
     | 'programacion.editar'
     | 'programacion.eliminar'
     | 'programacion.avisar'
+    | 'programacion.configurar'
     | 'abastecimiento.ver'
     | 'abastecimiento.registrar'
     | 'abastecimiento.configurar'

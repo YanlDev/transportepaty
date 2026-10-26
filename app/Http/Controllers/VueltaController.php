@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\EstadoVuelta;
-use App\Enums\OpcionTramo;
 use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
@@ -14,7 +13,9 @@ use App\Http\Requests\GuardarVueltaRequest;
 use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
+use App\Models\DestinoParticular;
 use App\Models\EnvioWhatsapp;
+use App\Models\OpcionTramo;
 use App\Models\ParadaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -175,7 +176,7 @@ class VueltaController extends Controller
             ->with([...$this->relaciones(), 'envios'])
             ->get()
             ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa)
-            ->map(fn (Vuelta $vuelta): array => [...$this->vuelta($vuelta, $request), 'aviso' => $this->avisoDe($vuelta)])
+            ->map(fn (Vuelta $vuelta): array => $this->fila($vuelta, $this->etapa($vuelta), $request))
             ->all());
     }
 
@@ -215,48 +216,36 @@ class VueltaController extends Controller
             ->reject(fn (array $fila): bool => $fila['etapa'] === 'en_base'
                 && in_array($fila['vuelta']->tracto_id, $conSiguiente, true))
             ->sortBy(fn (array $fila): string => $fila['vuelta']->inicio?->toDateString().'|'.$fila['vuelta']->tracto->placa)
-            ->map(function (array $fila) use ($request, $hoy): array {
-                $vuelta = $fila['vuelta'];
-                $llegada = $fila['etapa'] === 'en_base' ? $this->ultimaGuia($vuelta) : null;
-
-                return [
-                    ...$this->vuelta($vuelta, $request),
-                    'etapa' => $fila['etapa'],
-                    'actual' => $this->dondeVa($vuelta),
-                    'dias_en_ruta' => in_array($fila['etapa'], ['bajando', 'subiendo'], true) && $vuelta->inicio
-                        ? (int) $vuelta->inicio->diffInDays($hoy) + 1
-                        : null,
-                    'dias_en_base' => $llegada ? (int) $llegada->diffInDays($hoy) : null,
-                    'aviso' => $this->avisoDe($vuelta),
-                ];
-            })
+            ->map(fn (array $fila): array => $this->fila($fila['vuelta'], $fila['etapa'], $request))
             ->all());
     }
 
     /**
-     * Bajando hasta que el regreso tiene GR; subiendo hasta que la última
-     * GR del regreso llega a la base (Juliaca o la mina): ahí la unidad ya
-     * está disponible para la siguiente vuelta.
+     * Una fila de la tabla de programación: la vuelta con su etapa, dónde
+     * va, los días que lleva y sus avisos.
      *
-     * @return 'programada'|'bajando'|'subiendo'|'en_base'
+     * @return array<string, mixed>
      */
+    private function fila(Vuelta $vuelta, string $etapa, Request $request): array
+    {
+        $hoy = RelojOperativo::fechaDeHoy();
+        $llegada = $etapa === 'en_base' ? $this->ultimaGuia($vuelta) : null;
+
+        return [
+            ...$this->vuelta($vuelta, $request),
+            'etapa' => $etapa,
+            'actual' => $this->dondeVa($vuelta),
+            'dias_en_ruta' => in_array($etapa, ['en_ida', 'en_vuelta'], true) && $vuelta->inicio
+                ? (int) $vuelta->inicio->diffInDays($hoy) + 1
+                : null,
+            'dias_en_base' => $llegada ? (int) $llegada->diffInDays($hoy) : null,
+            'aviso' => $this->avisoDe($vuelta),
+        ];
+    }
+
     private function etapa(Vuelta $vuelta): string
     {
-        if ($vuelta->estado === EstadoVuelta::Programada) {
-            return 'programada';
-        }
-
-        if ($vuelta->estado !== EstadoVuelta::EnCurso) {
-            return 'en_base';
-        }
-
-        $ultima = $vuelta->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
-
-        if ($ultima?->sentido !== SentidoTramo::Regreso) {
-            return 'bajando';
-        }
-
-        return $ultima->zona_destino?->esBase() ? 'en_base' : 'subiendo';
+        return $vuelta->etapa();
     }
 
     private function ultimaGuia(Vuelta $vuelta): ?CarbonImmutable
@@ -373,7 +362,7 @@ class VueltaController extends Controller
     private function opcionesDelFormulario(): array
     {
         return [
-            'tramos' => fn (): array => OpcionTramo::opciones(),
+            'tramos' => fn (): array => $this->opcionesDeTramo(),
             'zonas' => fn (): array => ZonaRuta::options(),
             'cargas' => fn (): array => array_values(array_filter(
                 TipoCarga::options(),
@@ -403,6 +392,37 @@ class VueltaController extends Controller
                 ->get(['id', 'alias', 'ruc'])
                 ->map(fn (Cliente $cliente): array => ['id' => $cliente->id, 'alias' => $cliente->alias, 'ruc' => $cliente->ruc])
                 ->all(),
+        ];
+    }
+
+    /**
+     * Las opciones de ida y de vuelta y los destinos de la carga particular,
+     * tal como están en la configuración de la programación.
+     *
+     * @return array{ida: list<array<string, mixed>>, regreso: list<array<string, mixed>>, destinos: list<array{lugar: string, zona: string}>}
+     */
+    private function opcionesDeTramo(): array
+    {
+        $opciones = ['ida' => [], 'regreso' => []];
+
+        foreach (OpcionTramo::query()->where('activa', true)->enOrden()->get() as $opcion) {
+            $opciones[$opcion->sentido->value][] = [
+                'value' => (string) $opcion->id,
+                'label' => $opcion->nombre,
+                'descripcion' => $opcion->descripcion ?? '',
+                'pide_destino' => $opcion->pide_destino,
+                'paradas' => $opcion->paradas,
+            ];
+        }
+
+        return [
+            ...$opciones,
+            'destinos' => array_values(DestinoParticular::query()
+                ->where('activo', true)
+                ->enOrden()
+                ->get()
+                ->map(fn (DestinoParticular $destino): array => ['lugar' => $destino->lugar, 'zona' => $destino->zona->value])
+                ->all()),
         ];
     }
 

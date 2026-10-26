@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Enums\Permiso;
 use App\Models\User;
+use App\Services\PalabrasDeZona;
 use App\Services\SincronizadorPermisos;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -20,7 +21,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Una lectura de las palabras de cada zona por petición (o por job).
+        $this->app->scoped(PalabrasDeZona::class);
     }
 
     /**
