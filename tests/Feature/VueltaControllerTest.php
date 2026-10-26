@@ -247,3 +247,30 @@ it('programs the outbound leg first and the return when it is known', function (
         ->and($regreso[1]->lugar_origen)->toBe('Tacna')
         ->and($regreso[1]->zona_destino)->toBe(ZonaRuta::Juliaca);
 });
+
+it('fills the trailer and driver from the latest GR by date', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto, 'placa' => 'BYM-861']);
+    $carretaNueva = Vehiculo::factory()->carreta()->create(['placa' => 'VDI-980']);
+    $carretaVieja = Vehiculo::factory()->carreta()->create(['placa' => 'VDI-111']);
+
+    // La más reciente por traslado se registró primero; la vieja, después.
+    Viaje::factory()->create([
+        'tracto_id' => $tracto->id, 'carreta_id' => $carretaNueva->id, 'placa_carreta' => 'VDI-980',
+        'numero_gr' => 'EG03-00000020', 'fecha_traslado' => '2026-10-20', 'conductor_nombre' => 'MACHACA ALBERTO',
+    ]);
+    Viaje::factory()->create([
+        'tracto_id' => $tracto->id, 'carreta_id' => $carretaVieja->id, 'placa_carreta' => 'VDI-111',
+        'numero_gr' => 'EG03-00000010', 'fecha_traslado' => '2026-10-01',
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('tractos', function ($tractos) use ($tracto, $carretaNueva): bool {
+            $unidad = collect($tractos)->firstWhere('id', $tracto->id);
+
+            return $unidad['carreta_id'] === $carretaNueva->id
+                && $unidad['ultima_gr']['numero'] === 'EG03-00000020'
+                && $unidad['ultima_gr']['placa_carreta'] === 'VDI-980'
+                && $unidad['ultima_gr']['conductor'] === 'MACHACA ALBERTO';
+        }));
+});

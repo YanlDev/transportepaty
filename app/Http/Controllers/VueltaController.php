@@ -432,13 +432,18 @@ class VueltaController extends Controller
      * vuelta a la siguiente. También dónde dejó la unidad esa GR, para que la
      * plantilla arranque desde ahí.
      *
-     * @return array<int, array{id: int, placa: string, carreta_id: int|null, conductor_id: int|null, zona_actual: string|null}>
+     * @return array<int, array<string, mixed>>
      */
     private function opcionesUnidades(): array
     {
+        // La última por fecha de traslado, no por orden de carga: una GR
+        // importada tarde no le gana a la más reciente.
         $ultimas = Viaje::query()
-            ->whereIn('id', Viaje::query()->selectRaw('max(id)')->whereNotNull('tracto_id')->groupBy('tracto_id'))
-            ->get(['tracto_id', 'carreta_id', 'conductor_id', 'destino'])
+            ->whereNotNull('tracto_id')
+            ->orderByDesc('fecha_traslado')
+            ->orderByDesc('id')
+            ->get(['id', 'tracto_id', 'carreta_id', 'conductor_id', 'destino', 'numero_gr', 'fecha_traslado', 'placa_carreta', 'conductor_nombre'])
+            ->unique('tracto_id')
             ->keyBy('tracto_id');
 
         return Vehiculo::query()
@@ -446,15 +451,26 @@ class VueltaController extends Controller
             ->where('estado', EstadoVehiculo::Activo)
             ->orderBy('placa')
             ->get(['id', 'placa'])
-            ->map(fn (Vehiculo $tracto): array => [
-                'id' => $tracto->id,
-                'placa' => $tracto->placa,
-                'carreta_id' => $ultimas->get($tracto->id)?->carreta_id,
-                'conductor_id' => $ultimas->get($tracto->id)?->conductor_id,
-                'zona_actual' => ($destino = $ultimas->get($tracto->id)?->destino) !== null
-                    ? ZonaRuta::desdeDireccion($destino)?->value
-                    : null,
-            ])
+            ->map(function (Vehiculo $tracto) use ($ultimas): array {
+                /** @var Viaje|null $ultima */
+                $ultima = $ultimas->get($tracto->id);
+
+                return [
+                    'id' => $tracto->id,
+                    'placa' => $tracto->placa,
+                    'carreta_id' => $ultima?->carreta_id,
+                    'conductor_id' => $ultima?->conductor_id,
+                    'zona_actual' => $ultima ? ZonaRuta::desdeDireccion($ultima->destino)?->value : null,
+                    // Lo que dice el papel, aunque no calce con el padrón:
+                    // así se ve de dónde salió lo que se dejó puesto.
+                    'ultima_gr' => $ultima ? [
+                        'numero' => $ultima->numero_gr,
+                        'fecha' => $ultima->fecha_traslado->toDateString(),
+                        'placa_carreta' => $ultima->placa_carreta,
+                        'conductor' => $ultima->conductor_nombre,
+                    ] : null,
+                ];
+            })
             ->values()
             ->all();
     }

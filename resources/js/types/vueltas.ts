@@ -91,6 +91,13 @@ export type OpcionesVuelta = {
         conductor_id: number | null;
         /** Dónde la dejó su última GR. */
         zona_actual: string | null;
+        /** Lo que dice esa GR, aunque no calce con el padrón. */
+        ultima_gr: {
+            numero: string;
+            fecha: string;
+            placa_carreta: string | null;
+            conductor: string;
+        } | null;
     }[];
     carretas: { id: number; placa: string }[];
     conductores: { id: number; nombre: string }[];

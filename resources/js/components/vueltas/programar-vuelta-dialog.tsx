@@ -359,6 +359,38 @@ export function ProgramarVueltaDialog({
         }),
     );
 
+    /**
+     * De dónde salen la carreta y el conductor que se dejaron puestos: la
+     * última GR de la unidad. Si se cambió a mano, o si la placa de la GR no
+     * está en el padrón, se dice; nada se corrige solo.
+     */
+    const ultimaGr =
+        opciones.tractos.find((tracto) => tracto.id === data.tracto_id)
+            ?.ultima_gr ?? null;
+    const unidadElegida = opciones.tractos.find(
+        (tracto) => tracto.id === data.tracto_id,
+    );
+    const deLaGr = ultimaGr
+        ? `última GR ${ultimaGr.numero} (${ultimaGr.fecha.slice(8, 10)}/${ultimaGr.fecha.slice(5, 7)})`
+        : null;
+    const ayudaConductor =
+        ultimaGr === null || conGuias
+            ? undefined
+            : data.conductor_id !== null &&
+                data.conductor_id === unidadElegida?.conductor_id
+              ? `Según la ${deLaGr}.`
+              : `La ${deLaGr} trae a ${ultimaGr.conductor}.`;
+    const ayudaCarreta =
+        ultimaGr === null || conGuias
+            ? undefined
+            : ultimaGr.placa_carreta === null
+              ? `La ${deLaGr} no trae carreta.`
+              : unidadElegida?.carreta_id === null
+                ? `La ${deLaGr} dice ${ultimaGr.placa_carreta}, que no está en el padrón de carretas.`
+                : data.carreta_id === unidadElegida?.carreta_id
+                  ? `Según la ${deLaGr}.`
+                  : `La ${deLaGr} trae la ${ultimaGr.placa_carreta}.`;
+
     /** Cambia las paradas y vuelve a unir el recorrido. */
     const fijarParadas = (paradas: ParadaForm[], zona = zonaActual) =>
         setData('paradas', normalizar(paradas, zona));
@@ -826,6 +858,7 @@ export function ProgramarVueltaDialog({
                                 <Field
                                     label="Conductor"
                                     error={errores.conductor_id}
+                                    ayuda={ayudaConductor}
                                 >
                                     {(id) => (
                                         <CampoSelector
@@ -847,6 +880,7 @@ export function ProgramarVueltaDialog({
                                 <Field
                                     label="Carreta"
                                     error={errores.carreta_id}
+                                    ayuda={ayudaCarreta}
                                 >
                                     {(id) => (
                                         <CampoSelector
