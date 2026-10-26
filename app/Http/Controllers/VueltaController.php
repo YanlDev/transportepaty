@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\EstadoVuelta;
+use App\Enums\OpcionTramo;
 use App\Enums\OrigenVuelta;
-use App\Enums\PlantillaVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
@@ -328,7 +328,7 @@ class VueltaController extends Controller
     private function opcionesDelFormulario(): array
     {
         return [
-            'plantillas' => fn (): array => PlantillaVuelta::opciones(),
+            'tramos' => fn (): array => OpcionTramo::opciones(),
             'zonas' => fn (): array => ZonaRuta::options(),
             'cargas' => fn (): array => array_values(array_filter(
                 TipoCarga::options(),
@@ -458,6 +458,8 @@ class VueltaController extends Controller
             'destino' => $parada->lugar_destino ?? $parada->zona_destino?->label(),
             'zona_origen' => $parada->zona_origen?->value,
             'zona_destino' => $parada->zona_destino?->value,
+            'lugar_origen' => $parada->lugar_origen,
+            'lugar_destino' => $parada->lugar_destino,
             'tipo_carga' => $parada->tipo_carga->value,
             'tipo_carga_label' => $parada->tipo_carga->label(),
             'cliente_id' => $parada->cliente_id,

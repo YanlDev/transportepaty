@@ -299,6 +299,8 @@ class ProgramadorVueltas
                 'orden' => $indice + 1,
                 'zona_origen' => $parada['zona_origen'],
                 'zona_destino' => $parada['zona_destino'],
+                'lugar_origen' => $parada['lugar_origen'] ?? null,
+                'lugar_destino' => $parada['lugar_destino'] ?? null,
                 'tipo_carga' => $parada['tipo_carga'],
                 'cliente_id' => $clienteId,
                 'cliente' => $clienteId ? Cliente::query()->whereKey($clienteId)->value('alias') : null,

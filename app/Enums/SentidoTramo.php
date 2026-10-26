@@ -35,23 +35,30 @@ enum SentidoTramo: string
 
     /**
      * El tramo de un trayecto dentro de la vuelta. La vuelta empieza cuando
-     * la unidad sale de la sierra (Juliaca, la mina, Arequipa, Cusco) —ahí
-     * carga combustible y recibe viáticos— y termina cuando llega de nuevo a
-     * la sierra. Así:
+     * la unidad sale de la base (Juliaca o la mina) —ahí carga combustible y
+     * recibe viáticos— y termina cuando vuelve a llegar a la base. El Sur y
+     * Cusco son destinos de paso: de Tacna, Moquegua, Arequipa, Ilo o Cusco
+     * la unidad sigue a Juliaca, y eso todavía es el regreso. Así:
      *
-     * - lo que sale de la sierra es ida (incluido Juliaca ⇢ mina vacío);
-     * - lo que llega a la sierra desde la costa es regreso;
-     * - lo que va de costa a costa (Pisco → Callao) sigue en el tramo en que
-     *   iba la vuelta.
+     * - lo que sale de la base es ida (incluido Juliaca ⇢ mina vacío);
+     * - lo que sube de la costa a la sierra es regreso;
+     * - lo que llega a la base desde el Sur o Cusco es regreso (el final);
+     * - lo que baja del Sur o Cusco a la costa es ida;
+     * - lo demás (Pisco → Callao, Tacna → Ilo) sigue en el tramo en que iba
+     *   la vuelta.
      */
     public static function entre(?ZonaRuta $origen, ?ZonaRuta $destino, bool $yaEmpezoElRegreso): self
     {
-        if ($origen?->esSierra()) {
+        if ($origen?->esBase()) {
             return self::Ida;
         }
 
-        if ($destino?->esSierra()) {
+        if ($destino?->esSierra() && ($origen === null || ! $origen->esSierra() || $destino->esBase())) {
             return self::Regreso;
+        }
+
+        if ($origen?->esSierra() && $destino !== null && ! $destino->esSierra()) {
+            return self::Ida;
         }
 
         return $yaEmpezoElRegreso ? self::Regreso : self::Ida;

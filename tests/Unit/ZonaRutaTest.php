@@ -1,6 +1,6 @@
 <?php
 
-use App\Enums\PlantillaVuelta;
+use App\Enums\OpcionTramo;
 use App\Enums\SentidoTramo;
 use App\Enums\ZonaRuta;
 
@@ -33,17 +33,22 @@ it('sends whatever ends on the coast to the outbound leg', function (): void {
         ->and(SentidoTramo::hacia(ZonaRuta::Sur))->toBe(SentidoTramo::Regreso);
 });
 
-it('starts every template going down and ends it coming back up', function (PlantillaVuelta $plantilla): void {
-    $paradas = $plantilla->paradas();
+it('builds every leg option in one direction and without jumps', function (OpcionTramo $opcion): void {
+    $paradas = $opcion->paradas();
 
-    expect($paradas[0]['sentido'])->toBe(SentidoTramo::Ida)
-        ->and(end($paradas)['sentido'])->toBe(SentidoTramo::Regreso);
-
-    // Cada parada arranca donde terminó la anterior: la plantilla no salta.
+    // Cada parada arranca donde terminó la anterior: el tramo no salta.
     foreach (array_slice($paradas, 1) as $indice => $parada) {
         expect($parada['zona_origen'])->toBe($paradas[$indice]['zona_destino']);
     }
-})->with(PlantillaVuelta::cases());
+
+    // Y cada una cae en el tramo de la opción: la ida baja, el regreso sube.
+    foreach ($paradas as $parada) {
+        if ($parada['zona_destino'] !== null) {
+            expect(SentidoTramo::entre($parada['zona_origen'], $parada['zona_destino'], $opcion->sentido() === SentidoTramo::Regreso))
+                ->toBe($opcion->sentido());
+        }
+    }
+})->with(OpcionTramo::cases());
 
 /**
  * La vuelta empieza al salir de la sierra (ahí se abastece) y termina al
@@ -58,4 +63,9 @@ it('places each leg of the circuit in its part of the trip', function (?ZonaRuta
     'Lima → Juliaca, particular' => [ZonaRuta::Lima, ZonaRuta::Juliaca, false, SentidoTramo::Regreso],
     'Pisco → mina, escoria' => [ZonaRuta::Pisco, ZonaRuta::Mina, false, SentidoTramo::Regreso],
     'Callao → Lima ya regresando' => [ZonaRuta::Lima, ZonaRuta::Lima, true, SentidoTramo::Regreso],
+    'Lima → Tacna, particular' => [ZonaRuta::Lima, ZonaRuta::Sur, false, SentidoTramo::Regreso],
+    'Tacna ⇢ Juliaca: sigue el regreso' => [ZonaRuta::Sur, ZonaRuta::Juliaca, true, SentidoTramo::Regreso],
+    'Cusco ⇢ mina: sigue el regreso' => [ZonaRuta::Cusco, ZonaRuta::Mina, true, SentidoTramo::Regreso],
+    'Tacna → Ilo: dentro del Sur' => [ZonaRuta::Sur, ZonaRuta::Sur, true, SentidoTramo::Regreso],
+    'Arequipa → Lima: baja' => [ZonaRuta::Sur, ZonaRuta::Lima, true, SentidoTramo::Ida],
 ]);

@@ -17,6 +17,9 @@ export type ParadaVuelta = {
     destino: string | null;
     zona_origen: string | null;
     zona_destino: string | null;
+    /** Lo guardado tal cual (null si solo se sabe la zona). */
+    lugar_origen: string | null;
+    lugar_destino: string | null;
     tipo_carga: string;
     tipo_carga_label: string;
     cliente_id: number | null;
@@ -57,18 +60,28 @@ export type Vuelta = {
 
 export type Opcion = { value: string; label: string };
 
-export type PlantillaVuelta = Opcion & {
+/** Una opción para programar un tramo (ver `App\Enums\OpcionTramo`). */
+export type OpcionTramo = {
+    value: string;
+    label: string;
+    descripcion: string;
+    /** La carga particular de regreso: hay que elegir a dónde va. */
+    pide_destino: boolean;
     paradas: {
-        sentido: Sentido;
         zona_origen: string;
-        zona_destino: string;
+        zona_destino: string | null;
         tipo_carga: string;
     }[];
 };
 
 /** Lo que necesita el formulario de programar una vuelta. */
 export type OpcionesVuelta = {
-    plantillas: PlantillaVuelta[];
+    tramos: {
+        ida: OpcionTramo[];
+        regreso: OpcionTramo[];
+        /** A dónde va la carga particular de regreso; de ahí sigue a Juliaca. */
+        destinos: { lugar: string; zona: string }[];
+    };
     zonas: Opcion[];
     cargas: Opcion[];
     tractos: {

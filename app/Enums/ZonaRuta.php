@@ -42,6 +42,16 @@ enum ZonaRuta: string
     }
 
     /**
+     * Donde empieza y termina la vuelta: Juliaca y la mina. El Sur y Cusco
+     * son destinos de paso de la carga particular: de ahí la unidad sigue a
+     * Juliaca.
+     */
+    public function esBase(): bool
+    {
+        return in_array($this, [self::Mina, self::Juliaca], true);
+    }
+
+    /**
      * Las palabras de la dirección de la GR que delatan cada zona, en el
      * orden en que se prueban. La mina va primero porque su dirección dice
      * «Juliaca-Macusani» y se leería como Juliaca; Pisco antes que Lima

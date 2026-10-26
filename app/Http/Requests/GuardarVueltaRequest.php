@@ -39,6 +39,9 @@ class GuardarVueltaRequest extends FormRequest
             'paradas.*.zona_destino' => ['required', Rule::enum(ZonaRuta::class)],
             'paradas.*.tipo_carga' => ['required', Rule::enum(TipoCarga::class)->except([TipoCarga::Sacos])],
             'paradas.*.cliente_id' => ['nullable', Rule::exists('clientes', 'id')],
+            // El lugar exacto cuando la zona no alcanza: «Tacna», «Ilo».
+            'paradas.*.lugar_origen' => ['nullable', 'string', 'max:100'],
+            'paradas.*.lugar_destino' => ['nullable', 'string', 'max:100'],
         ];
     }
 

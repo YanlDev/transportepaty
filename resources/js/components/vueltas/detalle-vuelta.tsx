@@ -10,6 +10,7 @@ import {
     SheetTitle,
 } from '@/components/ui/sheet';
 import { AvisosVuelta } from '@/components/vueltas/avisos-vuelta';
+import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
 import {
     EstadoVueltaBadge,
     TramosVuelta,
@@ -88,6 +89,29 @@ export function DetalleVuelta({
                         </SheetHeader>
 
                         <div className="flex flex-col gap-5 p-4">
+                            <div className="rounded-xl bg-muted/40 p-4">
+                                <ItinerarioVuelta
+                                    paradas={[
+                                        ...vuelta.ida,
+                                        ...vuelta.regreso,
+                                    ].map((parada) => ({
+                                        sentido: parada.sentido,
+                                        desde: parada.origen ?? '¿?',
+                                        hasta: parada.destino ?? '¿?',
+                                        carga:
+                                            parada.tipo_carga === 'vacio'
+                                                ? 'vacía'
+                                                : parada.tipo_carga_label,
+                                        vacio: parada.tipo_carga === 'vacio',
+                                        hecha: parada.guias.length > 0,
+                                    }))}
+                                />
+                                {vuelta.regreso.length === 0 && (
+                                    <p className="mt-3 text-xs text-muted-foreground">
+                                        Regreso por definir.
+                                    </p>
+                                )}
+                            </div>
                             <TramosVuelta vuelta={vuelta} conGuias />
                             <AvisosVuelta
                                 salida={vuelta}

@@ -209,3 +209,28 @@ it('does not edit the trips rebuilt from the GR', function (): void {
         ->delete(route('vueltas.destroy', $historial))
         ->assertForbidden();
 });
+
+it('programs the outbound leg first and the return when it is known', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+
+    // Al salir solo se sabe la ida.
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), vueltaDelFormulario($tracto->id, ['paradas' => [
+        ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+    ]]));
+    $vuelta = Vuelta::query()->where('origen', OrigenVuelta::Programacion)->sole();
+    expect($vuelta->paradas()->where('sentido', SentidoTramo::Regreso)->count())->toBe(0);
+
+    // En Pisco se sabe: particular a Tacna, y de ahí sigue a Juliaca.
+    $ida = $vuelta->paradas()->sole();
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['paradas' => [
+        ['id' => $ida->id, 'sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+        ['sentido' => 'ida', 'zona_origen' => 'pisco', 'zona_destino' => 'lima', 'tipo_carga' => 'vacio'],
+        ['sentido' => 'regreso', 'zona_origen' => 'lima', 'zona_destino' => 'sur', 'lugar_destino' => 'Tacna', 'tipo_carga' => 'particular'],
+        ['sentido' => 'regreso', 'zona_origen' => 'sur', 'lugar_origen' => 'Tacna', 'zona_destino' => 'juliaca', 'tipo_carga' => 'vacio'],
+    ]]))->assertRedirect();
+
+    $regreso = $vuelta->fresh()->paradas->where('sentido', SentidoTramo::Regreso)->values();
+    expect($regreso->pluck('lugar_destino')->all())->toBe(['Tacna', null])
+        ->and($regreso[1]->lugar_origen)->toBe('Tacna')
+        ->and($regreso[1]->zona_destino)->toBe(ZonaRuta::Juliaca);
+});
