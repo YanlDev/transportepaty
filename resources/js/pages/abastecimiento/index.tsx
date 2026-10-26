@@ -1,5 +1,5 @@
 import { Head, Link, router, setLayoutProps } from '@inertiajs/react';
-import { Fuel, Search, Settings, Trash2 } from 'lucide-react';
+import { CircleCheck, Fuel, Search, Settings, Trash2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoController';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
@@ -84,6 +84,86 @@ function Barra({ fila }: { fila: CombustiblePunto }) {
                 )}
                 style={{ width: `${avance}%` }}
             />
+        </div>
+    );
+}
+
+/**
+ * El combustible de un ticket de un vistazo: un tramo por punto de carga,
+ * de ancho según sus galones, que se llena de verde a medida que se
+ * autoriza. Con el check, ese punto ya está completo.
+ */
+function BarraCombustible({
+    combustible,
+}: {
+    combustible: CombustiblePunto[];
+}) {
+    if (combustible.length === 0) {
+        return (
+            <span className="text-xs text-muted-foreground">
+                Sin tarjeta de la pizarra
+            </span>
+        );
+    }
+
+    // Un tanque lleno sin galones configurados pesa como 100 gal en el
+    // dibujo: solo para darle un ancho.
+    const peso = (fila: CombustiblePunto) =>
+        Math.max(fila.previsto ?? 100, fila.registrado, 1);
+
+    return (
+        <div className="flex w-full gap-1">
+            {combustible.map((fila) => {
+                const completo = fila.falta === 0 && fila.previsto !== null;
+                const avance = fila.previsto
+                    ? Math.min(100, (fila.registrado / fila.previsto) * 100)
+                    : fila.registrado > 0
+                      ? 100
+                      : 0;
+
+                return (
+                    <div
+                        key={fila.punto_id ?? fila.punto}
+                        className="flex min-w-16 flex-col gap-0.5"
+                        style={{ flexGrow: peso(fila), flexBasis: 0 }}
+                        title={`${fila.punto}: ${galones(fila.registrado)} de ${fila.previsto === null ? 'tanque lleno' : galones(fila.previsto)}`}
+                    >
+                        <div className="relative h-5 overflow-hidden rounded-md bg-muted">
+                            <div
+                                className={cn(
+                                    'h-full transition-all',
+                                    completo
+                                        ? 'bg-emerald-500'
+                                        : 'bg-emerald-400/80',
+                                )}
+                                style={{ width: `${avance}%` }}
+                            />
+                            <span
+                                className={cn(
+                                    'absolute inset-0 flex items-center justify-between gap-1 px-1.5 text-[10px] font-medium',
+                                    avance > 55
+                                        ? 'text-white'
+                                        : 'text-foreground/80',
+                                )}
+                            >
+                                <span className="truncate">{fila.punto}</span>
+                                {completo && (
+                                    <CircleCheck className="size-3 shrink-0" />
+                                )}
+                            </span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground tabular-nums">
+                            {Number.isInteger(fila.registrado)
+                                ? fila.registrado
+                                : fila.registrado.toFixed(1)}
+                            /
+                            {fila.previsto === null
+                                ? 'full'
+                                : `${Number.isInteger(fila.previsto) ? fila.previsto : fila.previsto.toFixed(1)} gal`}
+                        </span>
+                    </div>
+                );
+            })}
         </div>
     );
 }
@@ -230,13 +310,12 @@ export default function AbastecimientoIndex({
                             <TableHead className="w-24">Ticket</TableHead>
                             <TableHead className="w-24">Etapa</TableHead>
                             <TableHead>Tarjeta de la pizarra</TableHead>
-                            <TableHead className="w-24 text-right">
-                                Previsto
+                            <TableHead className="min-w-80">
+                                Combustible por punto
                             </TableHead>
-                            <TableHead className="w-28 text-right">
-                                Autorizado
+                            <TableHead className="w-32 text-right">
+                                Falta
                             </TableHead>
-                            <TableHead className="w-40">Falta</TableHead>
                             <TableHead className="w-24" />
                         </TableRow>
                     </TableHeader>
@@ -244,7 +323,7 @@ export default function AbastecimientoIndex({
                         {filtradas.length === 0 && (
                             <TableRow className="hover:bg-transparent">
                                 <TableCell
-                                    colSpan={8}
+                                    colSpan={7}
                                     className="py-10 text-center text-sm text-muted-foreground"
                                 >
                                     {vueltas.length === 0
@@ -305,23 +384,19 @@ export default function AbastecimientoIndex({
                                             )}
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-right tabular-nums">
-                                        {vuelta.combustible.length === 0
-                                            ? '—'
-                                            : vuelta.total_previsto === null
-                                              ? 'con full'
-                                              : galones(vuelta.total_previsto)}
-                                    </TableCell>
-                                    <TableCell className="text-right tabular-nums">
-                                        {galones(vuelta.total_registrado)}
-                                    </TableCell>
                                     <TableCell>
+                                        <BarraCombustible
+                                            combustible={vuelta.combustible}
+                                        />
+                                    </TableCell>
+                                    <TableCell className="text-right">
                                         {vuelta.combustible.length === 0 ? (
                                             <span className="text-xs text-muted-foreground">
                                                 —
                                             </span>
                                         ) : falta === 0 ? (
-                                            <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                                                <CircleCheck className="size-3.5" />
                                                 Completo
                                             </span>
                                         ) : (
