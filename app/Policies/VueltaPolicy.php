@@ -36,6 +36,15 @@ class VueltaPolicy
             && $user->checkPermissionTo(Permiso::ProgramacionEditar);
     }
 
+    /**
+     * Mandar los avisos habla en nombre de la empresa por WhatsApp, así que
+     * no va atado a poder editar la vuelta.
+     */
+    public function avisar(User $user, Vuelta $vuelta): bool
+    {
+        return $user->checkPermissionTo(Permiso::ProgramacionAvisar);
+    }
+
     public function delete(User $user, Vuelta $vuelta): bool
     {
         return $vuelta->origen === OrigenVuelta::Programacion

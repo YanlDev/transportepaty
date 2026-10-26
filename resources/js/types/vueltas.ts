@@ -1,3 +1,5 @@
+import type { ResumenEnvio } from '@/types/programacion';
+
 export type GuiaParada = {
     id: number;
     numero_gr: string;
@@ -42,6 +44,7 @@ export type Vuelta = {
     fin: string | null;
     dias: number | null;
     tracto_id: number;
+    placa: string;
     carreta_id: number | null;
     conductor_id: number | null;
     carreta: string | null;
@@ -89,3 +92,20 @@ export type OpcionesVuelta = {
     conductores: { id: number; nombre: string }[];
     clientes: { id: number; alias: string; ruc: string | null }[];
 };
+
+/** Una vuelta que sale el día elegido, con sus avisos armados. */
+export type SalidaDelDia = Vuelta & {
+    aviso: {
+        /** El texto para el conductor; lo arma el servidor para que sea uno solo. */
+        mensaje: string;
+        destinatarios: { etiqueta: string; numero: string }[];
+        areas: { id: number; area: string; numero: string; mensaje: string }[];
+        envios: {
+            conductor: ResumenEnvio | null;
+            /** Por id del área. */
+            areas: Record<number, ResumenEnvio>;
+        };
+    };
+};
+
+export type DiaDeSemana = { fecha: string; programadas: number };

@@ -1,9 +1,16 @@
-import { Head, Link, setLayoutProps } from '@inertiajs/react';
-import { CalendarPlus, ChevronRight, Pencil, Search } from 'lucide-react';
+import { Head, Link, router, setLayoutProps, usePoll } from '@inertiajs/react';
+import {
+    CalendarPlus,
+    ChevronRight,
+    Pencil,
+    Search,
+    Truck,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AvisosVuelta } from '@/components/vueltas/avisos-vuelta';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
 import {
     EstadoVueltaBadge,
@@ -11,15 +18,31 @@ import {
 } from '@/components/vueltas/tramos-vuelta';
 import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
-import type { OpcionesVuelta, UnidadConVuelta, Vuelta } from '@/types/vueltas';
+import { cn } from '@/lib/utils';
+import type {
+    DiaDeSemana,
+    OpcionesVuelta,
+    SalidaDelDia,
+    UnidadConVuelta,
+    Vuelta,
+} from '@/types/vueltas';
 
 type Props = OpcionesVuelta & {
+    fecha: string;
+    semana: DiaDeSemana[];
+    /** Las vueltas que salen el día elegido, con sus avisos. */
+    salidas: SalidaDelDia[];
+    whatsappConectado: boolean;
     /** Cada unidad con la vuelta en que va y la próxima programada. */
     unidades: UnidadConVuelta[];
 };
 
+type Vista = 'salidas' | 'unidades';
+
 /** El diálogo abierto: para programar una nueva o editar una existente. */
 type Dialogo = { vuelta: Vuelta | null } | null;
+
+const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
 function CabeceraVuelta({
     vuelta,
@@ -52,20 +75,39 @@ function CabeceraVuelta({
 }
 
 /**
- * En qué anda cada unidad: la vuelta en la que va, con su ida y su regreso,
- * y la que tiene programada después. Desde acá se programa la siguiente y se
- * entra a la historia de la unidad.
+ * La programación: todo nace acá. Se programa la vuelta de cada unidad (el
+ * ticket), se ve qué sale cada día y se avisa por WhatsApp al conductor y a
+ * las áreas. La vista de unidades muestra en qué anda cada una.
  */
-export default function VueltasIndex({ unidades, ...opciones }: Props) {
+export default function Programacion({
+    fecha,
+    semana,
+    salidas,
+    whatsappConectado,
+    unidades,
+    ...opciones
+}: Props) {
     const { puede } = usePermisos();
+    const [vista, setVista] = useState<Vista>('salidas');
     const [buscar, setBuscar] = useState('');
     const [dialogo, setDialogo] = useState<Dialogo>(null);
 
     setLayoutProps({
-        breadcrumbs: [{ title: 'Vueltas', href: vueltas.index().url }],
+        breadcrumbs: [{ title: 'Programación', href: vueltas.index().url }],
     });
 
-    const filtradas = useMemo(() => {
+    // Cada 15 segundos las salidas del día: así el ✓✓ de un aviso aparece
+    // solo y se ven las vueltas que programa otra persona.
+    usePoll(15_000, { only: ['salidas', 'semana'] });
+
+    const irA = (nuevaFecha: string) =>
+        router.get(
+            vueltas.index.url({ query: { fecha: nuevaFecha } }),
+            {},
+            { preserveScroll: true, preserveState: true },
+        );
+
+    const unidadesFiltradas = useMemo(() => {
         const texto = buscar.trim().toLowerCase().replace(/-/g, '');
 
         if (texto === '') {
@@ -80,35 +122,59 @@ export default function VueltasIndex({ unidades, ...opciones }: Props) {
         );
     }, [buscar, unidades]);
 
-    const enCurso = unidades.filter(
-        ({ vuelta }) => vuelta?.estado === 'en_curso',
-    ).length;
-    const programadas = unidades.filter(({ proxima }) => proxima).length;
-
     const editar = (vuelta: Vuelta) => setDialogo({ vuelta });
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
-            <Head title="Vueltas" />
+            <Head title="Programación" />
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm text-muted-foreground">
-                    {unidades.length}{' '}
-                    {unidades.length === 1 ? 'unidad' : 'unidades'} · {enCurso}{' '}
-                    en curso · {programadas} con la próxima programada
-                </p>
+                <div className="inline-flex rounded-lg border p-0.5">
+                    {(
+                        [
+                            ['salidas', 'Salidas del día'],
+                            ['unidades', 'Unidades'],
+                        ] as const
+                    ).map(([valor, etiqueta]) => (
+                        <button
+                            key={valor}
+                            type="button"
+                            onClick={() => setVista(valor)}
+                            className={cn(
+                                'rounded-md px-3 py-1.5 text-sm transition',
+                                vista === valor
+                                    ? 'bg-primary text-primary-foreground'
+                                    : 'text-muted-foreground hover:text-foreground',
+                            )}
+                        >
+                            {etiqueta}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="flex gap-2">
-                    <div className="relative flex-1 sm:w-72">
-                        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    {vista === 'salidas' ? (
                         <Input
-                            value={buscar}
+                            type="date"
+                            value={fecha}
                             onChange={(evento) =>
-                                setBuscar(evento.target.value)
+                                evento.target.value && irA(evento.target.value)
                             }
-                            placeholder="Placa o conductor"
-                            className="pl-8"
+                            className="w-44"
                         />
-                    </div>
+                    ) : (
+                        <div className="relative flex-1 sm:w-64">
+                            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={buscar}
+                                onChange={(evento) =>
+                                    setBuscar(evento.target.value)
+                                }
+                                placeholder="Placa o conductor"
+                                className="pl-8"
+                            />
+                        </div>
+                    )}
                     {puede('programacion.crear') && (
                         <Button onClick={() => setDialogo({ vuelta: null })}>
                             <CalendarPlus className="size-4" />
@@ -120,15 +186,114 @@ export default function VueltasIndex({ unidades, ...opciones }: Props) {
                 </div>
             </div>
 
-            {filtradas.length === 0 ? (
+            {vista === 'salidas' ? (
+                <>
+                    {/* La semana del día elegido, con cuántas vueltas salen
+                        cada uno: se ve de un vistazo qué días ya tienen plan. */}
+                    <div className="grid grid-cols-7 gap-1.5">
+                        {semana.map((dia, indice) => {
+                            const esElVisto = dia.fecha === fecha;
+
+                            return (
+                                <button
+                                    key={dia.fecha}
+                                    type="button"
+                                    onClick={() => irA(dia.fecha)}
+                                    aria-current={
+                                        esElVisto ? 'date' : undefined
+                                    }
+                                    className={cn(
+                                        'flex flex-col items-center gap-0.5 rounded-lg border px-1 py-2 text-xs transition',
+                                        esElVisto
+                                            ? 'border-primary bg-primary/10 font-semibold'
+                                            : 'hover:bg-accent',
+                                    )}
+                                >
+                                    <span className="text-muted-foreground">
+                                        {DIAS_CORTOS[indice]}
+                                    </span>
+                                    <span className="text-sm">
+                                        {Number(dia.fecha.slice(8, 10))}
+                                    </span>
+                                    <span
+                                        className={cn(
+                                            'rounded-full px-1.5 text-[10px] leading-4',
+                                            dia.programadas > 0
+                                                ? 'bg-primary/15 text-primary'
+                                                : 'text-muted-foreground/50',
+                                        )}
+                                    >
+                                        {dia.programadas}
+                                    </span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    {salidas.length === 0 ? (
+                        <div className="flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed p-10 text-center">
+                            <Truck className="size-7 text-muted-foreground" />
+                            <p className="font-medium">
+                                Sin vueltas que salgan este día
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                                Programa la vuelta de una unidad: es el ticket
+                                del viaje.
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 xl:grid-cols-2">
+                            {salidas.map((salida) => (
+                                <section
+                                    key={salida.id}
+                                    className="flex flex-col gap-3 rounded-xl border bg-card p-4"
+                                >
+                                    <header className="flex items-start justify-between gap-3">
+                                        <div className="flex min-w-0 flex-col gap-0.5">
+                                            <Link
+                                                href={
+                                                    vueltas.unidad(
+                                                        salida.tracto_id,
+                                                    ).url
+                                                }
+                                                className="font-mono text-base font-semibold hover:underline"
+                                            >
+                                                {formatearPlaca(salida.placa)}
+                                            </Link>
+                                            <span className="truncate text-xs text-muted-foreground">
+                                                {salida.conductor ??
+                                                    'Sin conductor'}
+                                                {salida.carreta &&
+                                                    ` · carreta ${formatearPlaca(salida.carreta)}`}
+                                            </span>
+                                        </div>
+                                    </header>
+                                    <CabeceraVuelta
+                                        vuelta={salida}
+                                        onEditar={editar}
+                                    />
+                                    <TramosVuelta vuelta={salida} />
+                                    <AvisosVuelta
+                                        salida={salida}
+                                        conectado={whatsappConectado}
+                                        puedeAvisar={puede(
+                                            'programacion.avisar',
+                                        )}
+                                    />
+                                </section>
+                            ))}
+                        </div>
+                    )}
+                </>
+            ) : unidadesFiltradas.length === 0 ? (
                 <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
                     {unidades.length === 0
-                        ? 'Todavía no hay vueltas armadas.'
+                        ? 'Todavía no hay vueltas.'
                         : 'Ninguna unidad coincide con la búsqueda.'}
                 </p>
             ) : (
                 <div className="grid gap-4 xl:grid-cols-2">
-                    {filtradas.map(
+                    {unidadesFiltradas.map(
                         ({ tracto, vueltas: total, vuelta, proxima }) => (
                             <section
                                 key={tracto.id}
@@ -185,6 +350,7 @@ export default function VueltasIndex({ unidades, ...opciones }: Props) {
                     open
                     onOpenChange={(abierto) => !abierto && setDialogo(null)}
                     vuelta={dialogo.vuelta}
+                    fechaInicial={fecha}
                     opciones={opciones}
                 />
             )}

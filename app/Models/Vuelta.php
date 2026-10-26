@@ -44,6 +44,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, ParadaVuelta> $paradas
  * @property-read Collection<int, Viaje> $viajes
  * @property-read Collection<int, Abastecimiento> $abastecimientos
+ * @property-read Collection<int, EnvioWhatsapp> $envios
  */
 #[Fillable(['tracto_id', 'carreta_id', 'conductor_id', 'tipo', 'estado', 'origen', 'inicio', 'fin'])]
 class Vuelta extends Model
@@ -89,6 +90,16 @@ class Vuelta extends Model
     public function paradas(): HasMany
     {
         return $this->hasMany(ParadaVuelta::class)->orderBy('orden');
+    }
+
+    /**
+     * Los avisos por WhatsApp de la vuelta, del más nuevo al más viejo.
+     *
+     * @return HasMany<EnvioWhatsapp, $this>
+     */
+    public function envios(): HasMany
+    {
+        return $this->hasMany(EnvioWhatsapp::class)->latest('id');
     }
 
     /**

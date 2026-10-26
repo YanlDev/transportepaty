@@ -180,6 +180,8 @@ Route::middleware('auth')->group(function () {
     Route::post('vueltas', [VueltaController::class, 'store'])->name('vueltas.store');
     Route::put('vueltas/{vuelta}', [VueltaController::class, 'update'])->name('vueltas.update');
     Route::delete('vueltas/{vuelta}', [VueltaController::class, 'destroy'])->name('vueltas.destroy');
+    Route::post('vueltas/{vuelta}/aviso', [VueltaController::class, 'avisarConductor'])->name('vueltas.aviso');
+    Route::post('vueltas/{vuelta}/aviso-area/{area}', [VueltaController::class, 'avisarArea'])->name('vueltas.avisoArea');
 
     Route::get('programacion', [ProgramacionController::class, 'index'])->name('programacion.index');
     Route::post('programacion', [ProgramacionController::class, 'store'])->name('programacion.store');

@@ -9,6 +9,7 @@ use App\Models\AreaAviso;
 use App\Models\EnvioWhatsapp;
 use App\Models\Programacion;
 use App\Models\User;
+use App\Models\Vuelta;
 use App\Services\Imagenes\ImagenesDeAviso;
 use Illuminate\Support\Collection;
 use RuntimeException;
@@ -23,7 +24,33 @@ class AvisosPorWhatsapp
     public function __construct(
         private readonly ImagenesDeAviso $imagenes,
         private readonly WhatsappServicio $whatsapp,
+        private readonly AvisoDeVuelta $avisoDeVuelta,
     ) {}
+
+    /** Anota el aviso de una vuelta al conductor y lo pone en la cola. */
+    public function encolarVueltaAlConductor(Vuelta $vuelta, string $numero, string $destino, ?User $usuario): EnvioWhatsapp
+    {
+        return $this->encolar([
+            'vuelta_id' => $vuelta->id,
+            'tipo' => EnvioWhatsapp::TIPO_CONDUCTOR,
+            'destino' => $destino,
+            'numero' => $numero,
+            'enviado_por' => $usuario?->id,
+        ]);
+    }
+
+    /** Anota el aviso de una vuelta a un área, a su número guardado. */
+    public function encolarVueltaAlArea(Vuelta $vuelta, AreaAviso $area, string $numero, ?User $usuario): EnvioWhatsapp
+    {
+        return $this->encolar([
+            'vuelta_id' => $vuelta->id,
+            'area_aviso_id' => $area->id,
+            'tipo' => EnvioWhatsapp::TIPO_AREA,
+            'destino' => $area->nombre,
+            'numero' => $numero,
+            'enviado_por' => $usuario?->id,
+        ]);
+    }
 
     /** Anota el aviso al conductor (o la advertencia) y lo pone en la cola. */
     public function encolarAlConductor(Programacion $programacion, TipoAvisoSalida $tipo, string $numero, string $destino, ?User $usuario): EnvioWhatsapp
@@ -93,6 +120,12 @@ class AvisosPorWhatsapp
             return;
         }
 
+        if ($envio->vuelta_id !== null) {
+            $this->mandarDeVuelta($envio);
+
+            return;
+        }
+
         $programacion = $envio->programacion;
 
         if ($programacion === null) {
@@ -142,6 +175,27 @@ class AvisosPorWhatsapp
         );
 
         $envio->update(['estado' => EstadoEnvio::Enviado, 'mensaje_id' => $mensajeId, 'error' => null, 'enviado_at' => now()]);
+    }
+
+    /**
+     * El aviso de una vuelta va como texto: el recorrido de ida y regreso se
+     * lee mejor así que en una imagen. Se arma con los datos de ese momento.
+     */
+    private function mandarDeVuelta(EnvioWhatsapp $envio): void
+    {
+        $vuelta = $envio->vuelta ?? throw new RuntimeException('La vuelta ya no existe.');
+        $vuelta->loadMissing(['tracto', 'carreta', 'conductor', 'paradas.viajes']);
+
+        $texto = $envio->tipo === EnvioWhatsapp::TIPO_AREA
+            ? $this->avisoDeVuelta->mensajeParaArea($vuelta)
+            : $this->avisoDeVuelta->mensajeParaConductor($vuelta);
+
+        $envio->update([
+            'estado' => EstadoEnvio::Enviado,
+            'mensaje_id' => $this->whatsapp->enviar($envio->numero, $texto),
+            'error' => null,
+            'enviado_at' => now(),
+        ]);
     }
 
     /** Cuando la cola se rinde después de los reintentos. */

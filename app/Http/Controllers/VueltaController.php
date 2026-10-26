@@ -11,13 +11,20 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Http\Requests\GuardarVueltaRequest;
+use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
+use App\Models\EnvioWhatsapp;
 use App\Models\ParadaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
+use App\Services\AvisoDeVuelta;
+use App\Services\AvisosPorWhatsapp;
 use App\Services\ProgramadorVueltas;
+use App\Services\RelojOperativo;
+use App\Services\WhatsappServicio;
+use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -32,7 +39,12 @@ use Inertia\Response;
  */
 class VueltaController extends Controller
 {
-    public function __construct(private readonly ProgramadorVueltas $programador) {}
+    public function __construct(
+        private readonly ProgramadorVueltas $programador,
+        private readonly AvisoDeVuelta $aviso,
+        private readonly AvisosPorWhatsapp $avisos,
+        private readonly WhatsappServicio $whatsapp,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -54,7 +66,13 @@ class VueltaController extends Controller
             ->groupBy('tracto_id')
             ->pluck('total', 'tracto_id');
 
+        $fecha = $this->fechaPedida($request);
+
         return Inertia::render('vueltas/index', [
+            'fecha' => $fecha->toDateString(),
+            'semana' => $this->semanaDe($fecha),
+            'salidas' => $this->salidasDelDia($fecha, $request),
+            'whatsappConectado' => fn (): bool => $this->whatsapp->conectado(),
             'unidades' => $vueltas
                 ->groupBy('tracto_id')
                 ->map(fn (Collection $deLaUnidad): array => $this->unidadEnTablero($deLaUnidad, (int) ($cantidades[$deLaUnidad->first()->tracto_id] ?? 0), $request))
@@ -115,6 +133,132 @@ class VueltaController extends Controller
         $vuelta->delete();
 
         return back()->with('toast', ['type' => 'success', 'message' => "Vuelta {$vuelta->codigo} quitada."]);
+    }
+
+    /**
+     * El aviso de la vuelta al conductor (o a su alterno), por la cola.
+     */
+    public function avisarConductor(Request $request, Vuelta $vuelta): RedirectResponse
+    {
+        $this->authorize('avisar', $vuelta);
+
+        $datos = $request->validate([
+            'numero' => ['required', 'string', 'max:20'],
+            'destino' => ['nullable', 'string', 'max:30'],
+        ]);
+
+        $numero = $this->aviso->numeroWhatsapp($datos['numero']);
+
+        if ($numero === null) {
+            return back()->withErrors(['numero' => 'El número no es válido.']);
+        }
+
+        $this->avisos->encolarVueltaAlConductor($vuelta, $numero, $datos['destino'] ?? 'Conductor', $request->user());
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Enviando la vuelta {$vuelta->codigo} a {$numero}…"]);
+    }
+
+    /**
+     * Va siempre al número guardado del área: el destino de un aviso de área
+     * no se elige al enviar.
+     */
+    public function avisarArea(Request $request, Vuelta $vuelta, AreaAviso $area): RedirectResponse
+    {
+        $this->authorize('avisar', $vuelta);
+
+        $numero = $this->aviso->numeroWhatsapp($area->numero);
+
+        if (! $area->activa || $numero === null) {
+            return back()->with('toast', ['type' => 'error', 'message' => "{$area->nombre} no tiene un número activo."]);
+        }
+
+        $this->avisos->encolarVueltaAlArea($vuelta, $area, $numero, $request->user());
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Enviando la vuelta {$vuelta->codigo} a {$area->nombre}…"]);
+    }
+
+    /**
+     * Las vueltas que salen ese día, con sus avisos armados y hasta dónde
+     * llegó el último envío a cada destino.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function salidasDelDia(CarbonImmutable $fecha, Request $request): array
+    {
+        return array_values(Vuelta::query()
+            ->whereDate('inicio', $fecha->toDateString())
+            ->where('estado', '!=', EstadoVuelta::Anulada)
+            ->with([...$this->relaciones(), 'envios'])
+            ->get()
+            ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa)
+            ->map(fn (Vuelta $vuelta): array => [
+                ...$this->vuelta($vuelta, $request),
+                'aviso' => [
+                    'mensaje' => $this->aviso->mensajeParaConductor($vuelta),
+                    'destinatarios' => $this->aviso->destinatarios($vuelta),
+                    'areas' => $this->aviso->avisosDeArea($vuelta),
+                    'envios' => $this->ultimosEnvios($vuelta),
+                ],
+            ])
+            ->all());
+    }
+
+    /**
+     * @return array{conductor: array<string, mixed>|null, areas: array<int, array<string, mixed>>}
+     */
+    private function ultimosEnvios(Vuelta $vuelta): array
+    {
+        $resumen = ['conductor' => null, 'areas' => []];
+
+        // Vienen del más nuevo al más viejo: el primero de cada destino gana.
+        foreach ($vuelta->envios as $envio) {
+            $datos = [
+                'estado' => $envio->estado->value,
+                'estado_label' => $envio->estado->label(),
+                'destino' => $envio->destino,
+                'hora' => ($envio->leido_at ?? $envio->entregado_at ?? $envio->enviado_at ?? $envio->created_at)->toIso8601String(),
+                'error' => $envio->error,
+            ];
+
+            if ($envio->tipo === EnvioWhatsapp::TIPO_CONDUCTOR) {
+                $resumen['conductor'] ??= $datos;
+            } elseif ($envio->area_aviso_id !== null) {
+                $resumen['areas'][$envio->area_aviso_id] ??= $datos;
+            }
+        }
+
+        return $resumen;
+    }
+
+    /**
+     * Los siete días de la semana del día que se está viendo, con cuántas
+     * vueltas salen cada uno.
+     *
+     * @return list<array{fecha: string, programadas: int}>
+     */
+    private function semanaDe(CarbonImmutable $fecha): array
+    {
+        $inicio = $fecha->startOfWeek();
+
+        $conteos = Vuelta::query()
+            ->whereBetween('inicio', [$inicio->toDateString(), $inicio->addDays(6)->toDateString()])
+            ->where('estado', '!=', EstadoVuelta::Anulada)
+            ->get(['inicio'])
+            ->countBy(fn (Vuelta $vuelta): string => (string) $vuelta->inicio?->toDateString());
+
+        return array_map(fn (int $dias): array => [
+            'fecha' => $dia = $inicio->addDays($dias)->toDateString(),
+            'programadas' => (int) $conteos->get($dia, 0),
+        ], range(0, 6));
+    }
+
+    private function fechaPedida(Request $request): CarbonImmutable
+    {
+        $fecha = $request->string('fecha')->trim()->value();
+
+        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) === 1
+            ? CarbonImmutable::parse($fecha)
+            : RelojOperativo::fechaDeHoy();
     }
 
     /**
@@ -225,7 +369,7 @@ class VueltaController extends Controller
         return [
             'tracto:id,placa',
             'carreta:id,placa',
-            'conductor:id,nombres,apellidos',
+            'conductor:id,nombres,apellidos,telefono,telefono_alterno',
             'paradas.viajes' => fn ($query) => $query
                 ->select(['id', 'parada_vuelta_id', 'numero_gr', 'fecha_traslado', 'peso', 'unidad_peso'])
                 ->orderBy('fecha_traslado')
@@ -253,6 +397,7 @@ class VueltaController extends Controller
             'fin' => $vuelta->fin?->toDateString(),
             'dias' => $vuelta->inicio && $vuelta->fin ? (int) $vuelta->inicio->diffInDays($vuelta->fin) + 1 : null,
             'tracto_id' => $vuelta->tracto_id,
+            'placa' => $vuelta->tracto->placa,
             'carreta_id' => $vuelta->carreta_id,
             'conductor_id' => $vuelta->conductor_id,
             'carreta' => $vuelta->carreta?->placa,

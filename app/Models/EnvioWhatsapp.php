@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property int|null $programacion_id
+ * @property int|null $vuelta_id
  * @property int|null $area_aviso_id
  * @property string $tipo
  * @property string $destino
@@ -28,10 +29,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $leido_at
  * @property CarbonImmutable $created_at
  * @property-read Programacion|null $programacion
+ * @property-read Vuelta|null $vuelta
  * @property-read AreaAviso|null $area
  */
 #[Fillable([
     'programacion_id',
+    'vuelta_id',
     'area_aviso_id',
     'tipo',
     'destino',
@@ -59,6 +62,14 @@ class EnvioWhatsapp extends Model
     public const TIPO_RECORDATORIO = 'recordatorio';
 
     protected $table = 'envios_whatsapp';
+
+    /**
+     * @return BelongsTo<Vuelta, $this>
+     */
+    public function vuelta(): BelongsTo
+    {
+        return $this->belongsTo(Vuelta::class);
+    }
 
     /**
      * @return BelongsTo<Programacion, $this>

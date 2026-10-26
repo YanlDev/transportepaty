@@ -148,6 +148,7 @@ export function ProgramarVueltaDialog({
     onOpenChange,
     vuelta,
     tractoInicial,
+    fechaInicial,
     opciones,
 }: {
     open: boolean;
@@ -156,6 +157,8 @@ export function ProgramarVueltaDialog({
     vuelta: Vuelta | null;
     /** Para programar desde la ficha de una unidad. */
     tractoInicial?: number | null;
+    /** El día que se estaba mirando: ahí sale la vuelta nueva. */
+    fechaInicial?: string;
     opciones: OpcionesVuelta;
 }) {
     const unidadInicial = opciones.tractos.find(
@@ -169,7 +172,7 @@ export function ProgramarVueltaDialog({
         carreta_id: vuelta?.carreta_id ?? unidadInicial?.carreta_id ?? null,
         conductor_id:
             vuelta?.conductor_id ?? unidadInicial?.conductor_id ?? null,
-        inicio: vuelta?.inicio ?? hoy(),
+        inicio: vuelta?.inicio ?? fechaInicial ?? hoy(),
         paradas: vuelta
             ? [...vuelta.ida, ...vuelta.regreso].map(desdeParada)
             : [],

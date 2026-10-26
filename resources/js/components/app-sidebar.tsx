@@ -8,7 +8,6 @@ import {
     IdCard,
     LayoutGrid,
     Receipt,
-    Repeat,
     Route,
     Truck,
     Wrench,
@@ -21,7 +20,6 @@ import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController'
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
-import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
@@ -97,20 +95,13 @@ const viajesNavItem: NavItem = {
 };
 
 /**
- * Qué unidades salen con carga particular cada día. La lee abastecimiento
- * para preparar la carga, así que entra con el mismo permiso de operación.
+ * La programación de vueltas: el ticket de cada viaje nace acá. La pantalla
+ * vieja de carga particular quedó fuera del menú.
  */
 const programacionNavItem: NavItem = {
     title: 'Programación',
-    href: programacion.index(),
-    icon: CalendarCheck,
-};
-
-/** La ida y el regreso de cada unidad, armados desde sus GR. */
-const vueltasNavItem: NavItem = {
-    title: 'Vueltas',
     href: vueltas.index(),
-    icon: Repeat,
+    icon: CalendarCheck,
 };
 
 /** Lo que le toca a cada unidad y el combustible que se le autoriza. */
@@ -193,9 +184,7 @@ export function AppSidebar() {
     ];
 
     const programacionArea = [
-        ...(puede('programacion.ver')
-            ? [programacionNavItem, vueltasNavItem]
-            : []),
+        ...(puede('programacion.ver') ? [programacionNavItem] : []),
         ...(puede('viajes.ver') ? [viajesNavItem] : []),
         // Cotizaciones antes que Clientes: es lo que se usa a diario.
         ...[...gestion].reverse(),
