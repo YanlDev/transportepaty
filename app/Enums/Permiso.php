@@ -53,6 +53,10 @@ enum Permiso: string
     case ProgramacionEliminar = 'programacion.eliminar';
     case ProgramacionAvisar = 'programacion.avisar';
 
+    case AbastecimientoVer = 'abastecimiento.ver';
+    case AbastecimientoRegistrar = 'abastecimiento.registrar';
+    case AbastecimientoConfigurar = 'abastecimiento.configurar';
+
     case AsistenciaVer = 'asistencia.ver';
     case AsistenciaMarcar = 'asistencia.marcar';
     case AsistenciaAjustar = 'asistencia.ajustar';
@@ -90,6 +94,7 @@ enum Permiso: string
         'conductores' => 'Conductores',
         'asistencia' => 'Asistencia',
         'programacion' => 'Programación',
+        'abastecimiento' => 'Abastecimiento',
         'viajes' => 'Viajes',
         'cotizaciones' => 'Cotizaciones',
         'clientes' => 'Clientes',
@@ -112,6 +117,7 @@ enum Permiso: string
         'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades']],
         'rrhh' => ['nombre' => 'RRHH', 'modulos' => ['conductores', 'asistencia']],
         'programacion' => ['nombre' => 'Programación', 'modulos' => ['programacion', 'viajes', 'cotizaciones', 'clientes', 'costos']],
+        'abastecimiento' => ['nombre' => 'Abastecimiento', 'modulos' => ['abastecimiento']],
         'contabilidad' => ['nombre' => 'Contabilidad', 'modulos' => ['cobranza', 'cuentas']],
         'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp']],
     ];
@@ -166,6 +172,9 @@ enum Permiso: string
             self::ProgramacionEditar => 'Editar salidas',
             self::ProgramacionEliminar => 'Quitar salidas',
             self::ProgramacionAvisar => 'Avisar salidas por WhatsApp',
+            self::AbastecimientoVer => 'Ver el abastecimiento',
+            self::AbastecimientoRegistrar => 'Registrar el combustible autorizado',
+            self::AbastecimientoConfigurar => 'Configurar puntos y reglas de dotación',
             self::AsistenciaVer => 'Ver la asistencia',
             self::AsistenciaMarcar => 'Marcar y desmarcar días',
             self::AsistenciaAjustar => 'Ajustar días debidos y notas',
@@ -209,8 +218,17 @@ enum Permiso: string
             self::CobranzaGestionar,
             self::CuentasVer,
             self::CuentasGestionar => ['contador'],
+            self::AbastecimientoVer,
+            self::AbastecimientoRegistrar,
+            self::AbastecimientoConfigurar => ['abastecimiento'],
             default => [],
         };
+
+        // Abastecimiento prepara cada salida: ve el tablero, las unidades y
+        // la programación, sin tocarlas.
+        if (in_array($this, [self::TableroVer, self::VehiculosVer, self::ProgramacionVer], true)) {
+            $roles[] = 'abastecimiento';
+        }
 
         // Gerencia ve todo y no toca nada: recibe cada «ver», también los de
         // los módulos que se agreguen después.

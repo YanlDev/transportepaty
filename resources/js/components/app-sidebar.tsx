@@ -4,6 +4,7 @@ import {
     Calculator,
     CalendarCheck,
     Container,
+    Fuel,
     IdCard,
     LayoutGrid,
     Receipt,
@@ -12,6 +13,7 @@ import {
     Truck,
     Wrench,
 } from 'lucide-react';
+import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoController';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
@@ -111,6 +113,13 @@ const vueltasNavItem: NavItem = {
     icon: Repeat,
 };
 
+/** Lo que le toca a cada unidad y el combustible que se le autoriza. */
+const abastecimientoNavItem: NavItem = {
+    title: 'Abastecimiento',
+    href: abastecimiento.index(),
+    icon: Fuel,
+};
+
 /** El control del personal. */
 const asistenciaNavItem: NavItem = {
     title: 'Asistencia',
@@ -192,6 +201,10 @@ export function AppSidebar() {
         ...[...gestion].reverse(),
     ];
 
+    const abastecimientoArea = puede('abastecimiento.ver')
+        ? [abastecimientoNavItem]
+        : [];
+
     const contabilidadArea = puede('cobranza.ver') ? [contabilidadNavItem] : [];
 
     // Con roles armados a mano una sección puede quedar vacía: no se pinta
@@ -200,6 +213,7 @@ export function AppSidebar() {
         { label: 'Flota', items: flota },
         { label: 'RRHH', items: rrhh },
         { label: 'Programación', items: programacionArea },
+        { label: 'Abastecimiento', items: abastecimientoArea },
         { label: 'Contabilidad', items: contabilidadArea },
     ];
 

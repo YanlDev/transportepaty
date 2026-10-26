@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\AbastecimientoController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\AvisoSalidaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
+use App\Http\Controllers\ConfiguracionAbastecimientoController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\CuentaBancariaController;
@@ -150,6 +152,28 @@ Route::middleware('auth')->group(function () {
 
     // Qué unidades salen con carga particular cada día. Se carga antes de
     // que exista la GR, así que no se deduce de `viajes`.
+    // Abastecimiento: el tablero con lo que le toca a cada unidad y el
+    // registro del combustible autorizado; aparte, la pizarra de dotaciones.
+    Route::get('abastecimiento', [AbastecimientoController::class, 'index'])->name('abastecimiento.index');
+    Route::post('abastecimiento', [AbastecimientoController::class, 'store'])->name('abastecimiento.store');
+    Route::delete('abastecimiento/{abastecimiento}', [AbastecimientoController::class, 'destroy'])->name('abastecimiento.destroy');
+    Route::get('abastecimiento/configuracion', [ConfiguracionAbastecimientoController::class, 'index'])
+        ->name('abastecimiento.configuracion');
+    Route::put('abastecimiento/configuracion/tanque', [ConfiguracionAbastecimientoController::class, 'actualizarTanque'])
+        ->name('abastecimiento.tanque');
+    Route::post('abastecimiento/puntos', [ConfiguracionAbastecimientoController::class, 'storePunto'])
+        ->name('abastecimiento.puntos.store');
+    Route::put('abastecimiento/puntos/{punto}', [ConfiguracionAbastecimientoController::class, 'updatePunto'])
+        ->name('abastecimiento.puntos.update');
+    Route::delete('abastecimiento/puntos/{punto}', [ConfiguracionAbastecimientoController::class, 'destroyPunto'])
+        ->name('abastecimiento.puntos.destroy');
+    Route::post('abastecimiento/reglas', [ConfiguracionAbastecimientoController::class, 'storeRegla'])
+        ->name('abastecimiento.reglas.store');
+    Route::put('abastecimiento/reglas/{regla}', [ConfiguracionAbastecimientoController::class, 'updateRegla'])
+        ->name('abastecimiento.reglas.update');
+    Route::delete('abastecimiento/reglas/{regla}', [ConfiguracionAbastecimientoController::class, 'destroyRegla'])
+        ->name('abastecimiento.reglas.destroy');
+
     // La vuelta de cada unidad —ida y regreso— armada desde sus GR.
     Route::get('vueltas', [VueltaController::class, 'index'])->name('vueltas.index');
     Route::get('vueltas/unidades/{vehiculo}', [VueltaController::class, 'unidad'])->name('vueltas.unidad');

@@ -43,6 +43,7 @@ use Illuminate\Support\Carbon;
  * @property-read Conductor|null $conductor
  * @property-read Collection<int, ParadaVuelta> $paradas
  * @property-read Collection<int, Viaje> $viajes
+ * @property-read Collection<int, Abastecimiento> $abastecimientos
  */
 #[Fillable(['tracto_id', 'carreta_id', 'conductor_id', 'tipo', 'estado', 'origen', 'inicio', 'fin'])]
 class Vuelta extends Model
@@ -88,6 +89,16 @@ class Vuelta extends Model
     public function paradas(): HasMany
     {
         return $this->hasMany(ParadaVuelta::class)->orderBy('orden');
+    }
+
+    /**
+     * El combustible autorizado para la vuelta.
+     *
+     * @return HasMany<Abastecimiento, $this>
+     */
+    public function abastecimientos(): HasMany
+    {
+        return $this->hasMany(Abastecimiento::class);
     }
 
     /**

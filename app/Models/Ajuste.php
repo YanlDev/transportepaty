@@ -24,6 +24,9 @@ class Ajuste extends Model
      */
     public const HORA_RECORDATORIO = 'hora_recordatorio_sin_gr';
 
+    /** Cuántos galones son «tanque lleno» (full) en las reglas de dotación. */
+    public const GALONES_TANQUE_LLENO = 'galones_tanque_lleno';
+
     protected $primaryKey = 'clave';
 
     protected $keyType = 'string';
