@@ -193,3 +193,25 @@ it('deactivates a point already used instead of deleting it', function (): void 
 
     expect($this->kio->fresh()->activo)->toBeTrue();
 });
+
+it('splits the allowance into one bar for the outbound leg and one for the return', function (): void {
+    $vuelta = vueltaConParada($this->tracto, [
+        'sentido' => SentidoTramo::Ida, 'zona_origen' => ZonaRuta::Mina, 'zona_destino' => ZonaRuta::Pisco, 'tipo_carga' => TipoCarga::Concentrado,
+    ]);
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $vuelta->id, 'orden' => 2, 'sentido' => SentidoTramo::Regreso,
+        'zona_origen' => ZonaRuta::Pisco, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Escoria,
+        'lugar_origen' => null, 'lugar_destino' => null,
+    ]);
+    Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'punto_abastecimiento_id' => $this->mina->id, 'galones' => 100]);
+    $vuelta->load('paradas.viajes');
+
+    $tramos = collect(app(DotacionVuelta::class)->de($vuelta, $vuelta->abastecimientos()->with('punto')->get())['tramos'])->keyBy('sentido');
+
+    expect($tramos['ida']['previsto'])->toBe(220.0)
+        ->and($tramos['ida']['registrado'])->toBe(100.0)
+        ->and($tramos['ida']['falta'])->toBe(120.0)
+        ->and(collect($tramos['ida']['puntos'])->pluck('punto')->all())->toBe(['Mina', 'Arequipa'])
+        ->and($tramos['regreso']['previsto'])->toBe(130.0)
+        ->and($tramos['regreso']['registrado'])->toBe(0.0);
+});

@@ -30,6 +30,7 @@ import type {
     CombustiblePunto,
     RegistroAbastecimiento,
     TractoAbastecimiento,
+    TramoCombustible,
     VueltaAbastecimiento,
 } from '@/types/abastecimiento';
 
@@ -89,16 +90,13 @@ function Barra({ fila }: { fila: CombustiblePunto }) {
 }
 
 /**
- * El combustible de un ticket de un vistazo: un tramo por punto de carga,
- * de ancho según sus galones, que se llena de verde a medida que se
- * autoriza. Con el check, ese punto ya está completo.
+ * El combustible de un ticket de un vistazo: una barra por tramo (la ida y,
+ * si tiene, la vuelta) que se llena de verde con lo autorizado. Los puntos
+ * de carga no se separan: van marcados dentro de la barra, con su nombre
+ * debajo, para saber dónde toca cargar.
  */
-function BarraCombustible({
-    combustible,
-}: {
-    combustible: CombustiblePunto[];
-}) {
-    if (combustible.length === 0) {
+function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
+    if (tramos.length === 0) {
         return (
             <span className="text-xs text-muted-foreground">
                 Sin tarjeta de la pizarra
@@ -106,61 +104,102 @@ function BarraCombustible({
         );
     }
 
-    // Un tanque lleno sin galones configurados pesa como 100 gal en el
-    // dibujo: solo para darle un ancho.
-    const peso = (fila: CombustiblePunto) =>
-        Math.max(fila.previsto ?? 100, fila.registrado, 1);
-
     return (
-        <div className="flex w-full gap-1">
-            {combustible.map((fila) => {
-                const completo = fila.falta === 0 && fila.previsto !== null;
-                const avance = fila.previsto
-                    ? Math.min(100, (fila.registrado / fila.previsto) * 100)
-                    : fila.registrado > 0
-                      ? 100
-                      : 0;
+        <div className="flex flex-col gap-1.5">
+            {tramos.map((tramo) => {
+                // Un tanque lleno sin galones configurados pesa como 100 gal
+                // en el dibujo: solo para darle un ancho.
+                const pesos = tramo.puntos.map(
+                    (punto) => punto.previsto ?? 100,
+                );
+                const total = pesos.reduce((suma, peso) => suma + peso, 0) || 1;
+                const avance =
+                    tramo.previsto && tramo.previsto > 0
+                        ? Math.min(
+                              100,
+                              (tramo.registrado / tramo.previsto) * 100,
+                          )
+                        : tramo.registrado > 0
+                          ? 100
+                          : 0;
+                const completo = tramo.falta === 0 && tramo.previsto !== null;
+                let acumulado = 0;
 
                 return (
                     <div
-                        key={fila.punto_id ?? fila.punto}
-                        className="flex min-w-16 flex-col gap-0.5"
-                        style={{ flexGrow: peso(fila), flexBasis: 0 }}
-                        title={`${fila.punto}: ${galones(fila.registrado)} de ${fila.previsto === null ? 'tanque lleno' : galones(fila.previsto)}`}
+                        key={tramo.sentido}
+                        className="grid grid-cols-[3.25rem_1fr_auto] items-center gap-x-2"
                     >
-                        <div className="relative h-5 overflow-hidden rounded-md bg-muted">
+                        <span
+                            className={cn(
+                                'text-[11px] font-medium',
+                                tramo.sentido === 'ida'
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-violet-700 dark:text-violet-400',
+                            )}
+                        >
+                            {tramo.sentido === 'ida' ? 'Ida' : 'Vuelta'}
+                        </span>
+                        <div className="relative h-3 overflow-hidden rounded-full bg-muted">
                             <div
                                 className={cn(
-                                    'h-full transition-all',
+                                    'h-full rounded-full transition-all',
                                     completo
                                         ? 'bg-emerald-500'
-                                        : 'bg-emerald-400/80',
+                                        : 'bg-emerald-400',
                                 )}
                                 style={{ width: `${avance}%` }}
                             />
-                            <span
-                                className={cn(
-                                    'absolute inset-0 flex items-center justify-between gap-1 px-1.5 text-[10px] font-medium',
-                                    avance > 55
-                                        ? 'text-white'
-                                        : 'text-foreground/80',
-                                )}
-                            >
-                                <span className="truncate">{fila.punto}</span>
-                                {completo && (
-                                    <CircleCheck className="size-3 shrink-0" />
-                                )}
-                            </span>
+                            {/* Dónde termina cada punto y empieza el siguiente. */}
+                            {pesos.slice(0, -1).map((peso, indice) => {
+                                acumulado += peso;
+
+                                return (
+                                    <span
+                                        key={indice}
+                                        className="absolute inset-y-0 w-0.5 bg-background"
+                                        style={{
+                                            left: `${(acumulado / total) * 100}%`,
+                                        }}
+                                    />
+                                );
+                            })}
                         </div>
-                        <span className="text-[10px] text-muted-foreground tabular-nums">
-                            {Number.isInteger(fila.registrado)
-                                ? fila.registrado
-                                : fila.registrado.toFixed(1)}
-                            /
-                            {fila.previsto === null
+                        <span
+                            className={cn(
+                                'flex items-center gap-1 text-[11px] tabular-nums',
+                                completo
+                                    ? 'font-medium text-emerald-700 dark:text-emerald-400'
+                                    : 'text-muted-foreground',
+                            )}
+                        >
+                            {completo && <CircleCheck className="size-3" />}
+                            {galones(tramo.registrado).replace(' gal', '')}/
+                            {tramo.previsto === null
                                 ? 'full'
-                                : `${Number.isInteger(fila.previsto) ? fila.previsto : fila.previsto.toFixed(1)} gal`}
+                                : galones(tramo.previsto)}
                         </span>
+                        <span />
+                        <div className="flex text-[10px] text-muted-foreground">
+                            {tramo.puntos.map((punto, indice) => (
+                                <span
+                                    key={punto.punto}
+                                    className="truncate"
+                                    style={{
+                                        flexGrow: pesos[indice],
+                                        flexBasis: 0,
+                                    }}
+                                >
+                                    {punto.punto}{' '}
+                                    {punto.previsto === null
+                                        ? 'full'
+                                        : Number.isInteger(punto.previsto)
+                                          ? punto.previsto
+                                          : punto.previsto.toFixed(1)}
+                                </span>
+                            ))}
+                        </div>
+                        <span />
                     </div>
                 );
             })}
@@ -311,7 +350,7 @@ export default function AbastecimientoIndex({
                             <TableHead className="w-24">Etapa</TableHead>
                             <TableHead>Tarjeta de la pizarra</TableHead>
                             <TableHead className="min-w-80">
-                                Combustible por punto
+                                Combustible
                             </TableHead>
                             <TableHead className="w-32 text-right">
                                 Falta
@@ -386,7 +425,7 @@ export default function AbastecimientoIndex({
                                     </TableCell>
                                     <TableCell>
                                         <BarraCombustible
-                                            combustible={vuelta.combustible}
+                                            tramos={vuelta.tramos}
                                         />
                                     </TableCell>
                                     <TableCell className="text-right">

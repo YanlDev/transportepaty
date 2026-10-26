@@ -33,6 +33,18 @@ export type VueltaAbastecimiento = {
     viaticos: { concepto: string; tipo: string; monto: number }[];
     total_previsto: number | null;
     total_registrado: number;
+    /** Una barra por tramo: la ida y, si tiene combustible, la vuelta. */
+    tramos: TramoCombustible[];
+};
+
+/** El combustible de un tramo: lo previsto, lo autorizado y sus puntos. */
+export type TramoCombustible = {
+    sentido: 'ida' | 'regreso';
+    /** null si incluye un tanque lleno sin galones configurados. */
+    previsto: number | null;
+    registrado: number;
+    falta: number | null;
+    puntos: { punto: string; previsto: number | null; lleno: boolean }[];
 };
 
 export type RegistroAbastecimiento = {

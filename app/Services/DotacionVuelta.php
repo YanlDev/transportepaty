@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\SentidoTramo;
 use App\Enums\TipoLineaAbastecimiento;
 use App\Models\Abastecimiento;
 use App\Models\Ajuste;
@@ -38,13 +39,15 @@ class DotacionVuelta
      *     combustible: list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>,
      *     viaticos: list<array{concepto: string, tipo: string, monto: float}>,
      *     total_previsto: float|null,
-     *     total_registrado: float
+     *     total_registrado: float,
+     *     tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null, lleno: bool}>}>
      * }
      */
     public function de(Vuelta $vuelta, Collection $registrados): array
     {
         $tarjetas = [];
         $lineas = [];
+        $porTramo = [SentidoTramo::Ida->value => [], SentidoTramo::Regreso->value => []];
 
         foreach ($vuelta->paradas as $parada) {
             $regla = $this->reglaDe($parada);
@@ -55,11 +58,15 @@ class DotacionVuelta
 
             $tarjetas[] = ['id' => $regla->id, 'nombre' => $regla->nombre, 'color' => $regla->color, 'parada_id' => $parada->id];
             array_push($lineas, ...$regla->lineas->all());
+            array_push($porTramo[$parada->sentido->value], ...$regla->lineas->all());
         }
+
+        $combustible = $this->combustible($lineas, $registrados);
 
         return [
             'tarjetas' => $tarjetas,
-            ...$this->combustible($lineas, $registrados),
+            ...$combustible,
+            'tramos' => $this->porTramo($porTramo, $combustible['combustible']),
             'viaticos' => array_values(collect($lineas)
                 ->reject(fn (LineaReglaAbastecimiento $linea): bool => $linea->tipo === TipoLineaAbastecimiento::Combustible)
                 ->map(fn (LineaReglaAbastecimiento $linea): array => [
@@ -69,6 +76,89 @@ class DotacionVuelta
                 ])
                 ->all()),
         ];
+    }
+
+    /**
+     * El combustible de la ida y de la vuelta por separado, para dibujar una
+     * barra por tramo. Lo autorizado se registra por punto y no por tramo,
+     * así que se reparte en orden: primero cubre lo previsto de la ida en
+     * ese punto y lo que sobra va a la vuelta.
+     *
+     * @param  array<string, list<LineaReglaAbastecimiento>>  $porTramo
+     * @param  list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>  $porPunto
+     * @return list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null, lleno: bool}>}>
+     */
+    private function porTramo(array $porTramo, array $porPunto): array
+    {
+        $disponible = [];
+
+        foreach ($porPunto as $fila) {
+            $disponible[$fila['punto_id'] ?? 0] = $fila['registrado'];
+        }
+
+        $tramos = [];
+
+        foreach ($porTramo as $sentido => $lineas) {
+            $puntos = [];
+
+            foreach ($lineas as $linea) {
+                if ($linea->tipo !== TipoLineaAbastecimiento::Combustible) {
+                    continue;
+                }
+
+                $clave = $linea->punto_abastecimiento_id ?? 0;
+                $puntos[$clave] ??= ['punto' => $linea->punto->nombre ?? 'Total del tramo', 'previsto' => 0.0, 'lleno' => false];
+
+                if ($linea->tanque_lleno) {
+                    $lleno = $this->galonesTanqueLleno();
+                    $puntos[$clave]['lleno'] = true;
+                    $puntos[$clave]['previsto'] = $lleno === null || $puntos[$clave]['previsto'] === null
+                        ? null
+                        : $puntos[$clave]['previsto'] + $lleno;
+                } elseif ($puntos[$clave]['previsto'] !== null) {
+                    $puntos[$clave]['previsto'] += (float) $linea->galones;
+                }
+            }
+
+            if ($puntos === []) {
+                continue;
+            }
+
+            $registrado = 0.0;
+
+            foreach ($puntos as $clave => $punto) {
+                $toma = $punto['previsto'] === null
+                    ? ($disponible[$clave] ?? 0.0)
+                    : min($disponible[$clave] ?? 0.0, $punto['previsto']);
+                $registrado += $toma;
+                $disponible[$clave] = ($disponible[$clave] ?? 0.0) - $toma;
+            }
+
+            $previstos = array_column($puntos, 'previsto');
+            $previsto = in_array(null, $previstos, true) ? null : (float) array_sum($previstos);
+
+            $tramos[] = [
+                'sentido' => $sentido,
+                'previsto' => $previsto,
+                'registrado' => $registrado,
+                'falta' => $previsto === null ? null : max(0.0, $previsto - $registrado),
+                'puntos' => array_values($puntos),
+            ];
+        }
+
+        // Lo autorizado en un punto que la pizarra no nombra se suma al
+        // último tramo, para que no quede fuera de la barra.
+        $sobrante = array_sum($disponible);
+
+        if ($sobrante > 0 && $tramos !== []) {
+            $ultimo = array_key_last($tramos);
+            $tramos[$ultimo]['registrado'] += $sobrante;
+            $tramos[$ultimo]['falta'] = $tramos[$ultimo]['previsto'] === null
+                ? null
+                : max(0.0, $tramos[$ultimo]['previsto'] - $tramos[$ultimo]['registrado']);
+        }
+
+        return $tramos;
     }
 
     /**
