@@ -1,4 +1,4 @@
-import { Head, Link, router, setLayoutProps, usePoll } from '@inertiajs/react';
+import { Head, Link, setLayoutProps, usePoll } from '@inertiajs/react';
 import { CalendarPlus, Search, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionProgramacionController';
@@ -11,29 +11,20 @@ import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dia
 import { ETAPAS, TablaVueltas } from '@/components/vueltas/tabla-vueltas';
 import { usePermisos } from '@/hooks/use-permisos';
 import { cn } from '@/lib/utils';
-import type {
-    DiaDeSemana,
-    OpcionesVuelta,
-    TarjetaVuelta,
-    Vuelta,
-} from '@/types/vueltas';
+import type { OpcionesVuelta, TarjetaVuelta, Vuelta } from '@/types/vueltas';
 
 type Props = OpcionesVuelta & {
+    /** Hoy: la fecha de salida que se propone al programar. */
     fecha: string;
-    semana: DiaDeSemana[];
-    /** Los tickets que salen el día elegido. */
-    salidas: TarjetaVuelta[];
     /** Cada ticket abierto en su etapa, y las unidades en base. */
     tablero: TarjetaVuelta[];
     whatsappConectado: boolean;
 };
 
-type Vista = 'gantt' | 'tablero' | 'salidas';
+type Vista = 'gantt' | 'tablero';
 
 /** El diálogo abierto: para un ticket nuevo o para editar uno. */
 type Dialogo = { vuelta: Vuelta | null } | null;
-
-const DIAS_CORTOS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
 
 const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
 
@@ -54,13 +45,11 @@ function filtrar(lista: TarjetaVuelta[], buscar: string): TarjetaVuelta[] {
 
 /**
  * La programación: todo nace acá. El tablero lista cada unidad en su etapa
- * —por salir, en ida, en vuelta, en base— y las salidas del día son lo que
- * sale una fecha. Clic en una fila abre el ticket con sus avisos.
+ * —por salir, en ida, en vuelta, en base— como Gantt o como lista. Clic en
+ * un ticket abre su detalle, con los avisos de WhatsApp.
  */
 export default function Programacion({
     fecha,
-    semana,
-    salidas,
     tablero,
     whatsappConectado,
     ...opciones
@@ -77,25 +66,16 @@ export default function Programacion({
 
     // Cada 15 segundos: las unidades cambian de etapa solas cuando llegan
     // sus GR, y el ✓✓ de un aviso aparece sin recargar.
-    usePoll(15_000, { only: ['tablero', 'salidas', 'semana'] });
-
-    const irA = (nuevaFecha: string) =>
-        router.get(
-            vueltas.index.url({ query: { fecha: nuevaFecha } }),
-            {},
-            { preserveScroll: true, preserveState: true },
-        );
+    usePoll(15_000, { only: ['tablero'] });
 
     const filtradas = useMemo(
-        () => filtrar(vista === 'salidas' ? salidas : tablero, buscar),
-        [buscar, vista, tablero, salidas],
+        () => filtrar(tablero, buscar),
+        [buscar, tablero],
     );
 
     // Se busca por id en lo último que llegó: si el ticket cambia con el
     // panel abierto (llega una GR, se manda un aviso), se ve al día.
-    const abierta =
-        [...tablero, ...salidas].find((vuelta) => vuelta.id === abiertaId) ??
-        null;
+    const abierta = tablero.find((vuelta) => vuelta.id === abiertaId) ?? null;
 
     const editar = (vuelta: Vuelta) => setDialogo({ vuelta });
 
@@ -110,7 +90,6 @@ export default function Programacion({
                             [
                                 ['gantt', 'Gantt'],
                                 ['tablero', 'Lista'],
-                                ['salidas', 'Salidas del día'],
                             ] as const
                         ).map(([valor, etiqueta]) => (
                             <button
@@ -129,7 +108,7 @@ export default function Programacion({
                         ))}
                     </div>
 
-                    {vista !== 'salidas' && (
+                    {
                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                             {ETAPAS.map((etapa) => (
                                 <span
@@ -155,7 +134,7 @@ export default function Programacion({
                                 </span>
                             ))}
                         </div>
-                    )}
+                    }
                 </div>
 
                 <div className="flex gap-2">
@@ -189,66 +168,14 @@ export default function Programacion({
                 </div>
             </div>
 
-            {vista === 'salidas' && (
-                <div className="flex flex-wrap items-center gap-3">
-                    <Input
-                        type="date"
-                        value={fecha}
-                        onChange={(evento) =>
-                            evento.target.value && irA(evento.target.value)
-                        }
-                        className="w-44"
-                    />
-                    <div className="grid flex-1 grid-cols-7 gap-1.5">
-                        {semana.map((dia, indice) => {
-                            const esElVisto = dia.fecha === fecha;
-
-                            return (
-                                <button
-                                    key={dia.fecha}
-                                    type="button"
-                                    onClick={() => irA(dia.fecha)}
-                                    aria-current={
-                                        esElVisto ? 'date' : undefined
-                                    }
-                                    className={cn(
-                                        'flex items-center justify-center gap-1.5 rounded-lg border px-1 py-1.5 text-xs transition',
-                                        esElVisto
-                                            ? 'border-primary bg-primary/10 font-semibold'
-                                            : 'hover:bg-accent',
-                                    )}
-                                >
-                                    <span className="text-muted-foreground">
-                                        {DIAS_CORTOS[indice]}
-                                    </span>
-                                    <span>
-                                        {Number(dia.fecha.slice(8, 10))}
-                                    </span>
-                                    {dia.programadas > 0 && (
-                                        <span className="rounded-full bg-primary/15 px-1.5 text-[10px] text-primary">
-                                            {dia.programadas}
-                                        </span>
-                                    )}
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-
             {vista === 'gantt' ? (
                 <GanttVueltas
                     vueltas={filtradas}
                     onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
                 />
-            ) : vista === 'salidas' && filtradas.length === 0 ? (
-                <p className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-                    No sale ningún ticket este día.
-                </p>
             ) : (
                 <TablaVueltas
                     vueltas={filtradas}
-                    agrupar={vista === 'tablero'}
                     onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
                 />
             )}

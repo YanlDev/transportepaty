@@ -69,20 +69,18 @@ it('tells the areas what the board assigns to the trip', function (): void {
         ->toContain('Viático mina S/ 143.00');
 });
 
-it('shows the trips that leave on the chosen day', function (): void {
+it('brings the notices of each ticket on the board', function (): void {
     actingAs(actorConRol('admin'))
-        ->get(route('vueltas.index', ['fecha' => '2026-10-27']))
+        ->get(route('vueltas.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('vueltas/index')
-            ->where('fecha', '2026-10-27')
-            ->has('salidas', 1)
-            ->where('salidas.0.placa', 'BYM-861')
-            ->where('salidas.0.aviso.destinatarios.0.numero', '51987654321')
-            ->where('semana', fn ($semana): bool => collect($semana)->firstWhere('fecha', '2026-10-27')['programadas'] === 1));
+            ->missing('salidas')
+            ->where('tablero', function ($tablero): bool {
+                $ticket = collect($tablero)->firstWhere('placa', 'BYM-861');
 
-    actingAs(actorConRol('admin'))
-        ->get(route('vueltas.index', ['fecha' => '2026-10-28']))
-        ->assertInertia(fn (Assert $page) => $page->has('salidas', 0));
+                return $ticket['aviso']['destinatarios'][0]['numero'] === '51987654321'
+                    && str_contains($ticket['aviso']['mensaje'], $ticket['codigo']);
+            }));
 });
 
 it('queues the notices of the trip to the driver and to an area', function (): void {

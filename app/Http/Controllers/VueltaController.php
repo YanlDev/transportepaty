@@ -57,12 +57,9 @@ class VueltaController extends Controller
     {
         $this->authorize('viewAny', Vuelta::class);
 
-        $fecha = $this->fechaPedida($request);
-
         return Inertia::render('vueltas/index', [
-            'fecha' => $fecha->toDateString(),
-            'semana' => $this->semanaDe($fecha),
-            'salidas' => $this->salidasDelDia($fecha, $request),
+            // Hoy: la fecha de salida que se propone al programar.
+            'fecha' => RelojOperativo::fechaDeHoy()->toDateString(),
             'tablero' => $this->tablero($request),
             'whatsappConectado' => fn (): bool => $this->whatsapp->conectado(),
             ...$this->opcionesDelFormulario(),
@@ -161,24 +158,6 @@ class VueltaController extends Controller
         $this->avisos->encolarVueltaAlArea($vuelta, $area, $numero, $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => "Enviando la vuelta {$vuelta->codigo} a {$area->nombre}…"]);
-    }
-
-    /**
-     * Las vueltas que salen ese día, con sus avisos armados y hasta dónde
-     * llegó el último envío a cada destino.
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function salidasDelDia(CarbonImmutable $fecha, Request $request): array
-    {
-        return array_values(Vuelta::query()
-            ->whereDate('inicio', $fecha->toDateString())
-            ->where('estado', '!=', EstadoVuelta::Anulada)
-            ->with([...$this->relaciones(), 'envios'])
-            ->get()
-            ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa)
-            ->map(fn (Vuelta $vuelta): array => $this->fila($vuelta, $this->etapa($vuelta), $request))
-            ->all());
     }
 
     /**
@@ -321,37 +300,6 @@ class VueltaController extends Controller
         }
 
         return $resumen;
-    }
-
-    /**
-     * Los siete días de la semana del día que se está viendo, con cuántas
-     * vueltas salen cada uno.
-     *
-     * @return list<array{fecha: string, programadas: int}>
-     */
-    private function semanaDe(CarbonImmutable $fecha): array
-    {
-        $inicio = $fecha->startOfWeek();
-
-        $conteos = Vuelta::query()
-            ->whereBetween('inicio', [$inicio->toDateString(), $inicio->addDays(6)->toDateString()])
-            ->where('estado', '!=', EstadoVuelta::Anulada)
-            ->get(['inicio'])
-            ->countBy(fn (Vuelta $vuelta): string => (string) $vuelta->inicio?->toDateString());
-
-        return array_map(fn (int $dias): array => [
-            'fecha' => $dia = $inicio->addDays($dias)->toDateString(),
-            'programadas' => (int) $conteos->get($dia, 0),
-        ], range(0, 6));
-    }
-
-    private function fechaPedida(Request $request): CarbonImmutable
-    {
-        $fecha = $request->string('fecha')->trim()->value();
-
-        return preg_match('/^\d{4}-\d{2}-\d{2}$/', $fecha) === 1
-            ? CarbonImmutable::parse($fecha)
-            : RelojOperativo::fechaDeHoy();
     }
 
     /**
