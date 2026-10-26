@@ -6,6 +6,7 @@ import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DetalleVuelta } from '@/components/vueltas/detalle-vuelta';
+import { GanttVueltas } from '@/components/vueltas/gantt-vueltas';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
 import { ETAPAS, TablaVueltas } from '@/components/vueltas/tabla-vueltas';
 import { usePermisos } from '@/hooks/use-permisos';
@@ -27,7 +28,7 @@ type Props = OpcionesVuelta & {
     whatsappConectado: boolean;
 };
 
-type Vista = 'tablero' | 'salidas';
+type Vista = 'gantt' | 'tablero' | 'salidas';
 
 /** El diálogo abierto: para un ticket nuevo o para editar uno. */
 type Dialogo = { vuelta: Vuelta | null } | null;
@@ -65,7 +66,7 @@ export default function Programacion({
     ...opciones
 }: Props) {
     const { puede } = usePermisos();
-    const [vista, setVista] = useState<Vista>('tablero');
+    const [vista, setVista] = useState<Vista>('gantt');
     const [buscar, setBuscar] = useState('');
     const [dialogo, setDialogo] = useState<Dialogo>(null);
     const [abiertaId, setAbiertaId] = useState<number | null>(null);
@@ -86,7 +87,7 @@ export default function Programacion({
         );
 
     const filtradas = useMemo(
-        () => filtrar(vista === 'tablero' ? tablero : salidas, buscar),
+        () => filtrar(vista === 'salidas' ? salidas : tablero, buscar),
         [buscar, vista, tablero, salidas],
     );
 
@@ -107,7 +108,8 @@ export default function Programacion({
                     <div className="inline-flex rounded-lg border p-0.5">
                         {(
                             [
-                                ['tablero', 'Tablero'],
+                                ['gantt', 'Gantt'],
+                                ['tablero', 'Lista'],
                                 ['salidas', 'Salidas del día'],
                             ] as const
                         ).map(([valor, etiqueta]) => (
@@ -127,7 +129,7 @@ export default function Programacion({
                         ))}
                     </div>
 
-                    {vista === 'tablero' && (
+                    {vista !== 'salidas' && (
                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                             {ETAPAS.map((etapa) => (
                                 <span
@@ -234,7 +236,12 @@ export default function Programacion({
                 </div>
             )}
 
-            {vista === 'salidas' && filtradas.length === 0 ? (
+            {vista === 'gantt' ? (
+                <GanttVueltas
+                    vueltas={filtradas}
+                    onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
+                />
+            ) : vista === 'salidas' && filtradas.length === 0 ? (
                 <p className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
                     No sale ningún ticket este día.
                 </p>
