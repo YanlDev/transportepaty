@@ -5,6 +5,7 @@ import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoControl
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
 import { ReglaDialog } from '@/components/abastecimiento/regla-dialog';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -134,6 +135,17 @@ function PuntoDialog({
                             />
                         )}
                     </Field>
+                    {/* Un punto que ya se usó no se borra, se desactiva:
+                        acá se vuelve a activar. */}
+                    <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                            checked={data.activo}
+                            onCheckedChange={(marcado) =>
+                                setData('activo', marcado === true)
+                            }
+                        />
+                        Activo (se ofrece al registrar y en las tarjetas)
+                    </label>
                 </form>
                 <DialogFooter>
                     <Button

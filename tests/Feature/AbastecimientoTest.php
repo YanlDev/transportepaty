@@ -185,4 +185,11 @@ it('deactivates a point already used instead of deleting it', function (): void 
     actingAs(actorConRol('abastecimiento'))->delete(route('abastecimiento.puntos.destroy', $this->kio));
 
     expect($this->kio->fresh()->activo)->toBeFalse();
+
+    // Y se puede volver a activar desde su edición.
+    actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.puntos.update', $this->kio), [
+        'nombre' => 'Kio', 'zona' => 'lima', 'detalle' => null, 'activo' => true,
+    ]);
+
+    expect($this->kio->fresh()->activo)->toBeTrue();
 });
