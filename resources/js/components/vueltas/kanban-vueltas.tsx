@@ -33,9 +33,9 @@ const COLUMNAS: {
         acento: 'bg-violet-500',
     },
     {
-        etapa: 'cerrada',
-        titulo: 'Cerrada',
-        ayuda: 'Últimos 3 días',
+        etapa: 'en_base',
+        titulo: 'En base',
+        ayuda: 'Disponible para programar',
         acento: 'bg-emerald-500',
     },
 ];
@@ -70,7 +70,8 @@ function Tarjeta({
 
             {vuelta.actual && (
                 <div className="flex items-start gap-1 text-xs">
-                    {vuelta.etapa === 'subiendo' ? (
+                    {vuelta.etapa === 'subiendo' ||
+                    vuelta.etapa === 'en_base' ? (
                         <ArrowUpRight className="mt-0.5 size-3 shrink-0 text-violet-500" />
                     ) : (
                         <ArrowDownRight className="mt-0.5 size-3 shrink-0 text-amber-500" />
@@ -104,6 +105,18 @@ function Tarjeta({
                         <span>
                             {vuelta.dias_en_ruta}{' '}
                             {vuelta.dias_en_ruta === 1 ? 'día' : 'días'}
+                        </span>
+                    )}
+                    {vuelta.dias_en_base !== null && (
+                        <span
+                            className={cn(
+                                vuelta.dias_en_base >= 3 &&
+                                    'font-medium text-amber-700 dark:text-amber-400',
+                            )}
+                        >
+                            {vuelta.dias_en_base === 0
+                                ? 'llegó hoy'
+                                : `hace ${vuelta.dias_en_base} ${vuelta.dias_en_base === 1 ? 'día' : 'días'}`}
                         </span>
                     )}
                     {avisado && (

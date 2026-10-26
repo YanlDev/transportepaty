@@ -113,7 +113,7 @@ export type AvisoVuelta = {
 /** Una vuelta que sale el día elegido, con sus avisos armados. */
 export type SalidaDelDia = Vuelta & { aviso: AvisoVuelta };
 
-export type EtapaVuelta = 'programada' | 'bajando' | 'subiendo' | 'cerrada';
+export type EtapaVuelta = 'programada' | 'bajando' | 'subiendo' | 'en_base';
 
 /** Una tarjeta del kanban de programación. */
 export type TarjetaVuelta = Vuelta & {
@@ -126,6 +126,8 @@ export type TarjetaVuelta = Vuelta & {
         hecha: boolean;
     } | null;
     dias_en_ruta: number | null;
+    /** Cuántos días lleva en la base esperando la siguiente vuelta. */
+    dias_en_base: number | null;
     aviso: AvisoVuelta;
 };
 

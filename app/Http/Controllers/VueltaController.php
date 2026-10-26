@@ -38,8 +38,11 @@ use Inertia\Response;
  */
 class VueltaController extends Controller
 {
-    /** Cuántos días se quedan en el tablero las vueltas ya cerradas. */
-    private const DIAS_CERRADAS_EN_TABLERO = 3;
+    /**
+     * Hasta cuántos días después de volver a la base se muestra una unidad
+     * como disponible: más que eso es una unidad parada, no una por programar.
+     */
+    private const DIAS_EN_BASE_EN_TABLERO = 30;
 
     public function __construct(
         private readonly ProgramadorVueltas $programador,
@@ -178,8 +181,9 @@ class VueltaController extends Controller
 
     /**
      * El kanban: cada vuelta abierta en su etapa —programada, bajando,
-     * subiendo— y las que cerraron en los últimos días. Las vueltas pasan
-     * solas de columna a medida que llegan sus GR.
+     * subiendo— y, en la última columna, las unidades que ya volvieron a la
+     * base y esperan su siguiente vuelta. Las vueltas pasan solas de columna
+     * a medida que llegan sus GR.
      *
      * @return list<array<string, mixed>>
      */
@@ -187,40 +191,81 @@ class VueltaController extends Controller
     {
         $hoy = RelojOperativo::fechaDeHoy();
 
-        return array_values(Vuelta::query()
+        $ultimas = Vuelta::query()->selectRaw('max(id)')->groupBy('tracto_id');
+
+        $vueltas = Vuelta::query()
             ->where(fn ($query) => $query
                 ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
                 ->orWhere(fn ($query) => $query
                     ->where('estado', EstadoVuelta::Cerrada)
-                    ->whereDate('fin', '>=', $hoy->subDays(self::DIAS_CERRADAS_EN_TABLERO)->toDateString())))
+                    ->whereIn('id', $ultimas)
+                    ->whereDate('fin', '>=', $hoy->subDays(self::DIAS_EN_BASE_EN_TABLERO)->toDateString())))
             ->with([...$this->relaciones(), 'envios'])
-            ->get()
-            ->sortBy(fn (Vuelta $vuelta): string => $vuelta->inicio?->toDateString().'|'.$vuelta->tracto->placa)
-            ->map(fn (Vuelta $vuelta): array => [
-                ...$this->vuelta($vuelta, $request),
-                'etapa' => $this->etapa($vuelta),
-                'actual' => $this->dondeVa($vuelta),
-                'dias_en_ruta' => $vuelta->inicio && $vuelta->estado === EstadoVuelta::EnCurso
-                    ? (int) $vuelta->inicio->diffInDays($hoy) + 1
-                    : null,
-                'aviso' => $this->avisoDe($vuelta),
-            ])
+            ->get();
+
+        // Una unidad que ya tiene programada la siguiente vuelta se ve ahí,
+        // no también como disponible en la base.
+        $conSiguiente = $vueltas
+            ->filter(fn (Vuelta $vuelta): bool => $vuelta->estado === EstadoVuelta::Programada)
+            ->pluck('tracto_id')
+            ->all();
+
+        return array_values($vueltas
+            ->map(fn (Vuelta $vuelta): array => ['vuelta' => $vuelta, 'etapa' => $this->etapa($vuelta)])
+            ->reject(fn (array $fila): bool => $fila['etapa'] === 'en_base'
+                && in_array($fila['vuelta']->tracto_id, $conSiguiente, true))
+            ->sortBy(fn (array $fila): string => $fila['vuelta']->inicio?->toDateString().'|'.$fila['vuelta']->tracto->placa)
+            ->map(function (array $fila) use ($request, $hoy): array {
+                $vuelta = $fila['vuelta'];
+                $llegada = $fila['etapa'] === 'en_base' ? $this->ultimaGuia($vuelta) : null;
+
+                return [
+                    ...$this->vuelta($vuelta, $request),
+                    'etapa' => $fila['etapa'],
+                    'actual' => $this->dondeVa($vuelta),
+                    'dias_en_ruta' => in_array($fila['etapa'], ['bajando', 'subiendo'], true) && $vuelta->inicio
+                        ? (int) $vuelta->inicio->diffInDays($hoy) + 1
+                        : null,
+                    'dias_en_base' => $llegada ? (int) $llegada->diffInDays($hoy) : null,
+                    'aviso' => $this->avisoDe($vuelta),
+                ];
+            })
             ->all());
     }
 
     /**
-     * @return 'programada'|'bajando'|'subiendo'|'cerrada'
+     * Bajando hasta que el regreso tiene GR; subiendo hasta que la última
+     * GR del regreso llega a la base (Juliaca o la mina): ahí la unidad ya
+     * está disponible para la siguiente vuelta.
+     *
+     * @return 'programada'|'bajando'|'subiendo'|'en_base'
      */
     private function etapa(Vuelta $vuelta): string
     {
-        return match ($vuelta->estado) {
-            EstadoVuelta::Programada => 'programada',
-            EstadoVuelta::Cerrada, EstadoVuelta::Anulada => 'cerrada',
-            EstadoVuelta::EnCurso => $vuelta->paradasDe(SentidoTramo::Regreso)
-                ->contains(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty())
-                ? 'subiendo'
-                : 'bajando',
-        };
+        if ($vuelta->estado === EstadoVuelta::Programada) {
+            return 'programada';
+        }
+
+        if ($vuelta->estado !== EstadoVuelta::EnCurso) {
+            return 'en_base';
+        }
+
+        $ultima = $vuelta->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
+
+        if ($ultima?->sentido !== SentidoTramo::Regreso) {
+            return 'bajando';
+        }
+
+        return $ultima->zona_destino?->esBase() ? 'en_base' : 'subiendo';
+    }
+
+    private function ultimaGuia(Vuelta $vuelta): ?CarbonImmutable
+    {
+        $fecha = $vuelta->paradas
+            ->flatMap(fn (ParadaVuelta $parada) => $parada->viajes)
+            ->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString());
+
+        return $fecha === null ? null : CarbonImmutable::parse($fecha);
     }
 
     /**

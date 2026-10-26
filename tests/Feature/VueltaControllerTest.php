@@ -38,40 +38,53 @@ it('is read by whoever reads the programación', function (): void {
 
 /**
  * El kanban: cada vuelta en su etapa. Una en curso está «bajando» hasta que
- * su regreso tiene GR; ahí pasa a «subiendo». Las cerradas se quedan unos
- * días y después salen del tablero.
+ * su regreso tiene GR, «subiendo» hasta que esa GR llega a la base (Juliaca
+ * o la mina), y ahí queda «en base», disponible para la siguiente.
  */
 it('places each trip in its stage on the board', function (): void {
+    $guiaEn = function (Vuelta $vuelta, SentidoTramo $sentido, ZonaRuta $origen, ZonaRuta $destino, string $fecha): void {
+        $parada = ParadaVuelta::factory()->create([
+            'vuelta_id' => $vuelta->id, 'sentido' => $sentido, 'orden' => $vuelta->paradas()->count() + 1,
+            'zona_origen' => $origen, 'zona_destino' => $destino,
+            'lugar_origen' => $origen->label(), 'lugar_destino' => $destino->label(),
+        ]);
+        Viaje::factory()->create(['tracto_id' => null, 'fecha_traslado' => $fecha])
+            ->forceFill(['parada_vuelta_id' => $parada->id])->save();
+    };
+
     $programada = Vuelta::factory()->programada()->create(['inicio' => now()->addDay()->toDateString()]);
     $bajando = Vuelta::factory()->create(['inicio' => now()->subDays(2)->toDateString()]);
+    $guiaEn($bajando, SentidoTramo::Ida, ZonaRuta::Mina, ZonaRuta::Pisco, now()->subDays(2)->toDateString());
     $subiendo = Vuelta::factory()->create(['inicio' => now()->subDays(8)->toDateString()]);
-    $recien = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(15)->toDateString(), 'fin' => now()->subDay()->toDateString()]);
-    $vieja = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(30)->toDateString(), 'fin' => now()->subDays(20)->toDateString()]);
-
-    ParadaVuelta::factory()->create([
-        'vuelta_id' => $bajando->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1,
-        'lugar_origen' => 'Antauta', 'lugar_destino' => 'Paracas',
-    ]);
-    $regreso = ParadaVuelta::factory()->create([
-        'vuelta_id' => $subiendo->id, 'sentido' => SentidoTramo::Regreso, 'orden' => 1,
-        'zona_origen' => ZonaRuta::Pisco, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Escoria,
-    ]);
-    Viaje::factory()->create(['tracto_id' => null])->forceFill(['parada_vuelta_id' => $regreso->id])->save();
+    $guiaEn($subiendo, SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Sur, now()->subDays(1)->toDateString());
+    $llego = Vuelta::factory()->create(['inicio' => now()->subDays(12)->toDateString()]);
+    $guiaEn($llego, SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Juliaca, now()->subDays(4)->toDateString());
+    $cerrada = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(15)->toDateString(), 'fin' => now()->subDay()->toDateString()]);
+    $parada = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(60)->toDateString(), 'fin' => now()->subDays(45)->toDateString()]);
+    // Llegó a la base pero ya tiene la siguiente programada: se ve una vez.
+    $conSiguiente = Vuelta::factory()->create(['inicio' => now()->subDays(12)->toDateString()]);
+    $guiaEn($conSiguiente, SentidoTramo::Regreso, ZonaRuta::Pisco, ZonaRuta::Mina, now()->subDays(3)->toDateString());
+    $siguiente = Vuelta::factory()->programada()->create(['tracto_id' => $conSiguiente->tracto_id, 'inicio' => now()->addDays(2)->toDateString()]);
 
     actingAs(actorConRol('admin'))
         ->get(route('vueltas.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('vueltas/index')
-            ->has('tablero', 4)
-            ->where('tablero', fn ($tablero): bool => collect($tablero)->pluck('etapa', 'id')->all() === [
-                $recien->id => 'cerrada',
-                $subiendo->id => 'subiendo',
-                $bajando->id => 'bajando',
-                $programada->id => 'programada',
-            ])
-            ->where('tablero', fn ($tablero): bool => collect($tablero)->firstWhere('id', $bajando->id)['actual']['texto'] === 'Antauta → Paracas'
-                && collect($tablero)->firstWhere('id', $bajando->id)['dias_en_ruta'] === 3
-                && ! collect($tablero)->contains('id', $vieja->id)));
+            ->where('tablero', function ($tablero) use ($programada, $bajando, $subiendo, $llego, $cerrada, $parada, $conSiguiente, $siguiente): bool {
+                $etapas = collect($tablero)->pluck('etapa', 'id');
+
+                return $etapas->get($programada->id) === 'programada'
+                    && $etapas->get($bajando->id) === 'bajando'
+                    && $etapas->get($subiendo->id) === 'subiendo'
+                    && $etapas->get($llego->id) === 'en_base'
+                    && $etapas->get($cerrada->id) === 'en_base'
+                    && $etapas->get($siguiente->id) === 'programada'
+                    && ! $etapas->has($parada->id)
+                    && ! $etapas->has($conSiguiente->id)
+                    && collect($tablero)->firstWhere('id', $llego->id)['dias_en_base'] === 4
+                    && collect($tablero)->firstWhere('id', $bajando->id)['dias_en_ruta'] === 3
+                    && collect($tablero)->firstWhere('id', $bajando->id)['actual']['texto'] === 'Mina San Rafael → Pisco';
+            }));
 });
 
 it('lists the history of a unit with the GR of each stop', function (): void {
