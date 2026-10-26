@@ -123,7 +123,7 @@ function Tramo({
 
 /**
  * Los dos tramos de la vuelta lado a lado (uno sobre otro en el celular):
- * la ida sube a la sierra, el regreso baja a la costa.
+ * la ida baja desde la mina o desde Juliaca, el regreso vuelve a subir.
  */
 export function TramosVuelta({
     vuelta,
@@ -135,14 +135,14 @@ export function TramosVuelta({
     return (
         <div className="grid gap-4 md:grid-cols-2">
             <Tramo
-                titulo="Ida · subida"
-                subida
+                titulo="Ida · bajada"
+                subida={false}
                 paradas={vuelta.ida}
                 conGuias={conGuias}
             />
             <Tramo
-                titulo="Regreso · bajada"
-                subida={false}
+                titulo="Regreso · subida"
+                subida
                 paradas={vuelta.regreso}
                 conGuias={conGuias}
             />

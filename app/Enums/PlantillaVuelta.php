@@ -29,53 +29,54 @@ enum PlantillaVuelta: string
     public function label(): string
     {
         return match ($this) {
-            self::JuliacaConcentradoMetalico => 'Particular a Juliaca · concentrado y metálico',
-            self::JuliacaConcentrado => 'Particular a Juliaca · concentrado',
-            self::MaterialesConcentradoMetalico => 'Materiales a mina · concentrado y metálico',
-            self::MaterialesConcentrado => 'Materiales a mina · concentrado',
-            self::EscoriaConcentrado => 'Escoria a mina · concentrado',
-            self::SurConcentradoMetalico => 'Particular al Sur · concentrado y metálico',
-            self::CuscoConcentradoMetalico => 'Particular a Cusco · concentrado y metálico',
-            self::ParticularLimaJuliaca => 'Solo particular · Lima ↔ Juliaca',
+            self::JuliacaConcentradoMetalico => 'Concentrado y metálico · particular a Juliaca',
+            self::JuliacaConcentrado => 'Concentrado · particular a Juliaca',
+            self::MaterialesConcentradoMetalico => 'Concentrado y metálico · materiales a mina',
+            self::MaterialesConcentrado => 'Concentrado · materiales a mina',
+            self::EscoriaConcentrado => 'Concentrado · escoria a mina',
+            self::SurConcentradoMetalico => 'Concentrado y metálico · particular al Sur',
+            self::CuscoConcentradoMetalico => 'Concentrado y metálico · particular a Cusco',
+            self::ParticularLimaJuliaca => 'Solo particular · Juliaca ↔ Lima',
         };
     }
 
     /**
-     * Las paradas en orden: primero la ida, después el regreso.
+     * Las paradas en orden: primero la ida (baja desde la mina o desde
+     * Juliaca), después el regreso (vuelve a subir).
      *
      * @return list<array{sentido: SentidoTramo, zona_origen: ZonaRuta, zona_destino: ZonaRuta, tipo_carga: TipoCarga}>
      */
     public function paradas(): array
     {
-        $subidaParticular = fn (ZonaRuta $destino): array => [
-            $this->parada(SentidoTramo::Ida, ZonaRuta::Lima, $destino, TipoCarga::Particular),
-            $this->parada(SentidoTramo::Ida, $destino, ZonaRuta::Mina, TipoCarga::Vacio),
-        ];
-        $subidaMateriales = [$this->parada(SentidoTramo::Ida, ZonaRuta::Lima, ZonaRuta::Mina, TipoCarga::Materiales)];
         $bajadaConMetalico = [
-            $this->parada(SentidoTramo::Regreso, ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado),
-            $this->parada(SentidoTramo::Regreso, ZonaRuta::Pisco, ZonaRuta::Lima, TipoCarga::Metalico),
+            $this->parada(SentidoTramo::Ida, ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado),
+            $this->parada(SentidoTramo::Ida, ZonaRuta::Pisco, ZonaRuta::Lima, TipoCarga::Metalico),
         ];
         $bajadaSinMetalico = [
-            $this->parada(SentidoTramo::Regreso, ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado),
-            $this->parada(SentidoTramo::Regreso, ZonaRuta::Pisco, ZonaRuta::Lima, TipoCarga::Vacio),
+            $this->parada(SentidoTramo::Ida, ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado),
+            $this->parada(SentidoTramo::Ida, ZonaRuta::Pisco, ZonaRuta::Lima, TipoCarga::Vacio),
         ];
+        $subidaParticular = fn (ZonaRuta $destino): array => [
+            $this->parada(SentidoTramo::Regreso, ZonaRuta::Lima, $destino, TipoCarga::Particular),
+            $this->parada(SentidoTramo::Regreso, $destino, ZonaRuta::Mina, TipoCarga::Vacio),
+        ];
+        $subidaMateriales = [$this->parada(SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Mina, TipoCarga::Materiales)];
 
         return match ($this) {
-            self::JuliacaConcentradoMetalico => [...$subidaParticular(ZonaRuta::Juliaca), ...$bajadaConMetalico],
-            self::JuliacaConcentrado => [...$subidaParticular(ZonaRuta::Juliaca), ...$bajadaSinMetalico],
-            self::MaterialesConcentradoMetalico => [...$subidaMateriales, ...$bajadaConMetalico],
-            self::MaterialesConcentrado => [...$subidaMateriales, ...$bajadaSinMetalico],
-            // Se queda en Pisco: la escoria sube y el concentrado vuelve a bajar ahí.
+            self::JuliacaConcentradoMetalico => [...$bajadaConMetalico, ...$subidaParticular(ZonaRuta::Juliaca)],
+            self::JuliacaConcentrado => [...$bajadaSinMetalico, ...$subidaParticular(ZonaRuta::Juliaca)],
+            self::MaterialesConcentradoMetalico => [...$bajadaConMetalico, ...$subidaMateriales],
+            self::MaterialesConcentrado => [...$bajadaSinMetalico, ...$subidaMateriales],
+            // Se da la vuelta en Pisco: baja el concentrado y sube la escoria.
             self::EscoriaConcentrado => [
-                $this->parada(SentidoTramo::Ida, ZonaRuta::Pisco, ZonaRuta::Mina, TipoCarga::Escoria),
-                $this->parada(SentidoTramo::Regreso, ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado),
+                $this->parada(SentidoTramo::Ida, ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado),
+                $this->parada(SentidoTramo::Regreso, ZonaRuta::Pisco, ZonaRuta::Mina, TipoCarga::Escoria),
             ],
-            self::SurConcentradoMetalico => [...$subidaParticular(ZonaRuta::Sur), ...$bajadaConMetalico],
-            self::CuscoConcentradoMetalico => [...$subidaParticular(ZonaRuta::Cusco), ...$bajadaConMetalico],
+            self::SurConcentradoMetalico => [...$bajadaConMetalico, ...$subidaParticular(ZonaRuta::Sur)],
+            self::CuscoConcentradoMetalico => [...$bajadaConMetalico, ...$subidaParticular(ZonaRuta::Cusco)],
             self::ParticularLimaJuliaca => [
-                $this->parada(SentidoTramo::Ida, ZonaRuta::Lima, ZonaRuta::Juliaca, TipoCarga::Particular),
-                $this->parada(SentidoTramo::Regreso, ZonaRuta::Juliaca, ZonaRuta::Lima, TipoCarga::Particular),
+                $this->parada(SentidoTramo::Ida, ZonaRuta::Juliaca, ZonaRuta::Lima, TipoCarga::Particular),
+                $this->parada(SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Juliaca, TipoCarga::Particular),
             ],
         };
     }

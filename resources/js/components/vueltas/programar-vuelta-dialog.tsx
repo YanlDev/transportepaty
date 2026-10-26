@@ -345,11 +345,11 @@ export function ProgramarVueltaDialog({
         <div className="flex flex-col gap-2">
             <h3 className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 {sentido === 'ida' ? (
-                    <ArrowUpRight className="size-3.5" />
-                ) : (
                     <ArrowDownRight className="size-3.5" />
+                ) : (
+                    <ArrowUpRight className="size-3.5" />
                 )}
-                {sentido === 'ida' ? 'Ida · subida' : 'Regreso · bajada'}
+                {sentido === 'ida' ? 'Ida · bajada' : 'Regreso · subida'}
             </h3>
 
             {data.paradas.map((parada, indice) => {

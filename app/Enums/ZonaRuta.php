@@ -8,9 +8,9 @@ use App\Enums\Concerns\HasLabel;
  * Las zonas en las que se mueve la flota, tan gruesas como hace falta para
  * leer el circuito: dónde carga y descarga la unidad, no la dirección exacta.
  *
- * El lado (sierra o costa) es lo que parte la vuelta en dos: todo lo que
- * termina en la sierra es la ida (la subida, hacia la mina) y todo lo que
- * termina en la costa es el regreso (la bajada). El Sur y Cusco cuentan como
+ * El lado (sierra o costa) es lo que parte la vuelta en dos: la ida sale de
+ * Juliaca o de la mina y termina en la costa (la bajada), y el regreso
+ * termina de vuelta en la sierra (la subida). El Sur y Cusco cuentan como
  * sierra porque se llega a ellos subiendo y desde ahí la unidad sigue a mina.
  */
 enum ZonaRuta: string

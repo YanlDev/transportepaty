@@ -72,8 +72,8 @@ it('lists the history of a unit with the GR of each stop', function (): void {
 });
 
 /**
- * Lo que manda el formulario para la plantilla de escoria: sube con escoria
- * desde Pisco y baja con concentrado.
+ * Lo que manda el formulario para la plantilla de escoria: baja con
+ * concentrado y sube con escoria desde Pisco.
  *
  * @return array<string, mixed>
  */
@@ -86,8 +86,8 @@ function vueltaDelFormulario(int $tractoId, array $cambios = []): array
         'inicio' => '2026-10-28',
         'paradas' => [
             // El regreso viene primero a propósito: se guarda igual en orden.
-            ['sentido' => 'regreso', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
-            ['sentido' => 'ida', 'zona_origen' => 'pisco', 'zona_destino' => 'mina', 'tipo_carga' => 'escoria'],
+            ['sentido' => 'regreso', 'zona_origen' => 'pisco', 'zona_destino' => 'mina', 'tipo_carga' => 'escoria'],
+            ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
         ],
         ...$cambios,
     ];
@@ -107,7 +107,7 @@ it('programs a trip with its stops, outbound leg first', function (): void {
     expect($vuelta->estado)->toBe(EstadoVuelta::Programada)
         ->and($vuelta->tipo)->toBe(TipoVuelta::Mina)
         ->and($vuelta->inicio->toDateString())->toBe('2026-10-28')
-        ->and($vuelta->paradas->pluck('tipo_carga')->all())->toBe([TipoCarga::Escoria, TipoCarga::Concentrado])
+        ->and($vuelta->paradas->pluck('tipo_carga')->all())->toBe([TipoCarga::Concentrado, TipoCarga::Escoria])
         // Programar la siguiente da por terminada la que estaba andando.
         ->and($anterior->fresh()->estado)->toBe(EstadoVuelta::Cerrada);
 });
@@ -138,7 +138,7 @@ it('edits what has not happened yet and keeps the stops with GR', function (): v
     $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
     actingAs(actorConRol('admin'))->post(route('vueltas.store'), vueltaDelFormulario($tracto->id));
     $vuelta = Vuelta::query()->where('origen', OrigenVuelta::Programacion)->sole();
-    [$escoria, $concentrado] = $vuelta->paradas->all();
+    [$concentrado, $escoria] = $vuelta->paradas->all();
 
     // Llega la GR de la escoria: esa parada ya pasó.
     Viaje::factory()->create([
@@ -147,20 +147,20 @@ it('edits what has not happened yet and keeps the stops with GR', function (): v
         'tipo_carga' => TipoCarga::Escoria,
     ]);
 
-    // En el formulario se cambia el regreso: concentrado y metálico. La
-    // escoria viaja con su id e intenta cambiarse: no debe tocarse.
+    // En el formulario se suma el metálico a la ida. La escoria viaja con
+    // su id e intenta cambiarse: no debe tocarse.
     actingAs(actorConRol('admin'))
         ->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['paradas' => [
-            ['id' => $escoria->id, 'sentido' => 'ida', 'zona_origen' => 'lima', 'zona_destino' => 'mina', 'tipo_carga' => 'materiales'],
-            ['id' => $concentrado->id, 'sentido' => 'regreso', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
-            ['sentido' => 'regreso', 'zona_origen' => 'pisco', 'zona_destino' => 'lima', 'tipo_carga' => 'metalico'],
+            ['id' => $concentrado->id, 'sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+            ['sentido' => 'ida', 'zona_origen' => 'pisco', 'zona_destino' => 'lima', 'tipo_carga' => 'metalico'],
+            ['id' => $escoria->id, 'sentido' => 'regreso', 'zona_origen' => 'lima', 'zona_destino' => 'mina', 'tipo_carga' => 'materiales'],
         ]]))
         ->assertRedirect();
 
     $paradas = $vuelta->fresh()->paradas;
 
-    expect($paradas->pluck('tipo_carga')->all())->toBe([TipoCarga::Escoria, TipoCarga::Concentrado, TipoCarga::Metalico])
-        ->and($paradas->first()->zona_origen)->toBe(ZonaRuta::Pisco)
+    expect($paradas->pluck('tipo_carga')->all())->toBe([TipoCarga::Concentrado, TipoCarga::Metalico, TipoCarga::Escoria])
+        ->and($paradas->last()->zona_origen)->toBe(ZonaRuta::Pisco)
         ->and($vuelta->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
 });
 

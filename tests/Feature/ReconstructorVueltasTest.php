@@ -47,35 +47,41 @@ beforeEach(function (): void {
 
 it('splits the history into outbound and return legs, adding the empty runs', function (): void {
     $materiales = guia($this->tracto, '2026-08-28', CALLAO, MINA, TipoCarga::Materiales);
-    guia($this->tracto, '2026-09-02', MINA, PISCO, TipoCarga::Concentrado);
+    $concentrado = guia($this->tracto, '2026-09-02', MINA, PISCO, TipoCarga::Concentrado);
     guia($this->tracto, '2026-09-07', PISCO, CALLAO, TipoCarga::Metalico);
     guia($this->tracto, '2026-09-09', HUARAL, JULIACA, TipoCarga::Particular);
     guia($this->tracto, '2026-09-16', MINA, PISCO, TipoCarga::Concentrado);
 
     $resumen = app(ReconstructorVueltas::class)->reconstruir();
 
-    expect($resumen)->toBe(['vueltas' => 2, 'paradas' => 6, 'vacios' => 1, 'guias' => 5]);
+    expect($resumen)->toBe(['vueltas' => 3, 'paradas' => 6, 'vacios' => 1, 'guias' => 5]);
 
-    [$primera, $segunda] = Vuelta::query()->orderBy('inicio')->get()->all();
+    [$anterior, $vuelta, $siguiente] = Vuelta::query()->orderBy('inicio')->get()->all();
 
-    expect(recorrido($primera))->toBe(['ida:materiales', 'regreso:concentrado', 'regreso:metalico'])
-        ->and($primera->estado)->toBe(EstadoVuelta::Cerrada)
-        ->and($primera->tipo)->toBe(TipoVuelta::Mina)
-        ->and($primera->inicio->toDateString())->toBe('2026-08-28')
-        ->and($primera->fin->toDateString())->toBe('2026-09-07')
-        ->and($primera->codigo)->toStartWith('V-');
+    // Los materiales subieron a mina: es el regreso de una vuelta que bajó
+    // antes de que hubiera GR.
+    expect(recorrido($anterior))->toBe(['regreso:materiales'])
+        ->and($anterior->estado)->toBe(EstadoVuelta::Cerrada)
+        ->and($materiales->fresh()->parada->vuelta->is($anterior))->toBeTrue();
 
-    // Juliaca → mina la unidad sube vacía: también es parte de la ida.
-    expect(recorrido($segunda))->toBe(['ida:particular', 'ida:vacio', 'regreso:concentrado'])
-        ->and($segunda->estado)->toBe(EstadoVuelta::EnCurso)
-        ->and($segunda->fin)->toBeNull();
+    // La vuelta sale de la mina: baja concentrado y metálico, sube con
+    // particular a Juliaca y de ahí vacía a la mina.
+    expect(recorrido($vuelta))->toBe(['ida:concentrado', 'ida:metalico', 'regreso:particular', 'regreso:vacio'])
+        ->and($vuelta->estado)->toBe(EstadoVuelta::Cerrada)
+        ->and($vuelta->tipo)->toBe(TipoVuelta::Mina)
+        ->and($vuelta->inicio->toDateString())->toBe('2026-09-02')
+        ->and($vuelta->fin->toDateString())->toBe('2026-09-09')
+        ->and($vuelta->codigo)->toStartWith('V-')
+        ->and($concentrado->fresh()->parada->vuelta->is($vuelta))->toBeTrue();
 
-    $vacio = $segunda->paradas()->where('tipo_carga', TipoCarga::Vacio)->sole();
+    $vacio = $vuelta->paradas()->where('tipo_carga', TipoCarga::Vacio)->sole();
     expect($vacio->lugar_origen)->toBe('Juliaca')
         ->and($vacio->lugar_destino)->toBe('Antauta')
         ->and($vacio->viajes)->toBeEmpty();
 
-    expect($materiales->fresh()->parada->vuelta->is($primera))->toBeTrue();
+    expect(recorrido($siguiente))->toBe(['ida:concentrado'])
+        ->and($siguiente->estado)->toBe(EstadoVuelta::EnCurso)
+        ->and($siguiente->fin)->toBeNull();
 });
 
 it('groups the GR of the same load into one stop', function (): void {
@@ -87,12 +93,12 @@ it('groups the GR of the same load into one stop', function (): void {
 
     $parada = ParadaVuelta::query()->sole();
     expect($parada->viajes)->toHaveCount(3)
-        ->and($parada->sentido)->toBe(SentidoTramo::Regreso);
+        ->and($parada->sentido)->toBe(SentidoTramo::Ida);
 });
 
 it('marks a round trip with only private cargo as particular', function (): void {
-    guia($this->tracto, '2026-09-04', HUARAL, JULIACA, TipoCarga::Particular);
-    guia($this->tracto, '2026-09-09', JULIACA, CALLAO, TipoCarga::Particular);
+    guia($this->tracto, '2026-09-04', JULIACA, CALLAO, TipoCarga::Particular);
+    guia($this->tracto, '2026-09-09', HUARAL, JULIACA, TipoCarga::Particular);
 
     app(ReconstructorVueltas::class)->reconstruir();
 

@@ -22,15 +22,18 @@ it('reads the circuit zone from a GR address', function (string $direccion, ?Zon
     'ninguna conocida' => ['CALLE SIN NOMBRE', null],
 ]);
 
-it('sends whatever ends in the highlands to the outbound leg', function (): void {
-    expect(SentidoTramo::hacia(ZonaRuta::Mina))->toBe(SentidoTramo::Ida)
-        ->and(SentidoTramo::hacia(ZonaRuta::Juliaca))->toBe(SentidoTramo::Ida)
-        ->and(SentidoTramo::hacia(ZonaRuta::Sur))->toBe(SentidoTramo::Ida)
-        ->and(SentidoTramo::hacia(ZonaRuta::Pisco))->toBe(SentidoTramo::Regreso)
-        ->and(SentidoTramo::hacia(ZonaRuta::Lima))->toBe(SentidoTramo::Regreso);
+/**
+ * La ida sale de Juliaca o de la mina y baja a la costa; el regreso sube.
+ */
+it('sends whatever ends on the coast to the outbound leg', function (): void {
+    expect(SentidoTramo::hacia(ZonaRuta::Pisco))->toBe(SentidoTramo::Ida)
+        ->and(SentidoTramo::hacia(ZonaRuta::Lima))->toBe(SentidoTramo::Ida)
+        ->and(SentidoTramo::hacia(ZonaRuta::Mina))->toBe(SentidoTramo::Regreso)
+        ->and(SentidoTramo::hacia(ZonaRuta::Juliaca))->toBe(SentidoTramo::Regreso)
+        ->and(SentidoTramo::hacia(ZonaRuta::Sur))->toBe(SentidoTramo::Regreso);
 });
 
-it('starts every template going up and ends it coming down', function (PlantillaVuelta $plantilla): void {
+it('starts every template going down and ends it coming back up', function (PlantillaVuelta $plantilla): void {
     $paradas = $plantilla->paradas();
 
     expect($paradas[0]['sentido'])->toBe(SentidoTramo::Ida)

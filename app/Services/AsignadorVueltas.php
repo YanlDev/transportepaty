@@ -25,7 +25,8 @@ use Illuminate\Support\Str;
  * - Si no hay vuelta programada, la GR sigue armando el historial con la
  *   misma regla de siempre: las GR de una misma carga se juntan, donde la
  *   unidad no arranca en la zona en que terminó hay un trayecto vacío, y la
- *   vuelta se cierra cuando la unidad vuelve a subir después de haber bajado.
+ *   vuelta se cierra cuando la unidad vuelve a bajar después de haber subido:
+ *   la ida siempre sale de Juliaca o de la mina.
  *
  * La reconstrucción del historial (`ReconstructorVueltas`) es esto mismo
  * aplicado GR por GR, así que las dos nunca dan resultados distintos.
@@ -50,7 +51,7 @@ class AsignadorVueltas
             $origen = ZonaRuta::desdeDireccion($guia->origen);
             $destino = ZonaRuta::desdeDireccion($guia->destino);
 
-            $parada = $vuelta?->origen === OrigenVuelta::Programacion
+            $parada = $vuelta?->origen === OrigenVuelta::Programacion && ! $this->yaRegreso($vuelta, $destino)
                 ? $this->enProgramada($vuelta, $guia, $origen, $destino)
                 : $this->enHistorial($vuelta, $guia, $origen, $destino);
 
@@ -77,6 +78,17 @@ class AsignadorVueltas
             ->orderByDesc('inicio')
             ->orderByDesc('id')
             ->first();
+    }
+
+    /**
+     * La unidad ya hizo el regreso de su vuelta programada y esta GR vuelve a
+     * bajar: es la ida de la vuelta siguiente, no algo fuera de programa.
+     */
+    private function yaRegreso(Vuelta $vuelta, ?ZonaRuta $destino): bool
+    {
+        return $destino !== null
+            && SentidoTramo::hacia($destino) === SentidoTramo::Ida
+            && $vuelta->paradas()->where('sentido', SentidoTramo::Regreso)->whereHas('viajes')->exists();
     }
 
     private function enProgramada(Vuelta $vuelta, Viaje $guia, ?ZonaRuta $origen, ?ZonaRuta $destino): ParadaVuelta
@@ -128,8 +140,8 @@ class AsignadorVueltas
     }
 
     /**
-     * La misma vuelta, o una nueva si la unidad vuelve a subir después de
-     * haber bajado: ahí se cierra la anterior.
+     * La misma vuelta, o una nueva si la unidad vuelve a bajar después de
+     * haber subido: ahí se cierra la anterior.
      */
     private function vueltaParaElTramo(?Vuelta $vuelta, Viaje $guia, SentidoTramo $sentido): Vuelta
     {
@@ -200,7 +212,7 @@ class AsignadorVueltas
     }
 
     /**
-     * De la ida si termina en la sierra y del regreso si termina en la costa.
+     * De la ida si termina en la costa y del regreso si termina en la sierra.
      * Sin zona reconocida se queda en el tramo en que va la vuelta.
      */
     private function sentidoDe(?Vuelta $vuelta, ?ZonaRuta $destino): SentidoTramo

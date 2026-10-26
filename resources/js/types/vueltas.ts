@@ -29,7 +29,7 @@ export type ParadaVuelta = {
 
 export type EstadoVuelta = 'programada' | 'en_curso' | 'cerrada' | 'anulada';
 
-/** El ticket del viaje: la ida (subida) y el regreso (bajada) de una unidad. */
+/** El ticket del viaje: la ida (baja desde la mina o Juliaca) y el regreso (sube) de una unidad. */
 export type Vuelta = {
     id: number;
     codigo: string | null;

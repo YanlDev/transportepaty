@@ -6,6 +6,7 @@ use App\Enums\EstadoVuelta;
 use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoVuelta;
+use Carbon\CarbonInterface;
 use Database\Factories\VueltaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -18,9 +19,10 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 use Illuminate\Support\Carbon;
 
 /**
- * El ticket del viaje: una vuelta de la unidad, con su ida (la subida a la
- * sierra) y su regreso (la bajada a la costa). Cada tramo tiene una o más
- * paradas, y las GR cuelgan de la parada en la que se hizo la carga.
+ * El ticket del viaje: una vuelta de la unidad, con su ida (sale de Juliaca
+ * o de la mina y baja a la costa) y su regreso (vuelve a subir). Cada tramo
+ * tiene una o más paradas, y las GR cuelgan de la parada en la que se hizo
+ * la carga.
  *
  * El código lo recibe al crearse (V-00001) y es la referencia que se le da
  * a las áreas. Las vueltas del historial se rearman desde las GR y su código
@@ -104,6 +106,19 @@ class Vuelta extends Model
     public function paradasDe(SentidoTramo $sentido): Collection
     {
         return $this->paradas->where('sentido', $sentido)->values();
+    }
+
+    /**
+     * Las de una unidad que están programadas o andando y que ya arrancaron
+     * (o arrancan) hasta ese día.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeAbiertasDeLaUnidad(Builder $query, int $tractoId, CarbonInterface $hasta): void
+    {
+        $query->where('tracto_id', $tractoId)
+            ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
+            ->whereDate('inicio', '<=', $hasta->toDateString());
     }
 
     /**

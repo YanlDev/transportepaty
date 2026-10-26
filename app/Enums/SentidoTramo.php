@@ -5,9 +5,9 @@ namespace App\Enums;
 use App\Enums\Concerns\HasLabel;
 
 /**
- * Los dos tramos de una vuelta. La ida sube de la costa a la sierra (con
- * carga particular, materiales o escoria) y el regreso baja con el mineral
- * o con otra carga particular.
+ * Los dos tramos de una vuelta. La ida sale de Juliaca o de la mina y baja
+ * a la costa (concentrado, metálico, particular); el regreso sube de vuelta
+ * a la sierra (escoria, materiales, particular, o vacía).
  */
 enum SentidoTramo: string
 {
@@ -25,11 +25,11 @@ enum SentidoTramo: string
     }
 
     /**
-     * Un trayecto pertenece a la ida si termina en la sierra y al regreso si
-     * termina en la costa.
+     * Un trayecto pertenece a la ida si termina en la costa (bajó) y al
+     * regreso si termina en la sierra (subió).
      */
     public static function hacia(ZonaRuta $destino): self
     {
-        return $destino->esSierra() ? self::Ida : self::Regreso;
+        return $destino->esSierra() ? self::Regreso : self::Ida;
     }
 }
