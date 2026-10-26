@@ -24,10 +24,8 @@ const DIAS_CORTOS = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
 type Segmento = {
     desde: number;
     hasta: number;
-    /** El tramo del recorrido (`mina>pisco`), que decide el color. */
-    ruta: string;
-    /** «Mina → Pisco», para la leyenda. */
-    nombreRuta: string;
+    /** Para quién trabaja la unidad en el tramo: decide el color. */
+    clase: keyof typeof COLORES;
     etiqueta: string;
     vacio: boolean;
     /** Sin GR todavía: lo programado, dibujado claro y punteado. */
@@ -35,70 +33,45 @@ type Segmento = {
 };
 
 /**
- * Un color por tramo del recorrido, para leer por dónde va cada unidad sin
- * leer los textos: Juliaca → mina celeste, mina → Pisco azul, y así. Lo que
- * no está en la lista va en gris.
+ * El color dice para quién trabaja la unidad en ese tramo: todo lo de Minsur
+ * (concentrado, metálico, escoria, materiales, sacos, Ransa) en el azul de
+ * Minsur, la carga particular en naranja y los tramos vacíos en gris. El
+ * tramo y la carga van escritos en la barra.
  */
-const COLORES_RUTA: Record<string, { lleno: string; claro: string }> = {
-    'juliaca>mina': {
-        lleno: 'bg-sky-400 text-sky-950',
-        claro: 'border-sky-400 bg-sky-400/15 text-sky-800 dark:text-sky-300',
+const COLORES: Record<
+    'minsur' | 'particular' | 'vacio' | 'por_definir',
+    { nombre: string; lleno: string; claro: string }
+> = {
+    minsur: {
+        nombre: 'Minsur',
+        lleno: 'bg-[#1d3c8f] text-white',
+        claro: 'border-[#1d3c8f] bg-[#1d3c8f]/15 text-[#1d3c8f] dark:border-blue-400 dark:text-blue-300',
     },
-    'mina>pisco': {
-        lleno: 'bg-blue-600 text-white',
-        claro: 'border-blue-600 bg-blue-600/15 text-blue-800 dark:text-blue-300',
-    },
-    'pisco>lima': {
-        lleno: 'bg-indigo-500 text-white',
-        claro: 'border-indigo-500 bg-indigo-500/15 text-indigo-800 dark:text-indigo-300',
-    },
-    'pisco>mina': {
-        lleno: 'bg-violet-500 text-white',
-        claro: 'border-violet-500 bg-violet-500/15 text-violet-800 dark:text-violet-300',
-    },
-    'lima>mina': {
-        lleno: 'bg-teal-500 text-white',
-        claro: 'border-teal-500 bg-teal-500/15 text-teal-800 dark:text-teal-300',
-    },
-    'lima>juliaca': {
-        lleno: 'bg-green-500 text-white',
-        claro: 'border-green-500 bg-green-500/15 text-green-800 dark:text-green-300',
-    },
-    'lima>sur': {
+    particular: {
+        nombre: 'Particular',
         lleno: 'bg-orange-500 text-white',
         claro: 'border-orange-500 bg-orange-500/15 text-orange-800 dark:text-orange-300',
     },
-    'lima>cusco': {
-        lleno: 'bg-amber-500 text-amber-950',
-        claro: 'border-amber-500 bg-amber-500/15 text-amber-800 dark:text-amber-300',
+    vacio: {
+        nombre: 'Vacía',
+        lleno: 'bg-zinc-400 text-white dark:bg-zinc-600',
+        claro: 'border-zinc-400 bg-zinc-400/15 text-zinc-700 dark:text-zinc-300',
     },
-    'sur>juliaca': {
-        lleno: 'bg-lime-500 text-lime-950',
-        claro: 'border-lime-500 bg-lime-500/15 text-lime-800 dark:text-lime-300',
-    },
-    'cusco>juliaca': {
-        lleno: 'bg-lime-500 text-lime-950',
-        claro: 'border-lime-500 bg-lime-500/15 text-lime-800 dark:text-lime-300',
-    },
-    'juliaca>lima': {
-        lleno: 'bg-emerald-700 text-white',
-        claro: 'border-emerald-700 bg-emerald-700/15 text-emerald-800 dark:text-emerald-300',
+    por_definir: {
+        nombre: 'Vuelta por definir',
+        lleno: 'bg-muted text-muted-foreground',
+        claro: 'border-muted-foreground/40 bg-muted/50 text-muted-foreground',
     },
 };
 
-const SIN_COLOR = {
-    lleno: 'bg-zinc-400 text-white dark:bg-zinc-600',
-    claro: 'border-zinc-400 bg-zinc-400/15 text-zinc-700 dark:text-zinc-300',
-};
+/** Para quién es una carga: lo que no es particular ni vacío es de Minsur. */
+function claseDeCarga(tipoCarga: string): keyof typeof COLORES {
+    if (tipoCarga === 'vacio') {
+        return 'vacio';
+    }
 
-const NOMBRE_ZONA: Record<string, string> = {
-    mina: 'Mina',
-    juliaca: 'Juliaca',
-    cusco: 'Cusco',
-    sur: 'Sur',
-    pisco: 'Pisco',
-    lima: 'Lima',
-};
+    return tipoCarga === 'particular' ? 'particular' : 'minsur';
+}
 
 function aDia(fecha: string): number {
     return new Date(`${fecha}T00:00:00`).getTime();
@@ -149,14 +122,10 @@ function segmentosDe(vuelta: TarjetaVuelta, hoy: number): Segmento[] {
             hasta = Math.max(hasta, hoy + DIA_MS);
         }
 
-        const origen = parada.zona_origen ?? '?';
-        const destino = parada.zona_destino ?? '?';
-
         segmentos.push({
             desde,
             hasta: Math.max(hasta, desde + DIA_MS / 2),
-            ruta: `${origen}>${destino}`,
-            nombreRuta: `${NOMBRE_ZONA[origen] ?? '¿?'} → ${NOMBRE_ZONA[destino] ?? '¿?'}`,
+            clase: claseDeCarga(parada.tipo_carga),
             etiqueta: `${parada.origen ?? '¿?'} → ${parada.destino ?? '¿?'} · ${vacio ? 'vacía' : parada.tipo_carga_label}`,
             vacio,
             estimado: parada.guias.length === 0,
@@ -168,8 +137,7 @@ function segmentosDe(vuelta: TarjetaVuelta, hoy: number): Segmento[] {
         segmentos.push({
             desde: cursor,
             hasta: cursor + DIAS_ESTIMADOS.vuelta_por_definir * DIA_MS,
-            ruta: 'por_definir',
-            nombreRuta: 'Vuelta por definir',
+            clase: 'por_definir',
             etiqueta: 'vuelta ?',
             vacio: false,
             estimado: true,
@@ -221,20 +189,14 @@ export function GanttVueltas({
         [vueltas, hoy],
     );
 
-    // Solo los tramos que aparecen en pantalla, en el orden del recorrido.
-    const leyenda = Object.entries(
-        Object.fromEntries(
-            filas.flatMap(({ segmentos }) =>
-                segmentos.map((segmento) => [
-                    segmento.ruta,
-                    segmento.nombreRuta,
-                ]),
-            ),
+    // Solo los colores que aparecen en pantalla.
+    const enPantalla = new Set(
+        filas.flatMap(({ segmentos }) =>
+            segmentos.map((segmento) => segmento.clase),
         ),
-    ).sort(
-        ([a], [b]) =>
-            ((Object.keys(COLORES_RUTA).indexOf(a) + 100) % 100) -
-            ((Object.keys(COLORES_RUTA).indexOf(b) + 100) % 100),
+    );
+    const leyenda = (Object.keys(COLORES) as (keyof typeof COLORES)[]).filter(
+        (clase) => enPantalla.has(clase),
     );
 
     const posicion = (ms: number) =>
@@ -248,18 +210,17 @@ export function GanttVueltas({
         <div className="flex flex-col gap-2">
             <div className="flex items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                    {leyenda.map(([ruta, nombre]) => (
-                        <span key={ruta} className="flex items-center gap-1.5">
+                    {leyenda.map((clase) => (
+                        <span key={clase} className="flex items-center gap-1.5">
                             <span
                                 className={cn(
                                     'h-2.5 w-5 rounded-sm',
-                                    ruta === 'por_definir'
+                                    clase === 'por_definir'
                                         ? 'border border-dashed border-muted-foreground/60'
-                                        : (COLORES_RUTA[ruta] ?? SIN_COLOR)
-                                              .lleno,
+                                        : COLORES[clase].lleno,
                                 )}
                             />
-                            {nombre}
+                            {COLORES[clase].nombre}
                         </span>
                     ))}
                     <span className="flex items-center gap-1.5">
@@ -394,14 +355,7 @@ export function GanttVueltas({
                                     const izquierda = posicion(segmento.desde);
                                     const ancho =
                                         posicion(segmento.hasta) - izquierda;
-                                    const estilo =
-                                        segmento.ruta === 'por_definir'
-                                            ? {
-                                                  lleno: 'bg-muted text-muted-foreground',
-                                                  claro: 'border-muted-foreground/40 bg-muted/50 text-muted-foreground',
-                                              }
-                                            : (COLORES_RUTA[segmento.ruta] ??
-                                              SIN_COLOR);
+                                    const estilo = COLORES[segmento.clase];
 
                                     return (
                                         <button
@@ -417,9 +371,6 @@ export function GanttVueltas({
                                                           estilo.claro,
                                                       )
                                                     : estilo.lleno,
-                                                segmento.vacio &&
-                                                    !segmento.estimado &&
-                                                    'opacity-60',
                                             )}
                                             style={{
                                                 left: `calc(${izquierda}% + 1px)`,
