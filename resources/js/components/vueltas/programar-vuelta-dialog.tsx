@@ -211,7 +211,11 @@ export function ProgramarVueltaDialog({
         }));
     };
 
-    /** La plantilla reemplaza todo lo que todavía no tiene GR. */
+    /**
+     * La plantilla reemplaza todo lo que todavía no tiene GR. Si la unidad
+     * quedó en Juliaca (o en el Sur, o en Cusco) y la plantilla arranca en la
+     * mina, se le antepone el vacío hasta la mina: ahí empieza la vuelta.
+     */
     const aplicarPlantilla = (valor: string) => {
         const plantilla = opciones.plantillas.find(
             (opcion) => opcion.value === valor,
@@ -221,10 +225,29 @@ export function ProgramarVueltaDialog({
             return;
         }
 
+        const zonaActual =
+            opciones.tractos.find((tracto) => tracto.id === data.tracto_id)
+                ?.zona_actual ?? null;
+        const primera = plantilla.paradas[0];
+        const subirVacio =
+            !conGuias &&
+            zonaActual !== null &&
+            ['juliaca', 'sur', 'cusco'].includes(zonaActual) &&
+            primera?.zona_origen === 'mina';
+
         setData((anterior) => ({
             ...anterior,
             paradas: [
                 ...anterior.paradas.filter((parada) => parada.bloqueada),
+                ...(subirVacio
+                    ? [
+                          nuevaParada('ida', {
+                              zona_origen: zonaActual,
+                              zona_destino: 'mina',
+                              tipo_carga: 'vacio',
+                          }),
+                      ]
+                    : []),
                 ...plantilla.paradas.map((parada) =>
                     nuevaParada(parada.sentido, parada),
                 ),

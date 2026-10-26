@@ -82,6 +82,8 @@ export type OpcionesVuelta = {
         placa: string;
         carreta_id: number | null;
         conductor_id: number | null;
+        /** Dónde la dejó su última GR. */
+        zona_actual: string | null;
     }[];
     carretas: { id: number; placa: string }[];
     conductores: { id: number; nombre: string }[];

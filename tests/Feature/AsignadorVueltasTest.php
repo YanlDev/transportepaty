@@ -36,7 +36,7 @@ function registrarGuia(Vehiculo $tracto, string $fecha, string $origen, string $
 
 /**
  * La vuelta de la plantilla «concentrado · particular a Juliaca»: baja con
- * concentrado y vacía a Lima, sube con particular a Juliaca y vacía a mina.
+ * concentrado y vacía a Lima, y sube con particular a Juliaca.
  */
 function programarVuelta(Vehiculo $tracto, string $salida): Vuelta
 {
@@ -46,7 +46,6 @@ function programarVuelta(Vehiculo $tracto, string $salida): Vuelta
         [SentidoTramo::Ida, ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado],
         [SentidoTramo::Ida, ZonaRuta::Pisco, ZonaRuta::Lima, TipoCarga::Vacio],
         [SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Juliaca, TipoCarga::Particular],
-        [SentidoTramo::Regreso, ZonaRuta::Juliaca, ZonaRuta::Mina, TipoCarga::Vacio],
     ] as $orden => [$sentido, $origen, $destino, $carga]) {
         ParadaVuelta::factory()->create([
             'vuelta_id' => $vuelta->id, 'sentido' => $sentido, 'orden' => $orden + 1,
@@ -96,7 +95,7 @@ it('adds what was not programmed as an unplanned stop', function (): void {
     expect($guia->parada->vuelta->is($vuelta))->toBeTrue()
         ->and($guia->parada->fuera_de_programa)->toBeTrue()
         ->and($guia->parada->sentido)->toBe(SentidoTramo::Ida)
-        ->and($guia->parada->orden)->toBe(5);
+        ->and($guia->parada->orden)->toBe(4);
 });
 
 it('joins several GR of the same load in one stop', function (): void {
@@ -115,7 +114,10 @@ it('opens the next trip when the unit goes down again after coming back up', fun
 
     $siguiente = registrarGuia($this->tracto, '2026-10-24', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
 
-    expect($siguiente->parada->vuelta->is($programada))->toBeFalse()
+    // El vacío Juliaca ⇢ mina abre la vuelta siguiente, junto con el
+    // concentrado.
+    expect($siguiente->parada->vuelta->paradas()->pluck('tipo_carga')->all())->toBe([TipoCarga::Vacio, TipoCarga::Concentrado])
+        ->and($siguiente->parada->vuelta->is($programada))->toBeFalse()
         ->and($siguiente->parada->vuelta->estado)->toBe(EstadoVuelta::EnCurso)
         ->and($programada->fresh()->estado)->toBe(EstadoVuelta::Cerrada)
         ->and($programada->fresh()->fin->toDateString())->toBe('2026-10-15');
@@ -133,12 +135,12 @@ it('keeps building the history when nothing is programmed', function (): void {
     expect($primera->origen)->toBe(OrigenVuelta::Historial)
         ->and($primera->estado)->toBe(EstadoVuelta::Cerrada)
         ->and($primera->fin->toDateString())->toBe('2026-09-09')
-        // Callao y Huaral son la misma zona: entre las dos no hay vacío; de
-        // Juliaca a la mina sí, y es parte del regreso.
-        ->and($primera->paradas()->count())->toBe(4)
+        // Callao y Huaral son la misma zona: entre las dos no hay vacío.
+        ->and($primera->paradas()->count())->toBe(3)
         ->and($segunda->estado)->toBe(EstadoVuelta::EnCurso)
         ->and($bajada->parada->vuelta->is($segunda))->toBeTrue()
-        ->and($segunda->paradas()->count())->toBe(1);
+        // De Juliaca a la mina sí: es el comienzo de la vuelta nueva.
+        ->and($segunda->paradas()->count())->toBe(2);
 });
 
 it('leaves the GR before the planned departure in the history', function (): void {

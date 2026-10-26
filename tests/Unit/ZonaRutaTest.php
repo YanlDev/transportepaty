@@ -44,3 +44,18 @@ it('starts every template going down and ends it coming back up', function (Plan
         expect($parada['zona_origen'])->toBe($paradas[$indice]['zona_destino']);
     }
 })->with(PlantillaVuelta::cases());
+
+/**
+ * La vuelta empieza al salir de la sierra (ahí se abastece) y termina al
+ * volver a ella.
+ */
+it('places each leg of the circuit in its part of the trip', function (?ZonaRuta $origen, ?ZonaRuta $destino, bool $yaRegresando, SentidoTramo $sentido): void {
+    expect(SentidoTramo::entre($origen, $destino, $yaRegresando))->toBe($sentido);
+})->with([
+    'Juliaca ⇢ mina, vacía' => [ZonaRuta::Juliaca, ZonaRuta::Mina, false, SentidoTramo::Ida],
+    'mina → Pisco, concentrado' => [ZonaRuta::Mina, ZonaRuta::Pisco, false, SentidoTramo::Ida],
+    'Pisco → Callao, metálico' => [ZonaRuta::Pisco, ZonaRuta::Lima, false, SentidoTramo::Ida],
+    'Lima → Juliaca, particular' => [ZonaRuta::Lima, ZonaRuta::Juliaca, false, SentidoTramo::Regreso],
+    'Pisco → mina, escoria' => [ZonaRuta::Pisco, ZonaRuta::Mina, false, SentidoTramo::Regreso],
+    'Callao → Lima ya regresando' => [ZonaRuta::Lima, ZonaRuta::Lima, true, SentidoTramo::Regreso],
+]);

@@ -184,15 +184,16 @@ class VueltaController extends Controller
     /**
      * Los tractos activos con la carreta y el conductor de su última GR:
      * elegir la unidad deja puestos los dos, que casi nunca cambian de una
-     * vuelta a la siguiente.
+     * vuelta a la siguiente. También dónde dejó la unidad esa GR, para que la
+     * plantilla arranque desde ahí.
      *
-     * @return array<int, array{id: int, placa: string, carreta_id: int|null, conductor_id: int|null}>
+     * @return array<int, array{id: int, placa: string, carreta_id: int|null, conductor_id: int|null, zona_actual: string|null}>
      */
     private function opcionesUnidades(): array
     {
         $ultimas = Viaje::query()
             ->whereIn('id', Viaje::query()->selectRaw('max(id)')->whereNotNull('tracto_id')->groupBy('tracto_id'))
-            ->get(['tracto_id', 'carreta_id', 'conductor_id'])
+            ->get(['tracto_id', 'carreta_id', 'conductor_id', 'destino'])
             ->keyBy('tracto_id');
 
         return Vehiculo::query()
@@ -205,6 +206,9 @@ class VueltaController extends Controller
                 'placa' => $tracto->placa,
                 'carreta_id' => $ultimas->get($tracto->id)?->carreta_id,
                 'conductor_id' => $ultimas->get($tracto->id)?->conductor_id,
+                'zona_actual' => ($destino = $ultimas->get($tracto->id)?->destino) !== null
+                    ? ZonaRuta::desdeDireccion($destino)?->value
+                    : null,
             ])
             ->values()
             ->all();

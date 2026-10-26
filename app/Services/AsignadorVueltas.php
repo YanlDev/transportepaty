@@ -25,8 +25,8 @@ use Illuminate\Support\Str;
  * - Si no hay vuelta programada, la GR sigue armando el historial con la
  *   misma regla de siempre: las GR de una misma carga se juntan, donde la
  *   unidad no arranca en la zona en que terminó hay un trayecto vacío, y la
- *   vuelta se cierra cuando la unidad vuelve a bajar después de haber subido:
- *   la ida siempre sale de Juliaca o de la mina.
+ *   vuelta empieza cuando la unidad sale de la sierra (Juliaca, la mina…)
+ *   y termina cuando vuelve a llegar a ella.
  *
  * La reconstrucción del historial (`ReconstructorVueltas`) es esto mismo
  * aplicado GR por GR, así que las dos nunca dan resultados distintos.
@@ -51,7 +51,7 @@ class AsignadorVueltas
             $origen = ZonaRuta::desdeDireccion($guia->origen);
             $destino = ZonaRuta::desdeDireccion($guia->destino);
 
-            $parada = $vuelta?->origen === OrigenVuelta::Programacion && ! $this->yaRegreso($vuelta, $destino)
+            $parada = $vuelta?->origen === OrigenVuelta::Programacion && ! $this->yaRegreso($vuelta, $origen, $destino)
                 ? $this->enProgramada($vuelta, $guia, $origen, $destino)
                 : $this->enHistorial($vuelta, $guia, $origen, $destino);
 
@@ -82,12 +82,12 @@ class AsignadorVueltas
 
     /**
      * La unidad ya hizo el regreso de su vuelta programada y esta GR vuelve a
-     * bajar: es la ida de la vuelta siguiente, no algo fuera de programa.
+     * salir de la sierra: es la ida de la vuelta siguiente, no algo fuera de
+     * programa.
      */
-    private function yaRegreso(Vuelta $vuelta, ?ZonaRuta $destino): bool
+    private function yaRegreso(Vuelta $vuelta, ?ZonaRuta $origen, ?ZonaRuta $destino): bool
     {
-        return $destino !== null
-            && SentidoTramo::hacia($destino) === SentidoTramo::Ida
+        return $this->sentidoDe($vuelta, $origen, $destino) === SentidoTramo::Ida
             && $vuelta->paradas()->where('sentido', SentidoTramo::Regreso)->whereHas('viajes')->exists();
     }
 
@@ -122,9 +122,10 @@ class AsignadorVueltas
         // Donde la unidad no arranca en la zona en que terminó, hizo ese
         // trayecto vacía.
         if ($ultima?->zona_destino !== null && $origen !== null && $ultima->zona_destino !== $origen) {
-            $vuelta = $this->vueltaParaElTramo($vuelta, $guia, SentidoTramo::hacia($origen));
+            $sentidoDelVacio = $this->sentidoDe($vuelta, $ultima->zona_destino, $origen);
+            $vuelta = $this->vueltaParaElTramo($vuelta, $guia, $sentidoDelVacio);
             $this->crearParada($vuelta, [
-                'sentido' => SentidoTramo::hacia($origen),
+                'sentido' => $sentidoDelVacio,
                 'zona_origen' => $ultima->zona_destino,
                 'zona_destino' => $origen,
                 'lugar_origen' => $ultima->lugar_destino,
@@ -133,15 +134,15 @@ class AsignadorVueltas
             ]);
         }
 
-        $sentido = $this->sentidoDe($vuelta, $destino);
+        $sentido = $this->sentidoDe($vuelta, $origen, $destino);
         $vuelta = $this->vueltaParaElTramo($vuelta, $guia, $sentido);
 
         return $this->agregarParada($vuelta, $guia, $origen, $destino, sentido: $sentido);
     }
 
     /**
-     * La misma vuelta, o una nueva si la unidad vuelve a bajar después de
-     * haber subido: ahí se cierra la anterior.
+     * La misma vuelta, o una nueva si la unidad vuelve a salir de la sierra
+     * después de haber regresado: ahí se cierra la anterior.
      */
     private function vueltaParaElTramo(?Vuelta $vuelta, Viaje $guia, SentidoTramo $sentido): Vuelta
     {
@@ -188,7 +189,7 @@ class AsignadorVueltas
         bool $fueraDePrograma = false,
     ): ParadaVuelta {
         return $this->crearParada($vuelta, [
-            'sentido' => $sentido ?? $this->sentidoDe($vuelta, $destino),
+            'sentido' => $sentido ?? $this->sentidoDe($vuelta, $origen, $destino),
             'zona_origen' => $origen,
             'zona_destino' => $destino,
             'lugar_origen' => $this->lugar($guia->origen),
@@ -212,18 +213,19 @@ class AsignadorVueltas
     }
 
     /**
-     * De la ida si termina en la costa y del regreso si termina en la sierra.
-     * Sin zona reconocida se queda en el tramo en que va la vuelta.
+     * Ver `SentidoTramo::entre()`: sale de la sierra, ida; llega a la sierra,
+     * regreso; de costa a costa, el tramo en que va la vuelta.
      */
-    private function sentidoDe(?Vuelta $vuelta, ?ZonaRuta $destino): SentidoTramo
+    private function sentidoDe(?Vuelta $vuelta, ?ZonaRuta $origen, ?ZonaRuta $destino): SentidoTramo
     {
-        if ($destino !== null) {
-            return SentidoTramo::hacia($destino);
-        }
+        // El regreso empezó si ya tiene algo recorrido (una GR o un vacío), no
+        // si solo está planeado.
+        $yaEmpezoElRegreso = (bool) $vuelta?->paradas()
+            ->where('sentido', SentidoTramo::Regreso)
+            ->where(fn ($query) => $query->whereHas('viajes')->orWhere('tipo_carga', TipoCarga::Vacio))
+            ->exists();
 
-        return $vuelta?->paradas()->where('sentido', SentidoTramo::Regreso)->exists()
-            ? SentidoTramo::Regreso
-            : SentidoTramo::Ida;
+        return SentidoTramo::entre($origen, $destino, $yaEmpezoElRegreso);
     }
 
     /**

@@ -64,9 +64,9 @@ it('splits the history into outbound and return legs, adding the empty runs', fu
         ->and($anterior->estado)->toBe(EstadoVuelta::Cerrada)
         ->and($materiales->fresh()->parada->vuelta->is($anterior))->toBeTrue();
 
-    // La vuelta sale de la mina: baja concentrado y metálico, sube con
-    // particular a Juliaca y de ahí vacía a la mina.
-    expect(recorrido($vuelta))->toBe(['ida:concentrado', 'ida:metalico', 'regreso:particular', 'regreso:vacio'])
+    // La vuelta sale de la mina: baja concentrado y metálico y sube con
+    // particular a Juliaca. Ahí termina.
+    expect(recorrido($vuelta))->toBe(['ida:concentrado', 'ida:metalico', 'regreso:particular'])
         ->and($vuelta->estado)->toBe(EstadoVuelta::Cerrada)
         ->and($vuelta->tipo)->toBe(TipoVuelta::Mina)
         ->and($vuelta->inicio->toDateString())->toBe('2026-09-02')
@@ -74,14 +74,16 @@ it('splits the history into outbound and return legs, adding the empty runs', fu
         ->and($vuelta->codigo)->toStartWith('V-')
         ->and($concentrado->fresh()->parada->vuelta->is($vuelta))->toBeTrue();
 
-    $vacio = $vuelta->paradas()->where('tipo_carga', TipoCarga::Vacio)->sole();
+    // De Juliaca sube vacía a la mina: ahí se abastece y arranca la vuelta
+    // siguiente.
+    expect(recorrido($siguiente))->toBe(['ida:vacio', 'ida:concentrado'])
+        ->and($siguiente->estado)->toBe(EstadoVuelta::EnCurso)
+        ->and($siguiente->fin)->toBeNull();
+
+    $vacio = $siguiente->paradas()->where('tipo_carga', TipoCarga::Vacio)->sole();
     expect($vacio->lugar_origen)->toBe('Juliaca')
         ->and($vacio->lugar_destino)->toBe('Antauta')
         ->and($vacio->viajes)->toBeEmpty();
-
-    expect(recorrido($siguiente))->toBe(['ida:concentrado'])
-        ->and($siguiente->estado)->toBe(EstadoVuelta::EnCurso)
-        ->and($siguiente->fin)->toBeNull();
 });
 
 it('groups the GR of the same load into one stop', function (): void {

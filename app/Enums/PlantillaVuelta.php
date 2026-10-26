@@ -41,8 +41,9 @@ enum PlantillaVuelta: string
     }
 
     /**
-     * Las paradas en orden: primero la ida (baja desde la mina o desde
-     * Juliaca), después el regreso (vuelve a subir).
+     * Las paradas en orden: primero la ida (desde la mina), después el
+     * regreso (vuelve a subir). Si la unidad está en Juliaca, el formulario
+     * le antepone el vacío hasta la mina.
      *
      * @return list<array{sentido: SentidoTramo, zona_origen: ZonaRuta, zona_destino: ZonaRuta, tipo_carga: TipoCarga}>
      */
@@ -56,9 +57,10 @@ enum PlantillaVuelta: string
             $this->parada(SentidoTramo::Ida, ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado),
             $this->parada(SentidoTramo::Ida, ZonaRuta::Pisco, ZonaRuta::Lima, TipoCarga::Vacio),
         ];
+        // El regreso termina al llegar a la sierra: el vacío de Juliaca a la
+        // mina ya es la ida de la vuelta siguiente (ahí se abastece).
         $subidaParticular = fn (ZonaRuta $destino): array => [
             $this->parada(SentidoTramo::Regreso, ZonaRuta::Lima, $destino, TipoCarga::Particular),
-            $this->parada(SentidoTramo::Regreso, $destino, ZonaRuta::Mina, TipoCarga::Vacio),
         ];
         $subidaMateriales = [$this->parada(SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Mina, TipoCarga::Materiales)];
 
