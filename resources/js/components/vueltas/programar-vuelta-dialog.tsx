@@ -373,13 +373,25 @@ export function ProgramarVueltaDialog({
     const deLaGr = ultimaGr
         ? `última GR ${ultimaGr.numero} (${ultimaGr.fecha.slice(8, 10)}/${ultimaGr.fecha.slice(5, 7)})`
         : null;
-    const ayudaConductor =
-        ultimaGr === null || conGuias
-            ? undefined
-            : data.conductor_id !== null &&
-                data.conductor_id === unidadElegida?.conductor_id
-              ? `Según la ${deLaGr}.`
-              : `La ${deLaGr} trae a ${ultimaGr.conductor}.`;
+    const conductorElegido = opciones.conductores.find(
+        (conductor) => conductor.id === data.conductor_id,
+    );
+    const otraUnidad =
+        conductorElegido?.tracto_id &&
+        data.tracto_id !== null &&
+        conductorElegido.tracto_id !== data.tracto_id
+            ? opciones.tractos.find(
+                  (tracto) => tracto.id === conductorElegido.tracto_id,
+              )?.placa
+            : undefined;
+    const ayudaConductor = otraUnidad
+        ? `Su última GR fue con ${otraUnidad}.`
+        : ultimaGr === null || conGuias
+          ? undefined
+          : data.conductor_id !== null &&
+              data.conductor_id === unidadElegida?.conductor_id
+            ? `Según la ${deLaGr}.`
+            : `La ${deLaGr} trae a ${ultimaGr.conductor}.`;
     const ayudaCarreta =
         ultimaGr === null || conGuias
             ? undefined
@@ -406,6 +418,35 @@ export function ProgramarVueltaDialog({
             tracto_id: tractoId,
             carreta_id: unidad?.carreta_id ?? anterior.carreta_id,
             conductor_id: unidad?.conductor_id ?? anterior.conductor_id,
+            paradas: normalizar(anterior.paradas, unidad?.zona_actual ?? null),
+        }));
+    };
+
+    /**
+     * Elegir primero al conductor deja puestas la unidad y la carreta de su
+     * última GR, como en la programación de siempre. Si la unidad ya estaba
+     * elegida no se pisa: se avisa debajo del campo.
+     */
+    const elegirConductor = (conductorId: number) => {
+        const conductor = opciones.conductores.find(
+            (opcion) => opcion.id === conductorId,
+        );
+
+        if (data.tracto_id !== null || conGuias || !conductor?.tracto_id) {
+            setData('conductor_id', conductorId);
+
+            return;
+        }
+
+        const unidad = opciones.tractos.find(
+            (opcion) => opcion.id === conductor.tracto_id,
+        );
+
+        setData((anterior) => ({
+            ...anterior,
+            conductor_id: conductorId,
+            tracto_id: conductor.tracto_id,
+            carreta_id: conductor.carreta_id ?? anterior.carreta_id,
             paradas: normalizar(anterior.paradas, unidad?.zona_actual ?? null),
         }));
     };
@@ -600,7 +641,7 @@ export function ProgramarVueltaDialog({
             titulo: 'Conductor',
             opciones: opcionesConductores,
             valor: data.conductor_id,
-            onElegir: (valor: number) => setData('conductor_id', valor),
+            onElegir: elegirConductor,
         },
     } as const;
 

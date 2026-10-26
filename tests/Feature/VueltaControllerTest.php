@@ -7,6 +7,7 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\TipoVuelta;
 use App\Enums\ZonaRuta;
+use App\Models\Conductor;
 use App\Models\ParadaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -254,9 +255,11 @@ it('fills the trailer and driver from the latest GR by date', function (): void 
     $carretaVieja = Vehiculo::factory()->carreta()->create(['placa' => 'VDI-111']);
 
     // La más reciente por traslado se registró primero; la vieja, después.
+    $conductor = Conductor::factory()->create();
     Viaje::factory()->create([
         'tracto_id' => $tracto->id, 'carreta_id' => $carretaNueva->id, 'placa_carreta' => 'VDI-980',
         'numero_gr' => 'EG03-00000020', 'fecha_traslado' => '2026-10-20', 'conductor_nombre' => 'MACHACA ALBERTO',
+        'conductor_id' => $conductor->id,
     ]);
     Viaje::factory()->create([
         'tracto_id' => $tracto->id, 'carreta_id' => $carretaVieja->id, 'placa_carreta' => 'VDI-111',
@@ -272,5 +275,11 @@ it('fills the trailer and driver from the latest GR by date', function (): void 
                 && $unidad['ultima_gr']['numero'] === 'EG03-00000020'
                 && $unidad['ultima_gr']['placa_carreta'] === 'VDI-980'
                 && $unidad['ultima_gr']['conductor'] === 'MACHACA ALBERTO';
-        }));
+        })
+            // Y al revés: elegir primero al conductor deja su unidad y carreta.
+            ->where('conductores', function ($conductores) use ($conductor, $tracto, $carretaNueva): bool {
+                $elegido = collect($conductores)->firstWhere('id', $conductor->id);
+
+                return $elegido['tracto_id'] === $tracto->id && $elegido['carreta_id'] === $carretaNueva->id;
+            }));
 });

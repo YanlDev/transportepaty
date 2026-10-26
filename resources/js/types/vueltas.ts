@@ -100,7 +100,13 @@ export type OpcionesVuelta = {
         } | null;
     }[];
     carretas: { id: number; placa: string }[];
-    conductores: { id: number; nombre: string }[];
+    conductores: {
+        id: number;
+        nombre: string;
+        /** La unidad y la carreta de su última GR. */
+        tracto_id: number | null;
+        carreta_id: number | null;
+    }[];
     clientes: { id: number; alias: string; ruc: string | null }[];
 };
 

@@ -376,16 +376,7 @@ class VueltaController extends Controller
                 ->get(['id', 'placa'])
                 ->map(fn (Vehiculo $carreta): array => ['id' => $carreta->id, 'placa' => $carreta->placa])
                 ->all(),
-            'conductores' => fn (): array => Conductor::query()
-                ->where('activo', true)
-                ->orderBy('apellidos')
-                ->orderBy('nombres')
-                ->get(['id', 'nombres', 'apellidos'])
-                ->map(fn (Conductor $conductor): array => [
-                    'id' => $conductor->id,
-                    'nombre' => "{$conductor->apellidos} {$conductor->nombres}",
-                ])
-                ->all(),
+            'conductores' => fn (): array => $this->opcionesConductores(),
             'clientes' => fn (): array => Cliente::query()
                 ->where('activo', true)
                 ->orderBy('alias')
@@ -472,6 +463,38 @@ class VueltaController extends Controller
                 ];
             })
             ->values()
+            ->all();
+    }
+
+    /**
+     * Los conductores activos con la unidad y la carreta de su última GR:
+     * elegir primero al conductor deja puestas las dos, como en la
+     * programación de siempre.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function opcionesConductores(): array
+    {
+        $ultimas = Viaje::query()
+            ->whereNotNull('conductor_id')
+            ->whereNotNull('tracto_id')
+            ->orderByDesc('fecha_traslado')
+            ->orderByDesc('id')
+            ->get(['conductor_id', 'tracto_id', 'carreta_id'])
+            ->unique('conductor_id')
+            ->keyBy('conductor_id');
+
+        return Conductor::query()
+            ->where('activo', true)
+            ->orderBy('apellidos')
+            ->orderBy('nombres')
+            ->get(['id', 'nombres', 'apellidos'])
+            ->map(fn (Conductor $conductor): array => [
+                'id' => $conductor->id,
+                'nombre' => "{$conductor->apellidos} {$conductor->nombres}",
+                'tracto_id' => $ultimas->get($conductor->id)?->tracto_id,
+                'carreta_id' => $ultimas->get($conductor->id)?->carreta_id,
+            ])
             ->all();
     }
 
