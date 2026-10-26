@@ -27,7 +27,6 @@ import { colorTarjeta } from '@/lib/color-tarjeta';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type {
-    CombustiblePunto,
     RegistroAbastecimiento,
     TractoAbastecimiento,
     TramoCombustible,
@@ -57,36 +56,16 @@ const galones = (valor: number | null): string =>
 const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
 
 /** Lo que falta en total: null si algo depende de un tanque lleno sin galones. */
+/**
+ * Lo que falta en total: el tope de cada tramo menos lo autorizado. null si
+ * algún tramo depende de un tanque lleno sin galones configurados.
+ */
 function faltaTotal(vuelta: VueltaAbastecimiento): number | null {
-    if (vuelta.combustible.some((fila) => fila.falta === null && fila.lleno)) {
+    if (vuelta.tramos.some((tramo) => tramo.falta === null)) {
         return null;
     }
 
-    return vuelta.combustible.reduce(
-        (suma, fila) => suma + (fila.falta ?? 0),
-        0,
-    );
-}
-
-function Barra({ fila }: { fila: CombustiblePunto }) {
-    const avance =
-        fila.previsto && fila.previsto > 0
-            ? Math.min(100, (fila.registrado / fila.previsto) * 100)
-            : fila.registrado > 0
-              ? 100
-              : 0;
-
-    return (
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-            <div
-                className={cn(
-                    'h-full rounded-full',
-                    fila.falta === 0 ? 'bg-emerald-500' : 'bg-amber-500',
-                )}
-                style={{ width: `${avance}%` }}
-            />
-        </div>
-    );
+    return vuelta.tramos.reduce((suma, tramo) => suma + (tramo.falta ?? 0), 0);
 }
 
 /**
@@ -180,7 +159,10 @@ function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                                 : galones(tramo.previsto)}
                         </span>
                         <span />
-                        <div className="flex text-[10px] text-muted-foreground">
+                        <div
+                            className="flex text-[10px] text-muted-foreground"
+                            title="Sugerido: el reparto entre puntos puede variar"
+                        >
                             {tramo.puntos.map((punto, indice) => (
                                 <span
                                     key={punto.punto}
@@ -269,15 +251,19 @@ export default function AbastecimientoIndex({
         });
     };
 
-    const registrarEn = (
-        vuelta: VueltaAbastecimiento,
-        fila?: CombustiblePunto,
-    ) =>
+    /**
+     * El registro con la unidad y el ticket puestos, y como galones lo que le
+     * falta al tramo (el punto lo elige quien registra: el reparto varía).
+     */
+    const registrarEn = (vuelta: VueltaAbastecimiento, falta?: number | null) =>
         setRegistrando({
             vehiculo_id: vuelta.tracto.id,
             vuelta_id: vuelta.id,
-            punto_abastecimiento_id: fila?.punto_id ?? null,
-            galones: fila?.falta ?? null,
+            punto_abastecimiento_id: null,
+            galones:
+                falta ??
+                vuelta.tramos.find((tramo) => (tramo.falta ?? 0) > 0)?.falta ??
+                null,
         });
 
     return (
@@ -599,62 +585,86 @@ export default function AbastecimientoIndex({
 
                                 <section className="flex flex-col gap-3">
                                     <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Combustible por punto
+                                        Combustible
                                     </h3>
-                                    {abierta.combustible.length === 0 ? (
+                                    {abierta.tramos.length === 0 ? (
                                         <p className="text-sm text-muted-foreground">
                                             Ninguna tarjeta de la pizarra calza
                                             con este ticket todavía.
                                         </p>
                                     ) : (
-                                        abierta.combustible.map((fila) => (
-                                            <div
-                                                key={
-                                                    fila.punto_id ?? fila.punto
-                                                }
-                                                className="flex flex-col gap-1.5"
-                                            >
-                                                <div className="flex items-center justify-between gap-2 text-sm">
-                                                    <span className="font-medium">
-                                                        {fila.punto}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground tabular-nums">
-                                                        {galones(
-                                                            fila.registrado,
-                                                        )}{' '}
-                                                        de{' '}
-                                                        {fila.previsto === null
-                                                            ? fila.lleno
-                                                                ? 'tanque lleno'
-                                                                : '—'
-                                                            : galones(
-                                                                  fila.previsto,
-                                                              )}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Barra fila={fila} />
-                                                    {puedeRegistrar &&
-                                                        fila.falta !== 0 && (
+                                        <>
+                                            <BarraCombustible
+                                                tramos={abierta.tramos}
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                El total de cada tramo es el
+                                                tope; los puntos son una
+                                                sugerencia. Lo que se cargue en
+                                                cualquier punto cuenta contra el
+                                                tope.
+                                            </p>
+                                            {puedeRegistrar &&
+                                                abierta.tramos.map(
+                                                    (tramo) =>
+                                                        tramo.falta !== 0 && (
                                                             <Button
+                                                                key={
+                                                                    tramo.sentido
+                                                                }
                                                                 variant="outline"
                                                                 size="sm"
-                                                                className="h-7 shrink-0"
+                                                                className="self-start"
                                                                 onClick={() =>
                                                                     registrarEn(
                                                                         abierta,
-                                                                        fila,
+                                                                        tramo.falta,
                                                                     )
                                                                 }
                                                             >
-                                                                {fila.falta
-                                                                    ? `Registrar ${galones(fila.falta)}`
-                                                                    : 'Registrar'}
+                                                                <Fuel className="size-3.5" />
+                                                                Registrar
+                                                                {tramo.falta
+                                                                    ? ` · faltan ${galones(tramo.falta)} de la ${tramo.sentido === 'ida' ? 'ida' : 'vuelta'}`
+                                                                    : ''}
                                                             </Button>
-                                                        )}
-                                                </div>
-                                            </div>
-                                        ))
+                                                        ),
+                                                )}
+                                        </>
+                                    )}
+                                    {abierta.combustible.some(
+                                        (fila) => fila.registrado > 0,
+                                    ) && (
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-xs font-medium text-muted-foreground">
+                                                Autorizado por punto
+                                            </span>
+                                            <ul className="flex flex-col gap-0.5 text-sm">
+                                                {abierta.combustible
+                                                    .filter(
+                                                        (fila) =>
+                                                            fila.registrado > 0,
+                                                    )
+                                                    .map((fila) => (
+                                                        <li
+                                                            key={
+                                                                fila.punto_id ??
+                                                                fila.punto
+                                                            }
+                                                            className="flex justify-between"
+                                                        >
+                                                            <span>
+                                                                {fila.punto}
+                                                            </span>
+                                                            <span className="tabular-nums">
+                                                                {galones(
+                                                                    fila.registrado,
+                                                                )}
+                                                            </span>
+                                                        </li>
+                                                    ))}
+                                            </ul>
+                                        </div>
                                     )}
                                 </section>
 

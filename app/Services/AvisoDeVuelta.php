@@ -170,9 +170,17 @@ class AvisoDeVuelta
             return [];
         }
 
+        $galones = fn (?float $valor): string => $valor === null
+            ? 'full'
+            : rtrim(rtrim(number_format($valor, 1, '.', ''), '0'), '.').' gal';
+
+        // El total del tramo es el tope; los puntos, una sugerencia de dónde
+        // cargar.
         $combustible = array_map(
-            fn (array $fila): string => $fila['punto'].' '.($fila['previsto'] === null ? 'full' : rtrim(rtrim(number_format($fila['previsto'], 1, '.', ''), '0'), '.').' gal'),
-            $dotacion['combustible'],
+            fn (array $tramo): string => ($tramo['sentido'] === SentidoTramo::Ida->value ? 'ida' : 'vuelta')
+                .' '.$galones($tramo['previsto'])
+                .' ('.implode(' · ', array_map(fn (array $punto): string => $punto['punto'].' '.$galones($punto['previsto']), $tramo['puntos'])).')',
+            $dotacion['tramos'],
         );
         $viaticos = array_map(
             fn (array $viatico): string => "{$viatico['concepto']} S/ ".number_format($viatico['monto'], 2),

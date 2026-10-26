@@ -79,10 +79,12 @@ class DotacionVuelta
     }
 
     /**
-     * El combustible de la ida y de la vuelta por separado, para dibujar una
-     * barra por tramo. Lo autorizado se registra por punto y no por tramo,
-     * así que se reparte en orden: primero cubre lo previsto de la ida en
-     * ese punto y lo que sobra va a la vuelta.
+     * El combustible de la ida y de la vuelta por separado. El total de la
+     * tarjeta es el tope del tramo (Juliaca – Mina – Lima: 220 gal); cómo se
+     * reparte entre los puntos varía (150 en Juliaca y 70 en Arequipa, o 100
+     * y 120), así que los puntos son una referencia y todo lo autorizado, en
+     * cualquier punto, cuenta contra el tope. Se reparte en orden: primero
+     * cubre la ida y lo que sobra va a la vuelta.
      *
      * @param  array<string, list<LineaReglaAbastecimiento>>  $porTramo
      * @param  list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>  $porPunto
@@ -90,12 +92,7 @@ class DotacionVuelta
      */
     private function porTramo(array $porTramo, array $porPunto): array
     {
-        $disponible = [];
-
-        foreach ($porPunto as $fila) {
-            $disponible[$fila['punto_id'] ?? 0] = $fila['registrado'];
-        }
-
+        $disponible = (float) array_sum(array_column($porPunto, 'registrado'));
         $tramos = [];
 
         foreach ($porTramo as $sentido => $lineas) {
@@ -124,38 +121,26 @@ class DotacionVuelta
                 continue;
             }
 
-            $registrado = 0.0;
-
-            foreach ($puntos as $clave => $punto) {
-                $toma = $punto['previsto'] === null
-                    ? ($disponible[$clave] ?? 0.0)
-                    : min($disponible[$clave] ?? 0.0, $punto['previsto']);
-                $registrado += $toma;
-                $disponible[$clave] = ($disponible[$clave] ?? 0.0) - $toma;
-            }
-
             $previstos = array_column($puntos, 'previsto');
             $previsto = in_array(null, $previstos, true) ? null : (float) array_sum($previstos);
+            $toma = $previsto === null ? $disponible : min($disponible, $previsto);
+            $disponible -= $toma;
 
             $tramos[] = [
                 'sentido' => $sentido,
                 'previsto' => $previsto,
-                'registrado' => $registrado,
-                'falta' => $previsto === null ? null : max(0.0, $previsto - $registrado),
+                'registrado' => $toma,
+                'falta' => $previsto === null ? null : max(0.0, $previsto - $toma),
                 'puntos' => array_values($puntos),
             ];
         }
 
-        // Lo autorizado en un punto que la pizarra no nombra se suma al
-        // último tramo, para que no quede fuera de la barra.
-        $sobrante = array_sum($disponible);
-
-        if ($sobrante > 0 && $tramos !== []) {
-            $ultimo = array_key_last($tramos);
-            $tramos[$ultimo]['registrado'] += $sobrante;
-            $tramos[$ultimo]['falta'] = $tramos[$ultimo]['previsto'] === null
-                ? null
-                : max(0.0, $tramos[$ultimo]['previsto'] - $tramos[$ultimo]['registrado']);
+        // Lo autorizado de más (pasó el tope) se suma al último tramo, para
+        // que se vea que se pasó.
+        if ($disponible > 0 && $tramos !== []) {
+            $ultimo = array_pop($tramos);
+            $ultimo['registrado'] += $disponible;
+            $tramos[] = $ultimo;
         }
 
         return $tramos;
