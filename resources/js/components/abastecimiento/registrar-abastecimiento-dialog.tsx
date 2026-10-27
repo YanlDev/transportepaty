@@ -23,7 +23,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import type { TractoAbastecimiento } from '@/types/abastecimiento';
+import type {
+    PuntoRegistro,
+    TractoAbastecimiento,
+} from '@/types/abastecimiento';
 
 type FormData = {
     vehiculo_id: number | null;
@@ -32,6 +35,7 @@ type FormData = {
     fecha: string;
     galones: string;
     tanque_lleno: boolean;
+    precio_galon: string;
     observacion: string;
 };
 
@@ -53,8 +57,9 @@ function hoy(): string {
 
 /**
  * Registrar lo que abastecimiento autorizó por el QR de Repsol (o en Kio):
- * unidad, punto y galones. Desde la tarjeta de una unidad llega con todo
- * puesto, incluidos los galones que le faltan en ese punto.
+ * unidad, punto, galones y a cuánto el galón. Desde la tarjeta de una unidad
+ * llega con todo puesto, incluidos los galones que le faltan; el precio lo
+ * propone el último que se pagó en ese punto.
  */
 export function RegistrarAbastecimientoDialog({
     open,
@@ -68,9 +73,17 @@ export function RegistrarAbastecimientoDialog({
     onOpenChange: (open: boolean) => void;
     inicial: InicialAbastecimiento;
     tractos: TractoAbastecimiento[];
-    puntos: { id: number; nombre: string }[];
+    puntos: PuntoRegistro[];
     galonesTanqueLleno: number | null;
 }) {
+    const precioDe = (puntoId: number | null | undefined): string => {
+        const precio = puntos.find(
+            (punto) => punto.id === puntoId,
+        )?.ultimo_precio;
+
+        return precio ? String(precio) : '';
+    };
+
     const { data, setData, post, processing, errors } = useForm<FormData>({
         vehiculo_id: inicial.vehiculo_id ?? null,
         vuelta_id: inicial.vuelta_id ?? null,
@@ -78,6 +91,7 @@ export function RegistrarAbastecimientoDialog({
         fecha: hoy(),
         galones: inicial.galones ? String(inicial.galones) : '',
         tanque_lleno: false,
+        precio_galon: precioDe(inicial.punto_abastecimiento_id),
         observacion: '',
     });
     const [eligiendo, setEligiendo] = useState(false);
@@ -88,6 +102,16 @@ export function RegistrarAbastecimientoDialog({
         detalle: tracto.vuelta ?? undefined,
     }));
     const tracto = tractos.find((opcion) => opcion.id === data.vehiculo_id);
+    const galonesDelRegistro =
+        data.galones !== ''
+            ? Number(data.galones)
+            : data.tanque_lleno
+              ? galonesTanqueLleno
+              : null;
+    const importe =
+        galonesDelRegistro !== null && data.precio_galon !== ''
+            ? galonesDelRegistro * Number(data.precio_galon)
+            : null;
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -179,10 +203,16 @@ export function RegistrarAbastecimientoDialog({
                                                     : undefined
                                             }
                                             onValueChange={(valor) =>
-                                                setData(
-                                                    'punto_abastecimiento_id',
-                                                    Number(valor),
-                                                )
+                                                setData((anterior) => ({
+                                                    ...anterior,
+                                                    punto_abastecimiento_id:
+                                                        Number(valor),
+                                                    precio_galon:
+                                                        precioDe(
+                                                            Number(valor),
+                                                        ) ||
+                                                        anterior.precio_galon,
+                                                }))
                                             }
                                         >
                                             <SelectTrigger className="w-full">
@@ -241,34 +271,63 @@ export function RegistrarAbastecimientoDialog({
                                 </Label>
                             </div>
 
-                            <Field
-                                label="Galones"
-                                error={errors.galones}
-                                required={!data.tanque_lleno}
-                                ayuda={
-                                    data.tanque_lleno &&
-                                    galonesTanqueLleno !== null
-                                        ? 'Vacío: se registra el tanque lleno configurado.'
-                                        : undefined
-                                }
-                            >
-                                {(id) => (
-                                    <Input
-                                        id={id}
-                                        type="number"
-                                        inputMode="decimal"
-                                        min="0"
-                                        step="0.1"
-                                        value={data.galones}
-                                        onChange={(evento) =>
-                                            setData(
-                                                'galones',
-                                                evento.target.value,
-                                            )
-                                        }
-                                    />
-                                )}
-                            </Field>
+                            <div className="grid grid-cols-2 gap-4">
+                                <Field
+                                    label="Galones"
+                                    error={errors.galones}
+                                    required={!data.tanque_lleno}
+                                    ayuda={
+                                        data.tanque_lleno &&
+                                        galonesTanqueLleno !== null
+                                            ? 'Vacío: el tanque lleno configurado.'
+                                            : undefined
+                                    }
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            type="number"
+                                            inputMode="decimal"
+                                            min="0"
+                                            step="0.1"
+                                            value={data.galones}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'galones',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </Field>
+
+                                <Field
+                                    label="Precio por galón (S/)"
+                                    error={errors.precio_galon}
+                                    ayuda={
+                                        importe !== null
+                                            ? `Importe: S/ ${importe.toFixed(2)}`
+                                            : 'Opcional: el del grifo ese día.'
+                                    }
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            type="number"
+                                            inputMode="decimal"
+                                            min="0"
+                                            step="0.001"
+                                            value={data.precio_galon}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'precio_galon',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </Field>
+                            </div>
 
                             <Field
                                 label="Observación"

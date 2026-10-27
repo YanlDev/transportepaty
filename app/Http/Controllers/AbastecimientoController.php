@@ -67,6 +67,7 @@ class AbastecimientoController extends Controller
                     'etapa' => $vuelta->etapa(),
                     'recorrido' => $this->recorrido($vuelta),
                     ...$this->dotacion->de($vuelta, $registrados->where('vuelta_id', $vuelta->id)->values()),
+                    'importe_registrado' => round((float) $registrados->where('vuelta_id', $vuelta->id)->sum('importe'), 2),
                 ])
                 ->all(),
             'recientes' => Abastecimiento::query()
@@ -83,17 +84,14 @@ class AbastecimientoController extends Controller
                     'vuelta' => $abastecimiento->vuelta?->codigo,
                     'galones' => (float) $abastecimiento->galones,
                     'tanque_lleno' => $abastecimiento->tanque_lleno,
+                    'precio_galon' => $abastecimiento->precio_galon === null ? null : (float) $abastecimiento->precio_galon,
+                    'importe' => $abastecimiento->importe === null ? null : (float) $abastecimiento->importe,
                     'observacion' => $abastecimiento->observacion,
                     'registrado_por' => $abastecimiento->registradoPor?->name,
                 ])
                 ->all(),
             'tractos' => fn (): array => $this->opcionesTractos(),
-            'puntos' => fn (): array => PuntoAbastecimiento::query()
-                ->where('activo', true)
-                ->enOrden()
-                ->get(['id', 'nombre'])
-                ->map(fn (PuntoAbastecimiento $punto): array => ['id' => $punto->id, 'nombre' => $punto->nombre])
-                ->all(),
+            'puntos' => fn (): array => $this->opcionesPuntos(),
             'galonesTanqueLleno' => fn (): ?float => ($valor = Ajuste::valor(Ajuste::GALONES_TANQUE_LLENO)) === null ? null : (float) $valor,
         ]);
     }
@@ -107,6 +105,10 @@ class AbastecimientoController extends Controller
             ? Vuelta::query()->find($request->integer('vuelta_id'))
             : $this->vueltaAbierta($request->integer('vehiculo_id'), $fecha);
         $lleno = $request->boolean('tanque_lleno');
+        $galones = $request->filled('galones')
+            ? $request->float('galones')
+            : (float) Ajuste::valor(Ajuste::GALONES_TANQUE_LLENO);
+        $precio = $request->filled('precio_galon') ? $request->float('precio_galon') : null;
 
         Abastecimiento::query()->create([
             'vehiculo_id' => $request->integer('vehiculo_id'),
@@ -114,10 +116,10 @@ class AbastecimientoController extends Controller
             'punto_abastecimiento_id' => $request->filled('punto_abastecimiento_id') ? $request->integer('punto_abastecimiento_id') : null,
             'conductor_id' => $vuelta?->conductor_id,
             'fecha' => $fecha,
-            'galones' => $request->filled('galones')
-                ? $request->float('galones')
-                : (float) Ajuste::valor(Ajuste::GALONES_TANQUE_LLENO),
+            'galones' => $galones,
             'tanque_lleno' => $lleno,
+            'precio_galon' => $precio,
+            'importe' => $precio === null ? null : round($galones * $precio, 2),
             'observacion' => $request->string('observacion')->toString() ?: null,
             'user_id' => $request->user()?->id,
         ]);
@@ -162,6 +164,37 @@ class AbastecimientoController extends Controller
                 'sentido' => $parada->sentido === SentidoTramo::Ida ? 'ida' : 'regreso',
                 'texto' => ($parada->lugar_origen ?? $parada->zona_origen?->label() ?? '¿?').' → '.($parada->lugar_destino ?? $parada->zona_destino?->label() ?? '¿?'),
                 'carga' => $parada->tipo_carga->label(),
+            ])
+            ->all());
+    }
+
+    /**
+     * Los puntos activos con el último precio por galón que se pagó en cada
+     * uno: elegir el punto deja puesto ese precio (si cambió, se corrige).
+     *
+     * @return list<array{id: int, nombre: string, ultimo_precio: float|null}>
+     */
+    private function opcionesPuntos(): array
+    {
+        $puntos = PuntoAbastecimiento::query()
+            ->where('activo', true)
+            ->enOrden()
+            ->get(['id', 'nombre']);
+
+        $precios = Abastecimiento::query()
+            ->whereIn('punto_abastecimiento_id', $puntos->pluck('id'))
+            ->whereNotNull('precio_galon')
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->get(['punto_abastecimiento_id', 'precio_galon'])
+            ->unique('punto_abastecimiento_id')
+            ->keyBy('punto_abastecimiento_id');
+
+        return array_values($puntos
+            ->map(fn (PuntoAbastecimiento $punto): array => [
+                'id' => $punto->id,
+                'nombre' => $punto->nombre,
+                'ultimo_precio' => ($precio = $precios->get($punto->id)?->precio_galon) === null ? null : (float) $precio,
             ])
             ->all());
     }

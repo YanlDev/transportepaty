@@ -33,6 +33,8 @@ export type VueltaAbastecimiento = {
     viaticos: { concepto: string; tipo: string; monto: number }[];
     total_previsto: number | null;
     total_registrado: number;
+    /** Soles del combustible autorizado (solo lo que tiene precio). */
+    importe_registrado: number;
     /** Una barra por tramo: la ida y, si tiene combustible, la vuelta. */
     tramos: TramoCombustible[];
 };
@@ -55,8 +57,17 @@ export type RegistroAbastecimiento = {
     vuelta: string | null;
     galones: number;
     tanque_lleno: boolean;
+    precio_galon: number | null;
+    importe: number | null;
     observacion: string | null;
     registrado_por: string | null;
+};
+
+/** Un punto para registrar, con el último precio que se pagó ahí. */
+export type PuntoRegistro = {
+    id: number;
+    nombre: string;
+    ultimo_precio: number | null;
 };
 
 export type TractoAbastecimiento = {

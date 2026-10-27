@@ -33,6 +33,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
             'fecha' => ['required', 'date'],
             'tanque_lleno' => ['boolean'],
             'galones' => ['nullable', 'numeric', 'min:0.1', 'max:999'],
+            'precio_galon' => ['nullable', 'numeric', 'min:0.01', 'max:99'],
             'observacion' => ['nullable', 'string', 'max:500'],
         ];
     }
@@ -63,6 +64,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
         return [
             'vehiculo_id' => 'unidad',
             'punto_abastecimiento_id' => 'punto',
+            'precio_galon' => 'precio por galón',
         ];
     }
 }

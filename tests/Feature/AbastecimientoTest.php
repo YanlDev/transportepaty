@@ -127,6 +127,38 @@ it('registers the authorized fuel on the open trip of the unit', function (): vo
         ->and((float) $registro->galones)->toBe(120.0);
 });
 
+it('keeps the price per gallon and the amount, and proposes the last price of the point', function (): void {
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), [
+            'vehiculo_id' => $this->tracto->id,
+            'punto_abastecimiento_id' => $this->arequipa->id,
+            'fecha' => now()->toDateString(),
+            'galones' => 120,
+            'precio_galon' => 16.45,
+        ])
+        ->assertSessionHas('toast.type', 'success');
+
+    $registro = Abastecimiento::query()->sole();
+    expect((float) $registro->precio_galon)->toBe(16.45)
+        ->and((float) $registro->importe)->toBe(1974.0);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('recientes.0.importe', 1974)
+            ->where('puntos', fn ($puntos) => collect($puntos)->firstWhere('id', $this->arequipa->id)['ultimo_precio'] === 16.45));
+});
+
+it('registers without price when it is not known', function (): void {
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), [
+        'vehiculo_id' => $this->tracto->id,
+        'fecha' => now()->toDateString(),
+        'galones' => 50,
+    ]);
+
+    expect(Abastecimiento::query()->sole()->importe)->toBeNull();
+});
+
 it('uses the configured full tank when the gallons are left empty', function (): void {
     $datos = [
         'vehiculo_id' => $this->tracto->id,

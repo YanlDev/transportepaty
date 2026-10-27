@@ -22,6 +22,8 @@ use Illuminate\Support\Carbon;
  * @property Carbon $fecha
  * @property string $galones
  * @property bool $tanque_lleno
+ * @property string|null $precio_galon Soles por galón en ese grifo.
+ * @property string|null $importe Galones × precio, en soles.
  * @property string|null $observacion
  * @property int|null $user_id
  * @property-read Vehiculo $vehiculo
@@ -32,7 +34,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'vehiculo_id', 'vuelta_id', 'punto_abastecimiento_id', 'conductor_id', 'fecha',
-    'galones', 'tanque_lleno', 'observacion', 'user_id',
+    'galones', 'tanque_lleno', 'precio_galon', 'importe', 'observacion', 'user_id',
 ])]
 class Abastecimiento extends Model
 {
@@ -88,6 +90,8 @@ class Abastecimiento extends Model
             'fecha' => 'date',
             'galones' => 'decimal:2',
             'tanque_lleno' => 'boolean',
+            'precio_galon' => 'decimal:3',
+            'importe' => 'decimal:2',
         ];
     }
 }

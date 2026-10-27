@@ -25,6 +25,8 @@ class AbastecimientoFactory extends Factory
             'fecha' => now()->toDateString(),
             'galones' => 100,
             'tanque_lleno' => false,
+            'precio_galon' => null,
+            'importe' => null,
             'observacion' => null,
             'user_id' => null,
         ];

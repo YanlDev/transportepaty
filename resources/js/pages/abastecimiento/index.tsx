@@ -27,6 +27,7 @@ import { colorTarjeta } from '@/lib/color-tarjeta';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type {
+    PuntoRegistro,
     RegistroAbastecimiento,
     TractoAbastecimiento,
     TramoCombustible,
@@ -37,7 +38,7 @@ type Props = {
     vueltas: VueltaAbastecimiento[];
     recientes: RegistroAbastecimiento[];
     tractos: TractoAbastecimiento[];
-    puntos: { id: number; nombre: string }[];
+    puntos: PuntoRegistro[];
     galonesTanqueLleno: number | null;
 };
 
@@ -52,6 +53,11 @@ const galones = (valor: number | null): string =>
     valor === null
         ? '—'
         : `${Number.isInteger(valor) ? valor : valor.toFixed(1)} gal`;
+
+const soles = (valor: number | null): string =>
+    valor === null
+        ? '—'
+        : `S/ ${valor.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
 
@@ -470,6 +476,12 @@ export default function AbastecimientoIndex({
                                 <TableHead className="text-right">
                                     Galones
                                 </TableHead>
+                                <TableHead className="text-right">
+                                    S/ gal
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    Importe
+                                </TableHead>
                                 <TableHead>Registró</TableHead>
                                 <TableHead className="w-0" />
                             </TableRow>
@@ -478,7 +490,7 @@ export default function AbastecimientoIndex({
                             {recientes.length === 0 && (
                                 <TableRow className="hover:bg-transparent">
                                     <TableCell
-                                        colSpan={7}
+                                        colSpan={9}
                                         className="py-6 text-center text-sm text-muted-foreground"
                                     >
                                         Todavía no se registró combustible.
@@ -502,6 +514,13 @@ export default function AbastecimientoIndex({
                                     <TableCell className="text-right tabular-nums">
                                         {galones(registro.galones)}
                                         {registro.tanque_lleno && ' (full)'}
+                                    </TableCell>
+                                    <TableCell className="text-right text-muted-foreground tabular-nums">
+                                        {registro.precio_galon?.toFixed(3) ??
+                                            '—'}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                        {soles(registro.importe)}
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">
                                         {registro.registrado_por ?? '—'}
@@ -636,8 +655,16 @@ export default function AbastecimientoIndex({
                                         (fila) => fila.registrado > 0,
                                     ) && (
                                         <div className="flex flex-col gap-1">
-                                            <span className="text-xs font-medium text-muted-foreground">
+                                            <span className="flex justify-between text-xs font-medium text-muted-foreground">
                                                 Autorizado por punto
+                                                {abierta.importe_registrado >
+                                                    0 && (
+                                                    <span className="tabular-nums">
+                                                        {soles(
+                                                            abierta.importe_registrado,
+                                                        )}
+                                                    </span>
+                                                )}
                                             </span>
                                             <ul className="flex flex-col gap-0.5 text-sm">
                                                 {abierta.combustible
