@@ -14,15 +14,19 @@ const DIAS_ATRAS = 14;
 const DIAS_ADELANTE = 7;
 
 /**
- * Cuánto se estima que dura una parada que todavía no tiene GR: lo justo
- * para dibujarla, no un pronóstico. Un vacío es más corto que un tramo con
- * carga; la vuelta por definir ocupa lo que suele durar un regreso.
+ * Cuánto se dibuja que dura un tramo: lo justo para leerlo, no un
+ * pronóstico. Vale también para los que tienen GR: la GR dice cuándo salió,
+ * no cuándo llegó, y estirar la barra hasta la GR siguiente pintaba como
+ * viaje los días de espera. La vuelta por definir ocupa lo que suele durar
+ * un regreso.
  */
 const DIAS_ESTIMADOS = { vacio: 1, carga: 2, vuelta_por_definir: 5 };
 
 const DIAS_CORTOS = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
 
 type Segmento = {
+    /** El ticket al que pertenece: el clic lo abre. */
+    vuelta: TarjetaVuelta;
     desde: number;
     hasta: number;
     /** Para quién trabaja la unidad en el tramo: decide el color. */
@@ -40,7 +44,7 @@ type Segmento = {
  * tramo y la carga van escritos en la barra.
  */
 const COLORES: Record<
-    'minsur' | 'particular' | 'vacio' | 'por_definir',
+    'minsur' | 'particular' | 'vacio' | 'espera' | 'por_definir',
     { nombre: string; lleno: string; claro: string }
 > = {
     minsur: {
@@ -57,6 +61,11 @@ const COLORES: Record<
         nombre: 'Vacía',
         lleno: 'bg-zinc-400 text-white dark:bg-zinc-600',
         claro: 'border-zinc-400 bg-zinc-400/15 text-zinc-700 dark:text-zinc-300',
+    },
+    espera: {
+        nombre: 'En espera / en base',
+        lleno: 'bg-[repeating-linear-gradient(135deg,color-mix(in_oklab,var(--color-muted-foreground)_22%,transparent)_0_5px,transparent_5px_9px)] text-muted-foreground',
+        claro: 'bg-[repeating-linear-gradient(135deg,color-mix(in_oklab,var(--color-muted-foreground)_22%,transparent)_0_5px,transparent_5px_9px)] text-muted-foreground',
     },
     por_definir: {
         nombre: 'Vuelta por definir',
@@ -88,44 +97,74 @@ function hoyMs(): number {
     ).getTime();
 }
 
+/** «3 d» o «hoy»: cuánto lleva una espera. */
+function duracion(desde: number, hasta: number): string {
+    const dias = Math.round((hasta - desde) / DIA_MS);
+
+    return dias <= 0 ? 'hoy' : `${dias} d`;
+}
+
 /**
  * Las paradas del ticket como tramos en el tiempo. Una parada con GR empieza
- * el día de su GR y dura hasta que arranca la siguiente; la que no tiene GR
- * se dibuja a continuación con una duración estimada.
+ * el día de su GR y dura lo estimado del viaje, sin pisar la GR siguiente; lo
+ * que pasa entre una GR y la otra es espera (descargando, esperando carga) y
+ * se dibuja aparte, rayado, con el lugar donde está. La parada sin GR va a
+ * continuación, clara y punteada.
+ *
+ * `ultimaDeLaUnidad`: solo el ticket más reciente de la unidad sigue hasta
+ * hoy (en ruta, o en base esperando el siguiente).
  */
-function segmentosDe(vuelta: TarjetaVuelta, hoy: number): Segmento[] {
+function segmentosDe(
+    vuelta: TarjetaVuelta,
+    hoy: number,
+    ultimaDeLaUnidad: boolean,
+): Segmento[] {
     const paradas: ParadaVuelta[] = [...vuelta.ida, ...vuelta.regreso];
-    const inicio = vuelta.inicio ? aDia(vuelta.inicio) : hoy;
     const segmentos: Segmento[] = [];
-    let cursor = inicio;
+    let cursor = vuelta.inicio ? aDia(vuelta.inicio) : hoy;
+    let anteriorConGuia: ParadaVuelta | null = null;
+
+    const espera = (desde: number, hasta: number, donde: string) =>
+        segmentos.push({
+            vuelta,
+            desde,
+            hasta,
+            clase: 'espera',
+            etiqueta: `${donde} · ${duracion(desde, hasta)}`,
+            vacio: false,
+            estimado: false,
+        });
 
     paradas.forEach((parada, indice) => {
         const vacio = parada.tipo_carga === 'vacio';
-        const desde = parada.fecha ? aDia(parada.fecha) : cursor;
-        const siguiente = paradas
-            .slice(indice + 1)
-            .find((otra) => otra.fecha !== null);
-        const estimada =
-            desde +
+        const dias =
             (vacio ? DIAS_ESTIMADOS.vacio : DIAS_ESTIMADOS.carga) * DIA_MS;
-        let hasta =
-            siguiente?.fecha && indice + 1 === paradas.indexOf(siguiente)
-                ? aDia(siguiente.fecha)
-                : estimada;
+        let desde = cursor;
+        let hasta = cursor + dias;
 
-        // La última parada de un ticket en ruta sigue hasta hoy.
-        const ultima = indice === paradas.length - 1;
+        if (parada.fecha) {
+            desde = aDia(parada.fecha);
 
-        if (
-            ultima &&
-            (vuelta.etapa === 'en_ida' || vuelta.etapa === 'en_vuelta')
-        ) {
-            hasta = Math.max(hasta, hoy + DIA_MS);
+            if (anteriorConGuia && desde > cursor) {
+                espera(cursor, desde, `en ${anteriorConGuia.destino ?? '¿?'}`);
+            }
+
+            const siguiente = paradas
+                .slice(indice + 1)
+                .find((otra) => otra.fecha !== null);
+            hasta = Math.min(
+                desde + dias,
+                siguiente?.fecha ? aDia(siguiente.fecha) : Infinity,
+            );
+            anteriorConGuia = parada;
         }
 
+        hasta = Math.max(hasta, desde + DIA_MS / 2);
+
         segmentos.push({
+            vuelta,
             desde,
-            hasta: Math.max(hasta, desde + DIA_MS / 2),
+            hasta,
             clase: claseDeCarga(parada.tipo_carga),
             etiqueta: `${parada.origen ?? '¿?'} → ${parada.destino ?? '¿?'} · ${vacio ? 'vacía' : parada.tipo_carga_label}`,
             vacio,
@@ -134,8 +173,24 @@ function segmentosDe(vuelta: TarjetaVuelta, hoy: number): Segmento[] {
         cursor = Math.max(cursor, hasta);
     });
 
+    const ultima = paradas.at(-1);
+
+    // Lo último que se hizo tiene GR y no hay nada programado después: la
+    // unidad espera ahí hasta hoy (en ruta) o está en base.
+    if (ultimaDeLaUnidad && ultima?.fecha && cursor < hoy + DIA_MS) {
+        espera(
+            cursor,
+            hoy + DIA_MS,
+            vuelta.etapa === 'en_base'
+                ? 'en base'
+                : `en ${ultima.destino ?? '¿?'}`,
+        );
+        cursor = hoy + DIA_MS;
+    }
+
     if (vuelta.regreso.length === 0 && vuelta.etapa !== 'en_base') {
         segmentos.push({
+            vuelta,
             desde: cursor,
             hasta: cursor + DIAS_ESTIMADOS.vuelta_por_definir * DIA_MS,
             clase: 'por_definir',
@@ -150,10 +205,10 @@ function segmentosDe(vuelta: TarjetaVuelta, hoy: number): Segmento[] {
 
 /**
  * La programación como tablero de despacho: una fila por unidad, los días
- * en columnas y cada ticket como una barra partida por parada, con un color
- * por tramo del recorrido (Juliaca → mina celeste, mina → Pisco azul…). Lo
- * que ya tiene GR va lleno; lo programado, claro y punteado. Clic en la
- * barra abre el ticket.
+ * en columnas y sus tickets uno detrás de otro, cada uno partido por parada
+ * con el color de para quién trabaja. Lo que ya tiene GR va lleno; lo
+ * programado, claro y punteado; la espera entre una GR y la siguiente,
+ * rayada. Clic en una barra abre su ticket.
  */
 export function GanttVueltas({
     vueltas,
@@ -173,22 +228,44 @@ export function GanttVueltas({
         (_, indice) => new Date(desde + indice * DIA_MS),
     );
 
-    const filas = useMemo(
-        () =>
-            [...vueltas]
-                .sort(
+    // Una fila por unidad: el ticket que acaba de cerrar y el que arranca
+    // van en la misma línea. La fila toma la etapa del más reciente.
+    const filas = useMemo(() => {
+        const porUnidad = new Map<number, TarjetaVuelta[]>();
+
+        for (const vuelta of vueltas) {
+            porUnidad.set(vuelta.tracto_id, [
+                ...(porUnidad.get(vuelta.tracto_id) ?? []),
+                vuelta,
+            ]);
+        }
+
+        const orden = (etapa: string) =>
+            ETAPAS.findIndex((opcion) => opcion.etapa === etapa);
+
+        return [...porUnidad.values()]
+            .map((tickets) => {
+                const ordenados = [...tickets].sort(
                     (a, b) =>
-                        ETAPAS.findIndex((etapa) => etapa.etapa === a.etapa) -
-                            ETAPAS.findIndex(
-                                (etapa) => etapa.etapa === b.etapa,
-                            ) || a.placa.localeCompare(b.placa, 'es'),
-                )
-                .map((vuelta) => ({
-                    vuelta,
-                    segmentos: segmentosDe(vuelta, hoy),
-                })),
-        [vueltas, hoy],
-    );
+                        (a.inicio ?? '').localeCompare(b.inicio ?? '') ||
+                        a.id - b.id,
+                );
+                const actual = ordenados.at(-1) as TarjetaVuelta;
+
+                return {
+                    actual,
+                    tickets: ordenados,
+                    segmentos: ordenados.flatMap((vuelta) =>
+                        segmentosDe(vuelta, hoy, vuelta === actual),
+                    ),
+                };
+            })
+            .sort(
+                (a, b) =>
+                    orden(a.actual.etapa) - orden(b.actual.etapa) ||
+                    a.actual.placa.localeCompare(b.actual.placa, 'es'),
+            );
+    }, [vueltas, hoy]);
 
     // Solo los colores que aparecen en pantalla.
     const enPantalla = new Set(
@@ -299,9 +376,9 @@ export function GanttVueltas({
                         </p>
                     )}
 
-                    {filas.map(({ vuelta, segmentos }) => (
+                    {filas.map(({ actual: vuelta, tickets, segmentos }) => (
                         <div
-                            key={vuelta.id}
+                            key={vuelta.tracto_id}
                             className="group flex border-b last:border-b-0 hover:bg-accent/30"
                         >
                             <button
@@ -324,7 +401,9 @@ export function GanttVueltas({
                                     )}
                                 </span>
                                 <span className="truncate font-mono text-[10px] text-muted-foreground">
-                                    {vuelta.codigo}
+                                    {tickets
+                                        .map((ticket) => ticket.codigo)
+                                        .join(' · ')}
                                     {vuelta.dias_en_base !== null &&
                                         ` · en base ${vuelta.dias_en_base} d`}
                                 </span>
@@ -365,16 +444,23 @@ export function GanttVueltas({
                                         <button
                                             key={indice}
                                             type="button"
-                                            onClick={() => onAbrir(vuelta)}
-                                            title={segmento.etiqueta}
+                                            onClick={() =>
+                                                onAbrir(segmento.vuelta)
+                                            }
+                                            title={`${segmento.vuelta.codigo ?? ''} · ${segmento.etiqueta}`}
                                             className={cn(
                                                 'absolute top-2 bottom-2 overflow-hidden rounded-md px-1.5 text-left text-[11px] leading-7 font-medium whitespace-nowrap transition hover:brightness-110',
-                                                segmento.estimado
+                                                segmento.clase === 'espera'
                                                     ? cn(
-                                                          'border border-dashed',
-                                                          estilo.claro,
+                                                          'top-3.5 bottom-3.5 rounded-sm leading-4 font-normal',
+                                                          estilo.lleno,
                                                       )
-                                                    : estilo.lleno,
+                                                    : segmento.estimado
+                                                      ? cn(
+                                                            'border border-dashed',
+                                                            estilo.claro,
+                                                        )
+                                                      : estilo.lleno,
                                             )}
                                             style={{
                                                 left: `calc(${izquierda}% + 1px)`,
