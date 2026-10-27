@@ -17,6 +17,7 @@ use App\Models\DestinoParticular;
 use App\Models\EnvioWhatsapp;
 use App\Models\OpcionTramo;
 use App\Models\ParadaVuelta;
+use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
@@ -220,6 +221,12 @@ class VueltaController extends Controller
                 : null,
             'dias_en_base' => $llegada ? (int) $llegada->diffInDays($hoy) : null,
             'aviso' => $this->avisoDe($vuelta),
+            'taller' => $vuelta->revisiones->first()?->resumen(),
+            'taller_anteriores' => array_values($vuelta->revisiones
+                ->skip(1)
+                ->map(fn (RevisionTaller $revision): array => $revision->resumen())
+                ->all()),
+            'revisable' => $request->user()?->can('create', [RevisionTaller::class, $vuelta]) ?? false,
         ];
     }
 
@@ -472,6 +479,7 @@ class VueltaController extends Controller
             'tracto:id,placa',
             'carreta:id,placa',
             'conductor:id,nombres,apellidos,telefono,telefono_alterno',
+            'revisiones.usuario:id,name',
             'paradas.viajes' => fn ($query) => $query
                 ->select(['id', 'parada_vuelta_id', 'numero_gr', 'fecha_traslado', 'peso', 'unidad_peso'])
                 ->orderBy('fecha_traslado')

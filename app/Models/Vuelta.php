@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasManyThrough;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -45,6 +46,8 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, Viaje> $viajes
  * @property-read Collection<int, Abastecimiento> $abastecimientos
  * @property-read Collection<int, EnvioWhatsapp> $envios
+ * @property-read Collection<int, RevisionTaller> $revisiones
+ * @property-read RevisionTaller|null $revision La última: la que vale.
  */
 #[Fillable(['tracto_id', 'carreta_id', 'conductor_id', 'tipo', 'estado', 'origen', 'inicio', 'fin'])]
 class Vuelta extends Model
@@ -100,6 +103,34 @@ class Vuelta extends Model
     public function envios(): HasMany
     {
         return $this->hasMany(EnvioWhatsapp::class)->latest('id');
+    }
+
+    /**
+     * Las revisiones de taller, de la más nueva a la más vieja.
+     *
+     * @return HasMany<RevisionTaller, $this>
+     */
+    public function revisiones(): HasMany
+    {
+        return $this->hasMany(RevisionTaller::class)->latest('id');
+    }
+
+    /**
+     * La última revisión de taller: la que vale.
+     *
+     * @return HasOne<RevisionTaller, $this>
+     */
+    public function revision(): HasOne
+    {
+        return $this->hasOne(RevisionTaller::class)->latestOfMany();
+    }
+
+    /**
+     * Si taller ya dio el apto: sin él, el ticket no avanza.
+     */
+    public function tieneOkDeTaller(): bool
+    {
+        return $this->revision?->esApta() ?? false;
     }
 
     /**

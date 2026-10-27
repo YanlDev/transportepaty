@@ -1,5 +1,6 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { IconoTaller } from '@/components/taller/estado-taller';
 import { Button } from '@/components/ui/button';
 import { ETAPAS } from '@/components/vueltas/tabla-vueltas';
 import { formatearPlaca } from '@/lib/format';
@@ -318,6 +319,9 @@ export function GanttVueltas({
                                     <span className="font-mono text-sm font-semibold">
                                         {formatearPlaca(vuelta.placa)}
                                     </span>
+                                    {vuelta.etapa !== 'en_base' && (
+                                        <IconoTaller revision={vuelta.taller} />
+                                    )}
                                 </span>
                                 <span className="truncate font-mono text-[10px] text-muted-foreground">
                                     {vuelta.codigo}

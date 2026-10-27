@@ -20,7 +20,7 @@ export function Field({ label, error, required, ayuda, children }: Props) {
     const id = useId();
 
     return (
-        <div className="grid gap-1.5">
+        <div className="grid min-w-0 grid-cols-1 gap-1.5">
             <Label htmlFor={id}>
                 {label}
                 {required && <span className="text-destructive"> *</span>}

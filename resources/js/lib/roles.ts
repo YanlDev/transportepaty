@@ -7,6 +7,7 @@ const NOMBRES_ROL: Record<string, string> = {
     gerencia: 'Gerencia',
     operaciones: 'Operaciones',
     abastecimiento: 'Abastecimiento',
+    taller: 'Taller',
     rrhh: 'RRHH',
     contador: 'Contador',
     visor: 'Visor',

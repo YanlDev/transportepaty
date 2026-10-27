@@ -3,6 +3,7 @@ import {
     Building2,
     Calculator,
     CalendarCheck,
+    ClipboardCheck,
     Container,
     Fuel,
     IdCard,
@@ -20,6 +21,7 @@ import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController'
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
+import taller from '@/actions/App/Http/Controllers/TallerController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
@@ -78,6 +80,13 @@ const mantenimientoNavItem: NavItem = {
     title: 'Mantenimiento',
     href: mantenimiento.index(),
     icon: Wrench,
+};
+
+/** El OK de salida de cada ticket: la bandeja de taller. */
+const tallerNavItem: NavItem = {
+    title: 'Taller',
+    href: taller.index(),
+    icon: ClipboardCheck,
 };
 
 /** Requiere admin o visor: el contador no ve el padrón de choferes. */
@@ -176,6 +185,7 @@ export function AppSidebar() {
     const flota = [
         ...(puede('vehiculos.ver') ? flotaNavItems : []),
         ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
+        ...(puede('taller.ver') ? [tallerNavItem] : []),
     ];
 
     const rrhh = [

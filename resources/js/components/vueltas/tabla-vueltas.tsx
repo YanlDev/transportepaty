@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp, CheckCheck } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { IconoTaller } from '@/components/taller/estado-taller';
 import {
     Table,
     TableBody,
@@ -269,7 +270,12 @@ function GrupoFilas({
                         className="cursor-pointer"
                     >
                         <TableCell className="font-mono font-semibold whitespace-nowrap">
-                            {formatearPlaca(vuelta.placa)}
+                            <span className="flex items-center gap-1.5">
+                                {formatearPlaca(vuelta.placa)}
+                                {vuelta.etapa !== 'en_base' && (
+                                    <IconoTaller revision={vuelta.taller} />
+                                )}
+                            </span>
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">
                             {vuelta.codigo}

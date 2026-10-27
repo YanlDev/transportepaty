@@ -168,8 +168,10 @@ export function RegistrarAbastecimientoDialog({
                                 ayuda={
                                     tracto
                                         ? tracto.vuelta
-                                            ? `Va a la vuelta ${tracto.vuelta}.`
-                                            : 'No tiene una vuelta abierta: queda suelto.'
+                                            ? tracto.apta
+                                                ? `Va al ticket ${tracto.vuelta}.`
+                                                : `El ticket ${tracto.vuelta} todavía no tiene el OK de taller.`
+                                            : 'No tiene un ticket abierto: primero se programa.'
                                         : undefined
                                 }
                             >
@@ -352,7 +354,10 @@ export function RegistrarAbastecimientoDialog({
                             <Button
                                 type="submit"
                                 form="registrar-abastecimiento"
-                                disabled={processing}
+                                disabled={
+                                    processing ||
+                                    (tracto !== undefined && !tracto.apta)
+                                }
                             >
                                 Registrar
                             </Button>

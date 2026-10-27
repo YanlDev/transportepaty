@@ -10,6 +10,7 @@ use App\Models\Ajuste;
 use App\Models\ParadaVuelta;
 use App\Models\PuntoAbastecimiento;
 use App\Models\ReglaAbastecimiento;
+use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
@@ -34,6 +35,18 @@ beforeEach(function (): void {
     $this->arequipa = PuntoAbastecimiento::query()->where('nombre', 'Arequipa')->sole();
     $this->mina = PuntoAbastecimiento::query()->where('nombre', 'Mina')->sole();
 });
+
+/**
+ * Un ticket abierto de la unidad que ya tiene el OK de taller: sin él no se
+ * registra combustible.
+ */
+function ticketApto(Vehiculo $tracto, array $atributos = []): Vuelta
+{
+    $vuelta = Vuelta::factory()->create(['tracto_id' => $tracto->id, 'inicio' => now()->subDay()->toDateString(), ...$atributos]);
+    RevisionTaller::factory()->create(['vuelta_id' => $vuelta->id]);
+
+    return $vuelta;
+}
 
 /**
  * Una vuelta abierta con una parada (y su GR, si se pasa la dirección).
@@ -111,7 +124,7 @@ it('counts a full tank only once its gallons are configured', function (): void 
 });
 
 it('registers the authorized fuel on the open trip of the unit', function (): void {
-    $vuelta = Vuelta::factory()->create(['tracto_id' => $this->tracto->id, 'inicio' => now()->subDay()->toDateString()]);
+    $vuelta = ticketApto($this->tracto);
 
     actingAs(actorConRol('abastecimiento'))
         ->post(route('abastecimiento.store'), [
@@ -128,6 +141,8 @@ it('registers the authorized fuel on the open trip of the unit', function (): vo
 });
 
 it('keeps the price per gallon and the amount, and proposes the last price of the point', function (): void {
+    ticketApto($this->tracto);
+
     actingAs(actorConRol('abastecimiento'))
         ->post(route('abastecimiento.store'), [
             'vehiculo_id' => $this->tracto->id,
@@ -150,6 +165,8 @@ it('keeps the price per gallon and the amount, and proposes the last price of th
 });
 
 it('registers without price when it is not known', function (): void {
+    ticketApto($this->tracto);
+
     actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), [
         'vehiculo_id' => $this->tracto->id,
         'fecha' => now()->toDateString(),
@@ -160,6 +177,8 @@ it('registers without price when it is not known', function (): void {
 });
 
 it('uses the configured full tank when the gallons are left empty', function (): void {
+    ticketApto($this->tracto);
+
     $datos = [
         'vehiculo_id' => $this->tracto->id,
         'punto_abastecimiento_id' => $this->kio->id,

@@ -26,6 +26,7 @@ use App\Http\Controllers\PlanMantenimientoController;
 use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\RolController;
+use App\Http\Controllers\TallerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
@@ -153,6 +154,10 @@ Route::middleware('auth')->group(function () {
 
     // Qué unidades salen con carga particular cada día. Se carga antes de
     // que exista la GR, así que no se deduce de `viajes`.
+    // Taller: la bandeja de tickets por revisar y el apto o no apto de salida.
+    Route::get('taller', [TallerController::class, 'index'])->name('taller.index');
+    Route::post('vueltas/{vuelta}/revision-taller', [TallerController::class, 'store'])->name('taller.store');
+
     // Abastecimiento: el tablero con lo que le toca a cada unidad y el
     // registro del combustible autorizado; aparte, la pizarra de dotaciones.
     Route::get('abastecimiento', [AbastecimientoController::class, 'index'])->name('abastecimiento.index');

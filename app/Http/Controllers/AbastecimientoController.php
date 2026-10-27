@@ -16,6 +16,7 @@ use App\Models\Vuelta;
 use App\Services\DotacionVuelta;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -41,6 +42,7 @@ class AbastecimientoController extends Controller
                 'tracto:id,placa',
                 'conductor:id,nombres,apellidos',
                 'paradas.viajes:id,parada_vuelta_id,numero_gr,origen,destino,peso,unidad_peso',
+                'revision.usuario:id,name',
             ])
             ->get()
             // La que ya volvió a la base no espera más combustible: lo que
@@ -65,6 +67,7 @@ class AbastecimientoController extends Controller
                     'tracto' => ['id' => $vuelta->tracto->id, 'placa' => $vuelta->tracto->placa],
                     'conductor' => $vuelta->conductor ? "{$vuelta->conductor->nombres} {$vuelta->conductor->apellidos}" : null,
                     'etapa' => $vuelta->etapa(),
+                    'taller' => $vuelta->revision?->resumen(),
                     'recorrido' => $this->recorrido($vuelta),
                     ...$this->dotacion->de($vuelta, $registrados->where('vuelta_id', $vuelta->id)->values()),
                     'importe_registrado' => round((float) $registrados->where('vuelta_id', $vuelta->id)->sum('importe'), 2),
@@ -104,6 +107,20 @@ class AbastecimientoController extends Controller
         $vuelta = $request->filled('vuelta_id')
             ? Vuelta::query()->find($request->integer('vuelta_id'))
             : $this->vueltaAbierta($request->integer('vehiculo_id'), $fecha);
+
+        // Sin el OK de taller el ticket no avanza: no se le autoriza nada.
+        if ($vuelta === null) {
+            throw ValidationException::withMessages([
+                'vehiculo_id' => 'La unidad no tiene un ticket abierto: primero se programa y taller da el OK.',
+            ]);
+        }
+
+        if (! $vuelta->tieneOkDeTaller()) {
+            throw ValidationException::withMessages([
+                'vehiculo_id' => "El ticket {$vuelta->codigo} todavía no tiene el OK de taller.",
+            ]);
+        }
+
         $lleno = $request->boolean('tanque_lleno');
         $galones = $request->filled('galones')
             ? $request->float('galones')
@@ -112,9 +129,9 @@ class AbastecimientoController extends Controller
 
         Abastecimiento::query()->create([
             'vehiculo_id' => $request->integer('vehiculo_id'),
-            'vuelta_id' => $vuelta?->id,
+            'vuelta_id' => $vuelta->id,
             'punto_abastecimiento_id' => $request->filled('punto_abastecimiento_id') ? $request->integer('punto_abastecimiento_id') : null,
-            'conductor_id' => $vuelta?->conductor_id,
+            'conductor_id' => $vuelta->conductor_id,
             'fecha' => $fecha,
             'galones' => $galones,
             'tanque_lleno' => $lleno,
@@ -126,7 +143,7 @@ class AbastecimientoController extends Controller
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => 'Abastecimiento registrado'.($vuelta ? " en la vuelta {$vuelta->codigo}." : '.'),
+            'message' => "Abastecimiento registrado en el ticket {$vuelta->codigo}.",
         ]);
     }
 
@@ -200,16 +217,17 @@ class AbastecimientoController extends Controller
     }
 
     /**
-     * Los tractos activos, con su vuelta abierta si tienen: elegir la unidad
-     * deja puesta la vuelta.
+     * Los tractos activos, con su vuelta abierta si tienen y si ya tiene el
+     * OK de taller: elegir la unidad deja puesta la vuelta.
      *
-     * @return array<int, array{id: int, placa: string, vuelta_id: int|null, vuelta: string|null}>
+     * @return array<int, array{id: int, placa: string, vuelta_id: int|null, vuelta: string|null, apta: bool}>
      */
     private function opcionesTractos(): array
     {
         $abiertas = Vuelta::query()
             ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
             ->orderBy('inicio')
+            ->with('revision')
             ->get(['id', 'codigo', 'tracto_id'])
             ->keyBy('tracto_id');
 
@@ -223,6 +241,7 @@ class AbastecimientoController extends Controller
                 'placa' => $tracto->placa,
                 'vuelta_id' => $abiertas->get($tracto->id)?->id,
                 'vuelta' => $abiertas->get($tracto->id)?->codigo,
+                'apta' => $abiertas->get($tracto->id)?->tieneOkDeTaller() ?? false,
             ])
             ->all();
     }

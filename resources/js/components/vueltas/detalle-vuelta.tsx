@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { ChevronRight, Pencil } from 'lucide-react';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
+import { TallerVuelta } from '@/components/taller/taller-vuelta';
 import { Button } from '@/components/ui/button';
 import {
     Sheet,
@@ -20,7 +21,7 @@ import type { TarjetaVuelta, Vuelta } from '@/types/vueltas';
 
 /**
  * El itinerario completo de una vuelta, a un costado: ida y regreso con sus
- * GR, los avisos de WhatsApp y el acceso a editarla.
+ * GR, el OK de taller, los avisos de WhatsApp y el acceso a editarla.
  */
 export function DetalleVuelta({
     vuelta,
@@ -112,6 +113,7 @@ export function DetalleVuelta({
                                     </p>
                                 )}
                             </div>
+                            <TallerVuelta ticket={vuelta} />
                             <TramosVuelta vuelta={vuelta} conGuias />
                             <AvisosVuelta
                                 salida={vuelta}

@@ -5,6 +5,7 @@ import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoControl
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
 import { RegistrarAbastecimientoDialog } from '@/components/abastecimiento/registrar-abastecimiento-dialog';
 import type { InicialAbastecimiento } from '@/components/abastecimiento/registrar-abastecimiento-dialog';
+import { EstadoTallerBadge } from '@/components/taller/estado-taller';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -389,6 +390,15 @@ export default function AbastecimientoIndex({
                                             />
                                             {etapa.texto}
                                         </span>
+                                        {vuelta.taller?.resultado !==
+                                            'apto' && (
+                                            <span className="mt-1 block">
+                                                <EstadoTallerBadge
+                                                    revision={vuelta.taller}
+                                                    corto
+                                                />
+                                            </span>
+                                        )}
                                     </TableCell>
                                     <TableCell className="max-w-64">
                                         <div className="flex flex-wrap gap-1">
@@ -447,6 +457,16 @@ export default function AbastecimientoIndex({
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
+                                                disabled={
+                                                    vuelta.taller?.resultado !==
+                                                    'apto'
+                                                }
+                                                title={
+                                                    vuelta.taller?.resultado !==
+                                                    'apto'
+                                                        ? 'Espera el OK de taller'
+                                                        : undefined
+                                                }
                                                 onClick={() =>
                                                     registrarEn(vuelta)
                                                 }
@@ -623,7 +643,21 @@ export default function AbastecimientoIndex({
                                                 cualquier punto cuenta contra el
                                                 tope.
                                             </p>
+                                            {abierta.taller?.resultado !==
+                                                'apto' && (
+                                                <div className="flex flex-col items-start gap-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                                                    <EstadoTallerBadge
+                                                        revision={
+                                                            abierta.taller
+                                                        }
+                                                    />
+                                                    Sin el OK de taller no se
+                                                    registra combustible.
+                                                </div>
+                                            )}
                                             {puedeRegistrar &&
+                                                abierta.taller?.resultado ===
+                                                    'apto' &&
                                                 abierta.tramos.map(
                                                     (tramo) =>
                                                         tramo.falta !== 0 && (

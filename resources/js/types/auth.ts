@@ -44,6 +44,8 @@ export type Permiso =
     | 'programacion.eliminar'
     | 'programacion.avisar'
     | 'programacion.configurar'
+    | 'taller.ver'
+    | 'taller.revisar'
     | 'abastecimiento.ver'
     | 'abastecimiento.registrar'
     | 'abastecimiento.configurar'

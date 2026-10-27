@@ -1,4 +1,4 @@
-import type { Opcion } from '@/types/vueltas';
+import type { Opcion, RevisionTaller } from '@/types/vueltas';
 
 /** Galones previstos por la pizarra en un punto, contra lo autorizado. */
 export type CombustiblePunto = {
@@ -18,6 +18,8 @@ export type VueltaAbastecimiento = {
     estado: 'programada' | 'en_curso';
     estado_label: string;
     etapa: 'programada' | 'en_ida' | 'en_vuelta' | 'en_base';
+    /** Sin el apto de taller no se le registra nada. */
+    taller: RevisionTaller | null;
     inicio: string | null;
     tracto: { id: number; placa: string };
     conductor: string | null;
@@ -75,6 +77,8 @@ export type TractoAbastecimiento = {
     placa: string;
     vuelta_id: number | null;
     vuelta: string | null;
+    /** Si su ticket ya tiene el OK de taller. */
+    apta: boolean;
 };
 
 export type PuntoAbastecimiento = {

@@ -37,6 +37,9 @@ enum Permiso: string
     case MantenimientoLlantas = 'mantenimiento.llantas';
     case MantenimientoEquipamiento = 'mantenimiento.equipamiento';
 
+    case TallerVer = 'taller.ver';
+    case TallerRevisar = 'taller.revisar';
+
     case NovedadesRegistrar = 'novedades.registrar';
     case NovedadesLevantar = 'novedades.levantar';
 
@@ -91,6 +94,7 @@ enum Permiso: string
         'tablero' => 'Tablero',
         'vehiculos' => 'Vehículos',
         'mantenimiento' => 'Mantenimiento',
+        'taller' => 'Taller (OK de salida)',
         'novedades' => 'Novedades de unidades',
         'conductores' => 'Conductores',
         'asistencia' => 'Asistencia',
@@ -115,7 +119,7 @@ enum Permiso: string
      */
     public const AREAS = [
         'general' => ['nombre' => 'General', 'modulos' => ['tablero']],
-        'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades']],
+        'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'taller', 'novedades']],
         'rrhh' => ['nombre' => 'RRHH', 'modulos' => ['conductores', 'asistencia']],
         'programacion' => ['nombre' => 'Programación', 'modulos' => ['programacion', 'viajes', 'cotizaciones', 'clientes', 'costos']],
         'abastecimiento' => ['nombre' => 'Abastecimiento', 'modulos' => ['abastecimiento']],
@@ -160,6 +164,8 @@ enum Permiso: string
             self::MantenimientoConfigurar => 'Configurar el plan de cada marca',
             self::MantenimientoLlantas => 'Registrar instalaciones, mediciones y cambios de llantas',
             self::MantenimientoEquipamiento => 'Contar el equipamiento de las carretas',
+            self::TallerVer => 'Ver los tickets por revisar',
+            self::TallerRevisar => 'Dar el apto o no apto de salida',
             self::NovedadesRegistrar => 'Registrar novedades',
             self::NovedadesLevantar => 'Levantar novedades',
             self::ViajesVer => 'Ver viajes',
@@ -223,12 +229,21 @@ enum Permiso: string
             self::AbastecimientoVer,
             self::AbastecimientoRegistrar,
             self::AbastecimientoConfigurar => ['abastecimiento'],
+            self::TallerVer,
+            self::TallerRevisar,
+            self::MantenimientoVer => ['taller'],
             default => [],
         };
 
         // Abastecimiento prepara cada salida: ve el tablero, las unidades y
         // la programación, sin tocarlas.
         if (in_array($this, [self::TableroVer, self::VehiculosVer, self::ProgramacionVer], true)) {
+            $roles[] = 'abastecimiento';
+            $roles[] = 'taller';
+        }
+
+        // Abastecimiento ve qué unidad tiene el OK de taller.
+        if ($this === self::TallerVer) {
             $roles[] = 'abastecimiento';
         }
 

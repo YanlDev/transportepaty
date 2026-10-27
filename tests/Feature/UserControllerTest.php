@@ -78,8 +78,8 @@ it('only offers the roles that exist', function (): void {
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('usuarios/create')
-            ->where('roles', fn ($roles): bool => collect($roles)->pluck('name')->all() === ['abastecimiento', 'admin', 'contador', 'gerencia', 'rrhh', 'visor'])
-            ->where('roles.5.permisos', fn ($permisos): bool => collect($permisos)->contains('viajes.ver'))
+            ->where('roles', fn ($roles): bool => collect($roles)->pluck('name')->all() === ['abastecimiento', 'admin', 'contador', 'gerencia', 'rrhh', 'taller', 'visor'])
+            ->where('roles.6.permisos', fn ($permisos): bool => collect($permisos)->contains('viajes.ver'))
         );
 });
 

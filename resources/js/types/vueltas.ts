@@ -127,6 +127,18 @@ export type AvisoVuelta = {
 
 export type EtapaVuelta = 'programada' | 'en_ida' | 'en_vuelta' | 'en_base';
 
+/** Una revisión de taller del ticket: apto o no apto, con cuándo estará lista. */
+export type RevisionTaller = {
+    resultado: 'apto' | 'no_apto';
+    resultado_label: string;
+    /** `Y-m-d H:i`: cuándo estará lista, si no es apta. */
+    disponible_estimado: string | null;
+    motivo: string | null;
+    trabajos: string | null;
+    por: string | null;
+    en: string;
+};
+
 /** Una fila de la tabla de programación. */
 export type TarjetaVuelta = Vuelta & {
     etapa: EtapaVuelta;
@@ -141,6 +153,11 @@ export type TarjetaVuelta = Vuelta & {
     /** Cuántos días lleva en la base esperando la siguiente vuelta. */
     dias_en_base: number | null;
     aviso: AvisoVuelta;
+    /** La última revisión de taller (la que vale); null si no la revisó. */
+    taller: RevisionTaller | null;
+    taller_anteriores: RevisionTaller[];
+    /** Si el usuario puede dar el apto o no apto. */
+    revisable: boolean;
 };
 
 export type DiaDeSemana = { fecha: string; programadas: number };

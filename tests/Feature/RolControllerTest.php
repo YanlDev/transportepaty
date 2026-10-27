@@ -47,8 +47,10 @@ it('shows the roles with their permissions and the catalog grouped by module', f
             // Cada módulo dice su área, para que el panel se agrupe como el menú.
             ->where('modulos.1.clave', 'vehiculos')
             ->where('modulos.1.area', 'Flota')
-            ->where('modulos.4.clave', 'conductores')
-            ->where('modulos.4.area', 'RRHH')
+            ->where('modulos.3.clave', 'taller')
+            ->where('modulos.3.area', 'Flota')
+            ->where('modulos.5.clave', 'conductores')
+            ->where('modulos.5.area', 'RRHH')
         );
 });
 
