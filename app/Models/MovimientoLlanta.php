@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TipoMovimientoLlanta;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\MovimientoLlantaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -35,7 +36,7 @@ use Illuminate\Support\Carbon;
 class MovimientoLlanta extends Model
 {
     /** @use HasFactory<MovimientoLlantaFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     protected $table = 'movimientos_llanta';
 

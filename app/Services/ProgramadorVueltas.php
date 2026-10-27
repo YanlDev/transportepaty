@@ -141,7 +141,8 @@ class ProgramadorVueltas
         $parada->delete();
         $salida->forceFill(['parada_vuelta_id' => null])->saveQuietly();
 
-        if ($vuelta->origen === OrigenVuelta::Programacion && ! $vuelta->paradas()->exists()) {
+        if ($vuelta->origen === OrigenVuelta::Programacion && ! $vuelta->paradas()->exists()
+            && ! $vuelta->abastecimientos()->exists() && ! $vuelta->viaticos()->exists()) {
             $vuelta->delete();
         }
     }
@@ -260,11 +261,15 @@ class ProgramadorVueltas
 
     /**
      * Una programada que todavía no tiene GR se puede quitar; con GR ya es
-     * historia y no.
+     * historia y no. Tampoco si ya se le autorizó combustible o se le
+     * depositó un viático: ese gasto quedaría suelto, sin ticket.
      */
     public function puedeQuitarse(Vuelta $vuelta): bool
     {
-        return $vuelta->origen === OrigenVuelta::Programacion && ! $vuelta->viajes()->exists();
+        return $vuelta->origen === OrigenVuelta::Programacion
+            && ! $vuelta->viajes()->exists()
+            && ! $vuelta->abastecimientos()->exists()
+            && ! $vuelta->viaticos()->exists();
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\ZonaRuta;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\ReglaAbastecimientoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -44,7 +45,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class ReglaAbastecimiento extends Model
 {
     /** @use HasFactory<ReglaAbastecimientoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return $this->nombre;
+    }
 
     protected $table = 'reglas_abastecimiento';
 

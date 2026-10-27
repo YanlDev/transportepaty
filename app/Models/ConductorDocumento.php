@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TipoDocumentoConductor;
+use App\Models\Concerns\RegistraHistorial;
 use App\Models\Concerns\TieneVencimiento;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -30,7 +31,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 ])]
 class ConductorDocumento extends Model implements HasMedia
 {
-    use InteractsWithMedia, TieneVencimiento;
+    use InteractsWithMedia, RegistraHistorial, TieneVencimiento;
 
     protected $table = 'conductor_documentos';
 

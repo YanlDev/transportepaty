@@ -7,6 +7,7 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\TipoVuelta;
 use App\Enums\ZonaRuta;
+use App\Models\Abastecimiento;
 use App\Models\Conductor;
 use App\Models\ParadaVuelta;
 use App\Models\Vehiculo;
@@ -301,4 +302,103 @@ it('places a unit back in Juliaca when its last GR went to the south', function 
             // De Tacna sigue a Juliaca: el ticket siguiente arranca ahí.
             return $unidad['zona_actual'] === 'juliaca' && $unidad['llego_a'] === 'Palca';
         }));
+});
+
+it('rejects a stop that starts and ends in the same zone', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vueltas.store'), vueltaDelFormulario($tracto->id, ['paradas' => [
+            ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+            ['sentido' => 'ida', 'zona_origen' => 'pisco', 'zona_destino' => 'pisco', 'tipo_carga' => 'metalico'],
+        ]]))
+        ->assertSessionHasErrors(['paradas.1.zona_destino'])
+        ->assertSessionDoesntHaveErrors(['paradas.0.zona_destino']);
+});
+
+it('accepts a stop inside the same zone when the places differ', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vueltas.store'), vueltaDelFormulario($tracto->id, ['paradas' => [
+            ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+            ['sentido' => 'regreso', 'zona_origen' => 'pisco', 'zona_destino' => 'sur', 'tipo_carga' => 'particular', 'lugar_destino' => 'Arequipa'],
+            ['sentido' => 'regreso', 'zona_origen' => 'sur', 'zona_destino' => 'sur', 'tipo_carga' => 'particular', 'lugar_origen' => 'Arequipa', 'lugar_destino' => 'Tacna'],
+        ]]))
+        ->assertSessionHasNoErrors();
+});
+
+it('does not program a second pending trip for the same unit', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), vueltaDelFormulario($tracto->id));
+    $vuelta = Vuelta::query()->where('origen', OrigenVuelta::Programacion)->sole();
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vueltas.store'), vueltaDelFormulario($tracto->id, ['inicio' => '2026-10-30']))
+        ->assertSessionHasErrors(['tracto_id']);
+
+    // Editar la que ya está sí se puede.
+    actingAs(actorConRol('admin'))
+        ->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['inicio' => '2026-10-30']))
+        ->assertSessionHasNoErrors();
+
+    expect(Vuelta::query()->where('origen', OrigenVuelta::Programacion)->count())->toBe(1);
+});
+
+it('does not pick a unit, trailer or driver that is out of service', function (): void {
+    $tracto = Vehiculo::factory()->enMantenimiento()->create(['tipo' => TipoVehiculo::Tracto]);
+    $carreta = Vehiculo::factory()->enMantenimiento()->create(['tipo' => TipoVehiculo::Carreta]);
+    $conductor = Conductor::factory()->create(['activo' => false]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vueltas.store'), vueltaDelFormulario($tracto->id, [
+            'carreta_id' => $carreta->id,
+            'conductor_id' => $conductor->id,
+        ]))
+        ->assertSessionHasErrors(['tracto_id', 'carreta_id', 'conductor_id']);
+});
+
+it('keeps the unit and driver a trip already had even if they went out of service', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    $conductor = Conductor::factory()->create();
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), vueltaDelFormulario($tracto->id, ['conductor_id' => $conductor->id]));
+    $vuelta = Vuelta::query()->where('origen', OrigenVuelta::Programacion)->sole();
+
+    $conductor->update(['activo' => false]);
+
+    actingAs(actorConRol('admin'))
+        ->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['conductor_id' => $conductor->id]))
+        ->assertSessionHasNoErrors();
+});
+
+it('does not move the departure after the first GR of the trip', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), vueltaDelFormulario($tracto->id));
+    $vuelta = Vuelta::query()->where('origen', OrigenVuelta::Programacion)->sole();
+
+    Viaje::factory()->create([
+        'tracto_id' => $tracto->id, 'fecha_traslado' => '2026-10-28', 'fecha_emision' => '2026-10-28',
+        'origen' => 'SAN RAFAEL - ANTAUTA - MELGAR - PUNO', 'destino' => 'KM 245 - PARACAS - PISCO - ICA',
+        'tipo_carga' => TipoCarga::Concentrado,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['inicio' => '2026-11-02']))
+        ->assertSessionHasErrors(['inicio']);
+
+    // La víspera de la GR sí: la salida puede salir fechada un día antes.
+    actingAs(actorConRol('admin'))
+        ->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['inicio' => '2026-10-29']))
+        ->assertSessionHasNoErrors();
+});
+
+it('does not remove a trip that already got fuel', function (): void {
+    $vuelta = Vuelta::factory()->programada()->create();
+    Abastecimiento::factory()->create(['vehiculo_id' => $vuelta->tracto_id, 'vuelta_id' => $vuelta->id]);
+
+    actingAs(actorConRol('admin'))
+        ->delete(route('vueltas.destroy', $vuelta))
+        ->assertSessionHas('toast.type', 'error');
+
+    expect($vuelta->fresh())->not->toBeNull();
 });

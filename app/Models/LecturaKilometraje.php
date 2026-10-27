@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\LecturaKilometrajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -29,7 +30,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class LecturaKilometraje extends Model implements HasMedia
 {
     /** @use HasFactory<LecturaKilometrajeFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     use InteractsWithMedia;
 

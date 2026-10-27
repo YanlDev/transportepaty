@@ -18,7 +18,6 @@ type Props = OpcionesVuelta & {
     fecha: string;
     /** Cada ticket abierto en su etapa, y las unidades en base. */
     tablero: TarjetaVuelta[];
-    whatsappConectado: boolean;
 };
 
 type Vista = 'gantt' | 'tablero';
@@ -46,14 +45,9 @@ function filtrar(lista: TarjetaVuelta[], buscar: string): TarjetaVuelta[] {
 /**
  * La programación: todo nace acá. El tablero lista cada unidad en su etapa
  * —por salir, en ida, en vuelta, en base— como Gantt o como lista. Clic en
- * un ticket abre su detalle, con los avisos de WhatsApp.
+ * un ticket abre su detalle.
  */
-export default function Programacion({
-    fecha,
-    tablero,
-    whatsappConectado,
-    ...opciones
-}: Props) {
+export default function Programacion({ fecha, tablero, ...opciones }: Props) {
     const { puede } = usePermisos();
     const [vista, setVista] = useState<Vista>('gantt');
     const [buscar, setBuscar] = useState('');
@@ -65,7 +59,7 @@ export default function Programacion({
     });
 
     // Cada 15 segundos: las unidades cambian de etapa solas cuando llegan
-    // sus GR, y el ✓✓ de un aviso aparece sin recargar.
+    // sus GR.
     usePoll(15_000, { only: ['tablero'] });
 
     const filtradas = useMemo(
@@ -74,7 +68,7 @@ export default function Programacion({
     );
 
     // Se busca por id en lo último que llegó: si el ticket cambia con el
-    // panel abierto (llega una GR, se manda un aviso), se ve al día.
+    // panel abierto (llega una GR), se ve al día.
     const abierta = tablero.find((vuelta) => vuelta.id === abiertaId) ?? null;
 
     const editar = (vuelta: Vuelta) => setDialogo({ vuelta });
@@ -184,8 +178,6 @@ export default function Programacion({
                 vuelta={abierta}
                 onCerrar={() => setAbiertaId(null)}
                 onEditar={editar}
-                conectado={whatsappConectado}
-                puedeAvisar={puede('programacion.avisar')}
             />
 
             {dialogo && (

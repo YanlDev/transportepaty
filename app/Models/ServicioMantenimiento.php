@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\ServicioMantenimientoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
@@ -29,7 +30,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class ServicioMantenimiento extends Model
 {
     /** @use HasFactory<ServicioMantenimientoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     protected $table = 'servicios_mantenimiento';
 

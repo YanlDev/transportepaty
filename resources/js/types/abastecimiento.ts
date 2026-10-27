@@ -32,7 +32,14 @@ export type VueltaAbastecimiento = {
         parada_id: number;
     }[];
     combustible: CombustiblePunto[];
-    viaticos: { concepto: string; tipo: string; monto: number }[];
+    /** Cada viático de la pizarra con su depósito (o pendiente), y los imprevistos. */
+    viaticos: ViaticoTicket[];
+    /** Lo de la pizarra que todavía no se depositó. */
+    viatico_pendiente: number;
+    viatico_depositado: number;
+    viaticos_anulados: ViaticoAnulado[];
+    /** Lo que se hizo con los viáticos del ticket, del más nuevo al más viejo. */
+    movimientos_viaticos: Movimiento[];
     total_previsto: number | null;
     total_registrado: number;
     /** Soles del combustible autorizado (solo lo que tiene precio). */
@@ -124,4 +131,42 @@ export type OpcionesConfiguracion = {
     sentidos: Opcion[];
     cargas: Opcion[];
     tiposLinea: Opcion[];
+};
+
+/** Un viático del ticket: el de la pizarra o un imprevisto. */
+export type ViaticoTicket = {
+    /** null si es un imprevisto. */
+    linea_id: number | null;
+    concepto: string;
+    /** Lo que dice la pizarra; null en un imprevisto. */
+    previsto: number | null;
+    deposito: {
+        id: number;
+        monto: number;
+        fecha: string;
+        numero_operacion: string | null;
+        observacion: string | null;
+        imprevisto: boolean;
+        registrado_por: string | null;
+    } | null;
+};
+
+export type ViaticoAnulado = {
+    id: number;
+    concepto: string;
+    monto: number;
+    fecha: string;
+    motivo: string | null;
+    anulado_por: string | null;
+    anulado_at: string | null;
+};
+
+/** Un movimiento del historial: quién, cuándo y qué cambió (campo → [antes, después]). */
+export type Movimiento = {
+    id: number;
+    fecha: string;
+    usuario: string | null;
+    accion: 'creado' | 'editado' | 'anulado' | 'eliminado';
+    etiqueta: string | null;
+    cambios: Record<string, [unknown, unknown]>;
 };

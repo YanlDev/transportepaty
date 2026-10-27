@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
@@ -24,6 +25,8 @@ use Illuminate\Support\Carbon;
 #[Fillable(['vehiculo_id', 'fecha', 'observacion', 'user_id'])]
 class ConteoEquipamiento extends Model
 {
+    use RegistraHistorial;
+
     protected $table = 'conteos_equipamiento';
 
     /**

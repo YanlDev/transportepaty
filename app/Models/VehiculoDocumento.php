@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TipoDocumento;
+use App\Models\Concerns\RegistraHistorial;
 use App\Models\Concerns\TieneVencimiento;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
@@ -32,7 +33,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 ])]
 class VehiculoDocumento extends Model implements HasMedia
 {
-    use InteractsWithMedia, TieneVencimiento;
+    use InteractsWithMedia, RegistraHistorial, TieneVencimiento;
 
     protected $table = 'vehiculo_documentos';
 

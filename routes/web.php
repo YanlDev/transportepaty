@@ -16,6 +16,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmisionGreController;
 use App\Http\Controllers\EquipamientoCarretaController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\LecturaKilometrajeController;
 use App\Http\Controllers\LlantaController;
 use App\Http\Controllers\MantenimientoController;
@@ -31,6 +32,7 @@ use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
 use App\Http\Controllers\ViajeController;
+use App\Http\Controllers\ViaticoController;
 use App\Http\Controllers\VueltaController;
 use App\Http\Controllers\WhatsappController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -163,6 +165,11 @@ Route::middleware('auth')->group(function () {
     Route::get('abastecimiento', [AbastecimientoController::class, 'index'])->name('abastecimiento.index');
     Route::post('abastecimiento', [AbastecimientoController::class, 'store'])->name('abastecimiento.store');
     Route::delete('abastecimiento/{abastecimiento}', [AbastecimientoController::class, 'destroy'])->name('abastecimiento.destroy');
+    // Los viáticos de cada ticket: se depositan, se corrigen y se anulan;
+    // nunca se borran.
+    Route::post('abastecimiento/viaticos', [ViaticoController::class, 'store'])->name('viaticos.store');
+    Route::put('abastecimiento/viaticos/{viatico}', [ViaticoController::class, 'update'])->name('viaticos.update');
+    Route::post('abastecimiento/viaticos/{viatico}/anular', [ViaticoController::class, 'anular'])->name('viaticos.anular');
     Route::get('abastecimiento/configuracion', [ConfiguracionAbastecimientoController::class, 'index'])
         ->name('abastecimiento.configuracion');
     Route::put('abastecimiento/configuracion/tanque', [ConfiguracionAbastecimientoController::class, 'actualizarTanque'])
@@ -311,6 +318,7 @@ Route::middleware('auth')->group(function () {
         Route::put('roles/{rol}', [RolController::class, 'update'])->name('roles.update');
         Route::delete('roles/{rol}', [RolController::class, 'destroy'])->name('roles.destroy');
 
+        Route::get('historial', [HistorialController::class, 'index'])->name('historial.index');
         Route::get('whatsapp', [WhatsappController::class, 'index'])->name('whatsapp.index');
         Route::post('whatsapp/vincular', [WhatsappController::class, 'vincular'])->name('whatsapp.vincular');
         Route::post('whatsapp/probar', [WhatsappController::class, 'probar'])->name('whatsapp.probar');

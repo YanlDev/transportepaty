@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CondicionLlanta;
 use App\Enums\MotivoRetiroLlanta;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\LlantaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -40,7 +41,12 @@ use Illuminate\Support\Carbon;
 class Llanta extends Model
 {
     /** @use HasFactory<LlantaFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return $this->codigo;
+    }
 
     /**
      * @return BelongsTo<Vehiculo, $this>

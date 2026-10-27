@@ -8,6 +8,7 @@ use App\Enums\SemaforoDocumental;
 use App\Enums\TipoCaja;
 use App\Enums\TipoDocumento;
 use App\Enums\TipoVehiculo;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\VehiculoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -59,7 +60,12 @@ use Illuminate\Support\Carbon;
 class Vehiculo extends Model
 {
     /** @use HasFactory<VehiculoFactory> */
-    use HasFactory, SoftDeletes;
+    use HasFactory, RegistraHistorial, SoftDeletes;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return $this->placa;
+    }
 
     /**
      * The model's default values for attributes.

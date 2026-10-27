@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ResultadoTaller;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\RevisionTallerFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -30,7 +31,12 @@ use Illuminate\Support\Carbon;
 class RevisionTaller extends Model
 {
     /** @use HasFactory<RevisionTallerFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return Vuelta::query()->whereKey($this->vuelta_id)->value('codigo');
+    }
 
     protected $table = 'revisiones_taller';
 

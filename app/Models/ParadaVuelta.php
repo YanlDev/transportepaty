@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\ZonaRuta;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\ParadaVueltaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
@@ -42,7 +43,12 @@ use Illuminate\Support\Carbon;
 class ParadaVuelta extends Model
 {
     /** @use HasFactory<ParadaVueltaFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return Vuelta::query()->whereKey($this->vuelta_id)->value('codigo');
+    }
 
     protected $table = 'paradas_vuelta';
 

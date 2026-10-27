@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TipoNovedad;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\NovedadFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -36,7 +37,7 @@ use Illuminate\Support\Carbon;
 class Novedad extends Model
 {
     /** @use HasFactory<NovedadFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     protected $table = 'novedades';
 

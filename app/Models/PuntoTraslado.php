@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\PuntoTrasladoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -37,7 +38,7 @@ use Illuminate\Database\Eloquent\Model;
 class PuntoTraslado extends Model
 {
     /** @use HasFactory<PuntoTrasladoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     protected $table = 'puntos_traslado';
 

@@ -21,6 +21,8 @@ it('keeps what each base role could do before permissions existed', function ():
         ->and($permisosDe('contador'))->toEqualCanonicalizing([
             'tablero.ver', 'vehiculos.ver', 'viajes.ver',
             'cobranza.ver', 'cobranza.gestionar', 'cuentas.ver', 'cuentas.gestionar',
+            // Facturación corrige los viáticos depositados.
+            'abastecimiento.viaticos',
         ]);
 });
 

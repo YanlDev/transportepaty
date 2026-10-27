@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EstadoLlanta;
+use App\Models\Concerns\RegistraHistorial;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -17,6 +18,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['llantas_revisar_mm', 'llantas_cambiar_mm'])]
 class ParametroMantenimiento extends Model
 {
+    use RegistraHistorial;
+
     protected $table = 'parametros_mantenimiento';
 
     public static function vigentes(): self

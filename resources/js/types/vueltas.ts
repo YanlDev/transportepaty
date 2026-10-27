@@ -152,7 +152,6 @@ export type TarjetaVuelta = Vuelta & {
     dias_en_ruta: number | null;
     /** Cuántos días lleva en la base esperando la siguiente vuelta. */
     dias_en_base: number | null;
-    aviso: AvisoVuelta;
     /** La última revisión de taller (la que vale); null si no la revisó. */
     taller: RevisionTaller | null;
     taller_anteriores: RevisionTaller[];

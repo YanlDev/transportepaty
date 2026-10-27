@@ -14,7 +14,6 @@ use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\DestinoParticular;
-use App\Models\EnvioWhatsapp;
 use App\Models\OpcionTramo;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
@@ -26,7 +25,6 @@ use App\Services\AvisoDeVuelta;
 use App\Services\AvisosPorWhatsapp;
 use App\Services\ProgramadorVueltas;
 use App\Services\RelojOperativo;
-use App\Services\WhatsappServicio;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\RedirectResponse;
@@ -51,7 +49,6 @@ class VueltaController extends Controller
         private readonly ProgramadorVueltas $programador,
         private readonly AvisoDeVuelta $aviso,
         private readonly AvisosPorWhatsapp $avisos,
-        private readonly WhatsappServicio $whatsapp,
     ) {}
 
     public function index(Request $request): Response
@@ -62,7 +59,6 @@ class VueltaController extends Controller
             // Hoy: la fecha de salida que se propone al programar.
             'fecha' => RelojOperativo::fechaDeHoy()->toDateString(),
             'tablero' => $this->tablero($request),
-            'whatsappConectado' => fn (): bool => $this->whatsapp->conectado(),
             ...$this->opcionesDelFormulario(),
         ]);
     }
@@ -73,7 +69,7 @@ class VueltaController extends Controller
 
         $vueltas = Vuelta::query()
             ->where('tracto_id', $vehiculo->id)
-            ->with($this->relaciones())
+            ->with($this->relaciones())->withExists(['abastecimientos', 'viaticos'])
             ->orderByDesc('inicio')
             ->orderByDesc('id')
             ->get();
@@ -110,7 +106,7 @@ class VueltaController extends Controller
         if (! $this->programador->puedeQuitarse($vuelta)) {
             return back()->with('toast', [
                 'type' => 'error',
-                'message' => "La vuelta {$vuelta->codigo} ya tiene GR: no se puede quitar.",
+                'message' => "La vuelta {$vuelta->codigo} ya tiene GR, combustible o viáticos: no se puede quitar.",
             ]);
         }
 
@@ -182,7 +178,7 @@ class VueltaController extends Controller
                     ->where('estado', EstadoVuelta::Cerrada)
                     ->whereIn('id', $ultimas)
                     ->whereDate('fin', '>=', $hoy->subDays(self::DIAS_EN_BASE_EN_TABLERO)->toDateString())))
-            ->with([...$this->relaciones(), 'envios'])
+            ->with($this->relaciones())->withExists(['abastecimientos', 'viaticos'])
             ->get();
 
         // Una unidad que ya tiene programada la siguiente vuelta se ve ahí,
@@ -203,7 +199,7 @@ class VueltaController extends Controller
 
     /**
      * Una fila de la tabla de programación: la vuelta con su etapa, dónde
-     * va, los días que lleva y sus avisos.
+     * va y los días que lleva.
      *
      * @return array<string, mixed>
      */
@@ -220,7 +216,6 @@ class VueltaController extends Controller
                 ? (int) $vuelta->inicio->diffInDays($hoy) + 1
                 : null,
             'dias_en_base' => $llegada ? (int) $llegada->diffInDays($hoy) : null,
-            'aviso' => $this->avisoDe($vuelta),
             'taller' => $vuelta->revisiones->first()?->resumen(),
             'taller_anteriores' => array_values($vuelta->revisiones
                 ->skip(1)
@@ -265,48 +260,6 @@ class VueltaController extends Controller
             'fecha' => $parada->fecha?->toDateString(),
             'hecha' => $hecha !== null,
         ];
-    }
-
-    /**
-     * Los avisos de la vuelta ya armados y hasta dónde llegó cada uno.
-     *
-     * @return array<string, mixed>
-     */
-    private function avisoDe(Vuelta $vuelta): array
-    {
-        return [
-            'mensaje' => $this->aviso->mensajeParaConductor($vuelta),
-            'destinatarios' => $this->aviso->destinatarios($vuelta),
-            'areas' => $this->aviso->avisosDeArea($vuelta),
-            'envios' => $this->ultimosEnvios($vuelta),
-        ];
-    }
-
-    /**
-     * @return array{conductor: array<string, mixed>|null, areas: array<int, array<string, mixed>>}
-     */
-    private function ultimosEnvios(Vuelta $vuelta): array
-    {
-        $resumen = ['conductor' => null, 'areas' => []];
-
-        // Vienen del más nuevo al más viejo: el primero de cada destino gana.
-        foreach ($vuelta->envios as $envio) {
-            $datos = [
-                'estado' => $envio->estado->value,
-                'estado_label' => $envio->estado->label(),
-                'destino' => $envio->destino,
-                'hora' => ($envio->leido_at ?? $envio->entregado_at ?? $envio->enviado_at ?? $envio->created_at)->toIso8601String(),
-                'error' => $envio->error,
-            ];
-
-            if ($envio->tipo === EnvioWhatsapp::TIPO_CONDUCTOR) {
-                $resumen['conductor'] ??= $datos;
-            } elseif ($envio->area_aviso_id !== null) {
-                $resumen['areas'][$envio->area_aviso_id] ??= $datos;
-            }
-        }
-
-        return $resumen;
     }
 
     /**
@@ -514,7 +467,9 @@ class VueltaController extends Controller
             'conductor' => $conductor ? "{$conductor->nombres} {$conductor->apellidos}" : null,
             'editable' => $request->user()?->can('update', $vuelta) ?? false,
             'quitable' => ($request->user()?->can('delete', $vuelta) ?? false)
-                && $vuelta->paradas->every(fn (ParadaVuelta $parada): bool => $parada->viajes->isEmpty()),
+                && $vuelta->paradas->every(fn (ParadaVuelta $parada): bool => $parada->viajes->isEmpty())
+                && ! $vuelta->abastecimientos_exists
+                && ! $vuelta->viaticos_exists,
             'ida' => $vuelta->paradasDe(SentidoTramo::Ida)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada))->all(),
             'regreso' => $vuelta->paradasDe(SentidoTramo::Regreso)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada))->all(),
         ];

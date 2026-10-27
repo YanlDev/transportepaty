@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\TipoLineaAbastecimiento;
+use App\Models\Concerns\RegistraHistorial;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,6 +26,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable(['regla_abastecimiento_id', 'tipo', 'concepto', 'punto_abastecimiento_id', 'galones', 'tanque_lleno', 'monto', 'orden'])]
 class LineaReglaAbastecimiento extends Model
 {
+    use RegistraHistorial;
+
     protected $table = 'lineas_regla_abastecimiento';
 
     /**

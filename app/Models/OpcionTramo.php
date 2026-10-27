@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\SentidoTramo;
+use App\Models\Concerns\RegistraHistorial;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -27,6 +28,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['nombre', 'descripcion', 'sentido', 'paradas', 'pide_destino', 'activa', 'orden'])]
 class OpcionTramo extends Model
 {
+    use RegistraHistorial;
+
     protected $table = 'opciones_tramo';
 
     /**

@@ -48,8 +48,14 @@ class ReconstructorVueltas
 
     private function borrarHistorial(?int $tractoId): void
     {
+        // Las que ya tienen el OK de taller, combustible o viáticos se quedan
+        // con sus GR: borrarlas perdería ese registro (y los viáticos no lo
+        // dejan).
         $vueltas = Vuelta::query()->delHistorial()
             ->when($tractoId, fn ($query) => $query->where('tracto_id', $tractoId))
+            ->whereDoesntHave('revisiones')
+            ->whereDoesntHave('abastecimientos')
+            ->whereDoesntHave('viaticos')
             ->pluck('id');
 
         // Primero se sueltan las GR: el `nullOnDelete` de la FK haría lo

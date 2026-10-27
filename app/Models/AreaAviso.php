@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\AreaAvisoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -29,7 +30,7 @@ use Illuminate\Database\Eloquent\Model;
 class AreaAviso extends Model
 {
     /** @use HasFactory<AreaAvisoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     protected $table = 'areas_aviso';
 

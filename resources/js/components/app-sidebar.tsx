@@ -200,9 +200,11 @@ export function AppSidebar() {
         ...[...gestion].reverse(),
     ];
 
-    const abastecimientoArea = puede('abastecimiento.ver')
-        ? [abastecimientoNavItem]
-        : [];
+    // Facturación entra solo a los viáticos: también ve el área.
+    const abastecimientoArea =
+        puede('abastecimiento.ver') || puede('abastecimiento.viaticos')
+            ? [abastecimientoNavItem]
+            : [];
 
     const contabilidadArea = puede('cobranza.ver') ? [contabilidadNavItem] : [];
 

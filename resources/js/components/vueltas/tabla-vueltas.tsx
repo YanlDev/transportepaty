@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, CheckCheck } from 'lucide-react';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { IconoTaller } from '@/components/taller/estado-taller';
 import {
@@ -193,9 +193,6 @@ export function TablaVueltas({
                             onOrdenar={ordenar}
                             className="w-28"
                         />
-                        <TableHead className="w-12 text-center">
-                            Aviso
-                        </TableHead>
                     </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -229,7 +226,7 @@ function GrupoFilas({
         <>
             {grupo.titulo && (
                 <TableRow className="bg-muted/50 hover:bg-muted/50">
-                    <TableCell colSpan={8} className="py-2">
+                    <TableCell colSpan={7} className="py-2">
                         <span className="flex items-center gap-2">
                             <span
                                 className={cn(
@@ -253,7 +250,7 @@ function GrupoFilas({
             {grupo.filas.length === 0 && grupo.titulo && (
                 <TableRow className="hover:bg-transparent">
                     <TableCell
-                        colSpan={8}
+                        colSpan={7}
                         className="py-3 text-center text-xs text-muted-foreground"
                     >
                         Ninguna
@@ -261,8 +258,6 @@ function GrupoFilas({
                 </TableRow>
             )}
             {grupo.filas.map((vuelta) => {
-                const avisado = vuelta.aviso.envios.conductor;
-
                 return (
                     <TableRow
                         key={vuelta.id}
@@ -316,21 +311,6 @@ function GrupoFilas({
                                         ? 'llegó hoy'
                                         : `espera ${vuelta.dias_en_base} d`}
                                 </span>
-                            )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                            {avisado && (
-                                <CheckCheck
-                                    aria-label={`Aviso: ${avisado.estado_label}`}
-                                    className={cn(
-                                        'mx-auto size-4',
-                                        avisado.estado === 'leido'
-                                            ? 'text-sky-500'
-                                            : avisado.estado === 'fallido'
-                                              ? 'text-destructive'
-                                              : 'text-muted-foreground',
-                                    )}
-                                />
                             )}
                         </TableCell>
                     </TableRow>

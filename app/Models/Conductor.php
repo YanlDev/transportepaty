@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\EstadoDocumento;
 use App\Enums\SemaforoDocumental;
 use App\Enums\TipoDocumentoConductor;
+use App\Models\Concerns\RegistraHistorial;
 use App\Services\RelojOperativo;
 use Carbon\CarbonInterface;
 use Database\Factories\ConductorFactory;
@@ -64,7 +65,12 @@ use Illuminate\Support\Carbon;
 class Conductor extends Model
 {
     /** @use HasFactory<ConductorFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return trim($this->nombres.' '.$this->apellidos);
+    }
 
     protected $table = 'conductores';
 

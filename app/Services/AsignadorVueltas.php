@@ -91,17 +91,34 @@ class AsignadorVueltas
             && $vuelta->paradas()->where('sentido', SentidoTramo::Regreso)->whereHas('viajes')->exists();
     }
 
+    /**
+     * La parada programada en la que cae la GR: la de su misma carga y
+     * trayecto. Si no hay, una cargada del mismo trayecto que todavía espera
+     * su GR —se programó «con carga» sin saber cuál, como la subida cargada
+     * de Juliaca a la mina— y la carga pasa a ser la que dice la GR.
+     */
     private function enProgramada(Vuelta $vuelta, Viaje $guia, ?ZonaRuta $origen, ?ZonaRuta $destino): ParadaVuelta
     {
-        $coincide = $vuelta->paradas()
-            ->where('tipo_carga', $guia->tipo_carga)
+        $delTrayecto = $vuelta->paradas()
             ->where('zona_origen', $origen)
             ->where('zona_destino', $destino)
-            ->get()
+            ->get();
+
+        $coincide = $delTrayecto
+            ->where('tipo_carga', $guia->tipo_carga)
             ->first(fn (ParadaVuelta $parada): bool => $this->admiteLaGuia($parada, $guia));
 
         if ($coincide !== null) {
             return $coincide;
+        }
+
+        $pendiente = $guia->tipo_carga === TipoCarga::Vacio ? null : $delTrayecto
+            ->first(fn (ParadaVuelta $parada): bool => ! $parada->esVacio() && ! $parada->viajes()->exists());
+
+        if ($pendiente !== null) {
+            $pendiente->update(['tipo_carga' => $guia->tipo_carga]);
+
+            return $pendiente;
         }
 
         return $this->agregarParada($vuelta, $guia, $origen, $destino, fueraDePrograma: true);
@@ -278,6 +295,28 @@ class AsignadorVueltas
         if ($cambios !== []) {
             $vuelta->update($cambios);
         }
+
+        $this->cerrarLasAnteriores($vuelta);
+    }
+
+    /**
+     * Si la vuelta ya anda, la anterior de la unidad terminó: pasa cuando
+     * las GR del viaje anterior se registran después de programar el
+     * siguiente, y sin esto la unidad quedaría con dos vueltas en curso.
+     */
+    private function cerrarLasAnteriores(Vuelta $vuelta): void
+    {
+        if ($vuelta->estado !== EstadoVuelta::EnCurso || $vuelta->inicio === null) {
+            return;
+        }
+
+        Vuelta::query()
+            ->where('tracto_id', $vuelta->tracto_id)
+            ->where('estado', EstadoVuelta::EnCurso)
+            ->whereKeyNot($vuelta->id)
+            ->whereDate('inicio', '<', $vuelta->inicio->toDateString())
+            ->get()
+            ->each(fn (Vuelta $anterior) => $this->cerrar($anterior));
     }
 
     /**

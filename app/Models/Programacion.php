@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use App\Services\ProgramadorVueltas;
 use Carbon\CarbonImmutable;
 use Database\Factories\ProgramacionFactory;
@@ -63,7 +64,12 @@ use Throwable;
 class Programacion extends Model
 {
     /** @use HasFactory<ProgramacionFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return 'Salida a '.$this->destino;
+    }
 
     protected $table = 'programaciones';
 

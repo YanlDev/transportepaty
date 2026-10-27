@@ -1,5 +1,6 @@
 import { Link } from '@inertiajs/react';
 import type { PropsWithChildren } from 'react';
+import historial from '@/actions/App/Http/Controllers/HistorialController';
 import roles from '@/actions/App/Http/Controllers/RolController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
@@ -43,6 +44,12 @@ const whatsappNavItem: NavItem = {
     icon: null,
 };
 
+const historialNavItem: NavItem = {
+    title: 'Historial',
+    href: historial.index(),
+    icon: null,
+};
+
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
     const { puede, esAdmin } = usePermisos();
@@ -50,6 +57,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const sistemaNavItems = [
         ...(esAdmin ? [usuariosNavItem, rolesNavItem] : []),
         ...(puede('whatsapp.administrar') ? [whatsappNavItem] : []),
+        ...(puede('historial.ver') ? [historialNavItem] : []),
     ];
 
     const grupos = [

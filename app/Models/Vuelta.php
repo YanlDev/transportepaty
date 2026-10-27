@@ -6,6 +6,7 @@ use App\Enums\EstadoVuelta;
 use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoVuelta;
+use App\Models\Concerns\RegistraHistorial;
 use Carbon\CarbonInterface;
 use Database\Factories\VueltaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -48,12 +49,19 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, EnvioWhatsapp> $envios
  * @property-read Collection<int, RevisionTaller> $revisiones
  * @property-read RevisionTaller|null $revision La última: la que vale.
+ * @property-read bool|null $abastecimientos_exists Solo si se cargó con `withExists`.
+ * @property-read bool|null $viaticos_exists Solo si se cargó con `withExists`.
  */
 #[Fillable(['tracto_id', 'carreta_id', 'conductor_id', 'tipo', 'estado', 'origen', 'inicio', 'fin'])]
 class Vuelta extends Model
 {
     /** @use HasFactory<VueltaFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return $this->codigo;
+    }
 
     protected static function booted(): void
     {
@@ -141,6 +149,14 @@ class Vuelta extends Model
     public function abastecimientos(): HasMany
     {
         return $this->hasMany(Abastecimiento::class);
+    }
+
+    /**
+     * @return HasMany<Viatico, $this>
+     */
+    public function viaticos(): HasMany
+    {
+        return $this->hasMany(Viatico::class);
     }
 
     /**

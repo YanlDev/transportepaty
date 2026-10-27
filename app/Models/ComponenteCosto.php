@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\MetodoCosto;
 use App\Enums\NaturalezaCosto;
 use App\Enums\TipoComponente;
+use App\Models\Concerns\RegistraHistorial;
 use App\Services\Costos\Derivacion;
 use Database\Factories\ComponenteCostoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -44,7 +45,7 @@ use Illuminate\Database\Eloquent\Model;
 class ComponenteCosto extends Model
 {
     /** @use HasFactory<ComponenteCostoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     protected $table = 'componentes_costo';
 

@@ -69,18 +69,13 @@ it('tells the areas what the board assigns to the trip', function (): void {
         ->toContain('Viático mina S/ 143.00');
 });
 
-it('brings the notices of each ticket on the board', function (): void {
+it('leaves the notices out of the board while they are being reworked', function (): void {
     actingAs(actorConRol('admin'))
         ->get(route('vueltas.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('vueltas/index')
-            ->missing('salidas')
-            ->where('tablero', function ($tablero): bool {
-                $ticket = collect($tablero)->firstWhere('placa', 'BYM-861');
-
-                return $ticket['aviso']['destinatarios'][0]['numero'] === '51987654321'
-                    && str_contains($ticket['aviso']['mensaje'], $ticket['codigo']);
-            }));
+            ->missing('whatsappConectado')
+            ->where('tablero', fn ($tablero): bool => ! array_key_exists('aviso', collect($tablero)->firstWhere('placa', 'BYM-861'))));
 });
 
 it('queues the notices of the trip to the driver and to an area', function (): void {

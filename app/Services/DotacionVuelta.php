@@ -10,6 +10,7 @@ use App\Models\LineaReglaAbastecimiento;
 use App\Models\ParadaVuelta;
 use App\Models\ReglaAbastecimiento;
 use App\Models\Viaje;
+use App\Models\Viatico;
 use App\Models\Vuelta;
 use Illuminate\Database\Eloquent\Collection;
 
@@ -37,7 +38,7 @@ class DotacionVuelta
      * @return array{
      *     tarjetas: list<array{id: int, nombre: string, color: string|null, parada_id: int}>,
      *     combustible: list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>,
-     *     viaticos: list<array{concepto: string, tipo: string, monto: float}>,
+     *     viaticos: list<array{linea_id: int, concepto: string, tipo: string, monto: float}>,
      *     total_previsto: float|null,
      *     total_registrado: float,
      *     tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null, lleno: bool}>}>
@@ -70,12 +71,54 @@ class DotacionVuelta
             'viaticos' => array_values(collect($lineas)
                 ->reject(fn (LineaReglaAbastecimiento $linea): bool => $linea->tipo === TipoLineaAbastecimiento::Combustible)
                 ->map(fn (LineaReglaAbastecimiento $linea): array => [
+                    'linea_id' => $linea->id,
                     'concepto' => $linea->concepto,
                     'tipo' => $linea->tipo->value,
                     'monto' => (float) $linea->monto,
                 ])
                 ->all()),
         ];
+    }
+
+    /**
+     * Los viáticos de la pizarra contra lo depositado: cada línea con su
+     * depósito (o pendiente) y, aparte, los imprevistos. Si la misma línea
+     * toca dos veces (dos paradas con la misma tarjeta), se espera dos
+     * depósitos. Los anulados no cuentan.
+     *
+     * @param  list<array{linea_id: int, concepto: string, tipo: string, monto: float}>  $dePizarra
+     * @param  Collection<int, Viatico>  $depositados  vigentes, del más viejo al más nuevo
+     * @return list<array{linea_id: int|null, concepto: string, previsto: float|null, deposito: Viatico|null}>
+     */
+    public function viaticosContraDepositos(array $dePizarra, Collection $depositados): array
+    {
+        $libres = $depositados->all();
+        $filas = [];
+
+        foreach ($dePizarra as $linea) {
+            $clave = array_find_key($libres, fn (Viatico $viatico): bool => $viatico->linea_regla_abastecimiento_id === $linea['linea_id']);
+            $deposito = null;
+
+            if ($clave !== null) {
+                $deposito = $libres[$clave];
+                unset($libres[$clave]);
+            }
+
+            $filas[] = ['linea_id' => $linea['linea_id'], 'concepto' => $linea['concepto'], 'previsto' => $linea['monto'], 'deposito' => $deposito];
+        }
+
+        // Lo que no calzó con la pizarra: los imprevistos y los de una línea
+        // que la pizarra ya no tiene.
+        foreach ($libres as $viatico) {
+            $filas[] = [
+                'linea_id' => $viatico->linea_regla_abastecimiento_id,
+                'concepto' => $viatico->concepto,
+                'previsto' => $viatico->monto_previsto === null ? null : (float) $viatico->monto_previsto,
+                'deposito' => $viatico,
+            ];
+        }
+
+        return $filas;
     }
 
     /**

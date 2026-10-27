@@ -13,9 +13,13 @@ use App\Models\User;
  */
 class AbastecimientoPolicy
 {
+    /**
+     * Facturación entra a corregir viáticos aunque no vea el resto del área.
+     */
     public function viewAny(User $user): bool
     {
-        return $user->checkPermissionTo(Permiso::AbastecimientoVer);
+        return $user->checkPermissionTo(Permiso::AbastecimientoVer)
+            || $user->checkPermissionTo(Permiso::AbastecimientoViaticos);
     }
 
     public function create(User $user): bool

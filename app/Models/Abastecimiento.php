@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\AbastecimientoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -39,7 +40,12 @@ use Illuminate\Support\Carbon;
 class Abastecimiento extends Model
 {
     /** @use HasFactory<AbastecimientoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return Vehiculo::withTrashed()->whereKey($this->vehiculo_id)->value('placa').' · '.$this->galones.' gal';
+    }
 
     /**
      * @return BelongsTo<Vehiculo, $this>

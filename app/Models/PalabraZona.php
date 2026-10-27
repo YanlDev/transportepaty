@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ZonaRuta;
+use App\Models\Concerns\RegistraHistorial;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 
@@ -18,6 +19,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['zona', 'palabra'])]
 class PalabraZona extends Model
 {
+    use RegistraHistorial;
+
     protected $table = 'palabras_zona';
 
     /**

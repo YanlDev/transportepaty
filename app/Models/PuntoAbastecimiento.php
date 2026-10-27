@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ZonaRuta;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\PuntoAbastecimientoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -25,7 +26,12 @@ use Illuminate\Database\Eloquent\Model;
 class PuntoAbastecimiento extends Model
 {
     /** @use HasFactory<PuntoAbastecimientoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return $this->nombre;
+    }
 
     protected $table = 'puntos_abastecimiento';
 

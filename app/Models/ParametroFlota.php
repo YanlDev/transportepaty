@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\ParametroFlotaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -38,7 +39,7 @@ use Illuminate\Database\Eloquent\Model;
 class ParametroFlota extends Model
 {
     /** @use HasFactory<ParametroFlotaFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     protected $table = 'parametros_flota';
 

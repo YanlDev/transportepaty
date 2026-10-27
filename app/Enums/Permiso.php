@@ -60,6 +60,7 @@ enum Permiso: string
     case AbastecimientoVer = 'abastecimiento.ver';
     case AbastecimientoRegistrar = 'abastecimiento.registrar';
     case AbastecimientoConfigurar = 'abastecimiento.configurar';
+    case AbastecimientoViaticos = 'abastecimiento.viaticos';
 
     case AsistenciaVer = 'asistencia.ver';
     case AsistenciaMarcar = 'asistencia.marcar';
@@ -85,6 +86,8 @@ enum Permiso: string
 
     case WhatsappAdministrar = 'whatsapp.administrar';
 
+    case HistorialVer = 'historial.ver';
+
     /**
      * Los módulos en el orden en que los muestra el panel, con su nombre.
      *
@@ -107,6 +110,7 @@ enum Permiso: string
         'cobranza' => 'Cobranza',
         'cuentas' => 'Cuentas bancarias',
         'whatsapp' => 'WhatsApp',
+        'historial' => 'Historial de movimientos',
     ];
 
     /**
@@ -124,7 +128,7 @@ enum Permiso: string
         'programacion' => ['nombre' => 'Programación', 'modulos' => ['programacion', 'viajes', 'cotizaciones', 'clientes', 'costos']],
         'abastecimiento' => ['nombre' => 'Abastecimiento', 'modulos' => ['abastecimiento']],
         'contabilidad' => ['nombre' => 'Contabilidad', 'modulos' => ['cobranza', 'cuentas']],
-        'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp']],
+        'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp', 'historial']],
     ];
 
     /**
@@ -183,6 +187,7 @@ enum Permiso: string
             self::AbastecimientoVer => 'Ver el abastecimiento',
             self::AbastecimientoRegistrar => 'Registrar el combustible autorizado',
             self::AbastecimientoConfigurar => 'Configurar puntos y reglas de dotación',
+            self::AbastecimientoViaticos => 'Depositar, corregir y anular viáticos',
             self::AsistenciaVer => 'Ver la asistencia',
             self::AsistenciaMarcar => 'Marcar y desmarcar días',
             self::AsistenciaAjustar => 'Ajustar días debidos y notas',
@@ -200,6 +205,7 @@ enum Permiso: string
             self::CuentasVer => 'Ver las cuentas',
             self::CuentasGestionar => 'Administrar las cuentas',
             self::WhatsappAdministrar => 'Vincular el número y las áreas de aviso',
+            self::HistorialVer => 'Ver el historial de movimientos del sistema',
         };
     }
 
@@ -229,6 +235,9 @@ enum Permiso: string
             self::AbastecimientoVer,
             self::AbastecimientoRegistrar,
             self::AbastecimientoConfigurar => ['abastecimiento'],
+            // Los viáticos los deposita abastecimiento y los corrige
+            // facturación.
+            self::AbastecimientoViaticos => ['abastecimiento', 'contador'],
             self::TallerVer,
             self::TallerRevisar,
             self::MantenimientoVer => ['taller'],

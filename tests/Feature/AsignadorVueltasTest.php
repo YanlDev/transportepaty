@@ -169,3 +169,50 @@ it('registers the GR even if building its trip fails', function (): void {
     expect($guia->exists)->toBeTrue()
         ->and($guia->parada_vuelta_id)->toBeNull();
 });
+
+it('drops the loaded climb from Juliaca to the mine into its programmed stop', function (): void {
+    $vuelta = Vuelta::factory()->programada()->create(['tracto_id' => $this->tracto->id, 'inicio' => '2026-10-10']);
+
+    foreach ([
+        [ZonaRuta::Juliaca, ZonaRuta::Mina, TipoCarga::Materiales],
+        [ZonaRuta::Mina, ZonaRuta::Pisco, TipoCarga::Concentrado],
+    ] as $orden => [$origen, $destino, $carga]) {
+        ParadaVuelta::factory()->create([
+            'vuelta_id' => $vuelta->id, 'sentido' => SentidoTramo::Ida, 'orden' => $orden + 1,
+            'zona_origen' => $origen, 'zona_destino' => $destino, 'tipo_carga' => $carga,
+            'lugar_origen' => null, 'lugar_destino' => null, 'cliente' => null, 'fecha' => null,
+        ]);
+    }
+
+    // La GR de la subida dice otra carga: igual cae en la subida programada.
+    $subida = registrarGuia($this->tracto, '2026-10-10', DIR_JULIACA, DIR_MINA, TipoCarga::Particular);
+    $bajada = registrarGuia($this->tracto, '2026-10-11', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
+
+    expect($subida->parada->vuelta->is($vuelta))->toBeTrue()
+        ->and($subida->parada->orden)->toBe(1)
+        ->and($subida->parada->fuera_de_programa)->toBeFalse()
+        ->and($subida->parada->tipo_carga)->toBe(TipoCarga::Particular)
+        ->and($bajada->parada->vuelta->is($vuelta))->toBeTrue()
+        ->and($bajada->parada->orden)->toBe(2)
+        ->and($vuelta->paradas()->count())->toBe(2);
+});
+
+it('closes the previous trip when the programmed one starts, even if its GR came late', function (): void {
+    $programada = Vuelta::factory()->programada()->create(['tracto_id' => $this->tracto->id, 'inicio' => '2026-10-10']);
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $programada->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1,
+        'zona_origen' => ZonaRuta::Mina, 'zona_destino' => ZonaRuta::Pisco, 'tipo_carga' => TipoCarga::Concentrado,
+        'lugar_origen' => null, 'lugar_destino' => null, 'cliente' => null, 'fecha' => null,
+    ]);
+
+    // Las GR del viaje anterior se registran después de programar el nuevo.
+    registrarGuia($this->tracto, '2026-09-24', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
+    $subida = registrarGuia($this->tracto, '2026-10-08', DIR_HUARAL, DIR_JULIACA, TipoCarga::Particular);
+    $anterior = $subida->parada->vuelta;
+
+    registrarGuia($this->tracto, '2026-10-12', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
+
+    expect($anterior->fresh()->estado)->toBe(EstadoVuelta::Cerrada)
+        ->and($anterior->fresh()->fin->toDateString())->toBe('2026-10-08')
+        ->and($programada->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
+});

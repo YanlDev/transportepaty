@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Moneda;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\CuentaBancariaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -36,7 +37,12 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class CuentaBancaria extends Model
 {
     /** @use HasFactory<CuentaBancariaFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return $this->banco.' · '.$this->alias;
+    }
 
     protected $table = 'cuentas_bancarias';
 

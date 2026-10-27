@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EstadoAsistencia;
+use App\Models\Concerns\RegistraHistorial;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +30,8 @@ use Illuminate\Support\Carbon;
 ])]
 class Asistencia extends Model
 {
+    use RegistraHistorial;
+
     /**
      * @return BelongsTo<Conductor, $this>
      */

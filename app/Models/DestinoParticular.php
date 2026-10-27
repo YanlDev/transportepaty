@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ZonaRuta;
+use App\Models\Concerns\RegistraHistorial;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -21,6 +22,8 @@ use Illuminate\Database\Eloquent\Model;
 #[Fillable(['lugar', 'zona', 'activo', 'orden'])]
 class DestinoParticular extends Model
 {
+    use RegistraHistorial;
+
     protected $table = 'destinos_particulares';
 
     /**

@@ -87,6 +87,27 @@ const POR_DEFINIR = 'por_definir';
 
 const ZONAS_DE_PASO = ['juliaca', 'sur', 'cusco'];
 
+/**
+ * Cómo llega la unidad a la mina antes de cargar: casi siempre sube vacía
+ * desde Juliaca, a veces sube cargada (con su GR) y a veces ya está ahí.
+ */
+type Subida = 'vacia' | 'cargada' | 'ninguna';
+
+const SUBIDAS: { value: Subida; label: string }[] = [
+    { value: 'vacia', label: 'Juliaca → mina vacía' },
+    { value: 'cargada', label: 'Juliaca → mina con carga' },
+    { value: 'ninguna', label: 'Ya está en la mina' },
+];
+
+/** Si la unidad quedó en Juliaca (o de paso hacia ahí), sube vacía. */
+function subidaPorZona(zona: string | null | undefined): Subida {
+    return zona && ZONAS_DE_PASO.includes(zona) ? 'vacia' : 'ninguna';
+}
+
+function esSubida(parada: ParadaForm): boolean {
+    return parada.zona_origen === 'juliaca' && parada.zona_destino === 'mina';
+}
+
 const ICONOS: Record<string, ReactNode> = {
     concentrado: <Mountain className="size-4" />,
     metalico: <Layers className="size-4" />,
@@ -145,31 +166,40 @@ function hoy(): string {
 }
 
 /**
- * Une lo elegido en un recorrido continuo: si la unidad está en Juliaca y la
- * ida arranca en la mina, antepone el vacío hasta la mina (ahí se abastece);
- * si la ida termina donde no arranca el regreso, une los dos con un vacío.
- * Los vacíos que agregó antes se rehacen cada vez.
+ * Une lo elegido en un recorrido continuo: si la ida arranca en la mina,
+ * antepone la subida desde Juliaca (vacía o con carga, según se eligió); si
+ * la ida termina donde no arranca el regreso, une los dos con un vacío. Lo
+ * que agregó antes se rehace cada vez.
  */
-function normalizar(
-    paradas: ParadaForm[],
-    zonaActual: string | null,
-): ParadaForm[] {
+function normalizar(paradas: ParadaForm[], subida: Subida): ParadaForm[] {
+    // La subida que puso el formulario se rehace con lo elegido, conservando
+    // su id; una que se cargó a mano se respeta.
+    const subidaAnterior = paradas.find(
+        (parada) => parada.auto && parada.sentido === 'ida' && esSubida(parada),
+    );
     const propias = paradas.filter((parada) => !parada.auto);
     const ida = propias.filter((parada) => parada.sentido === 'ida');
     const regreso = propias.filter((parada) => parada.sentido === 'regreso');
     const conGuias = propias.some((parada) => parada.bloqueada);
 
-    if (
-        !conGuias &&
-        zonaActual !== null &&
-        ZONAS_DE_PASO.includes(zonaActual) &&
-        ida[0]?.zona_origen === 'mina'
-    ) {
+    if (!conGuias && subida !== 'ninguna' && ida[0]?.zona_origen === 'mina') {
         ida.unshift(
             nuevaParada('ida', {
-                zona_origen: zonaActual,
+                id: subidaAnterior?.id ?? null,
+                zona_origen: 'juliaca',
                 zona_destino: 'mina',
-                tipo_carga: 'vacio',
+                // Con carga se respeta la que ya traía; si no, materiales.
+                tipo_carga:
+                    subida === 'vacia'
+                        ? 'vacio'
+                        : subidaAnterior &&
+                            subidaAnterior.tipo_carga !== 'vacio'
+                          ? subidaAnterior.tipo_carga
+                          : 'materiales',
+                cliente_id:
+                    subida === 'vacia'
+                        ? null
+                        : (subidaAnterior?.cliente_id ?? null),
                 auto: true,
             }),
         );
@@ -316,7 +346,18 @@ export function ProgramarVueltaDialog({
             vuelta?.conductor_id ?? unidadInicial?.conductor_id ?? null,
         inicio: vuelta?.inicio ?? fechaInicial ?? hoy(),
         paradas: vuelta
-            ? [...vuelta.ida, ...vuelta.regreso].map(desdeParada)
+            ? [...vuelta.ida, ...vuelta.regreso].map((parada, indice) => {
+                  const cargada = desdeParada(parada);
+                  const sinGuias = [...vuelta.ida, ...vuelta.regreso].every(
+                      (otra) => otra.guias.length === 0,
+                  );
+
+                  // Sin GR, la subida a la mina guardada la maneja el
+                  // selector «¿Cómo llega a la mina?».
+                  return indice === 0 && sinGuias && esSubida(cargada)
+                      ? { ...cargada, auto: true }
+                      : cargada;
+              })
             : [],
     });
 
@@ -326,14 +367,32 @@ export function ProgramarVueltaDialog({
         regreso: vuelta && vuelta.regreso.length > 0 ? null : POR_DEFINIR,
     });
     const [destino, setDestino] = useState<string | null>(null);
+    const [subida, setSubida] = useState<Subida>(() => {
+        const primera = vuelta?.ida[0];
+
+        if (!vuelta) {
+            return subidaPorZona(unidadInicial?.zona_actual);
+        }
+
+        return primera?.zona_origen === 'juliaca' &&
+            primera.zona_destino === 'mina'
+            ? primera.tipo_carga === 'vacio'
+                ? 'vacia'
+                : 'cargada'
+            : 'ninguna';
+    });
     const [aMano, setAMano] = useState(false);
     const [confirmandoQuitar, setConfirmandoQuitar] = useState(false);
 
     const errores = errors as Record<string, string | undefined>;
+    // Lo de una parada suelta también se dice arriba: con el editor a mano
+    // cerrado, el borde rojo de su campo no se ve.
+    const errorParadas =
+        errores.paradas ??
+        Object.entries(errores).find(([campo]) =>
+            campo.startsWith('paradas.'),
+        )?.[1];
     const conGuias = data.paradas.some((parada) => parada.bloqueada);
-    const zonaActual =
-        opciones.tractos.find((tracto) => tracto.id === data.tracto_id)
-            ?.zona_actual ?? null;
     const etiquetaZona = (zona: string | null) =>
         opciones.zonas.find((opcion) => opcion.value === zona)?.label ??
         zona ??
@@ -359,53 +418,14 @@ export function ProgramarVueltaDialog({
         }),
     );
 
-    /**
-     * De dónde salen la carreta y el conductor que se dejaron puestos: la
-     * última GR de la unidad. Si se cambió a mano, o si la placa de la GR no
-     * está en el padrón, se dice; nada se corrige solo.
-     */
-    const ultimaGr =
-        opciones.tractos.find((tracto) => tracto.id === data.tracto_id)
-            ?.ultima_gr ?? null;
-    const unidadElegida = opciones.tractos.find(
-        (tracto) => tracto.id === data.tracto_id,
-    );
-    const deLaGr = ultimaGr
-        ? `última GR ${ultimaGr.numero} (${ultimaGr.fecha.slice(8, 10)}/${ultimaGr.fecha.slice(5, 7)})`
-        : null;
-    const conductorElegido = opciones.conductores.find(
-        (conductor) => conductor.id === data.conductor_id,
-    );
-    const otraUnidad =
-        conductorElegido?.tracto_id &&
-        data.tracto_id !== null &&
-        conductorElegido.tracto_id !== data.tracto_id
-            ? opciones.tractos.find(
-                  (tracto) => tracto.id === conductorElegido.tracto_id,
-              )?.placa
-            : undefined;
-    const ayudaConductor = otraUnidad
-        ? `Su última GR fue con ${otraUnidad}.`
-        : ultimaGr === null || conGuias
-          ? undefined
-          : data.conductor_id !== null &&
-              data.conductor_id === unidadElegida?.conductor_id
-            ? `Según la ${deLaGr}.`
-            : `La ${deLaGr} trae a ${ultimaGr.conductor}.`;
-    const ayudaCarreta =
-        ultimaGr === null || conGuias
-            ? undefined
-            : ultimaGr.placa_carreta === null
-              ? `La ${deLaGr} no trae carreta.`
-              : unidadElegida?.carreta_id === null
-                ? `La ${deLaGr} dice ${ultimaGr.placa_carreta}, que no está en el padrón de carretas.`
-                : data.carreta_id === unidadElegida?.carreta_id
-                  ? `Según la ${deLaGr}.`
-                  : `La ${deLaGr} trae la ${ultimaGr.placa_carreta}.`;
-
     /** Cambia las paradas y vuelve a unir el recorrido. */
-    const fijarParadas = (paradas: ParadaForm[], zona = zonaActual) =>
-        setData('paradas', normalizar(paradas, zona));
+    const fijarParadas = (paradas: ParadaForm[], comoSube = subida) =>
+        setData('paradas', normalizar(paradas, comoSube));
+
+    const elegirSubida = (comoSube: Subida) => {
+        setSubida(comoSube);
+        fijarParadas(data.paradas, comoSube);
+    };
 
     /** Elegir la unidad deja puestos la carreta y el conductor de su última GR. */
     const elegirUnidad = (tractoId: number) => {
@@ -413,12 +433,15 @@ export function ProgramarVueltaDialog({
             (opcion) => opcion.id === tractoId,
         );
 
+        const comoSube = subidaPorZona(unidad?.zona_actual);
+
+        setSubida(comoSube);
         setData((anterior) => ({
             ...anterior,
             tracto_id: tractoId,
             carreta_id: unidad?.carreta_id ?? anterior.carreta_id,
             conductor_id: unidad?.conductor_id ?? anterior.conductor_id,
-            paradas: normalizar(anterior.paradas, unidad?.zona_actual ?? null),
+            paradas: normalizar(anterior.paradas, comoSube),
         }));
     };
 
@@ -442,12 +465,15 @@ export function ProgramarVueltaDialog({
             (opcion) => opcion.id === conductor.tracto_id,
         );
 
+        const comoSube = subidaPorZona(unidad?.zona_actual);
+
+        setSubida(comoSube);
         setData((anterior) => ({
             ...anterior,
             conductor_id: conductorId,
             tracto_id: conductor.tracto_id,
             carreta_id: conductor.carreta_id ?? anterior.carreta_id,
-            paradas: normalizar(anterior.paradas, unidad?.zona_actual ?? null),
+            paradas: normalizar(anterior.paradas, comoSube),
         }));
     };
 
@@ -750,6 +776,40 @@ export function ProgramarVueltaDialog({
                     ))}
                 </div>
 
+                {!subiendo &&
+                    fijas.length === 0 &&
+                    data.paradas.some(
+                        (parada) =>
+                            parada.sentido === 'ida' &&
+                            parada.zona_origen === 'mina',
+                    ) && (
+                        <div className="flex flex-col gap-2">
+                            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                                <MapPin className="size-3.5" />
+                                ¿Cómo llega a la mina?
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {SUBIDAS.map((candidata) => (
+                                    <button
+                                        key={candidata.value}
+                                        type="button"
+                                        onClick={() =>
+                                            elegirSubida(candidata.value)
+                                        }
+                                        className={cn(
+                                            'rounded-full border px-3 py-1 text-xs transition',
+                                            subida === candidata.value
+                                                ? 'border-amber-500 bg-amber-500 text-white'
+                                                : 'hover:bg-accent',
+                                        )}
+                                    >
+                                        {candidata.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                 {subiendo &&
                     opciones.tramos.regreso.find(
                         (opcion) => opcion.value === elegida.regreso,
@@ -804,9 +864,9 @@ export function ProgramarVueltaDialog({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 md:max-h-[92dvh] md:max-w-4xl">
+            <DialogContent className="flex max-h-[92dvh] flex-col gap-0 overflow-hidden p-0 md:max-w-4xl">
                 {buscador !== null ? (
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         <DialogHeader className="sr-only">
                             <DialogTitle>
                                 Elegir {buscador.titulo.toLowerCase()}
@@ -848,21 +908,6 @@ export function ProgramarVueltaDialog({
                                     label="Unidad"
                                     error={errores.tracto_id}
                                     required
-                                    ayuda={
-                                        conGuias
-                                            ? 'Ya tiene GR: no se cambia.'
-                                            : zonaActual
-                                              ? `Está en ${etiquetaZona(zonaActual)}${
-                                                    unidadElegida?.llego_a &&
-                                                    unidadElegida.llego_a.toLowerCase() !==
-                                                        etiquetaZona(
-                                                            zonaActual,
-                                                        ).toLowerCase()
-                                                        ? ` (su última GR fue a ${unidadElegida.llego_a})`
-                                                        : ''
-                                                }.`
-                                              : undefined
-                                    }
                                 >
                                     {(id) => (
                                         <CampoSelector
@@ -907,7 +952,6 @@ export function ProgramarVueltaDialog({
                                 <Field
                                     label="Conductor"
                                     error={errores.conductor_id}
-                                    ayuda={ayudaConductor}
                                 >
                                     {(id) => (
                                         <CampoSelector
@@ -929,7 +973,6 @@ export function ProgramarVueltaDialog({
                                 <Field
                                     label="Carreta"
                                     error={errores.carreta_id}
-                                    ayuda={ayudaCarreta}
                                 >
                                     {(id) => (
                                         <CampoSelector
@@ -957,9 +1000,9 @@ export function ProgramarVueltaDialog({
                                 <ItinerarioVuelta paradas={itinerario} />
                             </div>
 
-                            {errores.paradas && (
+                            {errorParadas && (
                                 <p className="text-sm text-destructive">
-                                    {errores.paradas}
+                                    {errorParadas}
                                 </p>
                             )}
 

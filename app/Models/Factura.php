@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\EstadoCobranza;
 use App\Enums\Moneda;
+use App\Models\Concerns\RegistraHistorial;
 use App\Services\DesgloseFactura;
 use App\Services\RelojOperativo;
 use Carbon\CarbonInterface;
@@ -98,7 +99,12 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class Factura extends Model implements HasMedia
 {
     /** @use HasFactory<FacturaFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return 'Factura '.$this->numero;
+    }
 
     use InteractsWithMedia;
 

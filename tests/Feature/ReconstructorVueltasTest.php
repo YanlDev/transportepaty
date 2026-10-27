@@ -6,9 +6,12 @@ use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\TipoVuelta;
+use App\Models\Abastecimiento;
 use App\Models\ParadaVuelta;
+use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
+use App\Models\Viatico;
 use App\Models\Vuelta;
 use App\Services\ReconstructorVueltas;
 
@@ -134,6 +137,21 @@ it('never touches programmed trips nor their GR', function (): void {
     expect($programada->fresh())->not->toBeNull()
         ->and($suya->fresh()->parada_vuelta_id)->toBe($parada->id)
         ->and(Vuelta::query()->where('origen', OrigenVuelta::Historial)->count())->toBe(1);
+});
+
+it('keeps the history trips that already have the workshop OK, fuel or allowances', function (): void {
+    guia($this->tracto, '2026-09-02', MINA, PISCO, TipoCarga::Concentrado);
+    $vuelta = Vuelta::query()->sole();
+    RevisionTaller::factory()->create(['vuelta_id' => $vuelta->id]);
+    Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id]);
+    Viatico::factory()->create(['vuelta_id' => $vuelta->id, 'vehiculo_id' => $this->tracto->id]);
+
+    app(ReconstructorVueltas::class)->reconstruir();
+
+    expect($vuelta->fresh())->not->toBeNull()
+        ->and($vuelta->fresh()->tieneOkDeTaller())->toBeTrue()
+        ->and(Vuelta::query()->count())->toBe(1)
+        ->and(Viaje::query()->whereNull('parada_vuelta_id')->count())->toBe(0);
 });
 
 it('does not save anything on a dry run', function (): void {

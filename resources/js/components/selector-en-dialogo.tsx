@@ -98,17 +98,22 @@ export function PanelBuscador({
     const escrito = busqueda.trim();
 
     return (
-        <div className="flex min-h-0 flex-1 flex-col gap-3">
-            <div className="flex items-center gap-2">
+        // Alto fijo y acotado a la pantalla: la lista hace scroll adentro en
+        // vez de estirar el diálogo, que en el celular se salía de la vista.
+        <div className="mx-auto flex h-[min(32rem,calc(100dvh-6rem))] w-full max-w-xl flex-col gap-3">
+            <div className="flex items-center gap-2 pr-8">
                 <button
                     type="button"
                     onClick={onVolver}
                     aria-label="Volver al formulario"
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                    className="flex items-center gap-1 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 >
                     <ArrowLeft className="size-4" />
+                    Volver
                 </button>
-                <p className="text-sm font-medium">{titulo}</p>
+                <p className="min-w-0 truncate text-base font-medium">
+                    Elegir {titulo.toLowerCase()}
+                </p>
             </div>
 
             <Command className="flex min-h-0 flex-1 flex-col rounded-md border">

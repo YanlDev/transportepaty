@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\ClienteFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -52,7 +53,12 @@ use Illuminate\Support\Str;
 class Cliente extends Model
 {
     /** @use HasFactory<ClienteFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return $this->alias;
+    }
 
     /**
      * Formas societarias que no aportan nada al identificar al cliente en una

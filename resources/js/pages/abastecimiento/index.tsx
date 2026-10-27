@@ -5,6 +5,9 @@ import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoControl
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
 import { RegistrarAbastecimientoDialog } from '@/components/abastecimiento/registrar-abastecimiento-dialog';
 import type { InicialAbastecimiento } from '@/components/abastecimiento/registrar-abastecimiento-dialog';
+import { ViaticoDialog } from '@/components/abastecimiento/viatico-dialog';
+import type { AccionViatico } from '@/components/abastecimiento/viatico-dialog';
+import { ViaticosTicket } from '@/components/abastecimiento/viaticos-ticket';
 import { EstadoTallerBadge } from '@/components/taller/estado-taller';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -213,6 +216,9 @@ export default function AbastecimientoIndex({
     const [buscar, setBuscar] = useState('');
     const [soloPendientes, setSoloPendientes] = useState(false);
     const [abiertaId, setAbiertaId] = useState<number | null>(null);
+    const [accionViatico, setAccionViatico] = useState<AccionViatico | null>(
+        null,
+    );
     const [registrando, setRegistrando] =
         useState<InicialAbastecimiento | null>(null);
 
@@ -445,6 +451,14 @@ export default function AbastecimientoIndex({
                                                 {falta === null
                                                     ? 'Tanque lleno'
                                                     : galones(falta)}
+                                            </span>
+                                        )}
+                                        {vuelta.viatico_pendiente > 0 && (
+                                            <span className="block text-xs text-amber-700 tabular-nums dark:text-amber-400">
+                                                Viático{' '}
+                                                {soles(
+                                                    vuelta.viatico_pendiente,
+                                                )}
                                             </span>
                                         )}
                                     </TableCell>
@@ -729,38 +743,26 @@ export default function AbastecimientoIndex({
                                     )}
                                 </section>
 
-                                {abierta.viaticos.length > 0 && (
-                                    <section className="flex flex-col gap-2">
-                                        <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                                            Viáticos según la pizarra
-                                        </h3>
-                                        <ul className="flex flex-col gap-1 text-sm">
-                                            {abierta.viaticos.map(
-                                                (viatico, indice) => (
-                                                    <li
-                                                        key={indice}
-                                                        className="flex justify-between"
-                                                    >
-                                                        <span>
-                                                            {viatico.concepto}
-                                                        </span>
-                                                        <span className="tabular-nums">
-                                                            S/{' '}
-                                                            {viatico.monto.toFixed(
-                                                                2,
-                                                            )}
-                                                        </span>
-                                                    </li>
-                                                ),
-                                            )}
-                                        </ul>
-                                    </section>
-                                )}
+                                <ViaticosTicket
+                                    vuelta={abierta}
+                                    puedeGestionar={puede(
+                                        'abastecimiento.viaticos',
+                                    )}
+                                    onAccion={setAccionViatico}
+                                />
                             </div>
                         </>
                     )}
                 </SheetContent>
             </Sheet>
+
+            {accionViatico && (
+                <ViaticoDialog
+                    key={JSON.stringify(accionViatico)}
+                    accion={accionViatico}
+                    onCerrar={() => setAccionViatico(null)}
+                />
+            )}
 
             {registrando && (
                 <RegistrarAbastecimientoDialog

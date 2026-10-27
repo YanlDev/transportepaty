@@ -26,7 +26,7 @@ use function Pest\Laravel\actingAs;
  * migración desde la foto de la oficina) y el registro de lo autorizado.
  */
 beforeEach(function (): void {
-    foreach (['admin', 'contador'] as $rol) {
+    foreach (['admin', 'contador', 'visor'] as $rol) {
         Role::findOrCreate($rol, 'web');
     }
 
@@ -198,8 +198,10 @@ it('uses the configured full tank when the gallons are left empty', function ():
 });
 
 it('keeps the area to its role', function (): void {
-    actingAs(actorConRol('contador'))->get(route('abastecimiento.index'))->assertForbidden();
+    // Facturación entra por los viáticos, pero no toca la pizarra.
+    actingAs(actorConRol('contador'))->get(route('abastecimiento.index'))->assertOk();
     actingAs(actorConRol('contador'))->get(route('abastecimiento.configuracion'))->assertForbidden();
+    actingAs(actorConRol('visor'))->get(route('abastecimiento.index'))->assertForbidden();
 
     actingAs(actorConRol('abastecimiento'))
         ->get(route('abastecimiento.index'))

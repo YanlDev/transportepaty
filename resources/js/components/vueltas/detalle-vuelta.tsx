@@ -10,7 +10,6 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
-import { AvisosVuelta } from '@/components/vueltas/avisos-vuelta';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
 import {
     EstadoVueltaBadge,
@@ -21,20 +20,16 @@ import type { TarjetaVuelta, Vuelta } from '@/types/vueltas';
 
 /**
  * El itinerario completo de una vuelta, a un costado: ida y regreso con sus
- * GR, el OK de taller, los avisos de WhatsApp y el acceso a editarla.
+ * GR, el OK de taller y el acceso a editarla.
  */
 export function DetalleVuelta({
     vuelta,
     onCerrar,
     onEditar,
-    conectado,
-    puedeAvisar,
 }: {
     vuelta: TarjetaVuelta | null;
     onCerrar: () => void;
     onEditar: (vuelta: Vuelta) => void;
-    conectado: boolean;
-    puedeAvisar: boolean;
 }) {
     return (
         <Sheet
@@ -115,11 +110,6 @@ export function DetalleVuelta({
                             </div>
                             <TallerVuelta ticket={vuelta} />
                             <TramosVuelta vuelta={vuelta} conGuias />
-                            <AvisosVuelta
-                                salida={vuelta}
-                                conectado={conectado}
-                                puedeAvisar={puedeAvisar}
-                            />
                         </div>
                     </>
                 )}

@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\EstadoCobranza;
 use App\Enums\MotivoBajaGre;
 use App\Enums\TipoCarga;
+use App\Models\Concerns\RegistraHistorial;
 use App\Services\AsignadorVueltas;
 use App\Services\AsociadorFacturas;
 use Database\Factories\ViajeFactory;
@@ -102,7 +103,12 @@ use Throwable;
 class Viaje extends Model implements HasMedia
 {
     /** @use HasFactory<ViajeFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return 'GR '.$this->numero_gr;
+    }
 
     use InteractsWithMedia;
 
