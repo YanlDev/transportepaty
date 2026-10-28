@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\EstadoVuelta;
+use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
@@ -35,7 +36,9 @@ beforeEach(function (): void {
  */
 function ticketConRansa(Vehiculo $tracto, string $fechaGr): Vuelta
 {
-    $vuelta = Vuelta::factory()->create(['tracto_id' => $tracto->id, 'inicio' => now()->subDays(10)->toDateString()]);
+    $vuelta = Vuelta::factory()->create([
+        'tracto_id' => $tracto->id, 'origen' => OrigenVuelta::Programacion, 'inicio' => now()->subDays(10)->toDateString(),
+    ]);
     RevisionTaller::factory()->create(['vuelta_id' => $vuelta->id]);
     $parada = ParadaVuelta::factory()->create([
         'vuelta_id' => $vuelta->id, 'sentido' => SentidoTramo::Regreso, 'orden' => 1,
@@ -64,9 +67,24 @@ it('still lets fuel be registered at Kio after the Ransa GR', function (): void 
         ->assertSessionHasNoErrors();
 });
 
-it('shows the tickets that arrived at base in the last days while they are open', function (): void {
+it('keeps a programmed ticket in base visible until it is locked', function (): void {
+    $programada = ticketConRansa($this->tracto, now()->subDays(20)->toDateString());
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('vueltas.0.id', $programada->id)->where('vueltas.0.etapa', 'en_base'));
+
+    $programada->update(['estado' => EstadoVuelta::Cerrada]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.index'))
+        ->assertInertia(fn (Assert $page) => $page->has('vueltas', 0));
+});
+
+it('shows the history tickets that arrived at base only for a few days', function (): void {
     $reciente = ticketConRansa($this->tracto, now()->subDays(5)->toDateString());
     $vieja = ticketConRansa(Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]), now()->subDays(20)->toDateString());
+    Vuelta::query()->update(['origen' => OrigenVuelta::Historial]);
 
     actingAs(actorConRol('abastecimiento'))
         ->get(route('abastecimiento.index'))

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\EstadoVuelta;
+use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\RegistrarAbastecimientoRequest;
@@ -35,7 +36,7 @@ class AbastecimientoController extends Controller
     /** Cuántos registros recientes se muestran debajo del tablero. */
     private const RECIENTES = 40;
 
-    /** Cuántos días después de llegar a la base se sigue viendo el ticket. */
+    /** Cuántos días después de llegar a la base se sigue viendo un ticket del historial. */
     private const DIAS_PARA_COMPLETAR = 7;
 
     public function __construct(private readonly DotacionVuelta $dotacion) {}
@@ -53,11 +54,12 @@ class AbastecimientoController extends Controller
                 'revision.usuario:id,name',
             ])
             ->get()
-            // La que ya volvió a la base se sigue viendo unos días, mientras
-            // nadie la cierre: el combustible del regreso (Kio, Arequipa) a
-            // veces se registra tarde. Lo que cargue para volver a salir es
-            // del ticket siguiente.
+            // La que ya volvió a la base se sigue viendo mientras nadie le
+            // ponga el candado: el combustible del regreso (Kio, Arequipa) a
+            // veces se registra tarde. Las armadas solas desde las GR, solo
+            // unos días: si no, se llenaría de viajes viejos que nadie cierra.
             ->reject(fn (Vuelta $vuelta): bool => $vuelta->etapa() === 'en_base'
+                && $vuelta->origen === OrigenVuelta::Historial
                 && ! $this->llegoHacePoco($vuelta))
             ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa.'|'.$vuelta->inicio?->toDateString())
             ->values();
