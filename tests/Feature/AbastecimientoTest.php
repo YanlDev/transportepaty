@@ -109,6 +109,22 @@ it('picks the Ransa card by the weight of the GR', function (float $peso, string
     '28 t' => [28, 'TNE', 'Materiales Ransa a mina · más de 25 t'],
 ]);
 
+it('uses the Ransa cards for private cargo going up to the mine', function (): void {
+    $vuelta = vueltaConParada($this->tracto, [
+        'sentido' => SentidoTramo::Regreso, 'zona_origen' => ZonaRuta::Lima, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Particular,
+    ], ['peso' => 12, 'unidad_peso' => 'TNE']);
+
+    expect(app(DotacionVuelta::class)->reglaDe($vuelta->paradas->first())->nombre)->toBe('Materiales Ransa a mina · hasta 15 t');
+});
+
+it('keeps the private return to Juliaca on its own card', function (): void {
+    $vuelta = vueltaConParada($this->tracto, [
+        'sentido' => SentidoTramo::Regreso, 'zona_origen' => ZonaRuta::Lima, 'zona_destino' => ZonaRuta::Juliaca, 'tipo_carga' => TipoCarga::Particular,
+    ], ['peso' => 12, 'unidad_peso' => 'TNE']);
+
+    expect(app(DotacionVuelta::class)->reglaDe($vuelta->paradas->first())->nombre)->toBe('Retorno con material particular');
+});
+
 it('counts a full tank only once its gallons are configured', function (): void {
     $vuelta = vueltaConParada($this->tracto, [
         'sentido' => SentidoTramo::Regreso, 'zona_origen' => ZonaRuta::Lima, 'zona_destino' => ZonaRuta::Cusco, 'tipo_carga' => TipoCarga::Particular,

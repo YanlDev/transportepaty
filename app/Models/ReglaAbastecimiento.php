@@ -87,6 +87,18 @@ class ReglaAbastecimiento extends Model
      * lugar (los distritos de la parada y las direcciones de sus GR) y
      * `$toneladas` el peso de sus GR, si hay.
      */
+    /**
+     * La carga de un cliente particular que sube a la mina (Metso y otros
+     * proveedores de San Rafael) gasta lo mismo que los materiales de Ransa:
+     * usa sus tarjetas, por peso.
+     */
+    private function esMaterialesParaParticularAMina(ParadaVuelta $parada): bool
+    {
+        return $this->tipo_carga === TipoCarga::Materiales
+            && $parada->tipo_carga === TipoCarga::Particular
+            && $parada->zona_destino === ZonaRuta::Mina;
+    }
+
     public function aplicaA(ParadaVuelta $parada, string $texto, ?float $toneladas): bool
     {
         if ($this->especificidad() === 0) {
@@ -98,7 +110,7 @@ class ReglaAbastecimiento extends Model
         if (! $coincide($this->sentido, $parada->sentido)
             || ! $coincide($this->zona_origen, $parada->zona_origen)
             || ! $coincide($this->zona_destino, $parada->zona_destino)
-            || ! $coincide($this->tipo_carga, $parada->tipo_carga)) {
+            || ! ($coincide($this->tipo_carga, $parada->tipo_carga) || $this->esMaterialesParaParticularAMina($parada))) {
             return false;
         }
 
