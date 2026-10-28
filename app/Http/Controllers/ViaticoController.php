@@ -94,7 +94,7 @@ class ViaticoController extends Controller
      */
     private function asegurarQueLeToca(Vuelta $vuelta, LineaReglaAbastecimiento $linea): void
     {
-        $previstas = collect($this->dotacion->de($vuelta, $vuelta->abastecimientos()->get())['viaticos'])
+        $previstas = collect($this->dotacion->de($vuelta, $vuelta->abastecimientos()->with('punto')->get())['viaticos'])
             ->where('linea_id', $linea->id)
             ->count();
 

@@ -4,9 +4,11 @@ use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
+use App\Models\Abastecimiento;
 use App\Models\HistorialCambio;
 use App\Models\LineaReglaAbastecimiento;
 use App\Models\ParadaVuelta;
+use App\Models\PuntoAbastecimiento;
 use App\Models\ReglaAbastecimiento;
 use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
@@ -57,6 +59,16 @@ it('does not deposit allowances without the workshop OK', function (): void {
         ->assertSessionHasErrors('vuelta_id');
 
     expect(Viatico::query()->count())->toBe(0);
+});
+
+it('deposits a board allowance on a ticket that already has fuel at several points', function (): void {
+    foreach (PuntoAbastecimiento::query()->whereIn('nombre', ['Mina', 'Kio'])->get() as $punto) {
+        Abastecimiento::factory()->create(['vehiculo_id' => $this->vuelta->tracto_id, 'vuelta_id' => $this->vuelta->id, 'punto_abastecimiento_id' => $punto->id]);
+    }
+
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
+        ->assertSessionHasNoErrors()
+        ->assertSessionHas('toast.type', 'success');
 });
 
 it('deposits a board allowance with the amount actually deposited', function (): void {
