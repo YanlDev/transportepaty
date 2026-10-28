@@ -1,5 +1,5 @@
-import { Link } from '@inertiajs/react';
-import { ChevronRight, Pencil } from 'lucide-react';
+import { Link, router } from '@inertiajs/react';
+import { ChevronRight, Lock, LockOpen, Pencil } from 'lucide-react';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { TallerVuelta } from '@/components/taller/taller-vuelta';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,9 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
+import { ETAPAS } from '@/components/vueltas/tabla-vueltas';
 import {
     EstadoVueltaBadge,
     TramosVuelta,
@@ -47,7 +49,30 @@ export function DetalleVuelta({
                                 <span className="font-mono text-sm text-muted-foreground">
                                     {vuelta.codigo}
                                 </span>
-                                <EstadoVueltaBadge vuelta={vuelta} />
+                                {vuelta.estado === 'en_curso' ? (
+                                    <StatusBadge
+                                        label={
+                                            ETAPAS.find(
+                                                (etapa) =>
+                                                    etapa.etapa ===
+                                                    vuelta.etapa,
+                                            )?.titulo ?? vuelta.estado_label
+                                        }
+                                        tone={
+                                            vuelta.etapa === 'en_base'
+                                                ? 'success'
+                                                : 'warning'
+                                        }
+                                    />
+                                ) : (
+                                    <EstadoVueltaBadge vuelta={vuelta} />
+                                )}
+                                {vuelta.estado === 'cerrada' && (
+                                    <Lock
+                                        className="size-4 text-muted-foreground"
+                                        aria-label="Con candado"
+                                    />
+                                )}
                             </SheetTitle>
                             <SheetDescription>
                                 {vuelta.tipo_label}
@@ -69,6 +94,45 @@ export function DetalleVuelta({
                                     >
                                         <Pencil className="size-3.5" />
                                         Editar
+                                    </Button>
+                                )}
+                                {vuelta.cerrable && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => {
+                                            if (
+                                                window.confirm(
+                                                    `¿Cerrar el ticket ${vuelta.codigo}? Ya no se le podrá registrar combustible ni viáticos.`,
+                                                )
+                                            ) {
+                                                router.post(
+                                                    vueltas.cerrar(vuelta.id)
+                                                        .url,
+                                                    {},
+                                                    { preserveScroll: true },
+                                                );
+                                            }
+                                        }}
+                                    >
+                                        <Lock className="size-3.5" />
+                                        Cerrar ticket
+                                    </Button>
+                                )}
+                                {vuelta.reabrible && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            router.post(
+                                                vueltas.reabrir(vuelta.id).url,
+                                                {},
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        <LockOpen className="size-3.5" />
+                                        Reabrir
                                     </Button>
                                 )}
                                 <Button variant="ghost" size="sm" asChild>

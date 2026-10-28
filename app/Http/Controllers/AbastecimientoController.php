@@ -16,6 +16,7 @@ use App\Models\Vehiculo;
 use App\Models\Viatico;
 use App\Models\Vuelta;
 use App\Services\DotacionVuelta;
+use App\Services\RelojOperativo;
 use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Carbon;
@@ -34,6 +35,9 @@ class AbastecimientoController extends Controller
     /** Cuántos registros recientes se muestran debajo del tablero. */
     private const RECIENTES = 40;
 
+    /** Cuántos días después de llegar a la base se sigue viendo el ticket. */
+    private const DIAS_PARA_COMPLETAR = 7;
+
     public function __construct(private readonly DotacionVuelta $dotacion) {}
 
     public function index(): Response
@@ -45,13 +49,16 @@ class AbastecimientoController extends Controller
             ->with([
                 'tracto:id,placa',
                 'conductor:id,nombres,apellidos',
-                'paradas.viajes:id,parada_vuelta_id,numero_gr,origen,destino,peso,unidad_peso',
+                'paradas.viajes:id,parada_vuelta_id,numero_gr,origen,destino,peso,unidad_peso,fecha_traslado',
                 'revision.usuario:id,name',
             ])
             ->get()
-            // La que ya volvió a la base no espera más combustible: lo que
-            // cargue para salir es del ticket siguiente.
-            ->reject(fn (Vuelta $vuelta): bool => $vuelta->etapa() === 'en_base')
+            // La que ya volvió a la base se sigue viendo unos días, mientras
+            // nadie la cierre: el combustible del regreso (Kio, Arequipa) a
+            // veces se registra tarde. Lo que cargue para volver a salir es
+            // del ticket siguiente.
+            ->reject(fn (Vuelta $vuelta): bool => $vuelta->etapa() === 'en_base'
+                && ! $this->llegoHacePoco($vuelta))
             ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa.'|'.$vuelta->inicio?->toDateString())
             ->values();
 
@@ -130,6 +137,12 @@ class AbastecimientoController extends Controller
         $vuelta = $request->filled('vuelta_id')
             ? Vuelta::query()->find($request->integer('vuelta_id'))
             : $this->vueltaAbierta($request->integer('vehiculo_id'), $fecha);
+
+        if ($vuelta !== null && ! in_array($vuelta->estado, [EstadoVuelta::Programada, EstadoVuelta::EnCurso], true)) {
+            throw ValidationException::withMessages([
+                'vehiculo_id' => "El ticket {$vuelta->codigo} está cerrado: hay que reabrirlo para registrarle combustible.",
+            ]);
+        }
 
         // Sin el OK de taller el ticket no avanza: no se le autoriza nada.
         if ($vuelta === null) {
@@ -235,6 +248,17 @@ class AbastecimientoController extends Controller
                 ])
                 ->all()),
         ];
+    }
+
+    /**
+     * Si llegó a la base hace a lo más `DIAS_PARA_COMPLETAR` días.
+     */
+    private function llegoHacePoco(Vuelta $vuelta): bool
+    {
+        $ultima = $vuelta->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
+        $llego = $ultima === null ? null : $vuelta->llegadaEstimada($ultima);
+
+        return $llego !== null && $llego->greaterThanOrEqualTo(RelojOperativo::fechaDeHoy()->subDays(self::DIAS_PARA_COMPLETAR));
     }
 
     /**

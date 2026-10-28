@@ -6,7 +6,10 @@ use App\Enums\EstadoVuelta;
 use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoVuelta;
+use App\Enums\ZonaRuta;
 use App\Models\Concerns\RegistraHistorial;
+use App\Services\RelojOperativo;
+use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\VueltaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -179,9 +182,10 @@ class Vuelta extends Model
 
     /**
      * En qué anda la unidad con este ticket: por salir, en ida hasta que la
-     * vuelta (el regreso) tiene GR, en vuelta hasta que esa GR llega a la
-     * base (Juliaca o la mina), y en base cuando ya está disponible para el
-     * siguiente. Necesita `paradas.viajes` cargadas.
+     * vuelta (el regreso) tiene GR, en vuelta hasta que llega a la base
+     * (Juliaca o la mina: el día de la GR más lo que tarda la ruta), y en
+     * base cuando ya está disponible para el siguiente. Necesita
+     * `paradas.viajes` cargadas, con su fecha de traslado.
      *
      * @return 'programada'|'en_ida'|'en_vuelta'|'en_base'
      */
@@ -201,7 +205,26 @@ class Vuelta extends Model
             return 'en_ida';
         }
 
-        return $ultima->zona_destino?->esBase() ? 'en_base' : 'en_vuelta';
+        if (! $ultima->zona_destino?->esBase()) {
+            return 'en_vuelta';
+        }
+
+        return $this->llegadaEstimada($ultima)?->isAfter(RelojOperativo::fechaDeHoy()) ? 'en_vuelta' : 'en_base';
+    }
+
+    /**
+     * Cuándo llega la unidad al final de la parada: la GR se emite al cargar
+     * (la de Ransa, en el Callao), no al llegar. Después de cargar todavía
+     * baja a Kio, abastece y recién sube: llega el día de la GR más lo que
+     * tarda la ruta.
+     */
+    public function llegadaEstimada(ParadaVuelta $parada): ?CarbonImmutable
+    {
+        $salio = $parada->viajes->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString());
+
+        return $salio === null
+            ? null
+            : CarbonImmutable::parse($salio)->addDays(ZonaRuta::diasDeViaje($parada->zona_origen, $parada->zona_destino));
     }
 
     /**

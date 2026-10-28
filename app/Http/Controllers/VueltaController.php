@@ -99,6 +99,31 @@ class VueltaController extends Controller
         return back()->with('toast', ['type' => 'success', 'message' => "Vuelta {$vuelta->codigo} actualizada."]);
     }
 
+    /**
+     * El candado: el ticket ya no recibe combustible ni viáticos. Las GR que
+     * lleguen después arman el ticket siguiente.
+     */
+    public function cerrar(Vuelta $vuelta, AsignadorVueltas $asignador): RedirectResponse
+    {
+        $this->authorize('cerrar', $vuelta);
+
+        $asignador->cerrar($vuelta);
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Ticket {$vuelta->codigo} cerrado: ya no recibe combustible ni viáticos."]);
+    }
+
+    public function reabrir(Vuelta $vuelta): RedirectResponse
+    {
+        $this->authorize('reabrir', $vuelta);
+
+        $vuelta->update([
+            'estado' => $vuelta->viajes()->exists() ? EstadoVuelta::EnCurso : EstadoVuelta::Programada,
+            'fin' => null,
+        ]);
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Ticket {$vuelta->codigo} reabierto."]);
+    }
+
     public function destroy(Vuelta $vuelta): RedirectResponse
     {
         $this->authorize('delete', $vuelta);
@@ -222,6 +247,8 @@ class VueltaController extends Controller
                 ->map(fn (RevisionTaller $revision): array => $revision->resumen())
                 ->all()),
             'revisable' => $request->user()?->can('create', [RevisionTaller::class, $vuelta]) ?? false,
+            'cerrable' => $request->user()?->can('cerrar', $vuelta) ?? false,
+            'reabrible' => $request->user()?->can('reabrir', $vuelta) ?? false,
         ];
     }
 
@@ -238,17 +265,10 @@ class VueltaController extends Controller
     {
         $ultima = $vuelta->paradas
             ->filter(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty())
-            ->sortBy(fn (ParadaVuelta $parada): string => $parada->viajes->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString()))
+            ->sortBy(fn (ParadaVuelta $parada): string => (string) $parada->viajes->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString()))
             ->last();
 
-        if ($ultima === null) {
-            return null;
-        }
-
-        $salio = CarbonImmutable::parse($ultima->viajes->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString()));
-        $llego = $salio->addDays(ZonaRuta::diasDeViaje($ultima->zona_origen, $ultima->zona_destino));
-
-        return $llego->min(RelojOperativo::fechaDeHoy());
+        return $ultima === null ? null : $vuelta->llegadaEstimada($ultima)?->min(RelojOperativo::fechaDeHoy());
     }
 
     /**

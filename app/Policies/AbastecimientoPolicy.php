@@ -2,6 +2,7 @@
 
 namespace App\Policies;
 
+use App\Enums\EstadoVuelta;
 use App\Enums\Permiso;
 use App\Models\Abastecimiento;
 use App\Models\User;
@@ -27,9 +28,13 @@ class AbastecimientoPolicy
         return $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
     }
 
+    /**
+     * Lo de un ticket cerrado (con candado) no se quita: se reabre antes.
+     */
     public function delete(User $user, Abastecimiento $abastecimiento): bool
     {
-        return $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
+        return $abastecimiento->vuelta?->estado !== EstadoVuelta::Cerrada
+            && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
     }
 
     public function configurar(User $user): bool

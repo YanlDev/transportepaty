@@ -215,6 +215,8 @@ Route::middleware('auth')->group(function () {
     Route::post('vueltas', [VueltaController::class, 'store'])->name('vueltas.store');
     Route::put('vueltas/{vuelta}', [VueltaController::class, 'update'])->name('vueltas.update');
     Route::delete('vueltas/{vuelta}', [VueltaController::class, 'destroy'])->name('vueltas.destroy');
+    Route::post('vueltas/{vuelta}/cerrar', [VueltaController::class, 'cerrar'])->name('vueltas.cerrar');
+    Route::post('vueltas/{vuelta}/reabrir', [VueltaController::class, 'reabrir'])->name('vueltas.reabrir');
     Route::post('vueltas/{vuelta}/aviso', [VueltaController::class, 'avisarConductor'])->name('vueltas.aviso');
     Route::post('vueltas/{vuelta}/aviso-area/{area}', [VueltaController::class, 'avisarArea'])->name('vueltas.avisoArea');
 

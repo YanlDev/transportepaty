@@ -31,7 +31,7 @@ class TallerController extends Controller
                 'tracto:id,placa',
                 'carreta:id,placa',
                 'conductor:id,nombres,apellidos',
-                'paradas.viajes:id,parada_vuelta_id',
+                'paradas.viajes:id,parada_vuelta_id,fecha_traslado',
                 'revisiones.usuario:id,name',
             ])
             ->get()

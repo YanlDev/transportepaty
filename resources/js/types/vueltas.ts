@@ -159,6 +159,10 @@ export type TarjetaVuelta = Vuelta & {
     taller_anteriores: RevisionTaller[];
     /** Si el usuario puede dar el apto o no apto. */
     revisable: boolean;
+    /** Puede ponerle el candado: ya no recibe combustible ni viáticos. */
+    cerrable: boolean;
+    /** Puede quitarle el candado (solo el último ticket de la unidad). */
+    reabrible: boolean;
 };
 
 export type DiaDeSemana = { fecha: string; programadas: number };

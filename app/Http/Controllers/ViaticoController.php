@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\EstadoVuelta;
 use App\Http\Requests\GuardarViaticoRequest;
 use App\Models\LineaReglaAbastecimiento;
 use App\Models\Viatico;
@@ -28,6 +29,12 @@ class ViaticoController extends Controller
         $linea = $request->filled('linea_regla_abastecimiento_id')
             ? LineaReglaAbastecimiento::query()->findOrFail($request->integer('linea_regla_abastecimiento_id'))
             : null;
+
+        if (! in_array($vuelta->estado, [EstadoVuelta::Programada, EstadoVuelta::EnCurso], true)) {
+            throw ValidationException::withMessages([
+                'vuelta_id' => "El ticket {$vuelta->codigo} está cerrado: hay que reabrirlo para depositarle viáticos.",
+            ]);
+        }
 
         // Como el combustible: sin el OK de taller el ticket no avanza.
         if (! $vuelta->tieneOkDeTaller()) {
