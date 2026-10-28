@@ -448,6 +448,21 @@ class VueltaController extends Controller
         $conductor = $vuelta->conductor;
         $programada = $vuelta->origen === OrigenVuelta::Programacion;
 
+        // Una parada sin lugar propio arranca donde terminó la anterior si es
+        // la misma zona: de Paracas (lo que dice la GR) sigue a Lima, no de
+        // «Pisco», y el recorrido no se corta.
+        $origenes = [];
+        $anterior = null;
+
+        foreach ($vuelta->paradas as $parada) {
+            if ($parada->lugar_origen === null && $anterior?->lugar_destino !== null
+                && $anterior->zona_destino === $parada->zona_origen) {
+                $origenes[$parada->id] = $anterior->lugar_destino;
+            }
+
+            $anterior = $parada;
+        }
+
         return [
             'id' => $vuelta->id,
             'codigo' => $vuelta->codigo,
@@ -470,20 +485,20 @@ class VueltaController extends Controller
                 && $vuelta->paradas->every(fn (ParadaVuelta $parada): bool => $parada->viajes->isEmpty())
                 && ! $vuelta->abastecimientos_exists
                 && ! $vuelta->viaticos_exists,
-            'ida' => $vuelta->paradasDe(SentidoTramo::Ida)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada))->all(),
-            'regreso' => $vuelta->paradasDe(SentidoTramo::Regreso)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada))->all(),
+            'ida' => $vuelta->paradasDe(SentidoTramo::Ida)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada, $origenes[$parada->id] ?? null))->all(),
+            'regreso' => $vuelta->paradasDe(SentidoTramo::Regreso)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada, $origenes[$parada->id] ?? null))->all(),
         ];
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function parada(ParadaVuelta $parada, bool $deVueltaProgramada): array
+    private function parada(ParadaVuelta $parada, bool $deVueltaProgramada, ?string $origenHeredado = null): array
     {
         return [
             'id' => $parada->id,
             'sentido' => $parada->sentido->value,
-            'origen' => $parada->lugar_origen ?? $parada->zona_origen?->label(),
+            'origen' => $parada->lugar_origen ?? $origenHeredado ?? $parada->zona_origen?->label(),
             'destino' => $parada->lugar_destino ?? $parada->zona_destino?->label(),
             'zona_origen' => $parada->zona_origen?->value,
             'zona_destino' => $parada->zona_destino?->value,

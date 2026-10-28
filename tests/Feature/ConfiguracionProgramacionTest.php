@@ -22,7 +22,7 @@ beforeEach(function (): void {
 
 it('comes loaded with what was in the code', function (): void {
     expect(OpcionTramo::query()->where('sentido', 'ida')->pluck('nombre')->all())
-        ->toContain('Concentrado a Pisco', 'Metálico al Callao')
+        ->toContain('Concentrado a Pisco', 'Metálico al Callao', 'Vacía de Pisco a Lima')
         ->not->toContain('Concentrado + metálico al Callao')
         ->and(OpcionTramo::query()->where('pide_destino', true)->sole()->nombre)->toBe('Carga particular')
         ->and(DestinoParticular::query()->pluck('lugar')->all())->toContain('Tacna', 'Ilo', 'Cusco')
@@ -41,7 +41,7 @@ it('is configured only by whoever has the permission', function (): void {
         ->get(route('programacion.configuracion'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('vueltas/configuracion')
-            ->has('opciones', 8)
+            ->has('opciones', 9)
             ->has('zonas', 6));
 });
 

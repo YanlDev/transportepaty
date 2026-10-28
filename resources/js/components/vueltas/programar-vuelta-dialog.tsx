@@ -696,17 +696,28 @@ export function ProgramarVueltaDialog({
                 }
               : buscadores[eligiendo.campo];
 
-    const itinerario = data.paradas.map((parada) => ({
-        sentido: parada.sentido,
-        desde: parada.lugar_origen ?? etiquetaZona(parada.zona_origen),
-        hasta: parada.lugar_destino ?? etiquetaZona(parada.zona_destino),
-        carga:
-            parada.tipo_carga === 'vacio'
-                ? 'vacía'
-                : etiquetaCarga(parada.tipo_carga),
-        vacio: parada.tipo_carga === 'vacio',
-        hecha: parada.bloqueada,
-    }));
+    // Sin lugar propio, una parada arranca donde terminó la anterior si es la
+    // misma zona: de Paracas (la GR) sigue a Lima, no de «Pisco».
+    const itinerario = data.paradas.map((parada, indice) => {
+        const anterior = data.paradas[indice - 1];
+
+        return {
+            sentido: parada.sentido,
+            desde:
+                parada.lugar_origen ??
+                (anterior?.lugar_destino &&
+                anterior.zona_destino === parada.zona_origen
+                    ? anterior.lugar_destino
+                    : etiquetaZona(parada.zona_origen)),
+            hasta: parada.lugar_destino ?? etiquetaZona(parada.zona_destino),
+            carga:
+                parada.tipo_carga === 'vacio'
+                    ? 'vacía'
+                    : etiquetaCarga(parada.tipo_carga),
+            vacio: parada.tipo_carga === 'vacio',
+            hecha: parada.bloqueada,
+        };
+    });
 
     const tramo = (sentido: Sentido) => {
         const subiendo = sentido === 'regreso';

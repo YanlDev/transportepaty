@@ -103,6 +103,26 @@ it('lists the history of a unit with the GR of each stop', function (): void {
             ->where('vueltas.0.regreso.0.guias.0.numero_gr', $guia->numero_gr));
 });
 
+it('continues a stop from the real place where the previous one ended', function (): void {
+    $vuelta = Vuelta::factory()->create();
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $vuelta->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1,
+        'zona_origen' => ZonaRuta::Mina, 'zona_destino' => ZonaRuta::Pisco,
+        'lugar_origen' => 'Antauta', 'lugar_destino' => 'Paracas', 'tipo_carga' => TipoCarga::Concentrado,
+    ]);
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $vuelta->id, 'sentido' => SentidoTramo::Ida, 'orden' => 2,
+        'zona_origen' => ZonaRuta::Pisco, 'zona_destino' => ZonaRuta::Lima,
+        'lugar_origen' => null, 'lugar_destino' => null, 'tipo_carga' => TipoCarga::Vacio,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.unidad', $vuelta->tracto_id))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vueltas.0.ida.1.origen', 'Paracas')
+            ->where('vueltas.0.ida.1.destino', 'Lima'));
+});
+
 /**
  * Lo que manda el formulario para la plantilla de escoria: baja con
  * concentrado y sube con escoria desde Pisco.
