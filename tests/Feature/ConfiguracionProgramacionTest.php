@@ -22,10 +22,16 @@ beforeEach(function (): void {
 
 it('comes loaded with what was in the code', function (): void {
     expect(OpcionTramo::query()->where('sentido', 'ida')->pluck('nombre')->all())
-        ->toContain('Concentrado a Pisco', 'Concentrado + metálico al Callao')
+        ->toContain('Concentrado a Pisco', 'Metálico al Callao')
+        ->not->toContain('Concentrado + metálico al Callao')
         ->and(OpcionTramo::query()->where('pide_destino', true)->sole()->nombre)->toBe('Carga particular')
         ->and(DestinoParticular::query()->pluck('lugar')->all())->toContain('Tacna', 'Ilo', 'Cusco')
         ->and(PalabraZona::query()->where('palabra', 'ANTAUTA')->sole()->zona)->toBe(ZonaRuta::Mina);
+});
+
+it('makes the metallic to Callao its own outbound leg from Pisco', function (): void {
+    expect(OpcionTramo::query()->where('nombre', 'Metálico al Callao')->sole()->paradas)
+        ->toBe([['zona_origen' => 'pisco', 'zona_destino' => 'lima', 'tipo_carga' => 'metalico']]);
 });
 
 it('is configured only by whoever has the permission', function (): void {

@@ -265,6 +265,7 @@ function TarjetaOpcion({
     descripcion,
     elegida,
     sentido,
+    bloqueo = null,
     onElegir,
 }: {
     icono: ReactNode;
@@ -272,6 +273,8 @@ function TarjetaOpcion({
     descripcion: string;
     elegida: boolean;
     sentido: Sentido;
+    /** Por qué no se puede elegir: no arranca donde está la unidad. */
+    bloqueo?: string | null;
     onElegir: () => void;
 }) {
     return (
@@ -279,13 +282,16 @@ function TarjetaOpcion({
             type="button"
             onClick={onElegir}
             aria-pressed={elegida}
+            disabled={bloqueo !== null}
             className={cn(
                 'flex items-start gap-3 rounded-xl border p-3 text-left transition',
-                elegida
-                    ? sentido === 'ida'
-                        ? 'border-amber-500 bg-amber-500/10 ring-1 ring-amber-500'
-                        : 'border-violet-500 bg-violet-500/10 ring-1 ring-violet-500'
-                    : 'hover:border-foreground/30 hover:bg-accent/50',
+                bloqueo !== null
+                    ? 'cursor-not-allowed border-dashed opacity-50'
+                    : elegida
+                      ? sentido === 'ida'
+                          ? 'border-amber-500 bg-amber-500/10 ring-1 ring-amber-500'
+                          : 'border-violet-500 bg-violet-500/10 ring-1 ring-violet-500'
+                      : 'hover:border-foreground/30 hover:bg-accent/50',
             )}
         >
             <span
@@ -305,6 +311,12 @@ function TarjetaOpcion({
                 <span className="block text-xs text-muted-foreground">
                     {descripcion}
                 </span>
+                {bloqueo !== null && (
+                    <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                        <Lock className="size-3" />
+                        {bloqueo}
+                    </span>
+                )}
             </span>
         </button>
     );
@@ -720,6 +732,27 @@ export function ProgramarVueltaDialog({
         const fijas = data.paradas.filter(
             (parada) => parada.sentido === sentido && parada.bloqueada,
         );
+        // Con GR, el tramo solo sigue desde donde quedó la unidad. Sin GR,
+        // la ida arranca en la base: lo de la costa (el metálico de Pisco al
+        // Callao) se agrega cuando la ida ya llegó ahí.
+        const dondeQuedo = fijas.at(-1)?.zona_destino ?? null;
+        const bloqueoDe = (paradas: { zona_origen: string }[]) => {
+            const arranca = paradas[0]?.zona_origen;
+
+            if (!arranca) {
+                return null;
+            }
+
+            if (dondeQuedo) {
+                return arranca === dondeQuedo
+                    ? null
+                    : `La unidad ya llegó a ${etiquetaZona(dondeQuedo)}`;
+            }
+
+            return !subiendo && !['mina', 'juliaca'].includes(arranca)
+                ? `Se agrega cuando la ida llegue a ${etiquetaZona(arranca)}`
+                : null;
+        };
         const conParticular = data.paradas.some(
             (parada) =>
                 parada.sentido === sentido &&
@@ -748,7 +781,8 @@ export function ProgramarVueltaDialog({
                 {fijas.length > 0 && (
                     <p className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs text-muted-foreground">
                         <Lock className="size-3.5" />
-                        Ya tiene GR: lo que elijas se agrega después.
+                        Ya tiene GR hasta {etiquetaZona(dondeQuedo)}: lo que
+                        elijas sigue desde ahí.
                     </p>
                 )}
 
@@ -771,6 +805,9 @@ export function ProgramarVueltaDialog({
                             descripcion={opcion.descripcion}
                             sentido={sentido}
                             elegida={elegida[sentido] === opcion.value}
+                            bloqueo={bloqueoDe(
+                                'paradas' in opcion ? opcion.paradas : [],
+                            )}
                             onElegir={() => elegirOpcion(sentido, opcion.value)}
                         />
                     ))}
