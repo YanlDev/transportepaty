@@ -63,6 +63,56 @@ const soles = (valor: number | null): string =>
         ? '—'
         : `S/ ${valor.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/**
+ * Los viáticos del ticket en una barra: lo depositado contra lo que dice la
+ * pizarra (lo depositado más lo pendiente), y debajo lo que va gastado en
+ * total con el combustible.
+ */
+function BarraViaticos({ vuelta }: { vuelta: VueltaAbastecimiento }) {
+    const total = vuelta.viatico_depositado + vuelta.viatico_pendiente;
+    const gastado = vuelta.importe_registrado + vuelta.viatico_depositado;
+
+    if (total === 0) {
+        return (
+            <span className="text-xs text-muted-foreground">
+                Sin viáticos en la pizarra
+            </span>
+        );
+    }
+
+    const completo = vuelta.viatico_pendiente === 0;
+
+    return (
+        <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+                <div className="h-2.5 w-28 overflow-hidden rounded-full bg-muted">
+                    <div
+                        className="h-full rounded-full bg-emerald-500"
+                        style={{
+                            width: `${Math.min(100, (vuelta.viatico_depositado / total) * 100)}%`,
+                        }}
+                    />
+                </div>
+                <span
+                    className={cn(
+                        'text-xs font-medium whitespace-nowrap tabular-nums',
+                        completo
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : 'text-amber-700 dark:text-amber-400',
+                    )}
+                >
+                    {soles(vuelta.viatico_depositado)} / {soles(total)}
+                </span>
+            </div>
+            {gastado > 0 && (
+                <span className="text-[11px] text-muted-foreground tabular-nums">
+                    Gasto del ticket: {soles(gastado)}
+                </span>
+            )}
+        </div>
+    );
+}
+
 const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
 
 /** Lo que falta en total: null si algo depende de un tanque lleno sin galones. */
@@ -351,6 +401,7 @@ export default function AbastecimientoIndex({
                             <TableHead className="min-w-80">
                                 Combustible
                             </TableHead>
+                            <TableHead className="min-w-44">Viáticos</TableHead>
                             <TableHead className="w-32 text-right">
                                 Falta
                             </TableHead>
@@ -361,7 +412,7 @@ export default function AbastecimientoIndex({
                         {filtradas.length === 0 && (
                             <TableRow className="hover:bg-transparent">
                                 <TableCell
-                                    colSpan={7}
+                                    colSpan={8}
                                     className="py-10 text-center text-sm text-muted-foreground"
                                 >
                                     {vueltas.length === 0
@@ -435,6 +486,9 @@ export default function AbastecimientoIndex({
                                         <BarraCombustible
                                             tramos={vuelta.tramos}
                                         />
+                                    </TableCell>
+                                    <TableCell>
+                                        <BarraViaticos vuelta={vuelta} />
                                     </TableCell>
                                     <TableCell className="text-right">
                                         {vuelta.combustible.length === 0 ? (
