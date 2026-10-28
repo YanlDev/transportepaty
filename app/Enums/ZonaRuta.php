@@ -43,6 +43,28 @@ enum ZonaRuta: string
     }
 
     /**
+     * Cuántos días suele tardar la unidad de una zona a otra, cargada o
+     * vacía: de la sierra a la costa (Mina → Pisco) unos 3; del Sur a la
+     * costa o a Cusco 2; dentro de la sierra o de la costa (Juliaca → Mina,
+     * Pisco → Callao) 1. Es lo normal sin contratiempos: sirve para dibujar
+     * el viaje y saber cuándo llegó, no para cobrar.
+     */
+    public static function diasDeViaje(?self $origen, ?self $destino): int
+    {
+        if ($origen === null || $destino === null) {
+            return 2;
+        }
+
+        $costa = fn (self $zona): bool => in_array($zona, [self::Pisco, self::Lima], true);
+
+        if ($costa($origen) === $costa($destino)) {
+            return in_array(self::Cusco, [$origen, $destino], true) && in_array(self::Sur, [$origen, $destino], true) ? 2 : 1;
+        }
+
+        return in_array(self::Sur, [$origen, $destino], true) ? 2 : 3;
+    }
+
+    /**
      * Donde empieza y termina la vuelta: Juliaca y la mina. El Sur y Cusco
      * son destinos de paso de la carga particular: de ahí la unidad sigue a
      * Juliaca.

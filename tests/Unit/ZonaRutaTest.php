@@ -51,3 +51,14 @@ it('places each leg of the circuit in its part of the trip', function (?ZonaRuta
     'Tacna → Ilo: dentro del Sur' => [ZonaRuta::Sur, ZonaRuta::Sur, true, SentidoTramo::Regreso],
     'Arequipa → Lima: baja' => [ZonaRuta::Sur, ZonaRuta::Lima, true, SentidoTramo::Ida],
 ]);
+
+it('knows how long each route usually takes', function (ZonaRuta $origen, ZonaRuta $destino, int $dias): void {
+    expect(ZonaRuta::diasDeViaje($origen, $destino))->toBe($dias);
+})->with([
+    'concentrado de la mina a Pisco' => [ZonaRuta::Mina, ZonaRuta::Pisco, 3],
+    'regreso de Lima a Juliaca' => [ZonaRuta::Lima, ZonaRuta::Juliaca, 3],
+    'metálico de Pisco al Callao' => [ZonaRuta::Pisco, ZonaRuta::Lima, 1],
+    'subida de Juliaca a la mina' => [ZonaRuta::Juliaca, ZonaRuta::Mina, 1],
+    'particular de Lima a Arequipa' => [ZonaRuta::Lima, ZonaRuta::Sur, 2],
+    'de Arequipa a Juliaca' => [ZonaRuta::Sur, ZonaRuta::Juliaca, 1],
+]);

@@ -83,7 +83,9 @@ it('places each trip in its stage on the board', function (): void {
                     && $etapas->get($siguiente->id) === 'programada'
                     && ! $etapas->has($parada->id)
                     && ! $etapas->has($conSiguiente->id)
-                    && collect($tablero)->firstWhere('id', $llego->id)['dias_en_base'] === 4
+                    // Salió de Lima hace 4 días y el viaje a Juliaca dura 3:
+                    // está en base desde ayer.
+                    && collect($tablero)->firstWhere('id', $llego->id)['dias_en_base'] === 1
                     && collect($tablero)->firstWhere('id', $bajando->id)['dias_en_ruta'] === 3
                     && collect($tablero)->firstWhere('id', $bajando->id)['actual']['texto'] === 'Mina San Rafael → Pisco';
             }));

@@ -230,13 +230,25 @@ class VueltaController extends Controller
         return $vuelta->etapa();
     }
 
+    /**
+     * Cuándo llegó a la base: el día de la última GR más lo que tarda ese
+     * tramo (la GR dice cuándo salió, no cuándo llegó).
+     */
     private function ultimaGuia(Vuelta $vuelta): ?CarbonImmutable
     {
-        $fecha = $vuelta->paradas
-            ->flatMap(fn (ParadaVuelta $parada) => $parada->viajes)
-            ->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString());
+        $ultima = $vuelta->paradas
+            ->filter(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty())
+            ->sortBy(fn (ParadaVuelta $parada): string => $parada->viajes->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString()))
+            ->last();
 
-        return $fecha === null ? null : CarbonImmutable::parse($fecha);
+        if ($ultima === null) {
+            return null;
+        }
+
+        $salio = CarbonImmutable::parse($ultima->viajes->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString()));
+        $llego = $salio->addDays(ZonaRuta::diasDeViaje($ultima->zona_origen, $ultima->zona_destino));
+
+        return $llego->min(RelojOperativo::fechaDeHoy());
     }
 
     /**
@@ -506,6 +518,8 @@ class VueltaController extends Controller
             'lugar_destino' => $parada->lugar_destino,
             'tipo_carga' => $parada->tipo_carga->value,
             'tipo_carga_label' => $parada->tipo_carga->label(),
+            // Lo que suele tardar: el Gantt lo dibuja así de largo.
+            'dias_viaje' => ZonaRuta::diasDeViaje($parada->zona_origen, $parada->zona_destino),
             'cliente_id' => $parada->cliente_id,
             'cliente' => $parada->cliente,
             'fecha' => $parada->fecha?->toDateString(),

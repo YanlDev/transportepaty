@@ -22,6 +22,8 @@ export type ParadaVuelta = {
     lugar_destino: string | null;
     tipo_carga: string;
     tipo_carga_label: string;
+    /** Lo que suele tardar el tramo (Mina → Pisco: 3 días). */
+    dias_viaje: number;
     cliente_id: number | null;
     cliente: string | null;
     fecha: string | null;

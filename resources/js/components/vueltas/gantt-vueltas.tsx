@@ -14,13 +14,10 @@ const DIAS_ATRAS = 14;
 const DIAS_ADELANTE = 7;
 
 /**
- * Cuánto se dibuja que dura un tramo: lo justo para leerlo, no un
- * pronóstico. Vale también para los que tienen GR: la GR dice cuándo salió,
- * no cuándo llegó, y estirar la barra hasta la GR siguiente pintaba como
- * viaje los días de espera. La vuelta por definir ocupa lo que suele durar
- * un regreso.
+ * Lo que ocupa la vuelta por definir: lo que suele durar un regreso. Cada
+ * tramo dura lo que dice el servidor para su ruta (`dias_viaje`).
  */
-const DIAS_ESTIMADOS = { vacio: 1, carga: 2, vuelta_por_definir: 5 };
+const DIAS_VUELTA_POR_DEFINIR = 5;
 
 const DIAS_CORTOS = ['Do', 'Lu', 'Ma', 'Mi', 'Ju', 'Vi', 'Sá'];
 
@@ -137,8 +134,16 @@ function segmentosDe(
 
     paradas.forEach((parada, indice) => {
         const vacio = parada.tipo_carga === 'vacio';
-        const dias =
-            (vacio ? DIAS_ESTIMADOS.vacio : DIAS_ESTIMADOS.carga) * DIA_MS;
+        // La GR dice cuándo salió: la barra dura lo que suele tardar la ruta
+        // (Mina → Pisco, 3 días) y lo que sigue hasta la GR siguiente es
+        // espera.
+        const dias = parada.dias_viaje * DIA_MS;
+        // Un vacío no lleva GR: si después ya hay una, ese vacío pasó (la
+        // unidad fue a Lima a buscar carga) y la espera es allá.
+        const vacioHecho =
+            vacio &&
+            parada.fecha === null &&
+            paradas.slice(indice + 1).some((otra) => otra.fecha !== null);
         let desde = cursor;
         let hasta = cursor + dias;
 
@@ -168,9 +173,13 @@ function segmentosDe(
             clase: claseDeCarga(parada.tipo_carga),
             etiqueta: `${parada.origen ?? '¿?'} → ${parada.destino ?? '¿?'} · ${vacio ? 'vacía' : parada.tipo_carga_label}`,
             vacio,
-            estimado: parada.guias.length === 0,
+            estimado: parada.guias.length === 0 && !vacioHecho,
         });
         cursor = Math.max(cursor, hasta);
+
+        if (vacioHecho) {
+            anteriorConGuia = parada;
+        }
     });
 
     const ultima = paradas.at(-1);
@@ -192,7 +201,7 @@ function segmentosDe(
         segmentos.push({
             vuelta,
             desde: cursor,
-            hasta: cursor + DIAS_ESTIMADOS.vuelta_por_definir * DIA_MS,
+            hasta: cursor + DIAS_VUELTA_POR_DEFINIR * DIA_MS,
             clase: 'por_definir',
             etiqueta: 'vuelta ?',
             vacio: false,
@@ -338,7 +347,7 @@ export function GanttVueltas({
             </div>
 
             <div className="overflow-x-auto rounded-xl border bg-card">
-                <div className="min-w-[56rem]">
+                <div className="min-w-[40rem]">
                     {/* Los días */}
                     <div className="sticky top-0 z-10 flex border-b bg-card">
                         <div className="w-40 shrink-0 border-r px-3 py-2 text-xs font-medium text-muted-foreground">
