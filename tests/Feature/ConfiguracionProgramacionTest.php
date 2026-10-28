@@ -34,6 +34,12 @@ it('makes the metallic to Callao its own outbound leg from Pisco', function (): 
         ->toBe([['zona_origen' => 'pisco', 'zona_destino' => 'lima', 'tipo_carga' => 'metalico']]);
 });
 
+it('offers private cargo up to the mine on the way back', function (): void {
+    expect(OpcionTramo::query()->where('nombre', 'Particular a mina')->sole())
+        ->sentido->value->toBe('regreso')
+        ->paradas->toBe([['zona_origen' => 'lima', 'zona_destino' => 'mina', 'tipo_carga' => 'particular']]);
+});
+
 it('is configured only by whoever has the permission', function (): void {
     actingAs(actorConRol('contador'))->get(route('programacion.configuracion'))->assertForbidden();
 
@@ -41,7 +47,7 @@ it('is configured only by whoever has the permission', function (): void {
         ->get(route('programacion.configuracion'))
         ->assertInertia(fn (Assert $page) => $page
             ->component('vueltas/configuracion')
-            ->has('opciones', 9)
+            ->has('opciones', 10)
             ->has('zonas', 6));
 });
 
