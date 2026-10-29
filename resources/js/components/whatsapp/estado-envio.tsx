@@ -1,6 +1,6 @@
 import { Check, CheckCheck, CircleAlert, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { ResumenEnvio } from '@/types/programacion';
+import type { ResumenEnvio } from '@/types/whatsapp';
 
 /**
  * Los mismos ✓ del chat de WhatsApp, junto al botón que mandó el aviso:

@@ -22,7 +22,7 @@ export default function ViajeCreate({
 }: Props) {
     return (
         <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 p-4 md:p-6">
-            <Head title="Registrar viaje manualmente" />
+            <Head title="Registrar GR manualmente" />
 
             <div>
                 <p className="text-sm text-muted-foreground">
@@ -44,7 +44,7 @@ export default function ViajeCreate({
 
 ViajeCreate.layout = {
     breadcrumbs: [
-        { title: 'Viajes', href: viajes.index().url },
+        { title: 'Guías de remisión', href: viajes.index().url },
         { title: 'Registrar manualmente', href: create().url },
     ],
 };

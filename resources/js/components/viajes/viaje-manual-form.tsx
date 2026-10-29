@@ -430,7 +430,7 @@ export function ViajeManualForm({
                 </Button>
                 <Button type="submit" disabled={processing}>
                     {processing && <Spinner />}
-                    Registrar viaje
+                    Registrar GR
                 </Button>
             </div>
         </form>

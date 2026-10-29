@@ -3,19 +3,20 @@
 namespace App\Services;
 
 use App\Enums\EstadoEnvio;
-use App\Enums\TipoAvisoSalida;
+use App\Enums\EstadoVuelta;
+use App\Enums\ResultadoTaller;
 use App\Jobs\EnviarAvisoWhatsapp;
 use App\Models\AreaAviso;
 use App\Models\EnvioWhatsapp;
-use App\Models\Programacion;
 use App\Models\User;
 use App\Models\Vuelta;
 use App\Services\Imagenes\ImagenesDeAviso;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use RuntimeException;
 
 /**
- * Los avisos de una salida por el número de la empresa: se anotan, se ponen
+ * Los avisos de un ticket por el número de la empresa: se anotan, se ponen
  * en la cola y un worker los manda. Así el botón responde al instante y un
  * envío lento de WhatsApp no ocupa la app de nadie.
  */
@@ -52,31 +53,6 @@ class AvisosPorWhatsapp
         ]);
     }
 
-    /** Anota el aviso al conductor (o la advertencia) y lo pone en la cola. */
-    public function encolarAlConductor(Programacion $programacion, TipoAvisoSalida $tipo, string $numero, string $destino, ?User $usuario): EnvioWhatsapp
-    {
-        return $this->encolar([
-            'programacion_id' => $programacion->id,
-            'tipo' => $tipo->value,
-            'destino' => $destino,
-            'numero' => $numero,
-            'enviado_por' => $usuario?->id,
-        ]);
-    }
-
-    /** Anota el aviso a un área y lo pone en la cola, a su número guardado. */
-    public function encolarAlArea(Programacion $programacion, AreaAviso $area, string $numero, ?User $usuario): EnvioWhatsapp
-    {
-        return $this->encolar([
-            'programacion_id' => $programacion->id,
-            'area_aviso_id' => $area->id,
-            'tipo' => EnvioWhatsapp::TIPO_AREA,
-            'destino' => $area->nombre,
-            'numero' => $numero,
-            'enviado_por' => $usuario?->id,
-        ]);
-    }
-
     /** Anota el recordatorio de las unidades sin GR a un área y lo encola. */
     public function encolarRecordatorio(AreaAviso $area, string $numero): EnvioWhatsapp
     {
@@ -89,22 +65,38 @@ class AvisosPorWhatsapp
     }
 
     /**
-     * Las unidades programadas para un día que todavía no tienen GR,
-     * ordenadas por placa.
+     * Los tickets que ya debían salir (hasta hoy) y siguen sin GR, por
+     * placa. Los que taller dio por no aptos no van: esa unidad no sale.
      *
-     * @return Collection<int, Programacion>
+     * @return Collection<int, array{placa: string, detalle: string}>
      */
-    public function unidadesSinGr(string $fecha): Collection
+    public function unidadesSinGr(CarbonImmutable $hoy): Collection
     {
-        $guias = Programacion::guiasDelDia($fecha);
-
-        return Programacion::query()
-            ->delDia($fecha)
-            ->with(['vehiculo:id,placa', 'conductor:id,nombres,apellidos', 'cliente:id,alias'])
+        return Vuelta::query()
+            ->where('estado', EstadoVuelta::Programada)
+            ->whereDate('inicio', '<=', $hoy->toDateString())
+            ->with(['tracto:id,placa', 'conductor:id,nombres,apellidos', 'paradas', 'revision'])
             ->get()
-            ->reject(fn (Programacion $programacion): bool => isset($guias[$programacion->vehiculo_id]))
-            ->sortBy(fn (Programacion $programacion): string => $programacion->vehiculo->placa)
+            ->reject(fn (Vuelta $vuelta): bool => $vuelta->revision?->resultado === ResultadoTaller::NoApto)
+            ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa)
+            ->map(fn (Vuelta $vuelta): array => [
+                'placa' => $vuelta->tracto->placa,
+                'detalle' => implode(' · ', array_filter([
+                    $vuelta->codigo,
+                    $this->primerTramo($vuelta),
+                    $vuelta->conductor ? "{$vuelta->conductor->nombres} {$vuelta->conductor->apellidos}" : null,
+                ])),
+            ])
             ->values();
+    }
+
+    private function primerTramo(Vuelta $vuelta): ?string
+    {
+        $parada = $vuelta->paradas->first();
+
+        return $parada === null
+            ? null
+            : ($parada->lugar_origen ?? $parada->zona_origen?->label() ?? '¿?').' → '.($parada->lugar_destino ?? $parada->zona_destino?->label() ?? '¿?');
     }
 
     /**
@@ -126,31 +118,7 @@ class AvisosPorWhatsapp
             return;
         }
 
-        $programacion = $envio->programacion;
-
-        if ($programacion === null) {
-            throw new RuntimeException('La programación ya no existe.');
-        }
-
-        $programacion->loadMissing(['vehiculo', 'conductor', 'cliente']);
-
-        $mensajeId = $this->whatsapp->enviar($envio->numero, $this->leyenda($envio, $programacion), $this->imagen($envio, $programacion));
-
-        $envio->update([
-            'estado' => EstadoEnvio::Enviado,
-            'mensaje_id' => $mensajeId,
-            'error' => null,
-            'enviado_at' => now(),
-        ]);
-
-        // Lo que respalda ante una multa es habérselo dicho al conductor:
-        // esos envíos dejan la salida como avisada.
-        if ($envio->tipo !== EnvioWhatsapp::TIPO_AREA) {
-            $programacion->update([
-                'aviso_enviado_at' => now(),
-                'aviso_enviado_por' => $envio->enviado_por,
-            ]);
-        }
+        throw new RuntimeException('Este aviso era de la pantalla de salidas de antes: ya no se manda.');
     }
 
     /**
@@ -160,7 +128,7 @@ class AvisosPorWhatsapp
     private function mandarRecordatorio(EnvioWhatsapp $envio): void
     {
         $hoy = RelojOperativo::fechaDeHoy();
-        $sinGr = $this->unidadesSinGr($hoy->toDateString());
+        $sinGr = $this->unidadesSinGr($hoy);
 
         if ($sinGr->isEmpty()) {
             $envio->update(['estado' => EstadoEnvio::Fallido, 'error' => 'No hizo falta: ya todas las unidades tienen GR.']);
@@ -202,34 +170,6 @@ class AvisosPorWhatsapp
     public function marcarFallido(EnvioWhatsapp $envio, string $error): void
     {
         $envio->update(['estado' => EstadoEnvio::Fallido, 'error' => $error]);
-    }
-
-    private function imagen(EnvioWhatsapp $envio, Programacion $programacion): string
-    {
-        return match ($envio->tipo) {
-            EnvioWhatsapp::TIPO_CONDUCTOR => $this->imagenes->conductor($programacion),
-            EnvioWhatsapp::TIPO_ADVERTENCIA => $this->imagenes->advertencia(),
-            default => $this->imagenes->area(
-                $programacion,
-                $envio->area ?? throw new RuntimeException('El área ya no existe.'),
-            ),
-        };
-    }
-
-    /**
-     * La leyenda corta que acompaña a la imagen: es lo que se lee en la
-     * notificación del celular antes de abrir el chat.
-     */
-    private function leyenda(EnvioWhatsapp $envio, Programacion $programacion): string
-    {
-        $fecha = $programacion->fecha->format('d/m');
-        $placa = $programacion->vehiculo->placa;
-
-        return match ($envio->tipo) {
-            EnvioWhatsapp::TIPO_CONDUCTOR => "Programación {$fecha} · {$placa}",
-            EnvioWhatsapp::TIPO_ADVERTENCIA => 'Documentación obligatoria antes de salir',
-            default => "Unidad programada {$fecha} · {$placa}",
-        };
     }
 
     /**

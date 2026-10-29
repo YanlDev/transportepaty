@@ -3,7 +3,6 @@
 use App\Http\Controllers\AbastecimientoController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
-use App\Http\Controllers\AvisoSalidaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
@@ -24,7 +23,6 @@ use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\OrdenTrabajoController;
 use App\Http\Controllers\ParametroCostoController;
 use App\Http\Controllers\PlanMantenimientoController;
-use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\RolController;
 use App\Http\Controllers\TallerController;
@@ -220,26 +218,9 @@ Route::middleware('auth')->group(function () {
     Route::post('vueltas/{vuelta}/aviso', [VueltaController::class, 'avisarConductor'])->name('vueltas.aviso');
     Route::post('vueltas/{vuelta}/aviso-area/{area}', [VueltaController::class, 'avisarArea'])->name('vueltas.avisoArea');
 
-    Route::get('programacion', [ProgramacionController::class, 'index'])->name('programacion.index');
-    Route::post('programacion', [ProgramacionController::class, 'store'])->name('programacion.store');
-    Route::put('programacion/{programacion}', [ProgramacionController::class, 'update'])
-        ->name('programacion.update');
-    // Corregir los números a los que se avisa, desde la misma fila.
-    Route::patch('programacion/{programacion}/numeros', [ProgramacionController::class, 'actualizarNumeros'])
-        ->name('programacion.numeros');
-    // El preaviso al conductor: queda registrado que se mandó.
-    Route::post('programacion/{programacion}/aviso', [ProgramacionController::class, 'registrarAviso'])
-        ->name('programacion.aviso');
-    Route::delete('programacion/{programacion}', [ProgramacionController::class, 'destroy'])
-        ->name('programacion.destroy');
-    Route::get('programacion/{programacion}/aviso/{tipo}', [AvisoSalidaController::class, 'imagen'])
-        ->name('programacion.aviso.imagen');
-    Route::post('programacion/{programacion}/aviso/{tipo}', [AvisoSalidaController::class, 'enviar'])
-        ->name('programacion.aviso.enviar');
-    Route::get('programacion/{programacion}/aviso-area/{area}', [AvisoSalidaController::class, 'imagenArea'])
-        ->name('programacion.avisoArea.imagen');
-    Route::post('programacion/{programacion}/aviso-area/{area}', [AvisoSalidaController::class, 'enviarArea'])
-        ->name('programacion.avisoArea.enviar');
+    // La pantalla de salidas de antes: quien la tenga en favoritos llega a
+    // los tickets.
+    Route::redirect('programacion', '/vueltas');
 
     // Mantenimiento: el semáforo de la flota, el km que se anota al llegar a
     // base y las órdenes de taller. `ordenes/crear` va antes que

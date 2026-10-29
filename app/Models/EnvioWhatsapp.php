@@ -14,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Un aviso mandado por el número de la empresa y hasta dónde llegó.
  *
  * @property int $id
- * @property int|null $programacion_id
+ * @property int|null $programacion_id De la pantalla de salidas de antes; ya no se llena.
  * @property int|null $vuelta_id
  * @property int|null $area_aviso_id
  * @property string $tipo
@@ -28,12 +28,10 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $entregado_at
  * @property CarbonImmutable|null $leido_at
  * @property CarbonImmutable $created_at
- * @property-read Programacion|null $programacion
  * @property-read Vuelta|null $vuelta
  * @property-read AreaAviso|null $area
  */
 #[Fillable([
-    'programacion_id',
     'vuelta_id',
     'area_aviso_id',
     'tipo',
@@ -54,8 +52,6 @@ class EnvioWhatsapp extends Model
 
     public const TIPO_CONDUCTOR = 'conductor';
 
-    public const TIPO_ADVERTENCIA = 'advertencia';
-
     public const TIPO_AREA = 'area';
 
     /** Las unidades de hoy que siguen sin GR, a un área (sin salida propia). */
@@ -69,14 +65,6 @@ class EnvioWhatsapp extends Model
     public function vuelta(): BelongsTo
     {
         return $this->belongsTo(Vuelta::class);
-    }
-
-    /**
-     * @return BelongsTo<Programacion, $this>
-     */
-    public function programacion(): BelongsTo
-    {
-        return $this->belongsTo(Programacion::class);
     }
 
     /**

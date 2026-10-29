@@ -95,6 +95,7 @@ class AbastecimientoController extends Controller
                     'conductor' => $vuelta->conductor ? "{$vuelta->conductor->nombres} {$vuelta->conductor->apellidos}" : null,
                     'etapa' => $vuelta->etapa(),
                     'taller' => $vuelta->revision?->resumen(),
+                    'bloqueo_gastos' => $vuelta->bloqueoDeGastos(),
                     'recorrido' => $this->recorrido($vuelta),
                     ...($dotacion = $this->dotacion->de($vuelta, $registrados->where('vuelta_id', $vuelta->id)->values())),
                     ...$this->viaticos(
@@ -140,23 +141,14 @@ class AbastecimientoController extends Controller
             ? Vuelta::query()->find($request->integer('vuelta_id'))
             : $this->vueltaAbierta($request->integer('vehiculo_id'), $fecha);
 
-        if ($vuelta !== null && ! in_array($vuelta->estado, [EstadoVuelta::Programada, EstadoVuelta::EnCurso], true)) {
-            throw ValidationException::withMessages([
-                'vehiculo_id' => "El ticket {$vuelta->codigo} está cerrado: hay que reabrirlo para registrarle combustible.",
-            ]);
-        }
-
-        // Sin el OK de taller el ticket no avanza: no se le autoriza nada.
         if ($vuelta === null) {
             throw ValidationException::withMessages([
                 'vehiculo_id' => 'La unidad no tiene un ticket abierto: primero se programa y taller da el OK.',
             ]);
         }
 
-        if (! $vuelta->tieneOkDeTaller()) {
-            throw ValidationException::withMessages([
-                'vehiculo_id' => "El ticket {$vuelta->codigo} todavía no tiene el OK de taller.",
-            ]);
+        if (($bloqueo = $vuelta->bloqueoDeGastos()) !== null) {
+            throw ValidationException::withMessages(['vehiculo_id' => $bloqueo]);
         }
 
         $lleno = $request->boolean('tanque_lleno');
@@ -327,7 +319,7 @@ class AbastecimientoController extends Controller
      * Los tractos activos, con su vuelta abierta si tienen y si ya tiene el
      * OK de taller: elegir la unidad deja puesta la vuelta.
      *
-     * @return array<int, array{id: int, placa: string, vuelta_id: int|null, vuelta: string|null, apta: bool}>
+     * @return array<int, array{id: int, placa: string, vuelta_id: int|null, vuelta: string|null, bloqueo: string|null}>
      */
     private function opcionesTractos(): array
     {
@@ -335,7 +327,7 @@ class AbastecimientoController extends Controller
             ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
             ->orderBy('inicio')
             ->with('revision')
-            ->get(['id', 'codigo', 'tracto_id'])
+            ->get(['id', 'codigo', 'tracto_id', 'estado'])
             ->keyBy('tracto_id');
 
         return Vehiculo::query()
@@ -348,7 +340,7 @@ class AbastecimientoController extends Controller
                 'placa' => $tracto->placa,
                 'vuelta_id' => $abiertas->get($tracto->id)?->id,
                 'vuelta' => $abiertas->get($tracto->id)?->codigo,
-                'apta' => $abiertas->get($tracto->id)?->tieneOkDeTaller() ?? false,
+                'bloqueo' => $abiertas->get($tracto->id)?->bloqueoDeGastos(),
             ])
             ->all();
     }

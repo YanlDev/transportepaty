@@ -42,7 +42,7 @@ export function BottomNav() {
             ? [{ title: 'Tractos', href: vehiculos.tractos(), icon: Truck }]
             : []),
         ...(puede('viajes.ver')
-            ? [{ title: 'Viajes', href: viajes.index(), icon: Route }]
+            ? [{ title: 'Guías', href: viajes.index(), icon: Route }]
             : []),
         ...(puede('conductores.ver')
             ? [

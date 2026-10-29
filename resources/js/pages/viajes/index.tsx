@@ -57,7 +57,7 @@ export default function ViajesIndex({
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
-            <Head title="Viajes" />
+            <Head title="Guías de remisión" />
 
             {/* Arrastrar el PDF desde la carpeta de la GR y soltarlo en la
                 pantalla. Solo para quien puede importar: al visor no le sirve
@@ -208,5 +208,5 @@ export default function ViajesIndex({
  */
 
 ViajesIndex.layout = {
-    breadcrumbs: [{ title: 'Viajes', href: viajes.index().url }],
+    breadcrumbs: [{ title: 'Guías de remisión', href: viajes.index().url }],
 };

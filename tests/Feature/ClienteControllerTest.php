@@ -296,7 +296,7 @@ it('suggests a short alias by dropping the forma societaria', function (): void 
 
 it('registers a client from the express form and stays on the page', function (): void {
     actingAs(actorConRol('admin'))
-        ->from(route('programacion.index'))
+        ->from(route('vueltas.index'))
         ->post(route('clientes.express'), [
             'ruc' => '20100136741',
             'razon_social' => 'MINSUR S.A.',
@@ -305,7 +305,7 @@ it('registers a client from the express form and stays on the page', function ()
         ])
         // Vuelve a lo que se estaba haciendo, no al padrón: el alta express
         // existe para no cortar la carga de la programación.
-        ->assertRedirect(route('programacion.index'))
+        ->assertRedirect(route('vueltas.index'))
         ->assertSessionHasNoErrors();
 
     $cliente = Cliente::query()->sole();

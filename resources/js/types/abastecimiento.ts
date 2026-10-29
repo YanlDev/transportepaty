@@ -20,6 +20,8 @@ export type VueltaAbastecimiento = {
     etapa: 'programada' | 'en_ida' | 'en_vuelta' | 'en_base';
     /** Sin el apto de taller no se le registra nada. */
     taller: RevisionTaller | null;
+    /** Por qué no se le puede registrar combustible ni viáticos; null si se puede. */
+    bloqueo_gastos: string | null;
     inicio: string | null;
     tracto: { id: number; placa: string };
     conductor: string | null;
@@ -84,8 +86,8 @@ export type TractoAbastecimiento = {
     placa: string;
     vuelta_id: number | null;
     vuelta: string | null;
-    /** Si su ticket ya tiene el OK de taller. */
-    apta: boolean;
+    /** Por qué su ticket no recibe gastos (sin OK de taller, con candado); null si los recibe. */
+    bloqueo: string | null;
 };
 
 export type PuntoAbastecimiento = {

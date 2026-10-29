@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Ajuste;
 use App\Models\AreaAviso;
-use App\Services\AvisoDeSalida;
+use App\Services\ContactoWhatsapp;
 use App\Services\RelojOperativo;
 use App\Services\WhatsappServicio;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +22,7 @@ class WhatsappController extends Controller
 {
     public function __construct(
         private readonly WhatsappServicio $whatsapp,
-        private readonly AvisoDeSalida $aviso,
+        private readonly ContactoWhatsapp $aviso,
     ) {}
 
     public function index(Request $request): Response

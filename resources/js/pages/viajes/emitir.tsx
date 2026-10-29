@@ -854,7 +854,7 @@ export default function EmitirGr({
 
 EmitirGr.layout = {
     breadcrumbs: [
-        { title: 'Viajes', href: viajes.index().url },
+        { title: 'Guías de remisión', href: viajes.index().url },
         { title: 'Emitir GR', href: emision.create().url },
     ],
 };

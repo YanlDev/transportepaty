@@ -96,9 +96,9 @@ const conductoresNavItem: NavItem = {
     icon: IdCard,
 };
 
-/** Los viajes: los lee también el contador, que factura contra ellos. */
+/** Las guías de remisión: las lee también el contador, que factura contra ellas. */
 const viajesNavItem: NavItem = {
-    title: 'Viajes',
+    title: 'Guías (GR)',
     href: viajes.index(),
     icon: Route,
 };

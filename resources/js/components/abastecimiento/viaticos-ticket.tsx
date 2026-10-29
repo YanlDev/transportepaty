@@ -35,9 +35,8 @@ export function ViaticosTicket({
     puedeGestionar: boolean;
     onAccion: (accion: AccionViatico) => void;
 }) {
-    // Sin el OK de taller no se deposita: lo ya depositado sí se corrige.
-    const puedeDepositar =
-        puedeGestionar && vuelta.taller?.resultado === 'apto';
+    // Sin el OK de taller o con candado no se deposita (`bloqueo_gastos`).
+    const puedeDepositar = puedeGestionar && vuelta.bloqueo_gastos === null;
     const [verHistorial, setVerHistorial] = useState(false);
     const [verAnulados, setVerAnulados] = useState(false);
 

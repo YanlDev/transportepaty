@@ -1,12 +1,17 @@
 <?php
 
 use App\Enums\EstadoEnvio;
+use App\Enums\EstadoVuelta;
+use App\Enums\SentidoTramo;
+use App\Enums\TipoCarga;
+use App\Enums\ZonaRuta;
 use App\Jobs\EnviarAvisoWhatsapp;
 use App\Models\Ajuste;
 use App\Models\AreaAviso;
 use App\Models\EnvioWhatsapp;
-use App\Models\Programacion;
-use App\Models\Viaje;
+use App\Models\ParadaVuelta;
+use App\Models\RevisionTaller;
+use App\Models\Vuelta;
 use App\Services\AvisosPorWhatsapp;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
@@ -32,9 +37,18 @@ beforeEach(function (): void {
     $this->travelTo(CarbonImmutable::parse('2026-09-26 10:05', 'America/Lima'));
 });
 
-function unidadProgramadaHoy(): Programacion
+/**
+ * Un ticket programado que sale ese día, todavía sin GR.
+ */
+function unidadProgramadaHoy(string $fecha = '2026-09-26'): Vuelta
 {
-    return Programacion::factory()->create(['fecha' => '2026-09-26']);
+    $vuelta = Vuelta::factory()->programada()->create(['inicio' => $fecha]);
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $vuelta->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1,
+        'zona_origen' => ZonaRuta::Mina, 'zona_destino' => ZonaRuta::Pisco, 'tipo_carga' => TipoCarga::Concentrado,
+    ]);
+
+    return $vuelta;
 }
 
 it('reminds the marked areas of the units that still have no GR', function (): void {
@@ -65,7 +79,7 @@ it('sends it once a day, not every minute', function (): void {
     expect(EnvioWhatsapp::query()->count())->toBe(1);
 
     $this->travelTo(CarbonImmutable::parse('2026-09-27 10:01', 'America/Lima'));
-    Programacion::factory()->create(['fecha' => '2026-09-27']);
+    unidadProgramadaHoy('2026-09-27');
     artisan('transpaty:recordatorio-sin-gr');
 
     expect(EnvioWhatsapp::query()->count())->toBe(2);
@@ -82,9 +96,9 @@ it('waits for the configured hour, in Lima', function (): void {
 });
 
 it('stays quiet when every unit already has its GR', function (): void {
-    $programacion = unidadProgramadaHoy();
+    $vuelta = unidadProgramadaHoy();
     AreaAviso::factory()->create(['recibe_recordatorio' => true]);
-    Viaje::factory()->create(['tracto_id' => $programacion->vehiculo_id, 'fecha_traslado' => '2026-09-26']);
+    $vuelta->update(['estado' => EstadoVuelta::EnCurso]);
 
     artisan('transpaty:recordatorio-sin-gr');
 
@@ -116,7 +130,7 @@ it('sends only the units still without GR when the worker gets to it', function 
     $conGr = unidadProgramadaHoy();
     unidadProgramadaHoy();
     $area = AreaAviso::factory()->create(['recibe_recordatorio' => true]);
-    Viaje::factory()->create(['tracto_id' => $conGr->vehiculo_id, 'fecha_traslado' => '2026-09-26']);
+    $conGr->update(['estado' => EstadoVuelta::EnCurso]);
 
     $envio = app(AvisosPorWhatsapp::class)->encolarRecordatorio($area, '51950301883');
     app(AvisosPorWhatsapp::class)->mandar($envio);
@@ -128,13 +142,26 @@ it('sends only the units still without GR when the worker gets to it', function 
 
 it('does not send the reminder if by then every unit got its GR', function (): void {
     Http::fake(['whatsapp.test/enviar' => Http::response(['id' => 'REC1'])]);
-    $programacion = unidadProgramadaHoy();
+    $vuelta = unidadProgramadaHoy();
     $area = AreaAviso::factory()->create(['recibe_recordatorio' => true]);
     $envio = app(AvisosPorWhatsapp::class)->encolarRecordatorio($area, '51950301883');
 
-    Viaje::factory()->create(['tracto_id' => $programacion->vehiculo_id, 'fecha_traslado' => '2026-09-26']);
+    $vuelta->update(['estado' => EstadoVuelta::EnCurso]);
     app(AvisosPorWhatsapp::class)->mandar($envio);
 
     expect($envio->fresh()->estado)->toBe(EstadoEnvio::Fallido);
     Http::assertNotSent(fn ($request): bool => str_ends_with($request->url(), '/enviar'));
+});
+
+it('lists the tickets that should have left, but not those the workshop held back', function (): void {
+    $atrasada = unidadProgramadaHoy('2026-09-25');
+    unidadProgramadaHoy('2026-09-28');
+    $enTaller = unidadProgramadaHoy();
+    RevisionTaller::factory()->noApta()->create(['vuelta_id' => $enTaller->id]);
+
+    $sinGr = app(AvisosPorWhatsapp::class)->unidadesSinGr(CarbonImmutable::parse('2026-09-26'));
+
+    expect($sinGr)->toHaveCount(1)
+        ->and($sinGr->first()['placa'])->toBe($atrasada->tracto->placa)
+        ->and($sinGr->first()['detalle'])->toContain($atrasada->codigo);
 });

@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\AreaAviso;
-use App\Services\AvisoDeSalida;
+use App\Services\ContactoWhatsapp;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 
@@ -13,7 +13,7 @@ use Illuminate\Http\Request;
  */
 class AreaAvisoController extends Controller
 {
-    public function __construct(private readonly AvisoDeSalida $aviso) {}
+    public function __construct(private readonly ContactoWhatsapp $aviso) {}
 
     public function store(Request $request): RedirectResponse
     {

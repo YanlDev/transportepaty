@@ -526,14 +526,12 @@ export default function AbastecimientoIndex({
                                                 variant="ghost"
                                                 size="sm"
                                                 disabled={
-                                                    vuelta.taller?.resultado !==
-                                                    'apto'
+                                                    vuelta.bloqueo_gastos !==
+                                                    null
                                                 }
                                                 title={
-                                                    vuelta.taller?.resultado !==
-                                                    'apto'
-                                                        ? 'Espera el OK de taller'
-                                                        : undefined
+                                                    vuelta.bloqueo_gastos ??
+                                                    undefined
                                                 }
                                                 onClick={() =>
                                                     registrarEn(vuelta)
@@ -711,21 +709,24 @@ export default function AbastecimientoIndex({
                                                 cualquier punto cuenta contra el
                                                 tope.
                                             </p>
-                                            {abierta.taller?.resultado !==
-                                                'apto' && (
+                                            {abierta.bloqueo_gastos !==
+                                                null && (
                                                 <div className="flex flex-col items-start gap-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                                                    <EstadoTallerBadge
-                                                        revision={
-                                                            abierta.taller
-                                                        }
-                                                    />
-                                                    Sin el OK de taller no se
-                                                    registra combustible.
+                                                    {abierta.taller
+                                                        ?.resultado !==
+                                                        'apto' && (
+                                                        <EstadoTallerBadge
+                                                            revision={
+                                                                abierta.taller
+                                                            }
+                                                        />
+                                                    )}
+                                                    {abierta.bloqueo_gastos}
                                                 </div>
                                             )}
                                             {puedeRegistrar &&
-                                                abierta.taller?.resultado ===
-                                                    'apto' &&
+                                                abierta.bloqueo_gastos ===
+                                                    null &&
                                                 abierta.tramos.map(
                                                     (tramo) =>
                                                         tramo.falta !== 0 && (

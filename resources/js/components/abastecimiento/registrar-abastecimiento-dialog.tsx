@@ -168,9 +168,8 @@ export function RegistrarAbastecimientoDialog({
                                 ayuda={
                                     tracto
                                         ? tracto.vuelta
-                                            ? tracto.apta
-                                                ? `Va al ticket ${tracto.vuelta}.`
-                                                : `El ticket ${tracto.vuelta} todavía no tiene el OK de taller.`
+                                            ? (tracto.bloqueo ??
+                                              `Va al ticket ${tracto.vuelta}.`)
                                             : 'No tiene un ticket abierto: primero se programa.'
                                         : undefined
                                 }
@@ -356,7 +355,8 @@ export function RegistrarAbastecimientoDialog({
                                 form="registrar-abastecimiento"
                                 disabled={
                                     processing ||
-                                    (tracto !== undefined && !tracto.apta)
+                                    (tracto !== undefined &&
+                                        tracto.bloqueo !== null)
                                 }
                             >
                                 Registrar

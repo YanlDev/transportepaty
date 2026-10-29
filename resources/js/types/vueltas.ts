@@ -1,4 +1,4 @@
-import type { ResumenEnvio } from '@/types/programacion';
+import type { ResumenEnvio } from '@/types/whatsapp';
 
 export type GuiaParada = {
     id: number;

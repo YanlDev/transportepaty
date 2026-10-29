@@ -145,6 +145,24 @@ class Vuelta extends Model
     }
 
     /**
+     * Por qué al ticket no se le puede registrar combustible ni viáticos, o
+     * null si se puede. Es la regla de todo el circuito, en un solo lugar:
+     * tiene que estar abierto (sin candado) y con el OK de taller.
+     */
+    public function bloqueoDeGastos(): ?string
+    {
+        if (! in_array($this->estado, [EstadoVuelta::Programada, EstadoVuelta::EnCurso], true)) {
+            return "El ticket {$this->codigo} está cerrado: hay que reabrirlo para registrarle gastos.";
+        }
+
+        if (! $this->tieneOkDeTaller()) {
+            return "El ticket {$this->codigo} todavía no tiene el OK de taller.";
+        }
+
+        return null;
+    }
+
+    /**
      * El combustible autorizado para la vuelta.
      *
      * @return HasMany<Abastecimiento, $this>

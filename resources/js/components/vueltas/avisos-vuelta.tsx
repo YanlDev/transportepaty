@@ -3,8 +3,8 @@ import { ChevronDown } from 'lucide-react';
 import { useState } from 'react';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { IconoWhatsapp } from '@/components/icono-whatsapp';
-import { EstadoEnvio } from '@/components/programacion/estado-envio';
 import { Button } from '@/components/ui/button';
+import { EstadoEnvio } from '@/components/whatsapp/estado-envio';
 import type { AvisoVuelta } from '@/types/vueltas';
 
 /**

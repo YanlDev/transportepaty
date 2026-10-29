@@ -17,8 +17,8 @@ use Illuminate\Support\Collection;
  * combustible y viáticos.
  *
  * El texto se arma acá y no en el navegador para que sea uno solo: es la
- * constancia de lo que se avisó. La normalización de números y la
- * advertencia de documentos son las mismas de siempre (`AvisoDeSalida`).
+ * constancia de lo que se avisó. Los números se normalizan con
+ * `ContactoWhatsapp`.
  */
 class AvisoDeVuelta
 {
@@ -26,7 +26,7 @@ class AvisoDeVuelta
     private ?Collection $areas = null;
 
     public function __construct(
-        private readonly AvisoDeSalida $avisoDeSalida,
+        private readonly ContactoWhatsapp $contacto,
         private readonly DotacionVuelta $dotacion,
     ) {}
 
@@ -68,7 +68,7 @@ class AvisoDeVuelta
         $destinatarios = [];
 
         foreach (['Conductor' => $vuelta->conductor?->telefono, 'Alterno' => $vuelta->conductor?->telefono_alterno] as $etiqueta => $telefono) {
-            $numero = $this->avisoDeSalida->numeroWhatsapp($telefono);
+            $numero = $this->contacto->numeroWhatsapp($telefono);
 
             if ($numero !== null && ! in_array($numero, array_column($destinatarios, 'numero'), true)) {
                 $destinatarios[] = ['etiqueta' => $etiqueta, 'numero' => $numero];
@@ -89,7 +89,7 @@ class AvisoDeVuelta
         $avisos = [];
 
         foreach ($this->areas() as $area) {
-            $numero = $this->avisoDeSalida->numeroWhatsapp($area->numero);
+            $numero = $this->contacto->numeroWhatsapp($area->numero);
 
             if ($numero === null) {
                 continue;
@@ -108,7 +108,7 @@ class AvisoDeVuelta
 
     public function numeroWhatsapp(?string $telefono): ?string
     {
-        return $this->avisoDeSalida->numeroWhatsapp($telefono);
+        return $this->contacto->numeroWhatsapp($telefono);
     }
 
     /**

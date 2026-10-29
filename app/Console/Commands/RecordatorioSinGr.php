@@ -5,8 +5,8 @@ namespace App\Console\Commands;
 use App\Models\Ajuste;
 use App\Models\AreaAviso;
 use App\Models\EnvioWhatsapp;
-use App\Services\AvisoDeSalida;
 use App\Services\AvisosPorWhatsapp;
+use App\Services\ContactoWhatsapp;
 use App\Services\RelojOperativo;
 use App\Services\WhatsappServicio;
 use Illuminate\Console\Attributes\Description;
@@ -15,7 +15,7 @@ use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * El recordatorio de las unidades programadas para hoy que siguen sin GR, a
+ * El recordatorio de los tickets que ya debían salir y siguen sin GR, a
  * las áreas marcadas en el panel de WhatsApp, a la hora configurada ahí.
  *
  * Corre cada minuto y decide solo: manda una vez por día y área, y únicamente
@@ -27,7 +27,7 @@ use Illuminate\Database\Eloquent\Collection;
 #[Description('Avisa a las áreas marcadas de las unidades de hoy que siguen sin GR')]
 class RecordatorioSinGr extends Command
 {
-    public function handle(AvisosPorWhatsapp $avisos, WhatsappServicio $whatsapp, AvisoDeSalida $aviso): int
+    public function handle(AvisosPorWhatsapp $avisos, WhatsappServicio $whatsapp, ContactoWhatsapp $aviso): int
     {
         $hora = Ajuste::valor(Ajuste::HORA_RECORDATORIO);
 
@@ -41,7 +41,7 @@ class RecordatorioSinGr extends Command
             return self::SUCCESS;
         }
 
-        $sinGr = $avisos->unidadesSinGr(RelojOperativo::hoy());
+        $sinGr = $avisos->unidadesSinGr(RelojOperativo::fechaDeHoy());
 
         if ($sinGr->isEmpty()) {
             return self::SUCCESS;
