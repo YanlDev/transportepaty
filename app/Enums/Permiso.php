@@ -95,16 +95,16 @@ enum Permiso: string
      * @var array<string, string>
      */
     public const MODULOS = [
-        'tablero' => 'Tablero',
-        'vehiculos' => 'Vehículos',
-        'mantenimiento' => 'Mantenimiento',
+        'tablero' => 'Inicio',
+        'programacion' => 'Programación (tickets)',
         'taller' => 'Taller (OK de salida)',
+        'abastecimiento' => 'Abastecimiento',
+        'viajes' => 'Guías de remisión',
+        'vehiculos' => 'Unidades',
+        'mantenimiento' => 'Mantenimiento',
         'novedades' => 'Novedades de unidades',
         'conductores' => 'Conductores',
         'asistencia' => 'Asistencia',
-        'programacion' => 'Programación',
-        'abastecimiento' => 'Abastecimiento',
-        'viajes' => 'Viajes',
         'cotizaciones' => 'Cotizaciones',
         'clientes' => 'Clientes',
         'costos' => 'Parámetros de costo',
@@ -115,20 +115,20 @@ enum Permiso: string
     ];
 
     /**
-     * Las áreas de la empresa y sus módulos. Es la misma división que el menú
-     * y que los roles: cada área tiene su rol (Flota la ve Gerencia y la
-     * maneja el admin), y el panel de permisos se agrupa así para que se vea
-     * de un vistazo qué área toca cada rol.
+     * Las áreas de la empresa y sus módulos. Es la misma división que el menú:
+     * Operación es todo lo que le pasa a un ticket (programarlo, el OK de
+     * taller, el combustible, sus GR); Flota, las unidades y quienes las
+     * manejan. El panel de permisos se agrupa así para que se vea de un
+     * vistazo qué toca cada rol.
      *
      * @var array<string, array{nombre: string, modulos: list<string>}>
      */
     public const AREAS = [
         'general' => ['nombre' => 'General', 'modulos' => ['tablero']],
-        'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'taller', 'novedades']],
-        'rrhh' => ['nombre' => 'RRHH', 'modulos' => ['conductores', 'asistencia']],
-        'programacion' => ['nombre' => 'Programación', 'modulos' => ['programacion', 'viajes', 'cotizaciones', 'clientes', 'costos']],
-        'abastecimiento' => ['nombre' => 'Abastecimiento', 'modulos' => ['abastecimiento']],
-        'contabilidad' => ['nombre' => 'Contabilidad', 'modulos' => ['cobranza', 'cuentas']],
+        'operacion' => ['nombre' => 'Operación', 'modulos' => ['programacion', 'taller', 'abastecimiento', 'viajes']],
+        'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades', 'conductores', 'asistencia']],
+        'comercial' => ['nombre' => 'Comercial', 'modulos' => ['cotizaciones', 'clientes', 'costos']],
+        'finanzas' => ['nombre' => 'Finanzas', 'modulos' => ['cobranza', 'cuentas']],
         'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp', 'historial']],
     ];
 

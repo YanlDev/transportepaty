@@ -3,12 +3,14 @@ import {
     Building2,
     Calculator,
     CalendarCheck,
+    CalendarDays,
     ClipboardCheck,
     Fuel,
     IdCard,
     LayoutGrid,
     Receipt,
     Route,
+    Settings,
     Truck,
     Wrench,
 } from 'lucide-react';
@@ -16,6 +18,7 @@ import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoControl
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
+import configuracion from '@/actions/App/Http/Controllers/ConfiguracionController';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
@@ -42,16 +45,16 @@ import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
 /**
- * El menú va por áreas —Flota, RRHH, Programación, Contabilidad— y no
- * como una lista corrida: con doce destinos, los títulos son lo que permite
- * saltar al bloque que se busca sin leerlos todos. Cada entrada sigue siendo
- * de un clic; agrupar es para leer, no para esconder.
+ * El menú va por áreas de trabajo y no por tablas: Operación es todo lo que
+ * le pasa a un ticket (programarlo, el OK de taller, el combustible, sus
+ * GR); Flota, las unidades y quienes las manejan; Comercial y Finanzas, lo
+ * que se cobra. La configuración entera está en una sola entrada, abajo.
  *
  * Una sección cuyas entradas no le corresponden al rol no se dibuja, ni su
  * título: `NavMain` devuelve null con la lista vacía.
  */
 const dashboardNavItem: NavItem = {
-    title: 'Dashboard',
+    title: 'Inicio',
     href: dashboard(),
     icon: LayoutGrid,
 };
@@ -94,10 +97,7 @@ const viajesNavItem: NavItem = {
     icon: Route,
 };
 
-/**
- * La programación de vueltas: el ticket de cada viaje nace acá. La pantalla
- * vieja de carga particular quedó fuera del menú.
- */
+/** Los tickets: cada viaje nace acá. */
 const programacionNavItem: NavItem = {
     title: 'Programación',
     href: vueltas.index(),
@@ -115,7 +115,14 @@ const abastecimientoNavItem: NavItem = {
 const asistenciaNavItem: NavItem = {
     title: 'Asistencia',
     href: asistencia.index(),
-    icon: CalendarCheck,
+    icon: CalendarDays,
+};
+
+/** Todos los ajustes en una sola puerta; cada quien ve los suyos. */
+const configuracionNavItem: NavItem = {
+    title: 'Configuración',
+    href: configuracion.index(),
+    icon: Settings,
 };
 
 /** Cada uno aparece con su permiso de lectura. */
@@ -170,9 +177,18 @@ export function AppSidebar() {
                 : item,
         );
 
-    // Las secciones son las áreas de la empresa —las mismas de los roles y
-    // del panel de permisos (`Permiso::AREAS`)—, así cada rol ve justo su
-    // bloque del menú.
+    // Las secciones son las áreas de la empresa —las mismas del panel de
+    // permisos (`Permiso::AREAS`)—, así cada rol ve justo su bloque.
+    const operacion = [
+        ...(puede('programacion.ver') ? [programacionNavItem] : []),
+        ...(puede('taller.ver') ? [tallerNavItem] : []),
+        // Facturación entra solo a los viáticos: también ve el área.
+        ...(puede('abastecimiento.ver') || puede('abastecimiento.viaticos')
+            ? [abastecimientoNavItem]
+            : []),
+        ...(puede('viajes.ver') ? [viajesNavItem] : []),
+    ];
+
     const flota = [
         // Tractos y carretas son una sola entrada, con pestañas; se marca
         // en cualquiera de las dos y en la ficha de una unidad.
@@ -188,37 +204,22 @@ export function AppSidebar() {
               ]
             : []),
         ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
-        ...(puede('taller.ver') ? [tallerNavItem] : []),
-    ];
-
-    const rrhh = [
         ...(puede('conductores.ver') ? [conductoresNavItem] : []),
         ...(puede('asistencia.ver') ? [asistenciaNavItem] : []),
     ];
 
-    const programacionArea = [
-        ...(puede('programacion.ver') ? [programacionNavItem] : []),
-        ...(puede('viajes.ver') ? [viajesNavItem] : []),
-        // Cotizaciones antes que Clientes: es lo que se usa a diario.
-        ...[...gestion].reverse(),
-    ];
+    // Cotizaciones antes que Clientes: es lo que se usa a diario.
+    const comercial = [...gestion].reverse();
 
-    // Facturación entra solo a los viáticos: también ve el área.
-    const abastecimientoArea =
-        puede('abastecimiento.ver') || puede('abastecimiento.viaticos')
-            ? [abastecimientoNavItem]
-            : [];
-
-    const contabilidadArea = puede('cobranza.ver') ? [contabilidadNavItem] : [];
+    const finanzas = puede('cobranza.ver') ? [contabilidadNavItem] : [];
 
     // Con roles armados a mano una sección puede quedar vacía: no se pinta
     // el título solo.
     const secciones = [
+        { label: 'Operación', items: operacion },
         { label: 'Flota', items: flota },
-        { label: 'RRHH', items: rrhh },
-        { label: 'Programación', items: programacionArea },
-        { label: 'Abastecimiento', items: abastecimientoArea },
-        { label: 'Contabilidad', items: contabilidadArea },
+        { label: 'Comercial', items: comercial },
+        { label: 'Finanzas', items: finanzas },
     ];
 
     return (
@@ -247,6 +248,27 @@ export function AppSidebar() {
                             <NavMain key={label} items={items} label={label} />
                         ),
                 )}
+                {/* Todo el que entra tiene al menos su cuenta: siempre se ve. */}
+                <div className="mt-auto pt-4">
+                    <NavMain
+                        items={[
+                            {
+                                ...configuracionNavItem,
+                                isActive:
+                                    isCurrentUrl(configuracion.index()) ||
+                                    isCurrentUrl(
+                                        '/settings',
+                                        undefined,
+                                        true,
+                                    ) ||
+                                    isCurrentUrl('/vueltas/configuracion') ||
+                                    isCurrentUrl(
+                                        '/abastecimiento/configuracion',
+                                    ),
+                            },
+                        ]}
+                    />
+                </div>
             </SidebarContent>
 
             <SidebarFooter>

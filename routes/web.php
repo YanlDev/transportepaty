@@ -7,6 +7,7 @@ use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\ConfiguracionAbastecimientoController;
+use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\ConfiguracionProgramacionController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\CotizacionController;
@@ -48,6 +49,10 @@ Route::post('whatsapp/recibos', ReciboWhatsappController::class)
 
 Route::middleware('auth')->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // La puerta única de la configuración: cada ajuste sigue en su
+    // pantalla, acá se juntan.
+    Route::get('configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
 
     Route::resource('conductores', ConductorController::class)
         ->parameters(['conductores' => 'conductor']);

@@ -47,12 +47,14 @@ it('shows the roles with their permissions and the catalog grouped by module', f
             ->has('modulos', count(Permiso::MODULOS))
             ->where('modulos.0.clave', 'tablero')
             // Cada módulo dice su área, para que el panel se agrupe como el menú.
-            ->where('modulos.1.clave', 'vehiculos')
-            ->where('modulos.1.area', 'Flota')
-            ->where('modulos.3.clave', 'taller')
-            ->where('modulos.3.area', 'Flota')
-            ->where('modulos.5.clave', 'conductores')
-            ->where('modulos.5.area', 'RRHH')
+            ->where('modulos.1.clave', 'programacion')
+            ->where('modulos.1.area', 'Operación')
+            ->where('modulos.2.clave', 'taller')
+            ->where('modulos.2.area', 'Operación')
+            ->where('modulos.5.clave', 'vehiculos')
+            ->where('modulos.5.area', 'Flota')
+            ->where('modulos.8.clave', 'conductores')
+            ->where('modulos.8.area', 'Flota')
         );
 });
 

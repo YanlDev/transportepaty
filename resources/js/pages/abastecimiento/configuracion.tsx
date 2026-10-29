@@ -1,8 +1,8 @@
 import { Head, router, setLayoutProps, useForm } from '@inertiajs/react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
-import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoController';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
+import hub from '@/actions/App/Http/Controllers/ConfiguracionController';
 import { ReglaDialog } from '@/components/abastecimiento/regla-dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -214,8 +214,11 @@ export default function AbastecimientoConfiguracion({
 
     setLayoutProps({
         breadcrumbs: [
-            { title: 'Abastecimiento', href: abastecimiento.index().url },
-            { title: 'Pizarra', href: configuracion.index().url },
+            { title: 'Configuración', href: hub.index().url },
+            {
+                title: 'Pizarra de abastecimiento',
+                href: configuracion.index().url,
+            },
         ],
     });
 

@@ -41,7 +41,7 @@ export function UserMenuContent({ user }: Props) {
                         onClick={cleanup}
                     >
                         <Settings className="mr-2" />
-                        Configuración
+                        Mi cuenta
                     </Link>
                 </DropdownMenuItem>
             </DropdownMenuGroup>

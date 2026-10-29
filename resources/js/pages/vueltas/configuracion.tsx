@@ -1,8 +1,8 @@
 import { Head, router, setLayoutProps, useForm } from '@inertiajs/react';
 import { Pencil, Plus, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
+import hub from '@/actions/App/Http/Controllers/ConfiguracionController';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionProgramacionController';
-import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -377,8 +377,8 @@ export default function ConfiguracionProgramacion({
 
     setLayoutProps({
         breadcrumbs: [
-            { title: 'Programación', href: vueltas.index().url },
-            { title: 'Configuración', href: configuracion.index().url },
+            { title: 'Configuración', href: hub.index().url },
+            { title: 'Rutas y tramos', href: configuracion.index().url },
         ],
     });
 
