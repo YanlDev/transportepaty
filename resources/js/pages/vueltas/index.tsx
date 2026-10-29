@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { DetalleVuelta } from '@/components/vueltas/detalle-vuelta';
 import { GanttVueltas } from '@/components/vueltas/gantt-vueltas';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
-import { ETAPAS, TablaVueltas } from '@/components/vueltas/tabla-vueltas';
+import { TablaVueltas } from '@/components/vueltas/tabla-vueltas';
 import { usePermisos } from '@/hooks/use-permisos';
+import { ETAPAS } from '@/lib/etapas';
 import { cn } from '@/lib/utils';
 import type { OpcionesVuelta, TarjetaVuelta, Vuelta } from '@/types/vueltas';
 

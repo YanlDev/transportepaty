@@ -16,6 +16,7 @@ import {
     galones,
     soles,
 } from '@/components/abastecimiento/barra-combustible';
+import { Placa } from '@/components/placa';
 import { TallerVuelta } from '@/components/taller/taller-vuelta';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -28,14 +29,15 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { AvisosVuelta } from '@/components/vueltas/avisos-vuelta';
+import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
-import { ETAPAS } from '@/components/vueltas/tabla-vueltas';
 import {
     EstadoVueltaBadge,
     TramosVuelta,
 } from '@/components/vueltas/tramos-vuelta';
 import { usePermisos } from '@/hooks/use-permisos';
+import { colorDeSentido } from '@/lib/etapas';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { TramoCombustible, ViaticoTicket } from '@/types/abastecimiento';
@@ -235,7 +237,6 @@ export default function ExpedienteTicket({
         ],
     });
 
-    const etapa = ETAPAS.find((opcion) => opcion.etapa === ticket.etapa);
     const sinPrecio = gastos.abastecimientos.some(
         (registro) => registro.importe === null,
     );
@@ -262,22 +263,12 @@ export default function ExpedienteTicket({
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="flex flex-col gap-1">
                     <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-md border-2 border-foreground/80 bg-background px-2 py-0.5 font-mono text-lg font-bold tracking-wider">
-                            {formatearPlaca(ticket.placa)}
-                        </span>
+                        <Placa placa={ticket.placa} tamano="lg" />
                         <span className="font-mono text-sm text-muted-foreground">
                             {ticket.codigo}
                         </span>
-                        {ticket.estado === 'en_curso' && etapa ? (
-                            <span className="flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium">
-                                <span
-                                    className={cn(
-                                        'size-2 rounded-full',
-                                        etapa.punto,
-                                    )}
-                                />
-                                {etapa.titulo}
-                            </span>
+                        {ticket.estado === 'en_curso' ? (
+                            <EtapaBadge etapa={ticket.etapa} />
                         ) : (
                             <EstadoVueltaBadge vuelta={ticket} />
                         )}
@@ -603,9 +594,9 @@ export default function ExpedienteTicket({
                                                 <span
                                                     className={cn(
                                                         'mr-1.5 text-xs font-medium',
-                                                        guia.sentido === 'ida'
-                                                            ? 'text-amber-700 dark:text-amber-400'
-                                                            : 'text-violet-700 dark:text-violet-400',
+                                                        colorDeSentido(
+                                                            guia.sentido,
+                                                        ),
                                                     )}
                                                 >
                                                     {guia.sentido === 'ida'

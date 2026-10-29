@@ -1,6 +1,7 @@
 import { Link, router } from '@inertiajs/react';
 import { ChevronRight, FileText, Lock, LockOpen, Pencil } from 'lucide-react';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
+import { Placa } from '@/components/placa';
 import { TallerVuelta } from '@/components/taller/taller-vuelta';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,9 +11,8 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
-import { StatusBadge } from '@/components/ui/status-badge';
+import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
-import { ETAPAS } from '@/components/vueltas/tabla-vueltas';
 import {
     EstadoVueltaBadge,
     TramosVuelta,
@@ -43,27 +43,12 @@ export function DetalleVuelta({
                     <>
                         <SheetHeader className="border-b">
                             <SheetTitle className="flex items-center gap-2">
-                                <span className="font-mono">
-                                    {formatearPlaca(vuelta.placa)}
-                                </span>
+                                <Placa placa={vuelta.placa} />
                                 <span className="font-mono text-sm text-muted-foreground">
                                     {vuelta.codigo}
                                 </span>
                                 {vuelta.estado === 'en_curso' ? (
-                                    <StatusBadge
-                                        label={
-                                            ETAPAS.find(
-                                                (etapa) =>
-                                                    etapa.etapa ===
-                                                    vuelta.etapa,
-                                            )?.titulo ?? vuelta.estado_label
-                                        }
-                                        tone={
-                                            vuelta.etapa === 'en_base'
-                                                ? 'success'
-                                                : 'warning'
-                                        }
-                                    />
+                                    <EtapaBadge etapa={vuelta.etapa} />
                                 ) : (
                                     <EstadoVueltaBadge vuelta={vuelta} />
                                 )}

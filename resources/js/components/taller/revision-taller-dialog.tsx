@@ -30,13 +30,16 @@ type FormData = {
 export function RevisionTallerDialog({
     ticket,
     onCerrar,
+    resultadoInicial = '',
 }: {
     ticket: { id: number; codigo: string | null; placa: string } | null;
     onCerrar: () => void;
+    /** Desde los botones grandes del celular llega ya elegido. */
+    resultadoInicial?: FormData['resultado'];
 }) {
     const { data, setData, post, processing, errors, reset, clearErrors } =
         useForm<FormData>({
-            resultado: '',
+            resultado: resultadoInicial,
             disponible_estimado: '',
             motivo: '',
             trabajos: '',

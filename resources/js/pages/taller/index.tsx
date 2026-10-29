@@ -1,8 +1,9 @@
 import { Head, Link, setLayoutProps, usePoll } from '@inertiajs/react';
-import { Search } from 'lucide-react';
+import { CircleCheck, CircleX, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import taller from '@/actions/App/Http/Controllers/TallerController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
+import { Placa } from '@/components/placa';
 import {
     EstadoTallerBadge,
     fechaHoraTaller,
@@ -18,6 +19,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EtapaVuelta, RevisionTaller } from '@/types/vueltas';
@@ -34,13 +36,6 @@ type Ticket = {
     revision: RevisionTaller | null;
     anteriores: RevisionTaller[];
     revisable: boolean;
-};
-
-const ETAPA: Record<EtapaVuelta, string> = {
-    programada: 'Por salir',
-    en_ida: 'En ida',
-    en_vuelta: 'En vuelta',
-    en_base: 'En base',
 };
 
 const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
@@ -71,12 +66,101 @@ const GRUPOS = [
 ] as const;
 
 /**
+ * Un ticket en el celular: la placa grande, a dónde va y los dos botones de
+ * siempre. Pensado para usarse en el patio, con una mano.
+ */
+function TarjetaTaller({
+    ticket,
+    grupo,
+    onRevisar,
+}: {
+    ticket: Ticket;
+    grupo: (typeof GRUPOS)[number]['clave'];
+    onRevisar: (resultado?: 'apto' | 'no_apto') => void;
+}) {
+    return (
+        <article className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+            <div className="flex items-start justify-between gap-2">
+                <div className="flex flex-col gap-1">
+                    <Placa placa={ticket.placa} tamano="lg" />
+                    {ticket.carreta && (
+                        <span className="font-mono text-xs text-muted-foreground">
+                            Carreta {formatearPlaca(ticket.carreta)}
+                        </span>
+                    )}
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                    <Link
+                        href={vueltas.show(ticket.id).url}
+                        className="font-mono text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    >
+                        {ticket.codigo}
+                    </Link>
+                    <EtapaBadge etapa={ticket.etapa} />
+                </div>
+            </div>
+
+            <div className="text-sm">
+                <p className="font-medium">{ticket.ruta ?? 'Sin ruta'}</p>
+                <p className="text-muted-foreground">
+                    Sale {formatearFecha(ticket.inicio)} ·{' '}
+                    {ticket.conductor ?? 'Sin conductor'}
+                </p>
+            </div>
+
+            {ticket.revision && (
+                <div className="flex flex-col gap-1 text-xs">
+                    <EstadoTallerBadge revision={ticket.revision} />
+                    {ticket.revision.motivo && (
+                        <span className="text-muted-foreground">
+                            {ticket.revision.motivo}
+                        </span>
+                    )}
+                </div>
+            )}
+
+            {ticket.revisable &&
+                (grupo === 'apto' ? (
+                    <Button
+                        variant="outline"
+                        className="h-11"
+                        onClick={() => onRevisar()}
+                    >
+                        Revisar de nuevo
+                    </Button>
+                ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                        <Button
+                            className="h-14 bg-emerald-600 text-base text-white hover:bg-emerald-700"
+                            onClick={() => onRevisar('apto')}
+                        >
+                            <CircleCheck className="size-5" />
+                            {grupo === 'no_apto' ? 'Ya está lista' : 'Apto'}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            className="h-14 border-red-300 text-base text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                            onClick={() => onRevisar('no_apto')}
+                        >
+                            <CircleX className="size-5" />
+                            {grupo === 'no_apto' ? 'Cambiar fecha' : 'No apto'}
+                        </Button>
+                    </div>
+                ))}
+        </article>
+    );
+}
+
+/**
  * La bandeja de taller: cada ticket abierto espera el apto antes de pasar a
  * abastecimiento. Si no es apto, taller dice cuándo estará lista la unidad.
  */
 export default function Taller({ tickets }: { tickets: Ticket[] }) {
     const [buscar, setBuscar] = useState('');
-    const [revisando, setRevisando] = useState<Ticket | null>(null);
+    const [revisando, setRevisando] = useState<{
+        ticket: Ticket;
+        resultado?: 'apto' | 'no_apto';
+    } | null>(null);
 
     setLayoutProps({
         breadcrumbs: [{ title: 'Taller', href: taller.index().url }],
@@ -141,7 +225,26 @@ export default function Taller({ tickets }: { tickets: Ticket[] }) {
                                 {lista.length}
                             </span>
                         </h2>
-                        <div className="overflow-x-auto rounded-xl border bg-card">
+                        {/* En el celular: una tarjeta por unidad, con los
+                            botones grandes para el patio. */}
+                        <div className="flex flex-col gap-2 md:hidden">
+                            {lista.length === 0 && (
+                                <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
+                                    {grupo.vacio}
+                                </p>
+                            )}
+                            {lista.map((ticket) => (
+                                <TarjetaTaller
+                                    key={ticket.id}
+                                    ticket={ticket}
+                                    grupo={grupo.clave}
+                                    onRevisar={(resultado) =>
+                                        setRevisando({ ticket, resultado })
+                                    }
+                                />
+                            ))}
+                        </div>
+                        <div className="overflow-x-auto rounded-xl border bg-card max-md:hidden">
                             <Table>
                                 <TableHeader>
                                     <TableRow className="hover:bg-transparent">
@@ -167,10 +270,10 @@ export default function Taller({ tickets }: { tickets: Ticket[] }) {
                                     )}
                                     {lista.map((ticket) => (
                                         <TableRow key={ticket.id}>
-                                            <TableCell className="font-mono whitespace-nowrap">
-                                                {formatearPlaca(ticket.placa)}
+                                            <TableCell className="whitespace-nowrap">
+                                                <Placa placa={ticket.placa} />
                                                 {ticket.carreta && (
-                                                    <span className="block text-xs text-muted-foreground">
+                                                    <span className="mt-1 block font-mono text-xs text-muted-foreground">
                                                         {formatearPlaca(
                                                             ticket.carreta,
                                                         )}
@@ -190,9 +293,10 @@ export default function Taller({ tickets }: { tickets: Ticket[] }) {
                                             </TableCell>
                                             <TableCell className="whitespace-nowrap">
                                                 {formatearFecha(ticket.inicio)}
-                                                <span className="block text-xs text-muted-foreground">
-                                                    {ETAPA[ticket.etapa]}
-                                                </span>
+                                                <EtapaBadge
+                                                    etapa={ticket.etapa}
+                                                    className="mt-1"
+                                                />
                                             </TableCell>
                                             <TableCell className="text-sm">
                                                 {ticket.ruta ?? '—'}
@@ -235,7 +339,9 @@ export default function Taller({ tickets }: { tickets: Ticket[] }) {
                                                                 : 'default'
                                                         }
                                                         onClick={() =>
-                                                            setRevisando(ticket)
+                                                            setRevisando({
+                                                                ticket,
+                                                            })
                                                         }
                                                     >
                                                         {grupo.clave ===
@@ -258,7 +364,9 @@ export default function Taller({ tickets }: { tickets: Ticket[] }) {
             })}
 
             <RevisionTallerDialog
-                ticket={revisando}
+                key={`${revisando?.ticket.id}-${revisando?.resultado ?? ''}`}
+                ticket={revisando?.ticket ?? null}
+                resultadoInicial={revisando?.resultado}
                 onCerrar={() => setRevisando(null)}
             />
         </div>

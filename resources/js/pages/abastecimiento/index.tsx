@@ -14,6 +14,7 @@ import type { InicialAbastecimiento } from '@/components/abastecimiento/registra
 import { ViaticoDialog } from '@/components/abastecimiento/viatico-dialog';
 import type { AccionViatico } from '@/components/abastecimiento/viatico-dialog';
 import { ViaticosTicket } from '@/components/abastecimiento/viaticos-ticket';
+import { Placa } from '@/components/placa';
 import { EstadoTallerBadge } from '@/components/taller/estado-taller';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +33,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { usePermisos } from '@/hooks/use-permisos';
 import { colorTarjeta } from '@/lib/color-tarjeta';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
@@ -50,13 +52,6 @@ type Props = {
     puntos: PuntoRegistro[];
     galonesTanqueLleno: number | null;
 };
-
-const ETAPA = {
-    programada: { texto: 'Por salir', punto: 'bg-sky-500' },
-    en_ida: { texto: 'Ida', punto: 'bg-amber-500' },
-    en_vuelta: { texto: 'Vuelta', punto: 'bg-violet-500' },
-    en_base: { texto: 'En base', punto: 'bg-emerald-500' },
-} as const;
 
 /**
  * Los viáticos del ticket en una barra: lo depositado contra lo que dice la
@@ -272,7 +267,73 @@ export default function AbastecimientoIndex({
                 </div>
             </div>
 
-            <div className="overflow-x-auto rounded-xl border bg-card">
+            {/* En el celular: una tarjeta por ticket, con su barra y los
+                botones grandes. Tocarla abre la ficha completa. */}
+            <div className="flex flex-col gap-2 md:hidden">
+                {filtradas.length === 0 && (
+                    <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                        {vueltas.length === 0
+                            ? 'No hay tickets abiertos.'
+                            : 'Ningún ticket coincide.'}
+                    </p>
+                )}
+                {filtradas.map((vuelta) => (
+                    <article
+                        key={vuelta.id}
+                        className="flex flex-col gap-3 rounded-xl border bg-card p-4"
+                    >
+                        <button
+                            type="button"
+                            onClick={() => setAbiertaId(vuelta.id)}
+                            className="flex items-start justify-between gap-2 text-left"
+                        >
+                            <span className="flex flex-col gap-1">
+                                <Placa
+                                    placa={vuelta.tracto.placa}
+                                    tamano="lg"
+                                />
+                                <span className="text-xs text-muted-foreground">
+                                    {vuelta.conductor ?? 'Sin conductor'}
+                                </span>
+                            </span>
+                            <span className="flex flex-col items-end gap-1">
+                                <span className="font-mono text-xs text-muted-foreground">
+                                    {vuelta.codigo}
+                                </span>
+                                <EtapaBadge etapa={vuelta.etapa} />
+                            </span>
+                        </button>
+                        <BarraCombustible tramos={vuelta.tramos} />
+                        <BarraViaticos vuelta={vuelta} />
+                        {vuelta.bloqueo_gastos !== null ? (
+                            <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                                {vuelta.bloqueo_gastos}
+                            </p>
+                        ) : (
+                            puedeRegistrar && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <Button
+                                        className="h-12 text-base"
+                                        onClick={() => registrarEn(vuelta)}
+                                    >
+                                        <Fuel className="size-5" />
+                                        Combustible
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        className="h-12 text-base"
+                                        onClick={() => setAbiertaId(vuelta.id)}
+                                    >
+                                        Viáticos y detalle
+                                    </Button>
+                                </div>
+                            )
+                        )}
+                    </article>
+                ))}
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border bg-card max-md:hidden">
                 <Table>
                     <TableHeader>
                         <TableRow className="hover:bg-transparent">
@@ -305,7 +366,6 @@ export default function AbastecimientoIndex({
                         )}
                         {filtradas.map((vuelta) => {
                             const falta = faltaTotal(vuelta);
-                            const etapa = ETAPA[vuelta.etapa];
 
                             return (
                                 <TableRow
@@ -313,8 +373,8 @@ export default function AbastecimientoIndex({
                                     className="cursor-pointer"
                                     onClick={() => setAbiertaId(vuelta.id)}
                                 >
-                                    <TableCell className="font-mono font-semibold whitespace-nowrap">
-                                        {formatearPlaca(vuelta.tracto.placa)}
+                                    <TableCell className="whitespace-nowrap">
+                                        <Placa placa={vuelta.tracto.placa} />
                                     </TableCell>
                                     <TableCell
                                         className="font-mono text-xs text-muted-foreground"
@@ -333,15 +393,7 @@ export default function AbastecimientoIndex({
                                         </Link>
                                     </TableCell>
                                     <TableCell>
-                                        <span className="flex items-center gap-1.5 text-xs">
-                                            <span
-                                                className={cn(
-                                                    'size-2 rounded-full',
-                                                    etapa.punto,
-                                                )}
-                                            />
-                                            {etapa.texto}
-                                        </span>
+                                        <EtapaBadge etapa={vuelta.etapa} />
                                         {vuelta.taller?.resultado !==
                                             'apto' && (
                                             <span className="mt-1 block">

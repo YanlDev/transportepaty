@@ -1,5 +1,6 @@
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Placa } from '@/components/placa';
 import { IconoTaller } from '@/components/taller/estado-taller';
 import {
     Table,
@@ -9,41 +10,14 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { formatearFecha, formatearPlaca } from '@/lib/format';
+import { ETAPAS } from '@/lib/etapas';
+import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EtapaVuelta, TarjetaVuelta } from '@/types/vueltas';
 
-export const ETAPAS: {
-    etapa: EtapaVuelta;
-    titulo: string;
-    ayuda: string;
-    punto: string;
-}[] = [
-    {
-        etapa: 'programada',
-        titulo: 'Por salir',
-        ayuda: 'Programadas, todavía sin GR',
-        punto: 'bg-sky-500',
-    },
-    {
-        etapa: 'en_ida',
-        titulo: 'En ida',
-        ayuda: 'De Juliaca o la mina hacia Pisco o Lima',
-        punto: 'bg-amber-500',
-    },
-    {
-        etapa: 'en_vuelta',
-        titulo: 'En vuelta',
-        ayuda: 'Regresando, todavía no llega a la base',
-        punto: 'bg-violet-500',
-    },
-    {
-        etapa: 'en_base',
-        titulo: 'En base',
-        ayuda: 'En Juliaca o la mina, disponibles para programar',
-        punto: 'bg-emerald-500',
-    },
-];
+// Las etapas viven en `@/lib/etapas`: se reexportan para quien ya las
+// tomaba de acá.
+export { ETAPAS } from '@/lib/etapas';
 
 type Columna = 'placa' | 'codigo' | 'conductor' | 'fecha' | 'dias';
 
@@ -264,9 +238,9 @@ function GrupoFilas({
                         onClick={() => onAbrir(vuelta)}
                         className="cursor-pointer"
                     >
-                        <TableCell className="font-mono font-semibold whitespace-nowrap">
+                        <TableCell className="whitespace-nowrap">
                             <span className="flex items-center gap-1.5">
-                                {formatearPlaca(vuelta.placa)}
+                                <Placa placa={vuelta.placa} tamano="sm" />
                                 {vuelta.etapa !== 'en_base' && (
                                     <IconoTaller revision={vuelta.taller} />
                                 )}

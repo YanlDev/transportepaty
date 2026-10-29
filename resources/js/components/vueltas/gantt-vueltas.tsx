@@ -1,9 +1,9 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { Placa } from '@/components/placa';
 import { IconoTaller } from '@/components/taller/estado-taller';
 import { Button } from '@/components/ui/button';
-import { ETAPAS } from '@/components/vueltas/tabla-vueltas';
-import { formatearPlaca } from '@/lib/format';
+import { ETAPAS } from '@/lib/etapas';
 import { cn } from '@/lib/utils';
 import type { ParadaVuelta, TarjetaVuelta } from '@/types/vueltas';
 
@@ -402,9 +402,7 @@ export function GanttVueltas({
                                             punto(vuelta.etapa),
                                         )}
                                     />
-                                    <span className="font-mono text-sm font-semibold">
-                                        {formatearPlaca(vuelta.placa)}
-                                    </span>
+                                    <Placa placa={vuelta.placa} tamano="sm" />
                                     {vuelta.etapa !== 'en_base' && (
                                         <IconoTaller revision={vuelta.taller} />
                                     )}

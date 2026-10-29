@@ -1,4 +1,5 @@
 import { CircleCheck } from 'lucide-react';
+import { colorDeSentido } from '@/lib/etapas';
 import { cn } from '@/lib/utils';
 import type { TramoCombustible } from '@/types/abastecimiento';
 
@@ -58,9 +59,7 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                         <span
                             className={cn(
                                 'text-[11px] font-medium',
-                                tramo.sentido === 'ida'
-                                    ? 'text-amber-700 dark:text-amber-400'
-                                    : 'text-violet-700 dark:text-violet-400',
+                                colorDeSentido(tramo.sentido),
                             )}
                         >
                             {tramo.sentido === 'ida' ? 'Ida' : 'Vuelta'}
