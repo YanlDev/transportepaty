@@ -92,6 +92,18 @@ it('lets authenticated users see the carretas list', function (): void {
         );
 });
 
+it('counts tractos and carretas for the tabs of the units screen', function (): void {
+    Vehiculo::factory()->count(2)->create();
+    Vehiculo::factory()->carreta()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('carretas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('seccion', 'carreta')
+            ->where('conteos', ['tracto' => 2, 'carreta' => 1])
+        );
+});
+
 it('keeps tractos and carretas apart in their own listing', function (): void {
     Vehiculo::factory()->create();
     Vehiculo::factory()->carreta()->create();

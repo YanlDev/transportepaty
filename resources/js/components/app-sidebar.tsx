@@ -4,7 +4,6 @@ import {
     Calculator,
     CalendarCheck,
     ClipboardCheck,
-    Container,
     Fuel,
     IdCard,
     LayoutGrid,
@@ -58,22 +57,14 @@ const dashboardNavItem: NavItem = {
 };
 
 /**
- * Las unidades y quienes las manejan. Tractos y carretas van separados —con
- * su propio ícono— para encontrar cada uno directo, en vez de filtrar por tipo
- * dentro de un listado combinado.
+ * Tractos y carretas en una sola entrada: la pantalla tiene una pestaña para
+ * cada uno.
  */
-const flotaNavItems: NavItem[] = [
-    {
-        title: 'Tractos',
-        href: vehiculos.tractos(),
-        icon: Truck,
-    },
-    {
-        title: 'Carretas',
-        href: vehiculos.carretas(),
-        icon: Container,
-    },
-];
+const unidadesNavItem: NavItem = {
+    title: 'Unidades',
+    href: vehiculos.tractos(),
+    icon: Truck,
+};
 
 /** El semáforo de taller: qué unidad necesita servicio y cuál viene. */
 const mantenimientoNavItem: NavItem = {
@@ -183,7 +174,19 @@ export function AppSidebar() {
     // del panel de permisos (`Permiso::AREAS`)—, así cada rol ve justo su
     // bloque del menú.
     const flota = [
-        ...(puede('vehiculos.ver') ? flotaNavItems : []),
+        // Tractos y carretas son una sola entrada, con pestañas; se marca
+        // en cualquiera de las dos y en la ficha de una unidad.
+        ...(puede('vehiculos.ver')
+            ? [
+                  {
+                      ...unidadesNavItem,
+                      isActive:
+                          isCurrentUrl(vehiculos.tractos()) ||
+                          isCurrentUrl(vehiculos.carretas()) ||
+                          isCurrentUrl('/vehiculos', undefined, true),
+                  },
+              ]
+            : []),
         ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
         ...(puede('taller.ver') ? [tallerNavItem] : []),
     ];

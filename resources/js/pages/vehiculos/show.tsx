@@ -62,6 +62,7 @@ export default function VehiculoShow({
 
     setLayoutProps({
         breadcrumbs: [
+            { title: 'Unidades', href: vehiculos.tractos().url },
             {
                 title: esTracto ? 'Tractos' : 'Carretas',
                 href: (esTracto ? vehiculos.tractos() : vehiculos.carretas())

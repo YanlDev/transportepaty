@@ -92,6 +92,11 @@ class VehiculoController extends Controller
             'vehiculos' => $vehiculos,
             'filtros' => $filtros,
             'seccion' => $tipo->value,
+            // Para las pestañas: tractos y carretas son una sola pantalla.
+            'conteos' => fn (): array => [
+                'tracto' => Vehiculo::query()->where('tipo', TipoVehiculo::Tracto)->count(),
+                'carreta' => Vehiculo::query()->where('tipo', TipoVehiculo::Carreta)->count(),
+            ],
             // Los catálogos de los selectores no dependen de los filtros: van
             // en closures para que una búsqueda que no los pide no los arme.
             'estados' => fn (): array => EstadoVehiculo::options(),

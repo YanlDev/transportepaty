@@ -39,7 +39,7 @@ export function BottomNav() {
             ? [{ title: 'Inicio', href: dashboard(), icon: LayoutGrid }]
             : []),
         ...(puede('vehiculos.ver')
-            ? [{ title: 'Tractos', href: vehiculos.tractos(), icon: Truck }]
+            ? [{ title: 'Unidades', href: vehiculos.tractos(), icon: Truck }]
             : []),
         ...(puede('viajes.ver')
             ? [{ title: 'Guías', href: viajes.index(), icon: Route }]
