@@ -14,6 +14,21 @@ use Illuminate\Support\Collection;
  * por tramo y por punto, los viáticos depositados (y los anulados, con sus
  * movimientos) y lo que suma en soles. Lo leen la bandeja de abastecimiento
  * y el expediente del ticket: los dos ven exactamente lo mismo.
+ *
+ * @phpstan-type GastosTicket array{
+ *     tarjetas: list<array{id: int, nombre: string, color: string|null, parada_id: int}>,
+ *     combustible: list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>,
+ *     total_previsto: float|null,
+ *     total_registrado: float,
+ *     tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null, lleno: bool}>}>,
+ *     viaticos: list<array<string, mixed>>,
+ *     viatico_pendiente: float,
+ *     viatico_depositado: float,
+ *     viaticos_anulados: list<array<string, mixed>>,
+ *     movimientos_viaticos: list<array<string, mixed>>,
+ *     importe_registrado: float,
+ *     abastecimientos: list<array<string, mixed>>
+ * }
  */
 class GastosDelTicket
 {
@@ -24,20 +39,7 @@ class GastosDelTicket
      * por ticket. Los tickets tienen que venir con `paradas.viajes`.
      *
      * @param  Collection<int, Vuelta>  $vueltas
-     * @return array<int, array{
-     *     tarjetas: list<array{id: int, nombre: string, color: string|null, parada_id: int}>,
-     *     combustible: list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>,
-     *     total_previsto: float|null,
-     *     total_registrado: float,
-     *     tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null, lleno: bool}>}>,
-     *     viaticos: list<array<string, mixed>>,
-     *     viatico_pendiente: float,
-     *     viatico_depositado: float,
-     *     viaticos_anulados: list<array<string, mixed>>,
-     *     movimientos_viaticos: list<array<string, mixed>>,
-     *     importe_registrado: float,
-     *     abastecimientos: list<array<string, mixed>>
-     * }>
+     * @return array<int, GastosTicket>
      */
     public function de(Collection $vueltas): array
     {
