@@ -14,6 +14,7 @@ use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\DestinoParticular;
+use App\Models\EnvioWhatsapp;
 use App\Models\OpcionTramo;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
@@ -23,8 +24,11 @@ use App\Models\Vuelta;
 use App\Services\AsignadorVueltas;
 use App\Services\AvisoDeVuelta;
 use App\Services\AvisosPorWhatsapp;
+use App\Services\GastosDelTicket;
+use App\Services\PasosDelTicket;
 use App\Services\ProgramadorVueltas;
 use App\Services\RelojOperativo;
+use App\Services\WhatsappServicio;
 use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\RedirectResponse;
@@ -49,6 +53,8 @@ class VueltaController extends Controller
         private readonly ProgramadorVueltas $programador,
         private readonly AvisoDeVuelta $aviso,
         private readonly AvisosPorWhatsapp $avisos,
+        private readonly GastosDelTicket $gastos,
+        private readonly PasosDelTicket $pasos,
     ) {}
 
     public function index(Request $request): Response
@@ -77,6 +83,31 @@ class VueltaController extends Controller
         return Inertia::render('vueltas/unidad', [
             'tracto' => ['id' => $vehiculo->id, 'placa' => $vehiculo->placa],
             'vueltas' => $vueltas->map(fn (Vuelta $vuelta): array => $this->vuelta($vuelta, $request))->all(),
+            ...$this->opcionesDelFormulario(),
+        ]);
+    }
+
+    /**
+     * El expediente del ticket: todo lo que le pasó, paso a paso, en una
+     * sola pantalla. Cada área sigue trabajando en su bandeja; acá se ve el
+     * conjunto y se salta a donde haga falta.
+     */
+    public function show(Request $request, Vuelta $vuelta, WhatsappServicio $whatsapp): Response
+    {
+        $this->authorize('viewAny', Vuelta::class);
+
+        $vuelta->load([...$this->relaciones(), 'envios'])->loadExists(['abastecimientos', 'viaticos']);
+
+        $gastos = $this->gastos->de(collect([$vuelta]))[$vuelta->id];
+
+        return Inertia::render('vueltas/show', [
+            'ticket' => $this->fila($vuelta, $vuelta->etapa(), $request),
+            ...$this->pasos->de($vuelta, $gastos),
+            'gastos' => $gastos,
+            'guias' => $this->guias($vuelta),
+            'aviso' => $this->avisoDe($vuelta),
+            'puedeAvisar' => $request->user()?->can('avisar', $vuelta) ?? false,
+            'whatsappConectado' => fn (): bool => $whatsapp->conectado(),
             ...$this->opcionesDelFormulario(),
         ]);
     }
@@ -249,6 +280,70 @@ class VueltaController extends Controller
             'revisable' => $request->user()?->can('create', [RevisionTaller::class, $vuelta]) ?? false,
             'cerrable' => $request->user()?->can('cerrar', $vuelta) ?? false,
             'reabrible' => $request->user()?->can('reabrir', $vuelta) ?? false,
+        ];
+    }
+
+    /**
+     * Las GR del ticket en el orden en que se hizo el viaje, cada una con su
+     * tramo.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function guias(Vuelta $vuelta): array
+    {
+        $guias = [];
+
+        foreach ($vuelta->paradas as $parada) {
+            foreach ($parada->viajes as $viaje) {
+                $guias[] = [
+                    'id' => $viaje->id,
+                    'numero_gr' => $viaje->numero_gr,
+                    'fecha_traslado' => $viaje->fecha_traslado->toDateString(),
+                    'sentido' => $parada->sentido->value,
+                    'tramo' => ($parada->lugar_origen ?? $parada->zona_origen?->label() ?? '¿?').' → '.($parada->lugar_destino ?? $parada->zona_destino?->label() ?? '¿?'),
+                    'tipo_carga_label' => $viaje->tipo_carga->label(),
+                    'cliente' => $viaje->cliente,
+                    'peso' => (float) $viaje->peso,
+                    'unidad_peso' => $viaje->unidad_peso,
+                ];
+            }
+        }
+
+        return $guias;
+    }
+
+    /**
+     * Los avisos de WhatsApp del ticket ya armados y hasta dónde llegó cada
+     * uno. Necesita `envios` cargados.
+     *
+     * @return array<string, mixed>
+     */
+    private function avisoDe(Vuelta $vuelta): array
+    {
+        $envios = ['conductor' => null, 'areas' => []];
+
+        // Vienen del más nuevo al más viejo: el primero de cada destino gana.
+        foreach ($vuelta->envios as $envio) {
+            $datos = [
+                'estado' => $envio->estado->value,
+                'estado_label' => $envio->estado->label(),
+                'destino' => $envio->destino,
+                'hora' => ($envio->leido_at ?? $envio->entregado_at ?? $envio->enviado_at ?? $envio->created_at)->toIso8601String(),
+                'error' => $envio->error,
+            ];
+
+            if ($envio->tipo === EnvioWhatsapp::TIPO_CONDUCTOR) {
+                $envios['conductor'] ??= $datos;
+            } elseif ($envio->area_aviso_id !== null) {
+                $envios['areas'][$envio->area_aviso_id] ??= $datos;
+            }
+        }
+
+        return [
+            'mensaje' => $this->aviso->mensajeParaConductor($vuelta),
+            'destinatarios' => $this->aviso->destinatarios($vuelta),
+            'areas' => $this->aviso->avisosDeArea($vuelta),
+            'envios' => $envios,
         ];
     }
 
@@ -466,7 +561,7 @@ class VueltaController extends Controller
             'conductor:id,nombres,apellidos,telefono,telefono_alterno',
             'revisiones.usuario:id,name',
             'paradas.viajes' => fn ($query) => $query
-                ->select(['id', 'parada_vuelta_id', 'numero_gr', 'fecha_traslado', 'peso', 'unidad_peso'])
+                ->select(['id', 'parada_vuelta_id', 'numero_gr', 'fecha_traslado', 'peso', 'unidad_peso', 'cliente', 'origen', 'destino', 'tipo_carga'])
                 ->orderBy('fecha_traslado')
                 ->orderBy('id'),
         ];

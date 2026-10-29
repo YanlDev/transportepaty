@@ -166,3 +166,36 @@ export type TarjetaVuelta = Vuelta & {
 };
 
 export type DiaDeSemana = { fecha: string; programadas: number };
+
+/** Un paso del circuito del ticket, como lo arma `PasosDelTicket`. */
+export type PasoTicket = {
+    clave:
+        | 'programado'
+        | 'taller'
+        | 'abastecimiento_ida'
+        | 'en_ida'
+        | 'regreso'
+        | 'abastecimiento_vuelta'
+        | 'en_vuelta'
+        | 'llego'
+        | 'cerrado';
+    titulo: string;
+    estado: 'hecho' | 'parcial' | 'pendiente' | 'alerta';
+    detalle: string | null;
+    /** `Y-m-d` o `Y-m-d H:i`. */
+    fecha: string | null;
+    por: string | null;
+};
+
+/** Una GR del ticket, con el tramo en que cayó. */
+export type GuiaTicket = {
+    id: number;
+    numero_gr: string;
+    fecha_traslado: string;
+    sentido: Sentido;
+    tramo: string;
+    tipo_carga_label: string;
+    cliente: string;
+    peso: number;
+    unidad_peso: string;
+};

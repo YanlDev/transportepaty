@@ -215,6 +215,7 @@ Route::middleware('auth')->group(function () {
     // La vuelta de cada unidad —ida y regreso— armada desde sus GR.
     Route::get('vueltas', [VueltaController::class, 'index'])->name('vueltas.index');
     Route::get('vueltas/unidades/{vehiculo}', [VueltaController::class, 'unidad'])->name('vueltas.unidad');
+    Route::get('vueltas/{vuelta}', [VueltaController::class, 'show'])->whereNumber('vuelta')->name('vueltas.show');
     Route::post('vueltas', [VueltaController::class, 'store'])->name('vueltas.store');
     Route::put('vueltas/{vuelta}', [VueltaController::class, 'update'])->name('vueltas.update');
     Route::delete('vueltas/{vuelta}', [VueltaController::class, 'destroy'])->name('vueltas.destroy');

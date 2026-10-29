@@ -1,7 +1,8 @@
-import { Head, setLayoutProps, usePoll } from '@inertiajs/react';
+import { Head, Link, setLayoutProps, usePoll } from '@inertiajs/react';
 import { Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import taller from '@/actions/App/Http/Controllers/TallerController';
+import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import {
     EstadoTallerBadge,
     fechaHoraTaller,
@@ -177,7 +178,15 @@ export default function Taller({ tickets }: { tickets: Ticket[] }) {
                                                 )}
                                             </TableCell>
                                             <TableCell className="font-mono text-xs">
-                                                {ticket.codigo}
+                                                <Link
+                                                    href={
+                                                        vueltas.show(ticket.id)
+                                                            .url
+                                                    }
+                                                    className="underline-offset-2 hover:underline"
+                                                >
+                                                    {ticket.codigo}
+                                                </Link>
                                             </TableCell>
                                             <TableCell className="whitespace-nowrap">
                                                 {formatearFecha(ticket.inicio)}

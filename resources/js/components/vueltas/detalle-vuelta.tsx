@@ -1,5 +1,5 @@
 import { Link, router } from '@inertiajs/react';
-import { ChevronRight, Lock, LockOpen, Pencil } from 'lucide-react';
+import { ChevronRight, FileText, Lock, LockOpen, Pencil } from 'lucide-react';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { TallerVuelta } from '@/components/taller/taller-vuelta';
 import { Button } from '@/components/ui/button';
@@ -135,6 +135,12 @@ export function DetalleVuelta({
                                         Reabrir
                                     </Button>
                                 )}
+                                <Button size="sm" asChild>
+                                    <Link href={vueltas.show(vuelta.id).url}>
+                                        <FileText className="size-3.5" />
+                                        Ver expediente
+                                    </Link>
+                                </Button>
                                 <Button variant="ghost" size="sm" asChild>
                                     <Link
                                         href={
