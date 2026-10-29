@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     Building2,
     Calculator,
@@ -149,6 +149,7 @@ const contabilidadNavItem: NavItem = {
 export function AppSidebar() {
     const { puede } = usePermisos();
     const { isCurrentUrl } = useCurrentUrl();
+    const { pendientesMenu } = usePage().props;
 
     // Cotizaciones es un solo módulo con pestañas (cotizador, emitidas,
     // tarifario). Quien puede cotizar entra por el cotizador, que es para lo
@@ -179,12 +180,23 @@ export function AppSidebar() {
 
     // Las secciones son las áreas de la empresa —las mismas del panel de
     // permisos (`Permiso::AREAS`)—, así cada rol ve justo su bloque.
+    // El número de pendientes de hoy junto a cada entrada: se ve desde
+    // cualquier pantalla, no solo desde el Inicio.
     const operacion = [
-        ...(puede('programacion.ver') ? [programacionNavItem] : []),
-        ...(puede('taller.ver') ? [tallerNavItem] : []),
+        ...(puede('programacion.ver')
+            ? [{ ...programacionNavItem, badge: pendientesMenu.programacion }]
+            : []),
+        ...(puede('taller.ver')
+            ? [{ ...tallerNavItem, badge: pendientesMenu.taller }]
+            : []),
         // Facturación entra solo a los viáticos: también ve el área.
         ...(puede('abastecimiento.ver') || puede('abastecimiento.viaticos')
-            ? [abastecimientoNavItem]
+            ? [
+                  {
+                      ...abastecimientoNavItem,
+                      badge: pendientesMenu.abastecimiento,
+                  },
+              ]
             : []),
         ...(puede('viajes.ver') ? [viajesNavItem] : []),
     ];

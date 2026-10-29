@@ -12,6 +12,10 @@ declare module '@inertiajs/core' {
         sharedPageProps: {
             name: string;
             esAmbientePrueba: boolean;
+            /** Pendientes de hoy por entrada del menú (taller, abastecimiento, programacion). */
+            pendientesMenu: Partial<
+                Record<'taller' | 'abastecimiento' | 'programacion', number>
+            >;
             auth: Auth;
             sidebarOpen: boolean;
             [key: string]: unknown;

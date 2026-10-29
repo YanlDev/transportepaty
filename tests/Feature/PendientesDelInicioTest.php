@@ -120,3 +120,11 @@ it('keeps the month summary on the same page', function (): void {
         ->get(route('dashboard'))
         ->assertInertia(fn (Assert $page) => $page->component('dashboard')->has('metaConcentrado')->has('pendientes'));
 });
+
+it('puts the count of each area next to its menu entry', function (): void {
+    ticketMinaPisco();
+
+    actingAs(actorConRol('taller'))
+        ->get(route('taller.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('pendientesMenu', ['taller' => 1]));
+});

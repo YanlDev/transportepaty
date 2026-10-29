@@ -2,7 +2,9 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\PendientesDelInicio;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -51,6 +53,12 @@ class HandleInertiaRequests extends Middleware
                 'permisos' => $user ? $user->getAllPermissions()->pluck('name')->values()->all() : [],
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            // El número junto a Taller, Abastecimiento y Programación. Se
+            // calcula a lo más una vez por minuto por usuario: va en todas
+            // las páginas.
+            'pendientesMenu' => fn (): array => $user
+                ? Cache::remember("pendientes-menu:{$user->id}", 60, fn (): array => app(PendientesDelInicio::class)->porEntradaDelMenu($user))
+                : [],
         ];
     }
 }

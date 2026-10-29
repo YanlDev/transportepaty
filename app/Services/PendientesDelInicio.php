@@ -88,6 +88,29 @@ class PendientesDelInicio
     }
 
     /**
+     * Cuántos pendientes tiene cada entrada del menú, para el número junto a
+     * Taller, Abastecimiento y Programación. Las GR sin facturar no cuentan:
+     * son un atraso acumulado, no algo de hoy.
+     *
+     * @return array<string, int>
+     */
+    public function porEntradaDelMenu(User $usuario): array
+    {
+        $entradas = ['Taller' => 'taller', 'Abastecimiento' => 'abastecimiento', 'Programación' => 'programacion'];
+        $cuentas = [];
+
+        foreach ($this->para($usuario) as $pendiente) {
+            $entrada = $entradas[$pendiente['area']] ?? null;
+
+            if ($entrada !== null) {
+                $cuentas[$entrada] = ($cuentas[$entrada] ?? 0) + $pendiente['cantidad'];
+            }
+        }
+
+        return $cuentas;
+    }
+
+    /**
      * @return Pendiente
      */
     private function porRevisar(): array

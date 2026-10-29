@@ -1,5 +1,5 @@
 import { Link } from '@inertiajs/react';
-import { ArrowRight, CircleCheck } from 'lucide-react';
+import { ChevronRight, CircleCheck } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export type Pendiente = {
@@ -15,127 +15,139 @@ export type Pendiente = {
     items: { texto: string; detalle: string | null; href: string }[];
 };
 
-/** El color del número según cuánto urge; en cero, verde «al día». */
-const TONO: Record<Pendiente['tono'], string> = {
-    alerta: 'text-red-600 dark:text-red-400',
-    aviso: 'text-amber-600 dark:text-amber-400',
-    info: 'text-sky-600 dark:text-sky-400',
+/** Lo más urgente arriba. */
+const ORDEN: Record<Pendiente['tono'], number> = {
+    alerta: 0,
+    aviso: 1,
+    info: 2,
 };
 
-const BORDE: Record<Pendiente['tono'], string> = {
-    alerta: 'border-l-red-500',
-    aviso: 'border-l-amber-500',
-    info: 'border-l-sky-500',
+const PUNTO: Record<Pendiente['tono'], string> = {
+    alerta: 'bg-red-500',
+    aviso: 'bg-amber-500',
+    info: 'bg-sky-500',
 };
 
-function Tarjeta({ pendiente }: { pendiente: Pendiente }) {
-    const alDia = pendiente.cantidad === 0;
+const NUMERO: Record<Pendiente['tono'], string> = {
+    alerta: 'bg-red-500/10 text-red-700 dark:text-red-300',
+    aviso: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    info: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
+};
 
-    return (
-        <article
-            className={cn(
-                'flex flex-col gap-3 rounded-xl border border-l-4 bg-card p-4',
-                alDia ? 'border-l-emerald-500' : BORDE[pendiente.tono],
-            )}
-        >
-            <header className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                    <p className="text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
-                        {pendiente.area}
-                    </p>
-                    <h3 className="text-sm font-semibold">
-                        {pendiente.titulo}
-                    </h3>
-                    <p className="text-xs text-muted-foreground">
-                        {pendiente.ayuda}
-                    </p>
-                </div>
-                {alDia ? (
-                    <span className="flex shrink-0 items-center gap-1 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-                        <CircleCheck className="size-4" />
-                        Al día
-                    </span>
-                ) : (
-                    <span
-                        className={cn(
-                            'shrink-0 text-3xl leading-none font-bold tabular-nums',
-                            TONO[pendiente.tono],
-                        )}
-                    >
-                        {pendiente.cantidad}
-                    </span>
-                )}
-            </header>
-
-            {pendiente.items.length > 0 && (
-                <ul className="flex flex-col divide-y rounded-lg border text-sm">
-                    {pendiente.items.map((item) => (
-                        <li key={item.href + item.texto}>
-                            <Link
-                                href={item.href}
-                                className="flex items-center justify-between gap-2 px-3 py-1.5 hover:bg-accent/50"
-                            >
-                                <span className="truncate font-mono text-xs">
-                                    {item.texto}
-                                </span>
-                                {item.detalle && (
-                                    <span className="shrink-0 text-xs text-muted-foreground">
-                                        {item.detalle}
-                                    </span>
-                                )}
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
-            )}
-
-            {!alDia && (
-                <Link
-                    href={pendiente.href}
-                    className="mt-auto flex items-center gap-1 self-start text-xs font-medium text-primary hover:underline"
-                >
-                    {pendiente.cantidad > pendiente.items.length &&
-                    pendiente.items.length > 0
-                        ? `Ver los ${pendiente.cantidad}`
-                        : 'Ir a resolverlo'}
-                    <ArrowRight className="size-3.5" />
-                </Link>
-            )}
-        </article>
-    );
-}
+/** Cuántos tickets se ven como chips en cada fila. */
+const CHIPS = 3;
 
 /**
- * Lo primero que se ve al entrar: lo que le toca hoy a quien entró, según lo
- * que puede hacer. Cada tarjeta lleva directo a donde se resuelve.
+ * Los pendientes de quien entró, como un panel más del tablero: una fila por
+ * pendiente con algo que hacer (lo urgente primero) y sus tickets a mano; lo
+ * que está al día va junto en una línea al pie.
  */
 export function PendientesPanel({ pendientes }: { pendientes: Pendiente[] }) {
     if (pendientes.length === 0) {
         return null;
     }
 
-    const total = pendientes.reduce(
-        (suma, pendiente) => suma + pendiente.cantidad,
-        0,
-    );
+    const conAlgo = pendientes
+        .filter((pendiente) => pendiente.cantidad > 0)
+        .sort((a, b) => ORDEN[a.tono] - ORDEN[b.tono]);
+    const alDia = pendientes.filter((pendiente) => pendiente.cantidad === 0);
 
     return (
-        <section className="flex flex-col gap-3">
-            <div>
-                <h2 className="text-lg font-semibold tracking-tight">
-                    Lo que te toca hoy
-                </h2>
-                <p className="text-sm text-muted-foreground">
-                    {total === 0
-                        ? 'Todo al día. Cuando algo necesite tu atención, aparece aquí.'
-                        : 'Toca una tarjeta o un ticket para ir directo a resolverlo.'}
+        <section className="rounded-xl border border-border bg-card">
+            <div className="flex items-center justify-between gap-3 border-b p-4">
+                <h2 className="text-sm font-semibold">Pendientes de hoy</h2>
+                <span className="text-xs text-muted-foreground">
+                    {conAlgo.length === 0
+                        ? 'Todo al día'
+                        : `${conAlgo.length} por resolver`}
+                </span>
+            </div>
+
+            {conAlgo.length > 0 && (
+                <ul className="divide-y">
+                    {conAlgo.map((pendiente) => (
+                        <li
+                            key={pendiente.clave}
+                            className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:gap-3"
+                        >
+                            <Link
+                                href={pendiente.href}
+                                className="group flex min-w-0 items-center gap-3 sm:w-72 sm:shrink-0"
+                            >
+                                <span
+                                    className={cn(
+                                        'grid h-6 min-w-6 shrink-0 place-items-center rounded-full px-1.5 text-xs font-bold tabular-nums',
+                                        NUMERO[pendiente.tono],
+                                    )}
+                                >
+                                    {pendiente.cantidad}
+                                </span>
+                                <span className="min-w-0">
+                                    <span className="flex items-center gap-1 text-sm font-medium group-hover:underline">
+                                        {pendiente.titulo}
+                                        <ChevronRight className="size-3.5 text-muted-foreground" />
+                                    </span>
+                                    <span className="block text-xs text-muted-foreground">
+                                        {pendiente.area}
+                                    </span>
+                                </span>
+                            </Link>
+
+                            {pendiente.items.length > 0 && (
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5 pl-9 sm:pl-0">
+                                    {pendiente.items
+                                        .slice(0, CHIPS)
+                                        .map((item) => (
+                                            <Link
+                                                key={item.href + item.texto}
+                                                href={item.href}
+                                                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs hover:border-foreground/30 hover:bg-accent/50"
+                                            >
+                                                <span
+                                                    className={cn(
+                                                        'size-1.5 rounded-full',
+                                                        PUNTO[pendiente.tono],
+                                                    )}
+                                                />
+                                                <span className="font-mono">
+                                                    {item.texto}
+                                                </span>
+                                                {item.detalle && (
+                                                    <span className="text-muted-foreground">
+                                                        {item.detalle}
+                                                    </span>
+                                                )}
+                                            </Link>
+                                        ))}
+                                    {pendiente.cantidad > CHIPS && (
+                                        <Link
+                                            href={pendiente.href}
+                                            className="text-xs text-muted-foreground hover:text-foreground"
+                                        >
+                                            +{pendiente.cantidad - CHIPS} más
+                                        </Link>
+                                    )}
+                                </div>
+                            )}
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {alDia.length > 0 && (
+                <p
+                    className={cn(
+                        'flex flex-wrap items-center gap-x-1.5 gap-y-1 px-4 py-3 text-xs text-muted-foreground',
+                        conAlgo.length > 0 && 'border-t',
+                    )}
+                >
+                    <CircleCheck className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                        Al día:
+                    </span>
+                    {alDia.map((pendiente) => pendiente.titulo).join(' · ')}
                 </p>
-            </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {pendientes.map((pendiente) => (
-                    <Tarjeta key={pendiente.clave} pendiente={pendiente} />
-                ))}
-            </div>
+            )}
         </section>
     );
 }
