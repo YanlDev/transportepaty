@@ -1,5 +1,5 @@
 import { Head, router, setLayoutProps, useForm } from '@inertiajs/react';
-import { Fuel, Plus, Settings, Trash2 } from 'lucide-react';
+import { ChevronRight, Fuel, Plus, Settings, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
 import hub from '@/actions/App/Http/Controllers/ConfiguracionController';
@@ -23,7 +23,6 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { colorTarjeta } from '@/lib/color-tarjeta';
 import { cn } from '@/lib/utils';
 import type {
     OpcionesConfiguracion,
@@ -289,18 +288,6 @@ function etiquetaDe(
         : null;
 }
 
-/** Origen → destino de la tarjeta, con el lugar si lo exige. */
-function rutaDe(
-    regla: ReglaAbastecimiento,
-    opciones: OpcionesConfiguracion,
-): string {
-    const desde = etiquetaDe(opciones.zonas, regla.zona_origen) ?? 'cualquiera';
-    const hasta =
-        etiquetaDe(opciones.zonas, regla.zona_destino) ?? 'cualquiera';
-
-    return `${desde} → ${hasta}${regla.lugares ? ` (${regla.lugares})` : ''}`;
-}
-
 /** El combustible de la tarjeta: el total y cómo se reparte entre puntos. */
 function combustibleDe(regla: ReglaAbastecimiento): {
     total: string;
@@ -371,6 +358,106 @@ function BotonEditar({
     );
 }
 
+/** El color de la línea según el sentido: el mismo de todo el sistema. */
+const COLOR_SENTIDO: Record<string, { linea: string; texto: string }> = {
+    ida: { linea: 'bg-amber-500', texto: 'text-amber-500' },
+    regreso: { linea: 'bg-violet-500', texto: 'text-violet-500' },
+};
+
+const SIN_SENTIDO = {
+    linea: 'bg-muted-foreground/40',
+    texto: 'text-muted-foreground/60',
+};
+
+/**
+ * La ruta dibujada: el origen y el destino unidos por una línea del color
+ * del sentido (la ida en ámbar, la vuelta en violeta), con los puntos donde
+ * se carga marcados encima y sus galones debajo.
+ */
+function RutaDibujada({
+    regla,
+    opciones,
+    conPuntos,
+}: {
+    regla: ReglaAbastecimiento;
+    opciones: OpcionesConfiguracion;
+    conPuntos: boolean;
+}) {
+    const color = regla.sentido
+        ? (COLOR_SENTIDO[regla.sentido] ?? SIN_SENTIDO)
+        : SIN_SENTIDO;
+    const desde = etiquetaDe(opciones.zonas, regla.zona_origen) ?? 'Cualquiera';
+    const hasta =
+        etiquetaDe(opciones.zonas, regla.zona_destino) ?? 'cualquiera';
+    const puntos = conPuntos
+        ? regla.lineas.filter(
+              (linea) => linea.tipo === 'combustible' && linea.punto,
+          )
+        : [];
+
+    return (
+        <div
+            className={cn(
+                'flex items-center gap-2',
+                puntos.length > 0 && 'pb-4',
+            )}
+        >
+            <span className="shrink-0 text-sm font-medium">{desde}</span>
+            <div className="relative h-5 min-w-28 flex-1">
+                <span
+                    className={cn(
+                        'absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 rounded-full',
+                        color.linea,
+                    )}
+                />
+                <ChevronRight
+                    className={cn(
+                        'absolute top-1/2 -right-2 size-5 -translate-y-1/2',
+                        color.texto,
+                    )}
+                    strokeWidth={3}
+                />
+                {puntos.map((linea, indice) => (
+                    <span
+                        key={indice}
+                        className="absolute top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center"
+                        style={{
+                            left: `${((indice + 1) / (puntos.length + 1)) * 100}%`,
+                        }}
+                    >
+                        <span
+                            className={cn(
+                                'size-3 rounded-full ring-2 ring-card',
+                                color.linea,
+                            )}
+                        />
+                        <span className="absolute top-full mt-1 text-[10px] leading-none whitespace-nowrap text-muted-foreground">
+                            {linea.punto}{' '}
+                            <span className="font-medium text-foreground tabular-nums">
+                                {linea.tanque_lleno
+                                    ? 'full'
+                                    : (linea.galones ?? '—')}
+                            </span>
+                        </span>
+                    </span>
+                ))}
+            </div>
+            <span className="shrink-0 pl-2 text-sm font-medium">
+                {hasta}
+                {regla.lugares && (
+                    <span className="text-xs font-normal text-muted-foreground">
+                        {' '}
+                        ({regla.lugares})
+                    </span>
+                )}
+            </span>
+        </div>
+    );
+}
+
+const COLUMNAS =
+    'md:grid-cols-[minmax(0,2.6fr)_minmax(0,0.8fr)_minmax(0,0.7fr)_minmax(0,0.7fr)_auto]';
+
 /** Una ruta de la pizarra en una fila: qué le toca y el ⚙️ para editarla. */
 function FilaRuta({
     grupo,
@@ -383,29 +470,26 @@ function FilaRuta({
 }) {
     const primera = grupo[0];
     const porPeso = grupo.length > 1;
-    const color = colorTarjeta(primera.color);
-    const combustible = combustibleDe(primera);
     const viaticos = viaticosDe(primera);
 
     return (
-        <li className="grid gap-2 px-4 py-3 md:grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,1.4fr)_minmax(0,0.6fr)_auto] md:items-center md:gap-4">
-            <div className="flex min-w-0 items-start gap-2">
-                <span
-                    className={cn(
-                        'mt-1.5 size-2.5 shrink-0 rounded-full border',
-                        color.cabecera,
-                    )}
+        <li
+            className={cn(
+                'grid gap-2 px-4 py-3 md:items-center md:gap-4',
+                COLUMNAS,
+            )}
+        >
+            <div className="min-w-0">
+                <RutaDibujada
+                    regla={primera}
+                    opciones={opciones}
+                    conPuntos={!porPeso}
                 />
-                <div className="min-w-0">
-                    <p className="text-sm font-medium">
-                        {rutaDe(primera, opciones)}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">
-                        {porPeso
-                            ? primera.nombre.replace(/\s*·.*$/, '')
-                            : primera.nombre}
-                    </p>
-                </div>
+                <p className="truncate pt-0.5 text-xs text-muted-foreground">
+                    {porPeso
+                        ? primera.nombre.replace(/\s*·.*$/, '')
+                        : primera.nombre}
+                </p>
             </div>
 
             <p className="text-sm text-muted-foreground">
@@ -434,16 +518,9 @@ function FilaRuta({
                 </div>
             ) : (
                 <>
-                    <div className="min-w-0">
-                        <p className="text-sm font-medium tabular-nums">
-                            {combustible.total}
-                        </p>
-                        {combustible.puntos && (
-                            <p className="truncate text-xs text-muted-foreground">
-                                {combustible.puntos}
-                            </p>
-                        )}
-                    </div>
+                    <p className="text-sm font-medium tabular-nums">
+                        {combustibleDe(primera).total}
+                    </p>
                     <p className="text-sm tabular-nums">
                         {viaticos > 0 ? `S/ ${viaticos.toFixed(2)}` : '—'}
                     </p>
@@ -626,7 +703,12 @@ export default function AbastecimientoConfiguracion({
                                 {seccion.ayuda}
                             </p>
                         </div>
-                        <div className="hidden grid-cols-[minmax(0,1.4fr)_minmax(0,0.7fr)_minmax(0,1.4fr)_minmax(0,0.6fr)_auto] gap-4 border-b px-4 py-2 text-xs text-muted-foreground md:grid">
+                        <div
+                            className={cn(
+                                'hidden gap-4 border-b px-4 py-2 text-xs text-muted-foreground md:grid',
+                                COLUMNAS,
+                            )}
+                        >
                             <span>Ruta</span>
                             <span>Carga</span>
                             <span>Combustible</span>
