@@ -93,3 +93,12 @@ it('has no current step once it is locked', function (): void {
 it('is read by whoever reads the programación', function (): void {
     actingAs(actorConRol('contador'))->get(route('vueltas.show', $this->vuelta))->assertForbidden();
 });
+
+it('tells the board what each ticket needs next', function (): void {
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('tablero.0.id', $this->vuelta->id)
+            ->where('tablero.0.siguiente.clave', 'taller')
+            ->where('tablero.0.siguiente.detalle', 'Esperando la revisión'));
+});

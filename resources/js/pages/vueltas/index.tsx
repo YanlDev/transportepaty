@@ -9,11 +9,17 @@ import { Input } from '@/components/ui/input';
 import { DetalleVuelta } from '@/components/vueltas/detalle-vuelta';
 import { GanttVueltas } from '@/components/vueltas/gantt-vueltas';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
+import { SeguimientoVueltas } from '@/components/vueltas/seguimiento-vueltas';
 import { TablaVueltas } from '@/components/vueltas/tabla-vueltas';
 import { usePermisos } from '@/hooks/use-permisos';
 import { ETAPAS } from '@/lib/etapas';
 import { cn } from '@/lib/utils';
-import type { OpcionesVuelta, TarjetaVuelta, Vuelta } from '@/types/vueltas';
+import type {
+    EtapaVuelta,
+    OpcionesVuelta,
+    TarjetaVuelta,
+    Vuelta,
+} from '@/types/vueltas';
 
 type Props = OpcionesVuelta & {
     /** Hoy: la fecha de salida que se propone al programar. */
@@ -22,7 +28,7 @@ type Props = OpcionesVuelta & {
     tablero: TarjetaVuelta[];
 };
 
-type Vista = 'gantt' | 'tablero';
+type Vista = 'seguimiento' | 'tablero' | 'gantt';
 
 /** El diálogo abierto: para un ticket nuevo o para editar uno. */
 type Dialogo = { vuelta: Vuelta | null } | null;
@@ -51,7 +57,8 @@ function filtrar(lista: TarjetaVuelta[], buscar: string): TarjetaVuelta[] {
  */
 export default function Programacion({ fecha, tablero, ...opciones }: Props) {
     const { puede } = usePermisos();
-    const [vista, setVista] = useState<Vista>('gantt');
+    const [vista, setVista] = useState<Vista>('seguimiento');
+    const [etapa, setEtapa] = useState<EtapaVuelta | null>(null);
     const [buscar, setBuscar] = useState('');
     const [dialogo, setDialogo] = useState<Dialogo>(null);
     const [abiertaId, setAbiertaId] = useState<number | null>(null);
@@ -68,6 +75,9 @@ export default function Programacion({ fecha, tablero, ...opciones }: Props) {
         () => filtrar(tablero, buscar),
         [buscar, tablero],
     );
+    const visibles = etapa
+        ? filtradas.filter((vuelta) => vuelta.etapa === etapa)
+        : filtradas;
 
     // Se busca por id en lo último que llegó: si el ticket cambia con el
     // panel abierto (llega una GR), se ve al día.
@@ -90,8 +100,9 @@ export default function Programacion({ fecha, tablero, ...opciones }: Props) {
                     <div className="inline-flex rounded-lg border p-0.5">
                         {(
                             [
-                                ['gantt', 'Gantt'],
+                                ['seguimiento', 'Seguimiento'],
                                 ['tablero', 'Lista'],
+                                ['gantt', 'Calendario'],
                             ] as const
                         ).map(([valor, etiqueta]) => (
                             <button
@@ -100,6 +111,8 @@ export default function Programacion({ fecha, tablero, ...opciones }: Props) {
                                 onClick={() => setVista(valor)}
                                 className={cn(
                                     'rounded-md px-3 py-1.5 text-sm transition',
+                                    // El calendario no entra en un celular.
+                                    valor === 'gantt' && 'max-md:hidden',
                                     vista === valor
                                         ? 'bg-primary text-primary-foreground'
                                         : 'text-muted-foreground hover:text-foreground',
@@ -110,33 +123,46 @@ export default function Programacion({ fecha, tablero, ...opciones }: Props) {
                         ))}
                     </div>
 
-                    {
-                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                            {ETAPAS.map((etapa) => (
-                                <span
-                                    key={etapa.etapa}
-                                    className="flex items-center gap-1.5"
+                    {/* Cuántos hay en cada etapa; tocar una filtra. */}
+                    <div className="flex flex-wrap gap-1.5 text-xs">
+                        {ETAPAS.map((opcion) => {
+                            const activa = etapa === opcion.etapa;
+
+                            return (
+                                <button
+                                    key={opcion.etapa}
+                                    type="button"
+                                    onClick={() =>
+                                        setEtapa(activa ? null : opcion.etapa)
+                                    }
+                                    aria-pressed={activa}
+                                    className={cn(
+                                        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition',
+                                        activa
+                                            ? opcion.suave
+                                            : 'text-muted-foreground hover:text-foreground',
+                                    )}
                                 >
                                     <span
                                         className={cn(
                                             'size-2 rounded-full',
-                                            etapa.punto,
+                                            opcion.punto,
                                         )}
                                     />
-                                    {etapa.titulo}
+                                    {opcion.titulo}
                                     <span className="font-medium text-foreground tabular-nums">
                                         {
                                             tablero.filter(
                                                 (vuelta) =>
                                                     vuelta.etapa ===
-                                                    etapa.etapa,
+                                                    opcion.etapa,
                                             ).length
                                         }
                                     </span>
-                                </span>
-                            ))}
-                        </div>
-                    }
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
 
                 <div className="flex gap-2">
@@ -170,14 +196,21 @@ export default function Programacion({ fecha, tablero, ...opciones }: Props) {
                 </div>
             </div>
 
-            {vista === 'gantt' ? (
-                <GanttVueltas
-                    vueltas={filtradas}
+            {vista === 'seguimiento' && (
+                <SeguimientoVueltas
+                    vueltas={visibles}
                     onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
                 />
-            ) : (
+            )}
+            {vista === 'tablero' && (
                 <TablaVueltas
-                    vueltas={filtradas}
+                    vueltas={visibles}
+                    onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
+                />
+            )}
+            {vista === 'gantt' && (
+                <GanttVueltas
+                    vueltas={visibles}
                     onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
                 />
             )}

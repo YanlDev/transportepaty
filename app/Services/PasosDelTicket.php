@@ -32,8 +32,48 @@ class PasosDelTicket
      */
     public function de(Vuelta $vuelta, array $gastos): array
     {
-        $pasos = [
-            $this->programado($vuelta),
+        $pasos = $this->pasos($vuelta, $gastos, conAutor: true);
+
+        // El paso en el que está: el primero sin terminar. Uno cerrado ya no
+        // espera nada.
+        $actual = $vuelta->estado === EstadoVuelta::Cerrada
+            ? null
+            : collect($pasos)->first(fn (array $paso): bool => $paso['estado'] !== 'hecho')['clave'] ?? null;
+
+        return ['pasos' => $pasos, 'actual' => $actual];
+    }
+
+    /**
+     * Lo próximo que le falta al ticket, para el seguimiento de la
+     * programación: el primer paso sin terminar. No busca quién lo programó
+     * (en el tablero sería una consulta por ticket). Null si ya está cerrado.
+     *
+     * @param  array{tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @return Paso|null
+     */
+    public function siguiente(Vuelta $vuelta, array $gastos): ?array
+    {
+        if ($vuelta->estado === EstadoVuelta::Cerrada) {
+            return null;
+        }
+
+        foreach ($this->pasos($vuelta, $gastos, conAutor: false) as $paso) {
+            if ($paso['estado'] !== 'hecho') {
+                return $paso;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param  array{tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @return list<Paso>
+     */
+    private function pasos(Vuelta $vuelta, array $gastos, bool $conAutor): array
+    {
+        return [
+            $conAutor ? $this->programado($vuelta) : $this->paso('programado', 'Programado', 'hecho'),
             $this->taller($vuelta),
             $this->abastecimiento($gastos, SentidoTramo::Ida, conViaticos: true),
             $this->enRuta($vuelta, SentidoTramo::Ida),
@@ -43,14 +83,6 @@ class PasosDelTicket
             $this->llego($vuelta),
             $this->cerrado($vuelta),
         ];
-
-        // El paso en el que está: el primero sin terminar. Uno cerrado ya no
-        // espera nada.
-        $actual = $vuelta->estado === EstadoVuelta::Cerrada
-            ? null
-            : collect($pasos)->first(fn (array $paso): bool => $paso['estado'] !== 'hecho')['clave'] ?? null;
-
-        return ['pasos' => $pasos, 'actual' => $actual];
     }
 
     /**

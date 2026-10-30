@@ -163,6 +163,8 @@ export type TarjetaVuelta = Vuelta & {
     cerrable: boolean;
     /** Puede quitarle el candado (solo el último ticket de la unidad). */
     reabrible: boolean;
+    /** Lo próximo que le falta (el primer paso sin terminar); null si está cerrado. */
+    siguiente?: PasoTicket | null;
 };
 
 export type DiaDeSemana = { fecha: string; programadas: number };

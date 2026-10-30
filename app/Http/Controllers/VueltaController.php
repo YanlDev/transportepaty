@@ -237,6 +237,8 @@ class VueltaController extends Controller
             ->with($this->relaciones())->withExists(['abastecimientos', 'viaticos'])
             ->get();
 
+        $gastos = $this->gastos->de($vueltas);
+
         // Una unidad que ya tiene programada la siguiente vuelta se ve ahí,
         // no también como disponible en la base.
         $conSiguiente = $vueltas
@@ -249,7 +251,12 @@ class VueltaController extends Controller
             ->reject(fn (array $fila): bool => $fila['etapa'] === 'en_base'
                 && in_array($fila['vuelta']->tracto_id, $conSiguiente, true))
             ->sortBy(fn (array $fila): string => $fila['vuelta']->inicio?->toDateString().'|'.$fila['vuelta']->tracto->placa)
-            ->map(fn (array $fila): array => $this->fila($fila['vuelta'], $fila['etapa'], $request))
+            ->map(fn (array $fila): array => [
+                ...$this->fila($fila['vuelta'], $fila['etapa'], $request),
+                // Lo próximo que le falta: el seguimiento lo muestra en cada
+                // fila.
+                'siguiente' => $this->pasos->siguiente($fila['vuelta'], $gastos[$fila['vuelta']->id]),
+            ])
             ->all());
     }
 
