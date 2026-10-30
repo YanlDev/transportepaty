@@ -14,6 +14,7 @@ import type { InicialAbastecimiento } from '@/components/abastecimiento/registra
 import { ViaticoDialog } from '@/components/abastecimiento/viatico-dialog';
 import type { AccionViatico } from '@/components/abastecimiento/viatico-dialog';
 import { ViaticosTicket } from '@/components/abastecimiento/viaticos-ticket';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Placa } from '@/components/placa';
 import { EstadoTallerBadge } from '@/components/taller/estado-taller';
 import { Button } from '@/components/ui/button';
@@ -209,6 +210,12 @@ export default function AbastecimientoIndex({
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Abastecimiento" />
+
+            <EncabezadoPantalla
+                titulo="Abastecimiento"
+                descripcion="El combustible y los viáticos de cada ticket, contra lo que dice la pizarra."
+                icono={Fuel}
+            />
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">

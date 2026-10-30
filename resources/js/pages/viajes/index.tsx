@@ -1,10 +1,11 @@
 import { Head, Link } from '@inertiajs/react';
-import { FilePenLine, Route as RouteIcon, Send } from 'lucide-react';
+import { FilePenLine, Route, Route as RouteIcon, Send } from 'lucide-react';
 import { useState } from 'react';
 import emisionGre from '@/actions/App/Http/Controllers/EmisionGreController';
 import viajes, { create } from '@/actions/App/Http/Controllers/ViajeController';
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { EmptyState } from '@/components/empty-state';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
 import { ListadoResponsivo } from '@/components/listado-responsivo';
@@ -58,6 +59,12 @@ export default function ViajesIndex({
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Guías de remisión" />
+
+            <EncabezadoPantalla
+                titulo="Guías de remisión"
+                descripcion="Al subir una GR, cae sola en el ticket de su unidad."
+                icono={Route}
+            />
 
             {/* Arrastrar el PDF desde la carpeta de la GR y soltarlo en la
                 pantalla. Solo para quien puede importar: al visor no le sirve

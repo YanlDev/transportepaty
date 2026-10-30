@@ -11,6 +11,7 @@ import { ResumenCobranza } from '@/components/contabilidad/resumen-cobranza';
 import { TablaCobranza } from '@/components/contabilidad/tabla-cobranza';
 import { TarjetaCobranza } from '@/components/contabilidad/tarjeta-cobranza';
 import { EmptyState } from '@/components/empty-state';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
 import { ListadoResponsivo } from '@/components/listado-responsivo';
@@ -98,6 +99,12 @@ export default function ContabilidadIndex({
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Contabilidad" />
+
+            <EncabezadoPantalla
+                titulo="Contabilidad"
+                descripcion="Qué se facturó, qué se cobró y qué falta, GR por GR."
+                icono={Receipt}
+            />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                 <ResumenCobranza

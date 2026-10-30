@@ -1,8 +1,9 @@
 import { Head, Link, setLayoutProps, usePoll } from '@inertiajs/react';
-import { CalendarPlus, Search, Settings } from 'lucide-react';
+import { CalendarCheck, CalendarPlus, Search, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionProgramacionController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DetalleVuelta } from '@/components/vueltas/detalle-vuelta';
@@ -77,6 +78,12 @@ export default function Programacion({ fecha, tablero, ...opciones }: Props) {
     return (
         <div className="flex h-full flex-1 flex-col gap-5 p-4 md:p-6">
             <Head title="Programación" />
+
+            <EncabezadoPantalla
+                titulo="Programación"
+                descripcion="Cada viaje es un ticket: aquí se programa la ida y la vuelta de cada unidad y se ve en qué etapa va."
+                icono={CalendarCheck}
+            />
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-3">

@@ -9,6 +9,7 @@ import {
     MessageCircle,
     Palette,
     Route,
+    Settings,
     ShieldCheck,
     User,
     Users,
@@ -26,6 +27,7 @@ import { edit as editarPlan } from '@/actions/App/Http/Controllers/PlanMantenimi
 import roles from '@/actions/App/Http/Controllers/RolController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { usePermisos } from '@/hooks/use-permisos';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editProfile } from '@/routes/profile';
@@ -245,13 +247,11 @@ export default function Configuracion({
         <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 p-4 md:p-6">
             <Head title="Configuración" />
 
-            <div>
-                <h1 className="text-lg font-semibold">Configuración</h1>
-                <p className="text-sm text-muted-foreground">
-                    Todos los ajustes del sistema en un solo lugar. Solo ves los
-                    que puedes cambiar.
-                </p>
-            </div>
+            <EncabezadoPantalla
+                titulo="Configuración"
+                descripcion="Todos los ajustes del sistema en un solo lugar. Solo ves los que puedes cambiar."
+                icono={Settings}
+            />
 
             {grupos.map((grupo) => (
                 <section key={grupo.titulo} className="flex flex-col gap-3">

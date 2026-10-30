@@ -1,8 +1,9 @@
 import { Head, Link, setLayoutProps, usePoll } from '@inertiajs/react';
-import { CircleCheck, CircleX, Search } from 'lucide-react';
+import { CircleCheck, CircleX, ClipboardCheck, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import taller from '@/actions/App/Http/Controllers/TallerController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Placa } from '@/components/placa';
 import {
     EstadoTallerBadge,
@@ -187,14 +188,11 @@ export default function Taller({ tickets }: { tickets: Ticket[] }) {
             <Head title="Taller" />
 
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 className="text-lg font-semibold">
-                        Taller · OK de salida
-                    </h1>
-                    <p className="text-sm text-muted-foreground">
-                        Sin el apto, el ticket no pasa a abastecimiento.
-                    </p>
-                </div>
+                <EncabezadoPantalla
+                    titulo="Taller"
+                    descripcion="Antes de salir, cada ticket necesita tu apto. Sin él, abastecimiento no puede cargarle nada."
+                    icono={ClipboardCheck}
+                />
                 <div className="relative md:w-64">
                     <Search className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
