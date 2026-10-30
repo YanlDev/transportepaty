@@ -23,6 +23,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { colorTarjeta } from '@/lib/color-tarjeta';
 import { cn } from '@/lib/utils';
 import type {
     OpcionesConfiguracion,
@@ -489,17 +490,27 @@ function FilaRuta({
                 COLUMNAS,
             )}
         >
-            <div className="min-w-0">
+            <div className="flex min-w-0 flex-col gap-2">
+                {/* El nombre manda: es como se la conoce en la oficina. La
+                    marca es el color de su tarjeta en la pizarra de papel. */}
+                <p className="flex min-w-0 items-center gap-2">
+                    <span
+                        className={cn(
+                            'h-4 w-1.5 shrink-0 rounded-full border',
+                            colorTarjeta(primera.color).cabecera,
+                        )}
+                    />
+                    <span className="truncate text-sm font-semibold">
+                        {porPeso
+                            ? primera.nombre.replace(/\s*·.*$/, '')
+                            : primera.nombre}
+                    </span>
+                </p>
                 <RutaDibujada
                     regla={primera}
                     opciones={opciones}
                     conPuntos={!porPeso}
                 />
-                <p className="truncate pt-0.5 text-xs text-muted-foreground">
-                    {porPeso
-                        ? primera.nombre.replace(/\s*·.*$/, '')
-                        : primera.nombre}
-                </p>
             </div>
 
             <p className="text-sm text-muted-foreground">
