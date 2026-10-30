@@ -99,6 +99,10 @@ export type PuntoAbastecimiento = {
     zona_label: string | null;
     detalle: string | null;
     activo: boolean;
+    /** Lo que se cargó ahí en el mes en curso. */
+    galones_mes?: number;
+    /** El último precio por galón que se pagó ahí. */
+    ultimo_precio?: number | null;
 };
 
 export type LineaRegla = {

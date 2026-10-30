@@ -229,6 +229,19 @@ it('does not take a listed point and a written one at the same time', function (
         ->assertSessionHasErrors('punto_libre');
 });
 
+it('shows for each point what was loaded this month and the last price paid', function (): void {
+    Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'punto_abastecimiento_id' => $this->arequipa->id, 'galones' => 120, 'precio_galon' => 16.2, 'fecha' => now()->subDays(40)->toDateString()]);
+    Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'punto_abastecimiento_id' => $this->arequipa->id, 'galones' => 70, 'precio_galon' => 16.5, 'fecha' => now()->toDateString()]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.configuracion'))
+        ->assertInertia(fn (Assert $page) => $page->where('puntos', function ($puntos): bool {
+            $arequipa = collect($puntos)->firstWhere('nombre', 'Arequipa');
+
+            return $arequipa['galones_mes'] === 70 && $arequipa['ultimo_precio'] === 16.5;
+        }));
+});
+
 it('uses the configured full tank when the gallons are left empty', function (): void {
     ticketApto($this->tracto);
 

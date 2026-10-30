@@ -13,6 +13,7 @@ use App\Models\Ajuste;
 use App\Models\LineaReglaAbastecimiento;
 use App\Models\PuntoAbastecimiento;
 use App\Models\ReglaAbastecimiento;
+use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -30,6 +31,24 @@ class ConfiguracionAbastecimientoController extends Controller
     {
         $this->authorize('configurar', Abastecimiento::class);
 
+        // Lo que se cargó en cada punto este mes y el último precio que se
+        // pagó ahí: sirve para ver qué grifo se usa y negociar convenios.
+        $mes = RelojOperativo::fechaDeHoy()->startOfMonth()->toDateString();
+        $galonesDelMes = Abastecimiento::query()
+            ->whereNotNull('punto_abastecimiento_id')
+            ->whereDate('fecha', '>=', $mes)
+            ->selectRaw('punto_abastecimiento_id, sum(galones) as galones')
+            ->groupBy('punto_abastecimiento_id')
+            ->pluck('galones', 'punto_abastecimiento_id');
+        $ultimosPrecios = Abastecimiento::query()
+            ->whereNotNull('punto_abastecimiento_id')
+            ->whereNotNull('precio_galon')
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->get(['punto_abastecimiento_id', 'precio_galon'])
+            ->unique('punto_abastecimiento_id')
+            ->pluck('precio_galon', 'punto_abastecimiento_id');
+
         return Inertia::render('abastecimiento/configuracion', [
             'galonesTanqueLleno' => Ajuste::valor(Ajuste::GALONES_TANQUE_LLENO),
             'puntos' => PuntoAbastecimiento::query()
@@ -42,6 +61,8 @@ class ConfiguracionAbastecimientoController extends Controller
                     'zona_label' => $punto->zona?->label(),
                     'detalle' => $punto->detalle,
                     'activo' => $punto->activo,
+                    'galones_mes' => round((float) ($galonesDelMes[$punto->id] ?? 0), 2),
+                    'ultimo_precio' => isset($ultimosPrecios[$punto->id]) ? (float) $ultimosPrecios[$punto->id] : null,
                 ])
                 ->all(),
             'reglas' => ReglaAbastecimiento::query()

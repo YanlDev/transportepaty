@@ -176,7 +176,7 @@ export function ReglaDialog({
             <DialogContent className="flex flex-col overflow-hidden md:max-h-[90dvh] md:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>
-                        {regla ? 'Editar tarjeta' : 'Nueva tarjeta'}
+                        {regla ? 'Editar ruta' : 'Nueva ruta'}
                     </DialogTitle>
                     <DialogDescription>
                         Lo que no se elija vale para cualquiera. Si varias
