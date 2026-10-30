@@ -268,9 +268,17 @@ class ClienteController extends Controller
 
         $cliente->update($request->validated());
 
+        // Cambió a quién se le cobran sus despachos: los viajes ya importados
+        // pasan al destinatario, o vuelven a él.
+        $reasignados = $cliente->wasChanged('cliente_es_destinatario')
+            ? $cliente->reasignarClienteDeSusViajes()
+            : 0;
+
         return to_route('clientes.index', $request->query())->with('toast', [
             'type' => 'success',
-            'message' => 'Cliente actualizado correctamente.',
+            'message' => $reasignados > 0
+                ? "Cliente actualizado y {$reasignados} viaje(s) con el cliente corregido."
+                : 'Cliente actualizado correctamente.',
         ]);
     }
 

@@ -28,6 +28,7 @@ type FormData = {
     email: string;
     direccion: string;
     recurrente: boolean;
+    cliente_es_destinatario: boolean;
     activo: boolean;
     notas: string;
 };
@@ -43,11 +44,13 @@ export function ClienteForm({ mode, cliente }: Props) {
         email: cliente?.email ?? '',
         direccion: cliente?.direccion ?? '',
         recurrente: cliente?.recurrente ?? false,
+        cliente_es_destinatario: cliente?.cliente_es_destinatario ?? false,
         activo: cliente?.activo ?? true,
         notas: cliente?.notas ?? '',
     });
 
     const recurrenteId = useId();
+    const destinatarioId = useId();
     const activoId = useId();
 
     const { url } = usePage();
@@ -208,6 +211,32 @@ export function ClienteForm({ mode, cliente }: Props) {
                         />
                         <Label htmlFor={recurrenteId} className="font-normal">
                             Cliente recurrente
+                        </Label>
+                    </div>
+
+                    {/* Para quien despacha mercadería que paga el comprador:
+                        Porcelanato envía a las tiendas de Juliaca y el flete
+                        se le factura a cada tienda. */}
+                    <div className="flex items-start gap-2 sm:col-span-2">
+                        <Checkbox
+                            id={destinatarioId}
+                            checked={data.cliente_es_destinatario}
+                            onCheckedChange={(value) =>
+                                setData(
+                                    'cliente_es_destinatario',
+                                    value === true,
+                                )
+                            }
+                        />
+                        <Label
+                            htmlFor={destinatarioId}
+                            className="flex flex-col items-start gap-0.5 font-normal"
+                        >
+                            El cliente es el destinatario
+                            <span className="text-xs text-muted-foreground">
+                                En sus GR, el viaje se le asigna a quien recibe
+                                la carga, no a este remitente.
+                            </span>
                         </Label>
                     </div>
 

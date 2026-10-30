@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\ImportadorViaje;
 use Database\Factories\ClienteFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -17,6 +18,10 @@ use Illuminate\Support\Str;
  * alias corto para mostrar, y los datos de contacto que hoy viven en la
  * cabeza de alguien.
  *
+ * Si `cliente_es_destinatario` está marcado, el cliente de sus viajes no es
+ * él sino el destinatario de cada GR: despacha mercadería que se le factura
+ * al comprador (Porcelanato Latino a las tiendas de Juliaca).
+ *
  * @property int $id
  * @property string $ruc
  * @property string $razon_social
@@ -27,6 +32,7 @@ use Illuminate\Support\Str;
  * @property string|null $email
  * @property string|null $direccion
  * @property bool $recurrente
+ * @property bool $cliente_es_destinatario
  * @property bool $activo
  * @property string|null $notas
  * @property-read Collection<int, Viaje> $viajes
@@ -46,6 +52,7 @@ use Illuminate\Support\Str;
     'email',
     'direccion',
     'recurrente',
+    'cliente_es_destinatario',
     'activo',
     'notas',
 ])]
@@ -83,6 +90,46 @@ class Cliente extends Model
     public function viajes(): HasMany
     {
         return $this->hasMany(Viaje::class);
+    }
+
+    /**
+     * Vuelve a decidir el cliente de los viajes que este cliente despachó como
+     * remitente, según `cliente_es_destinatario`: el destinatario de cada GR,
+     * o él mismo. Los viajes con subcontratador no se tocan: ahí el cliente
+     * es quien subcontrató (Crisar en las GR de Ajeper).
+     *
+     * @return int Cuántos viajes cambiaron de cliente.
+     */
+    public function reasignarClienteDeSusViajes(): int
+    {
+        $cambiados = 0;
+
+        Viaje::query()->conAnuladas()->where('remitente_ruc', $this->ruc)->each(function (Viaje $viaje) use (&$cambiados): void {
+            $esDelRemitente = $viaje->cliente_ruc === $this->ruc;
+            $esDelDestinatario = $viaje->destinatario_ruc !== null && $viaje->cliente_ruc === $viaje->destinatario_ruc;
+
+            if (! $esDelRemitente && ! $esDelDestinatario) {
+                return;
+            }
+
+            [$nombre, $ruc] = $this->cliente_es_destinatario && $viaje->destinatario_ruc !== null
+                ? [ImportadorViaje::normalizarRazonSocial($viaje->destinatario), $viaje->destinatario_ruc]
+                : [$viaje->remitente ?? $viaje->cliente, $this->ruc];
+
+            if ($ruc === $viaje->cliente_ruc) {
+                return;
+            }
+
+            $viaje->forceFill([
+                'cliente' => $nombre,
+                'cliente_ruc' => $ruc,
+                'cliente_id' => self::porRuc($ruc)?->id,
+            ])->saveQuietly();
+
+            $cambiados++;
+        });
+
+        return $cambiados;
     }
 
     /**
@@ -148,6 +195,7 @@ class Cliente extends Model
     {
         return [
             'recurrente' => 'boolean',
+            'cliente_es_destinatario' => 'boolean',
             'activo' => 'boolean',
         ];
     }

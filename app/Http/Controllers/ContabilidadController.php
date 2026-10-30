@@ -79,7 +79,7 @@ class ContabilidadController extends Controller
             // en closures para que una búsqueda que no los pide no los arme.
             'estados' => fn (): array => EstadoCobranza::options(),
             'monedas' => fn (): array => Moneda::options(),
-            'clientes' => fn (): array => Viaje::opcionesDeCliente(),
+            'clientes' => fn (): array => $this->opcionesCliente(),
             'meses' => fn (): array => $this->cobranza->opcionesDeMes(),
             'cuentas' => fn (): array => $this->opcionesCuentas(),
             // No dependen de los filtros: una factura sin GR no cae en ningún
@@ -214,6 +214,8 @@ class ContabilidadController extends Controller
             'detraccion_manual' => $factura->detraccion_manual,
             // La del PDF, para mostrarla cuando se corrigió a mano.
             'detraccion_impresa' => $this->cifra($factura->detraccion_impresa),
+            // El cliente paga el total y la detracción la deposita la empresa.
+            'detraccion_por_empresa' => $factura->detraccion_por_empresa,
             // Las cifras son las impresas en el PDF: no se recalculan.
             'desde_pdf' => $factura->desde_pdf,
             'neto' => $this->cifra($factura->neto),
@@ -225,6 +227,7 @@ class ContabilidadController extends Controller
             'dias_vencida' => $factura->diasVencida(),
             'cuenta_bancaria_id' => $factura->cuenta_bancaria_id,
             'cuenta' => $factura->cuentaBancaria?->alias,
+            'numero_operacion' => $factura->numero_operacion,
             'fecha_detraccion' => $factura->fecha_detraccion?->toDateString(),
             'constancia_detraccion' => $factura->constancia_detraccion,
             'observacion' => $factura->observacion,
@@ -316,6 +319,30 @@ class ContabilidadController extends Controller
         }
 
         return $mes;
+    }
+
+    /**
+     * Los clientes de las GR más a quienes se facturó: la tienda de Juliaca a
+     * la que se le cobra no siempre es el cliente que figura en la GR.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function opcionesCliente(): array
+    {
+        $facturados = Factura::query()
+            ->whereNotNull('cliente_razon_social')
+            ->whereHas('viajes')
+            ->distinct()
+            ->pluck('cliente_razon_social');
+
+        return collect(Viaje::opcionesDeCliente())
+            ->pluck('value')
+            ->merge($facturados)
+            ->unique()
+            ->sort()
+            ->map(fn (string $cliente): array => ['value' => $cliente, 'label' => $cliente])
+            ->values()
+            ->all();
     }
 
     /**

@@ -159,6 +159,34 @@ it('records the subcontratador as the cliente, not the remitente printed on the 
         ->and($viaje->cliente_ruc)->toBe('20603930844');
 });
 
+/**
+ * Porcelanato despacha a tiendas de Juliaca y el flete se le factura a cada
+ * tienda: marcado así en el padrón, el cliente del viaje es el destinatario.
+ */
+it('records the destinatario as the cliente when the padrón says so for the remitente', function (): void {
+    Cliente::factory()->create(['ruc' => '20609175789', 'cliente_es_destinatario' => true]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-porcelanato-a-tienda-juliaca.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    $viaje = Viaje::query()->sole();
+
+    expect($viaje->cliente)->toBe('ARREDONDO DAMIAN RAUL ISAAC')
+        ->and($viaje->cliente_ruc)->toBe('10310435223')
+        ->and($viaje->remitente_ruc)->toBe('20609175789');
+});
+
+it('keeps the remitente as the cliente when the padrón does not mark it', function (): void {
+    Cliente::factory()->create(['ruc' => '20609175789']);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-porcelanato-a-tienda-juliaca.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    expect(Viaje::query()->sole()->cliente_ruc)->toBe('20609175789');
+});
+
 it('uppercases the cliente so the same company does not look like two different ones', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('viajes.store'), ['archivos' => [gr('gr-san-lorenzo-multi-guia.pdf')]])

@@ -31,6 +31,9 @@ abstract class ClienteRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'direccion' => ['nullable', 'string', 'max:255'],
             'recurrente' => ['required', 'boolean'],
+            // El cliente de sus despachos es el destinatario de cada GR
+            // (Porcelanato Latino factura el flete a las tiendas).
+            'cliente_es_destinatario' => ['sometimes', 'boolean'],
             'activo' => ['required', 'boolean'],
             'notas' => ['nullable', 'string', 'max:2000'],
         ];

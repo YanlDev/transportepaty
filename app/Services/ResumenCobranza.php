@@ -77,7 +77,13 @@ class ResumenCobranza
                         ->orWhereHas('facturas', fn ($query) => $query->whereLike('numero', "%{$buscar}%", caseSensitive: false));
                 });
             })
-            ->when($filtros['cliente'], fn ($query, string $cliente) => $query->where('cliente', $cliente))
+            // El cliente de la GR o a quién se le facturó: el flete puede
+            // cobrársele a la tienda que recibió la carga y no al proveedor
+            // que la despachó.
+            ->when($filtros['cliente'], fn ($query, string $cliente) => $query->where(function ($query) use ($cliente): void {
+                $query->where('cliente', $cliente)
+                    ->orWhereHas('facturas', fn ($query) => $query->where('cliente_razon_social', $cliente));
+            }))
             ->when($filtros['mes'], function ($query, string $mes): void {
                 // `Y-m` acotado a los días del mes en vez de `whereYear` +
                 // `whereMonth`: así el índice de `fecha_traslado` sigue
@@ -122,7 +128,9 @@ class ResumenCobranza
      */
     private function conDetraccionPendiente(Builder $query): Builder
     {
-        return $query->where('detraccion', '>', 0)->whereNull('fecha_detraccion');
+        return $query->where('detraccion', '>', 0)
+            ->whereNull('fecha_detraccion')
+            ->where('detraccion_por_empresa', false);
     }
 
     /**
@@ -133,6 +141,11 @@ class ResumenCobranza
      * Por cobrar es lo que falta que deposite el cliente, en sus dos partes:
      * el neto a la cuenta de la empresa y la detracción al Banco de la
      * Nación. Cobrado es la suma de lo que ya entró por cualquiera de los dos.
+     * Cuando la detracción la deposita la empresa no es por cobrar ni cobrado:
+     * va aparte, como lo que la empresa tiene pendiente de depositar.
+     *
+     * La detracción se deposita siempre en soles, así que va siempre en el
+     * bloque de soles, aunque la factura sea en dólares.
      *
      * Los totales se calculan sobre facturas distintas, no sobre filas: una
      * factura que cubre tres viajes aparece en tres filas y sumarla tres veces
@@ -149,21 +162,35 @@ class ResumenCobranza
                 'viajes.id',
                 $this->consulta($filtros)->reorder()->select('viajes.id'),
             ))
-            ->get(['id', 'monto', 'neto', 'detraccion', 'moneda', 'fecha_pago', 'fecha_detraccion']);
+            ->get(['id', 'monto', 'neto', 'detraccion', 'detraccion_por_empresa', 'moneda', 'fecha_pago', 'fecha_detraccion']);
 
-        $porMoneda = $facturas
-            ->groupBy(fn (Factura $factura): string => $factura->moneda->value)
-            ->map(fn ($grupo, string $moneda): array => [
-                'moneda' => $moneda,
-                'simbolo' => Moneda::from($moneda)->simbolo(),
-                'por_cobrar' => round((float) $grupo->whereNull('fecha_pago')->sum('neto'), 2),
-                'detraccion_por_cobrar' => round((float) $grupo->whereNull('fecha_detraccion')->sum('detraccion'), 2),
-                'cobrado' => round(
-                    (float) $grupo->whereNotNull('fecha_pago')->sum('neto')
-                    + (float) $grupo->whereNotNull('fecha_detraccion')->sum('detraccion'),
-                    2,
-                ),
-            ])
+        $monedas = $facturas->map(fn (Factura $factura): Moneda => $factura->moneda)
+            ->when($facturas->contains(fn (Factura $factura): bool => (float) $factura->detraccion > 0), fn ($monedas) => $monedas->push(Moneda::Soles))
+            ->unique(fn (Moneda $moneda): string => $moneda->value)
+            ->sortBy(fn (Moneda $moneda): int => $moneda === Moneda::Soles ? 0 : 1);
+
+        $porMoneda = $monedas
+            ->map(function (Moneda $moneda) use ($facturas): array {
+                $propias = $facturas->filter(fn (Factura $factura): bool => $factura->moneda === $moneda);
+                $detracciones = $moneda === Moneda::Soles ? $facturas : $facturas->take(0);
+
+                return [
+                    'moneda' => $moneda->value,
+                    'simbolo' => $moneda->simbolo(),
+                    'por_cobrar' => round((float) $propias->whereNull('fecha_pago')->sum('neto'), 2),
+                    'detraccion_por_cobrar' => round((float) $detracciones
+                        ->filter(fn (Factura $factura): bool => $factura->faltaDetraccion())
+                        ->sum('detraccion'), 2),
+                    'detraccion_por_depositar' => round((float) $detracciones
+                        ->filter(fn (Factura $factura): bool => $factura->detraccionPorDepositar())
+                        ->sum('detraccion'), 2),
+                    'cobrado' => round(
+                        (float) $propias->whereNotNull('fecha_pago')->sum('neto')
+                        + $detracciones->sum(fn (Factura $factura): float => $factura->detraccionCobrada()),
+                        2,
+                    ),
+                ];
+            })
             ->values()
             ->all();
 

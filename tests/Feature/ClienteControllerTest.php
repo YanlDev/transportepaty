@@ -171,6 +171,35 @@ it('keeps its own RUC when updating', function (): void {
     expect($cliente->fresh()->alias)->toBe('Minsur Perú');
 });
 
+/**
+ * Marcar al remitente corrige los viajes ya importados: pasan al destinatario
+ * de cada GR. Desmarcarlo los devuelve. Los subcontratados no se tocan.
+ */
+it('moves the trips of a remitente to their destinatario when marked, and back when unmarked', function (): void {
+    $porcelanato = Cliente::factory()->create(['ruc' => '20609175789', 'alias' => 'Porcelanato Latino']);
+    $tienda = Cliente::factory()->create(['ruc' => '20600812913', 'alias' => 'Melma']);
+    $remitente = ['remitente' => 'PORCELANATO LATINO SOCIEDAD ANONIMA CERRADA', 'remitente_ruc' => '20609175789'];
+
+    $aMelma = Viaje::factory()->create([...$remitente, 'cliente' => 'PORCELANATO LATINO SOCIEDAD ANONIMA CERRADA', 'cliente_ruc' => '20609175789', 'cliente_id' => $porcelanato->id, 'destinatario' => 'Importaciones Melma S.A.C.', 'destinatario_ruc' => '20600812913']);
+    $subcontratado = Viaje::factory()->create([...$remitente, 'cliente' => 'CRISAR LOGISTICA S.A.C.', 'cliente_ruc' => '20603930844', 'destinatario' => 'OTRA TIENDA', 'destinatario_ruc' => '20111111111']);
+
+    actingAs(actorConRol('admin'))
+        ->put(route('clientes.update', $porcelanato), datosCliente(['ruc' => '20609175789', 'cliente_es_destinatario' => true]))
+        ->assertSessionHasNoErrors();
+
+    expect($aMelma->fresh()->cliente)->toBe('IMPORTACIONES MELMA S.A.C.')
+        ->and($aMelma->fresh()->cliente_ruc)->toBe('20600812913')
+        ->and($aMelma->fresh()->cliente_id)->toBe($tienda->id)
+        ->and($subcontratado->fresh()->cliente_ruc)->toBe('20603930844');
+
+    actingAs(actorConRol('admin'))
+        ->put(route('clientes.update', $porcelanato), datosCliente(['ruc' => '20609175789', 'cliente_es_destinatario' => false]))
+        ->assertSessionHasNoErrors();
+
+    expect($aMelma->fresh()->cliente)->toBe('PORCELANATO LATINO SOCIEDAD ANONIMA CERRADA')
+        ->and($aMelma->fresh()->cliente_id)->toBe($porcelanato->id);
+});
+
 it('shows the client ficha with its recent trips', function (): void {
     $cliente = Cliente::factory()->create();
 

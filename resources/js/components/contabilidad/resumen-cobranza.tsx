@@ -33,15 +33,32 @@ export function ResumenCobranza({
                         </p>
                     </div>
                     {/* Va aparte del neto porque entra por otro lado: el
-                        cliente la deposita en el Banco de la Nación. */}
-                    <div>
-                        <p className="text-xs text-muted-foreground">
-                            Detracción por cobrar
-                        </p>
-                        <p className="text-xl font-semibold text-sky-700 tabular-nums dark:text-sky-400">
-                            {monto.simbolo} {cifra(monto.detraccion_por_cobrar)}
-                        </p>
-                    </div>
+                        cliente la deposita en el Banco de la Nación, y
+                        siempre en soles, así que solo va en ese bloque. */}
+                    {monto.moneda === 'PEN' && (
+                        <div>
+                            <p className="text-xs text-muted-foreground">
+                                Detracción por cobrar
+                            </p>
+                            <p className="text-xl font-semibold text-sky-700 tabular-nums dark:text-sky-400">
+                                {monto.simbolo}{' '}
+                                {cifra(monto.detraccion_por_cobrar)}
+                            </p>
+                        </div>
+                    )}
+                    {/* No es plata por cobrar: es de Paty, que la deposita por
+                        los clientes que le pagan el total. */}
+                    {monto.detraccion_por_depositar > 0 && (
+                        <div>
+                            <p className="text-xs text-muted-foreground">
+                                Detracción que deposita Paty
+                            </p>
+                            <p className="text-xl font-semibold text-violet-700 tabular-nums dark:text-violet-400">
+                                {monto.simbolo}{' '}
+                                {cifra(monto.detraccion_por_depositar)}
+                            </p>
+                        </div>
+                    )}
                     <div>
                         <p className="text-xs text-muted-foreground">Cobrado</p>
                         <p className="text-xl font-semibold text-emerald-700 tabular-nums dark:text-emerald-400">

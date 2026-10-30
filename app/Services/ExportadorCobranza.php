@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\EstadoCobranza;
+use App\Enums\Moneda;
 use App\Models\Factura;
 use App\Models\Viaje;
 use Carbon\CarbonInterface;
@@ -72,6 +73,7 @@ class ExportadorCobranza
         'Días vencida',
         'Fecha pago neto',
         'Cuenta',
+        'N° operación',
         'Fecha detracción',
         'Constancia detracción',
         'Observación',
@@ -97,6 +99,7 @@ class ExportadorCobranza
         'Moneda',
         'Fecha pago neto',
         'Cuenta',
+        'N° operación',
         'Fecha detracción',
         'Constancia detracción',
         'Observación',
@@ -217,10 +220,12 @@ class ExportadorCobranza
 
         $fila = 4;
 
-        foreach ($facturas->groupBy(fn (Factura $factura): string => $factura->moneda->value) as $moneda => $delaMoneda) {
-            $fila = $this->escribirTotalesDeMoneda($hoja, $fila, (string) $moneda, $delaMoneda);
-            $fila = $this->escribirAntiguedad($hoja, $fila, $delaMoneda);
-            $fila = $this->escribirPorCliente($hoja, $fila, $delaMoneda);
+        foreach ($this->monedasDelResumen($facturas) as $moneda) {
+            $delBloque = $facturas->filter(fn (Factura $factura): bool => $this->vaEnElBloque($factura, $moneda));
+
+            $fila = $this->escribirTotalesDeMoneda($hoja, $fila, $moneda, $delBloque);
+            $fila = $this->escribirAntiguedad($hoja, $fila, $moneda, $delBloque);
+            $fila = $this->escribirPorCliente($hoja, $fila, $moneda, $delBloque);
         }
 
         if ($facturas->isEmpty()) {
@@ -238,28 +243,65 @@ class ExportadorCobranza
     }
 
     /**
+     * Las monedas con bloque propio en el resumen: las de las facturas, y
+     * soles siempre que haya detracciones, que se depositan en soles aunque la
+     * factura sea en dólares.
+     *
+     * @param  Collection<int, Factura>  $facturas
+     * @return array<int, Moneda>
+     */
+    private function monedasDelResumen(Collection $facturas): array
+    {
+        $monedas = $facturas->map(fn (Factura $factura): Moneda => $factura->moneda)->all();
+
+        if ($facturas->contains(fn (Factura $factura): bool => (float) $factura->detraccion > 0)) {
+            $monedas[] = Moneda::Soles;
+        }
+
+        return collect($monedas)
+            ->unique(fn (Moneda $moneda): string => $moneda->value)
+            ->sortBy(fn (Moneda $moneda): int => $moneda === Moneda::Soles ? 0 : 1)
+            ->values()
+            ->all();
+    }
+
+    /** La factura aporta al bloque por su neto, o al de soles por su detracción. */
+    private function vaEnElBloque(Factura $factura, Moneda $moneda): bool
+    {
+        return $factura->moneda === $moneda
+            || ($moneda === Moneda::Soles && (float) $factura->detraccion > 0);
+    }
+
+    /**
      * Las cifras grandes de una moneda: sumar soles con dólares da un número
      * que no significa nada, así que cada moneda va en su bloque.
      *
      * @param  Collection<int, Factura>  $facturas
      */
-    private function escribirTotalesDeMoneda(Worksheet $hoja, int $fila, string $moneda, Collection $facturas): int
+    private function escribirTotalesDeMoneda(Worksheet $hoja, int $fila, Moneda $moneda, Collection $facturas): int
     {
-        $this->titulo($hoja, $fila, "Totales en {$moneda}");
+        $this->titulo($hoja, $fila, "Totales en {$moneda->value}");
         $fila++;
 
-        $vencidas = $facturas->filter(fn (Factura $factura): bool => ($factura->diasVencida() ?? 0) > 0);
+        $propias = $facturas->filter(fn (Factura $factura): bool => $factura->moneda === $moneda);
+        $vencidas = $facturas->filter(fn (Factura $factura): bool => ($factura->diasVencida() ?? 0) > 0 && $this->pendiente($factura, $moneda) > 0);
 
         $cifras = [
-            'Facturas' => [$facturas->count(), '0'],
-            'Total facturado (con IGV)' => [$this->suma($facturas, 'total'), self::FORMATO_DINERO],
-            'Neto por cobrar' => [$facturas->sum(fn (Factura $factura): float => $this->netoPendiente($factura)), self::FORMATO_DINERO],
-            'Detracción por cobrar' => [$facturas->sum(fn (Factura $factura): float => $this->detraccionPendiente($factura)), self::FORMATO_DINERO],
-            'Cobrado (neto + detracción)' => [$facturas->sum(fn (Factura $factura): float => $this->cobrado($factura)), self::FORMATO_DINERO],
-            'Vencido sin cobrar' => [$vencidas->sum(fn (Factura $factura): float => $this->pendiente($factura)), self::FORMATO_DINERO],
+            'Facturas' => [$propias->count(), '0'],
+            'Total facturado (con IGV)' => [$this->suma($propias, 'total'), self::FORMATO_DINERO],
+            'Neto por cobrar' => [$facturas->sum(fn (Factura $factura): float => $this->netoPendiente($factura, $moneda)), self::FORMATO_DINERO],
+            'Detracción por cobrar' => [$facturas->sum(fn (Factura $factura): float => $this->detraccionPendiente($factura, $moneda)), self::FORMATO_DINERO],
+            'Detracción que deposita Paty' => [$facturas->sum(fn (Factura $factura): float => $this->detraccionPorDepositar($factura, $moneda)), self::FORMATO_DINERO],
+            'Cobrado (neto + detracción)' => [$facturas->sum(fn (Factura $factura): float => $this->cobrado($factura, $moneda)), self::FORMATO_DINERO],
+            'Vencido sin cobrar' => [$vencidas->sum(fn (Factura $factura): float => $this->pendiente($factura, $moneda)), self::FORMATO_DINERO],
             'Facturas vencidas' => [$vencidas->count(), '0'],
-            'Facturas sin monto cargado' => [$facturas->whereNull('total')->count(), '0'],
+            'Facturas sin monto cargado' => [$propias->whereNull('total')->count(), '0'],
         ];
+
+        // La detracción solo existe en soles.
+        if ($moneda !== Moneda::Soles) {
+            unset($cifras['Detracción por cobrar'], $cifras['Detracción que deposita Paty']);
+        }
 
         foreach ($cifras as $etiqueta => [$valor, $formato]) {
             $hoja->setCellValue([1, $fila], $etiqueta);
@@ -279,14 +321,14 @@ class ExportadorCobranza
      *
      * @param  Collection<int, Factura>  $facturas
      */
-    private function escribirAntiguedad(Worksheet $hoja, int $fila, Collection $facturas): int
+    private function escribirAntiguedad(Worksheet $hoja, int $fila, Moneda $moneda, Collection $facturas): int
     {
         $this->titulo($hoja, $fila, 'Antigüedad de lo que falta cobrar');
         $fila++;
         $this->encabezado($hoja, $fila, ['Tramo', 'Facturas', 'Neto', 'Detracción', 'Total pendiente']);
         $fila++;
 
-        $pendientes = $facturas->filter(fn (Factura $factura): bool => $this->pendiente($factura) > 0);
+        $pendientes = $facturas->filter(fn (Factura $factura): bool => $this->pendiente($factura, $moneda) > 0);
 
         foreach (self::TRAMOS as $tramo => [$desde, $hasta]) {
             $delTramo = $pendientes->filter(function (Factura $factura) use ($desde, $hasta): bool {
@@ -298,9 +340,9 @@ class ExportadorCobranza
             $hoja->fromArray([
                 $tramo,
                 $delTramo->count(),
-                round($delTramo->sum(fn (Factura $factura): float => $this->netoPendiente($factura)), 2),
-                round($delTramo->sum(fn (Factura $factura): float => $this->detraccionPendiente($factura)), 2),
-                round($delTramo->sum(fn (Factura $factura): float => $this->pendiente($factura)), 2),
+                round($delTramo->sum(fn (Factura $factura): float => $this->netoPendiente($factura, $moneda)), 2),
+                round($delTramo->sum(fn (Factura $factura): float => $this->detraccionPendiente($factura, $moneda)), 2),
+                round($delTramo->sum(fn (Factura $factura): float => $this->pendiente($factura, $moneda)), 2),
             ], null, 'A'.$fila, true);
 
             if ($desde !== null && $delTramo->isNotEmpty()) {
@@ -318,7 +360,7 @@ class ExportadorCobranza
     /**
      * @param  Collection<int, Factura>  $facturas
      */
-    private function escribirPorCliente(Worksheet $hoja, int $fila, Collection $facturas): int
+    private function escribirPorCliente(Worksheet $hoja, int $fila, Moneda $moneda, Collection $facturas): int
     {
         $this->titulo($hoja, $fila, 'Por cliente');
         $fila++;
@@ -331,19 +373,21 @@ class ExportadorCobranza
         // el PDF de la factura, y por nombre quedaría partida en dos.
         $porCliente = $facturas
             ->groupBy(fn (Factura $factura): string => $this->rucDe($factura) ?? $this->clienteDe($factura))
-            ->sortByDesc(fn (Collection $delCliente): float => $delCliente->sum(fn (Factura $factura): float => $this->pendiente($factura)));
+            ->sortByDesc(fn (Collection $delCliente): float => $delCliente->sum(fn (Factura $factura): float => $this->pendiente($factura, $moneda)));
 
         foreach ($porCliente as $delCliente) {
+            $propias = $delCliente->filter(fn (Factura $factura): bool => $factura->moneda === $moneda);
+
             $hoja->fromArray([
                 $this->clienteDe($delCliente->first()),
-                $delCliente->count(),
-                round($this->suma($delCliente, 'total'), 2),
-                round($delCliente->sum(fn (Factura $factura): float => $this->netoPendiente($factura)), 2),
-                round($delCliente->sum(fn (Factura $factura): float => $this->detraccionPendiente($factura)), 2),
-                round($delCliente->sum(fn (Factura $factura): float => $this->cobrado($factura)), 2),
+                $propias->count(),
+                round($this->suma($propias, 'total'), 2),
+                round($delCliente->sum(fn (Factura $factura): float => $this->netoPendiente($factura, $moneda)), 2),
+                round($delCliente->sum(fn (Factura $factura): float => $this->detraccionPendiente($factura, $moneda)), 2),
+                round($delCliente->sum(fn (Factura $factura): float => $this->cobrado($factura, $moneda)), 2),
                 round($delCliente
                     ->filter(fn (Factura $factura): bool => ($factura->diasVencida() ?? 0) > 0)
-                    ->sum(fn (Factura $factura): float => $this->pendiente($factura)), 2),
+                    ->sum(fn (Factura $factura): float => $this->pendiente($factura, $moneda)), 2),
             ], null, 'A'.$fila, true);
             $fila++;
         }
@@ -421,6 +465,7 @@ class ExportadorCobranza
                 $factura->moneda->value,
                 $factura->fecha_pago === null ? null : $this->fecha($factura->fecha_pago),
                 $factura->cuentaBancaria?->alias,
+                $factura->numero_operacion,
                 $factura->fecha_detraccion === null ? null : $this->fecha($factura->fecha_detraccion),
                 $factura->constancia_detraccion,
                 $factura->observacion,
@@ -439,7 +484,7 @@ class ExportadorCobranza
             $this->filaTotales($hoja, $ultima + 1, 2, range(9, 13), etiqueta: 1);
         }
 
-        $this->darFormatoTabla($hoja, count(self::ENCABEZADOS_FACTURAS), max($ultima, 1), fechas: [2, 3, 15, 17], dinero: range(9, 13), totales: $ultima > 1);
+        $this->darFormatoTabla($hoja, count(self::ENCABEZADOS_FACTURAS), max($ultima, 1), fechas: [2, 3, 15, 18], dinero: range(9, 13), totales: $ultima > 1);
     }
 
     // ─── Por GR ─────────────────────────────────────────────────────────────
@@ -500,7 +545,7 @@ class ExportadorCobranza
         $hoja->getStyle([self::COLUMNA_INICIO_COBRANZA, 1, self::COLUMNA_INICIO_COBRANZA, max($ultima, 1)])
             ->getBorders()->getLeft()->setBorderStyle(Border::BORDER_MEDIUM);
 
-        $this->darFormatoTabla($hoja, count(self::ENCABEZADOS_POR_GR), max($ultima, 1), fechas: [1, 16, 24, 26, 28], dinero: range(17, 22), totales: $ultima > 1);
+        $this->darFormatoTabla($hoja, count(self::ENCABEZADOS_POR_GR), max($ultima, 1), fechas: [1, 16, 24, 26, 29], dinero: range(17, 22), totales: $ultima > 1);
         if ($ultima > 1) {
             $this->formatear($hoja, 12, 2, $ultima, '#,##0.00');
 
@@ -545,6 +590,7 @@ class ExportadorCobranza
             $factura?->diasVencida(),
             $factura?->fecha_pago === null ? null : $this->fecha($factura->fecha_pago),
             $factura?->cuentaBancaria?->alias,
+            $factura?->numero_operacion,
             $factura?->fecha_detraccion === null ? null : $this->fecha($factura->fecha_detraccion),
             $factura?->constancia_detraccion,
             $factura === null ? $viaje->motivo_no_facturable : $factura->observacion,
@@ -584,25 +630,34 @@ class ExportadorCobranza
 
     // ─── Cifras de una factura ──────────────────────────────────────────────
 
-    private function netoPendiente(Factura $factura): float
+    // Cada cifra se pide en una moneda: el neto cuenta en la de la factura y
+    // la detracción, que se deposita siempre en soles, solo en soles.
+
+    private function netoPendiente(Factura $factura, Moneda $moneda): float
     {
-        return $factura->fecha_pago === null ? (float) $factura->neto : 0.0;
+        return $factura->moneda === $moneda && $factura->fecha_pago === null ? (float) $factura->neto : 0.0;
     }
 
-    private function detraccionPendiente(Factura $factura): float
+    private function detraccionPendiente(Factura $factura, Moneda $moneda): float
     {
-        return $factura->faltaDetraccion() ? (float) $factura->detraccion : 0.0;
+        return $moneda === Moneda::Soles && $factura->faltaDetraccion() ? (float) $factura->detraccion : 0.0;
     }
 
-    private function pendiente(Factura $factura): float
+    /** No es plata por cobrar: es la que la empresa tiene que depositar. */
+    private function detraccionPorDepositar(Factura $factura, Moneda $moneda): float
     {
-        return $this->netoPendiente($factura) + $this->detraccionPendiente($factura);
+        return $moneda === Moneda::Soles && $factura->detraccionPorDepositar() ? (float) $factura->detraccion : 0.0;
     }
 
-    private function cobrado(Factura $factura): float
+    private function pendiente(Factura $factura, Moneda $moneda): float
     {
-        return ($factura->fecha_pago === null ? 0.0 : (float) $factura->neto)
-            + ($factura->fecha_detraccion === null ? 0.0 : (float) $factura->detraccion);
+        return $this->netoPendiente($factura, $moneda) + $this->detraccionPendiente($factura, $moneda);
+    }
+
+    private function cobrado(Factura $factura, Moneda $moneda): float
+    {
+        return ($factura->moneda === $moneda && $factura->fecha_pago !== null ? (float) $factura->neto : 0.0)
+            + ($moneda === Moneda::Soles ? $factura->detraccionCobrada() : 0.0);
     }
 
     /**

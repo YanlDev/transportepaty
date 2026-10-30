@@ -137,9 +137,10 @@ class LectorGuiaRemision
             // GR: quien use estos campos decide si lo usa para reemplazar al
             // cliente (ver `ImportadorViaje`).
             ...$this->extraerEmpresa('subcontratador', 'Datos del subcontratador:', $texto),
-            // Quién paga el flete. Solo informativo: el cliente sigue siendo
-            // el subcontratador o el remitente —cuando paga un comprador
-            // (Hatun Wasi en GR de Porcelanato) no se le cobra a él—.
+            // Quién paga el flete. Solo informativo: el cliente lo decide
+            // `ImportadorViaje::clienteReal()` —el subcontratador, el
+            // destinatario si el padrón marca así al remitente (Porcelanato),
+            // o el remitente—.
             ...$this->extraerEmpresa('pagador_flete', 'Datos de pagador de flete:', $texto),
             'guias_remitente' => $this->extraerGuiasRemitente($texto),
             'peso' => $this->capturar('/Peso Bruto total de la carga:\s*([\d,]+(?:\.\d+)?)/u', $texto),

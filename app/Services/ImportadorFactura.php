@@ -74,6 +74,11 @@ class ImportadorFactura
                 // recalcula después.
                 'detraccion_redondeada' => $campos['cliente_ruc'] !== TipoCarga::RUC_MINSUR
                     && round($campos['detraccion']) === $campos['detraccion'],
+                // Con detracción y el neto pendiente igual al total, el cliente
+                // paga todo y la detracción la deposita la empresa.
+                'detraccion_por_empresa' => $campos['detraccion'] > 0
+                    && $campos['neto'] !== null
+                    && abs($campos['neto'] - $campos['total']) < 0.005,
             ]);
 
             $factura->guardarCifrasImpresas([

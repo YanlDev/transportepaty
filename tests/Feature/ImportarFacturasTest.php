@@ -292,3 +292,30 @@ it('links every GR a Minsur factura cites in its lines', function (): void {
 
     expect(Factura::query()->sole()->viajes()->count())->toBe(13);
 });
+
+/**
+ * Melma, cliente chico de Juliaca: paga el total a la empresa y la detracción
+ * la deposita la empresa. El PDF lo dice con el neto pendiente igual al total.
+ */
+it('marks the detraccion as deposited by the company when the client pays the total', function (): void {
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.importar'), ['archivos' => [facturaPdf('factura-melma-detraccion-por-empresa')]]);
+
+    $factura = Factura::query()->sole();
+
+    expect([$factura->total, $factura->detraccion, $factura->neto])->toBe(['2500.00', '100.00', '2500.00'])
+        ->and($factura->detraccion_por_empresa)->toBeTrue();
+
+    // Cobrado el total, la factura está pagada: la detracción ya no es del cliente.
+    $factura->update(['fecha_pago' => '2026-10-25']);
+
+    expect($factura->fresh()->estado()->value)->toBe('pagado')
+        ->and($factura->fresh()->detraccionPorDepositar())->toBeTrue();
+});
+
+it('leaves the detraccion to the client when the printed neto discounts it', function (): void {
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.importar'), ['archivos' => [facturaPdf('factura-crisar-dos-gr')]]);
+
+    expect(Factura::query()->sole()->detraccion_por_empresa)->toBeFalse();
+});

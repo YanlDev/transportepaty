@@ -86,11 +86,16 @@ class ResumenTablero
     private function viajesDelRango(string $desde, string $hasta): Collection
     {
         return Viaje::query()
-            // El alias del padrón es lo que se muestra; sin precargarlo,
-            // `nombreCliente()` dispara una consulta por viaje.
-            ->with('clienteDelPadron:id,alias')
+            // El alias del padrón es lo que se muestra, y las facturas dicen a
+            // quién se le cobró; sin precargarlos, `nombreClienteComercial()`
+            // dispara consultas por viaje.
+            ->with([
+                'clienteDelPadron:id,alias',
+                'facturas:facturas.id,fecha_emision,cliente_razon_social,cliente_ruc',
+                'facturas.clienteDelPadron:id,ruc,alias',
+            ])
             ->whereBetween('fecha_traslado', [$desde, $hasta])
-            ->get(['cliente', 'cliente_id', 'fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni', 'tipo_carga']);
+            ->get(['id', 'cliente', 'cliente_id', 'fecha_traslado', 'tracto_id', 'placa_tracto', 'carreta_id', 'placa_carreta', 'conductor_id', 'conductor_dni', 'tipo_carga']);
     }
 
     private function esDeMinsur(Viaje $viaje): bool
@@ -224,7 +229,8 @@ class ResumenTablero
 
     /**
      * Cuántos viajes reales —no GR— tiene cada cliente en el rango, con el
-     * porcentaje que representa. Se listan los más grandes uno por uno y el
+     * porcentaje que representa. El cliente es a quién se le facturó, si ya
+     * se facturó (ver `Viaje::nombreClienteComercial()`). Se listan los más grandes uno por uno y el
      * resto se junta en una sola barra de «otros».
      *
      * @param  Collection<int, Viaje>  $viajes
@@ -233,7 +239,7 @@ class ResumenTablero
     private function viajesPorCliente(Collection $viajes): array
     {
         $porCliente = $viajes
-            ->groupBy(fn (Viaje $viaje): string => $viaje->nombreCliente())
+            ->groupBy(fn (Viaje $viaje): string => $viaje->nombreClienteComercial())
             ->map(fn (Collection $delCliente): int => Viaje::contarViajesReales($delCliente))
             ->sortDesc();
 

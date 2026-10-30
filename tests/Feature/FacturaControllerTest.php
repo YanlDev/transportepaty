@@ -148,10 +148,15 @@ it('records the cobro with its cuenta', function (): void {
         ->patch(route('facturas.update', $factura), ['cuenta_bancaria_id' => $cuenta->id])
         ->assertSessionHasNoErrors();
 
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['numero_operacion' => '00451287'])
+        ->assertSessionHasNoErrors();
+
     $factura->refresh();
 
     expect($factura->fecha_pago?->toDateString())->toBe('2026-09-20')
         ->and($factura->cuenta_bancaria_id)->toBe($cuenta->id)
+        ->and($factura->numero_operacion)->toBe('00451287')
         // Entró el neto, pero la detracción todavía no.
         ->and($factura->estado()->value)->toBe('falta_detraccion');
 
@@ -719,4 +724,28 @@ it('fills the cliente facturado of the old facturas from their GR', function ():
     expect($aMano->fresh()->cliente_razon_social)->toBe('MOLINORTE TRADING S.A.C.')
         ->and($aMano->fresh()->cliente_ruc)->toBe('20512345678')
         ->and($delPdf->fresh()->cliente_razon_social)->toBe('MINSUR S. A.');
+});
+
+/**
+ * Los clientes chicos pagan el total y la detracción la deposita la empresa:
+ * el neto pasa a ser el total, y desmarcarlo lo devuelve.
+ */
+it('makes the neto the total when the company deposits the detraccion', function (): void {
+    $factura = Factura::factory()->create(['monto' => 7500]);
+
+    expect([$factura->total, $factura->detraccion, $factura->neto])->toBe(['8850.00', '354.00', '8496.00']);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion_por_empresa' => true])
+        ->assertSessionHasNoErrors();
+
+    expect($factura->fresh()->neto)->toBe('8850.00')
+        ->and($factura->fresh()->detraccion)->toBe('354.00')
+        ->and($factura->fresh()->faltaDetraccion())->toBeFalse();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['detraccion_por_empresa' => false])
+        ->assertSessionHasNoErrors();
+
+    expect($factura->fresh()->neto)->toBe('8496.00');
 });

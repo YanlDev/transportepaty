@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\EstadoCobranza;
 use App\Enums\Moneda;
 use App\Services\DesgloseFactura;
+use App\Services\ImportadorViaje;
 use App\Services\RelojOperativo;
 use Carbon\CarbonInterface;
 use Database\Factories\FacturaFactory;
@@ -39,6 +40,16 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * hasta que se corrija el valor o el total, que la vuelven a calcular. En
  * una subida en PDF, quitarla devuelve la impresa (`detraccion_impresa`).
  *
+ * Casi siempre es el cliente quien deposita la detracción en el Banco de la
+ * Nación. Los clientes chicos le pagan a la empresa el total y es la empresa
+ * la que la deposita (`detraccion_por_empresa`): entonces el neto que se le
+ * cobra al cliente es el total, y la detracción ya no es una deuda del
+ * cliente sino un pendiente de la empresa (`detraccionPorDepositar()`).
+ *
+ * La detracción se deposita siempre en soles, aunque la factura sea en
+ * dólares: en una factura en dólares es la cifra en soles al tipo de cambio,
+ * y el neto, en dólares, ya la descuenta convertida.
+ *
  * Una factura subida en PDF (`desde_pdf`) guarda las cifras impresas sin
  * recalcularlas, trae el PDF en la colección `archivo` y recuerda las GR que
  * cita (`gr_citadas`) o el período que cobra, para asociarse a sus viajes.
@@ -56,10 +67,12 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property bool $detraccion_redondeada
  * @property bool $detraccion_manual
  * @property string|null $detraccion_impresa
+ * @property bool $detraccion_por_empresa
  * @property string|null $neto
  * @property Moneda $moneda
  * @property Carbon|null $fecha_pago
  * @property int|null $cuenta_bancaria_id
+ * @property string|null $numero_operacion
  * @property Carbon|null $fecha_detraccion
  * @property string|null $constancia_detraccion
  * @property string|null $observacion
@@ -82,9 +95,11 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'tasa_detraccion',
     'detraccion_redondeada',
     'detraccion_manual',
+    'detraccion_por_empresa',
     'moneda',
     'fecha_pago',
     'cuenta_bancaria_id',
+    'numero_operacion',
     'fecha_detraccion',
     'constancia_detraccion',
     'observacion',
@@ -137,7 +152,33 @@ class Factura extends Model implements HasMedia
             $factura->tasa_detraccion ??= (string) config('transpaty.facturacion.detraccion');
         });
 
-        static::saving(fn (Factura $factura) => $factura->desglosar());
+        static::saving(function (Factura $factura): void {
+            $factura->desglosar();
+            $factura->aplicarQuienDepositaLaDetraccion();
+        });
+    }
+
+    /**
+     * Si la detracción la deposita la empresa, el cliente paga el total y ese
+     * es el neto. Si se desmarca en una factura ya guardada, el neto vuelve a
+     * descontarla. Solo en una ya guardada: una factura nueva en dólares trae
+     * la detracción en soles y su neto impreso no se toca.
+     */
+    private function aplicarQuienDepositaLaDetraccion(): void
+    {
+        if ($this->total === null) {
+            return;
+        }
+
+        if ($this->detraccion_por_empresa) {
+            $this->neto = $this->total;
+
+            return;
+        }
+
+        if ($this->exists && $this->isDirty('detraccion_por_empresa')) {
+            $this->neto = (string) round((float) $this->total - (float) $this->detraccion, 2);
+        }
     }
 
     /**
@@ -235,6 +276,29 @@ class Factura extends Model implements HasMedia
     }
 
     /**
+     * El cliente facturado en el padrón, por RUC.
+     *
+     * @return BelongsTo<Cliente, $this>
+     */
+    public function clienteDelPadron(): BelongsTo
+    {
+        return $this->belongsTo(Cliente::class, 'cliente_ruc', 'ruc');
+    }
+
+    /**
+     * A quién se facturó, como se muestra: el alias del padrón si el RUC está
+     * dado de alta, y si no la razón social impresa. Null si la factura no
+     * dice a quién.
+     *
+     * Requiere `clienteDelPadron` precargada para no caer en N+1.
+     */
+    public function nombreCliente(): ?string
+    {
+        return $this->clienteDelPadron->alias
+            ?? ($this->cliente_razon_social === null ? null : ImportadorViaje::normalizarRazonSocial($this->cliente_razon_social));
+    }
+
+    /**
      * Por cobrar, cobrada solo en parte o cobrada del todo. Nunca devuelve
      * `SinFacturar`: si hay factura, algo se facturó — ese caso es el del
      * viaje sin facturas, y lo resuelve `Viaje::estadoCobranza()`.
@@ -254,10 +318,35 @@ class Factura extends Model implements HasMedia
             : EstadoCobranza::Pagado;
     }
 
-    /** Lleva detracción y el cliente todavía no la depositó. */
+    /** Lleva detracción, la deposita el cliente y todavía no lo hizo. */
     public function faltaDetraccion(): bool
     {
-        return (float) $this->detraccion > 0 && $this->fecha_detraccion === null;
+        return ! $this->detraccion_por_empresa
+            && (float) $this->detraccion > 0
+            && $this->fecha_detraccion === null;
+    }
+
+    /**
+     * Lleva detracción, la deposita la empresa y todavía no lo hizo. No es
+     * plata por cobrar: es plata de la empresa que tiene que pasar de su
+     * cuenta al Banco de la Nación.
+     */
+    public function detraccionPorDepositar(): bool
+    {
+        return $this->detraccion_por_empresa
+            && (float) $this->detraccion > 0
+            && $this->fecha_detraccion === null;
+    }
+
+    /**
+     * Lo que el cliente ya depositó de la detracción. Cero si la deposita la
+     * empresa: ese depósito es plata de la empresa, no un cobro.
+     */
+    public function detraccionCobrada(): float
+    {
+        return ! $this->detraccion_por_empresa && $this->fecha_detraccion !== null
+            ? (float) $this->detraccion
+            : 0.0;
     }
 
     /**
@@ -309,6 +398,7 @@ class Factura extends Model implements HasMedia
             'desde_pdf' => 'boolean',
             'detraccion_redondeada' => 'boolean',
             'detraccion_manual' => 'boolean',
+            'detraccion_por_empresa' => 'boolean',
             'monto' => 'decimal:2',
             'tasa_igv' => 'decimal:4',
             'igv' => 'decimal:2',

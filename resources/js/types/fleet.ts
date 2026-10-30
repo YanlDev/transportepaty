@@ -384,6 +384,8 @@ export type Cliente = {
     email: string | null;
     direccion: string | null;
     recurrente: boolean;
+    /** El cliente de sus despachos es el destinatario de cada GR. */
+    cliente_es_destinatario: boolean;
     activo: boolean;
     notas: string | null;
 };

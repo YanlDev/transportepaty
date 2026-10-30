@@ -7,6 +7,7 @@ use App\Enums\TipoDocumentoConductor;
 use App\Enums\TipoNovedad;
 use App\Models\Conductor;
 use App\Models\ConductorDocumento;
+use App\Models\Factura;
 use App\Models\Novedad;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
@@ -504,5 +505,26 @@ it('counts document expiry boundaries the same way the fichas do', function (): 
             ->where('documentos.sin_fecha', 0)
             ->where('documentos.total', 5)
             ->where('resumen.documentosVencidos', 1)
+        );
+});
+
+/**
+ * El proveedor de Lima despacha y la tienda de Juliaca paga el flete: una vez
+ * facturado, el viaje cuenta para la tienda. Sin factura, para el de la GR.
+ */
+it('counts an invoiced trip for whoever it was billed to', function (): void {
+    $this->travelTo('2026-09-20 12:00:00');
+
+    $factura = Factura::factory()->create(['cliente_razon_social' => 'CASAS CERAMICOS HATUN WASI E.I.R.L.', 'cliente_ruc' => '20448044771']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')
+        ->create(['cliente' => 'INVERSIONES SUPERPLAST S.A.C.', 'fecha_traslado' => '2026-09-05']);
+    Viaje::factory()->create(['cliente' => 'INVERSIONES SUPERPLAST S.A.C.', 'fecha_traslado' => '2026-09-06']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('dashboard'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('viajesPorCliente', fn ($clientes) => collect($clientes)
+                ->firstWhere('cliente', 'CASAS CERAMICOS HATUN WASI E.I.R.L.')['valor'] === 1
+                && collect($clientes)->firstWhere('cliente', 'INVERSIONES SUPERPLAST S.A.C.')['valor'] === 1)
         );
 });

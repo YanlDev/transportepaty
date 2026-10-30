@@ -96,6 +96,7 @@ it('writes every column of the table, with the money as a number', function (): 
         'moneda' => Moneda::Soles,
         'fecha_pago' => null,
         'cuenta_bancaria_id' => $cuenta->id,
+        'numero_operacion' => '00451287',
         'observacion' => 'A 30 días',
     ]);
 
@@ -110,7 +111,7 @@ it('writes every column of the table, with the money as a number', function (): 
         'Cliente', 'Destinatario', 'Origen', 'Destino', 'Tipo de carga',
         'Peso (TNE)', 'Estado', 'N° factura', 'Facturado a', 'Fecha emisión', 'Valor flete',
         'IGV', 'Total flete', 'Detracción', 'Neto a pagar', 'Valor por GR',
-        'Moneda', 'Vence', 'Días vencida', 'Fecha pago neto', 'Cuenta',
+        'Moneda', 'Vence', 'Días vencida', 'Fecha pago neto', 'Cuenta', 'N° operación',
         'Fecha detracción', 'Constancia detracción', 'Observación',
     ]);
 
@@ -138,7 +139,8 @@ it('writes every column of the table, with the money as a number', function (): 
         // Emitida el 12/09, vence a los 30 días: el 12/10.
         ->and($fila[23])->toBe(46307.0)
         ->and($fila[26])->toBe('BCP Soles')
-        ->and($fila[29])->toBe('A 30 días');
+        ->and($fila[27])->toBe('00451287')
+        ->and($fila[30])->toBe('A 30 días');
 });
 
 it('writes the weight in tonnes even when the guide came in kilos', function (): void {
@@ -329,7 +331,7 @@ it('writes one row per factura with its desglose and a total that follows the fi
     expect($hoja[0])->toBe([
         'N° factura', 'Fecha emisión', 'Vence', 'Días vencida', 'Estado', 'Facturado a', 'RUC', 'GR',
         'Valor flete', 'IGV', 'Total flete', 'Detracción', 'Neto a pagar', 'Moneda',
-        'Fecha pago neto', 'Cuenta', 'Fecha detracción', 'Constancia detracción', 'Observación',
+        'Fecha pago neto', 'Cuenta', 'N° operación', 'Fecha detracción', 'Constancia detracción', 'Observación',
     ])
         ->and($hoja)->toHaveCount(4)
         ->and($crisar[7])->toBe('EG03-00012429, EG03-00012430')
@@ -383,6 +385,42 @@ it('sums what is still owed in the resumen, split in neto and detracción, and a
         ->and(array_slice($filas->firstWhere(0, '1 a 30 días'), 0, 5))->toEqual(['1 a 30 días', 1, 0, 336, 336])
         // Cliente, facturas, facturado, neto y detracción por cobrar, cobrado, vencido.
         ->and(array_slice($filas->firstWhere(0, 'CRISAR LOGISTICA S.A.C.'), 0, 7))->toEqual(['CRISAR LOGISTICA S.A.C.', 1, 8400, 0, 336, 8064, 336]);
+});
+
+/**
+ * El cliente que paga el total: lo cobrado es el total y la detracción va en
+ * su propia línea, como lo que la empresa debe depositar. La detracción de una
+ * factura en dólares se deposita en soles y va en el bloque de soles.
+ */
+it('separates the detraccion the company deposits and keeps every detraccion in soles', function (): void {
+    $hoy = RelojOperativo::fechaDeHoy();
+
+    Viaje::factory()->hasAttached(Factura::factory()->create([
+        'monto' => 7500,
+        'fecha_emision' => $hoy->subDays(5)->toDateString(),
+        'fecha_pago' => $hoy->toDateString(),
+        'detraccion_por_empresa' => true,
+    ]), relationship: 'facturas')->create();
+
+    $enDolares = Factura::factory()->create(['moneda' => 'USD', 'fecha_emision' => $hoy->subDays(5)->toDateString()]);
+    $enDolares->forceFill(['monto' => '2324.56', 'igv' => '418.42', 'total' => '2742.98', 'detraccion' => '377.00', 'neto' => '2633.26', 'desde_pdf' => true])->saveQuietly();
+    Viaje::factory()->hasAttached($enDolares, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('admin'));
+
+    $filas = collect(libroExportado(route('contabilidad.exportar'))->getSheetByName('Resumen')->toArray(null, true, false, false));
+    $bloque = fn (string $titulo) => $filas->slice($filas->search(fn (array $fila): bool => $fila[0] === $titulo) + 1, 9)
+        ->mapWithKeys(fn (array $fila): array => [$fila[0] => $fila[1]]);
+
+    $soles = $bloque('Totales en PEN');
+    $dolares = $bloque('Totales en USD');
+
+    expect($soles['Facturas'])->toEqual(1)
+        ->and($soles['Cobrado (neto + detracción)'])->toEqual(8850)
+        ->and($soles['Detracción por cobrar'])->toEqual(377)
+        ->and($soles['Detracción que deposita Paty'])->toEqual(354)
+        ->and($dolares['Neto por cobrar'])->toEqual(2633.26)
+        ->and($dolares->has('Detracción por cobrar'))->toBeFalse();
 });
 
 it('lists the facturas por asociar regardless of the filters', function (): void {

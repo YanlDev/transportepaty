@@ -45,6 +45,9 @@ class PatchFacturaRequest extends FormRequest
             // Con o sin céntimos en la detracción: depende de cómo la emite
             // el cliente (Minsur, con céntimos).
             'detraccion_redondeada' => ['sometimes', 'boolean'],
+            // Quién la deposita: el cliente, o la empresa cuando el cliente le
+            // paga el total (los clientes chicos).
+            'detraccion_por_empresa' => ['sometimes', 'boolean'],
             // La detracción a mano, cuando el cálculo no coincide con lo que
             // depositó el cliente. Vacía vuelve al cálculo. Va sola: con el
             // valor o el total en la misma petición no se sabría cuál manda.
@@ -64,6 +67,7 @@ class PatchFacturaRequest extends FormRequest
             // factura recién sale el 22; la fila lo marca.
             'fecha_pago' => ['sometimes', 'nullable', 'date'],
             'cuenta_bancaria_id' => ['sometimes', 'nullable', Rule::exists('cuentas_bancarias', 'id')],
+            'numero_operacion' => ['sometimes', 'nullable', 'string', 'max:30'],
 
             // La otra mitad del cobro: lo que el cliente depositó en la cuenta
             // de detracciones del Banco de la Nación. Como el neto, puede

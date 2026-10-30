@@ -182,6 +182,10 @@ class ImportadorViaje
      * remitente siempre dice «AJEPER S.A.», pero quien contrata y paga a
      * Paty es «CRISAR LOGISTICA S.A.C.» en todas, sin excepción.
      *
+     * Sin subcontratador, si el remitente está marcado en el padrón con
+     * `cliente_es_destinatario`, el cliente es el destinatario: Porcelanato
+     * despacha a tiendas de Juliaca y el flete se le factura a cada tienda.
+     *
      * @param  array<string, mixed>  $campos
      * @return array{0: string, 1: string|null}
      */
@@ -189,6 +193,11 @@ class ImportadorViaje
     {
         if ($campos['subcontratador'] !== null) {
             return [self::normalizarRazonSocial($campos['subcontratador']), $campos['subcontratador_ruc']];
+        }
+
+        if (($campos['destinatario_ruc'] ?? null) !== null
+            && Cliente::porRuc($campos['cliente_ruc'])?->cliente_es_destinatario) {
+            return [self::normalizarRazonSocial($campos['destinatario']), $campos['destinatario_ruc']];
         }
 
         return [self::normalizarRazonSocial($campos['cliente']), $campos['cliente_ruc']];

@@ -16,6 +16,11 @@ export type FacturaResumen = {
      * puede registrarse solo con su número.
      */
     monto: number | null;
+    /**
+     * El cliente paga el total y la detracción la deposita la empresa: el
+     * neto es el total y la detracción queda como pendiente de la empresa.
+     */
+    detraccion_por_empresa: boolean;
     /** IGV, total, detracción y neto: los calcula el backend a partir del valor (o del total). */
     igv: number | null;
     total: number | null;
@@ -28,7 +33,10 @@ export type FacturaResumen = {
     detraccion_impresa: number | null;
     /** Las cifras son las impresas en el PDF subido: no se recalculan. */
     desde_pdf: boolean;
-    /** Lo que el cliente deposita en la cuenta de la empresa: total menos detracción. */
+    /**
+     * Lo que el cliente deposita en la cuenta de la empresa: total menos
+     * detracción, o el total si la detracción la deposita la empresa.
+     */
     neto: number | null;
     moneda: string;
     /** `S/` o `$`, ya resuelto en el backend. */
@@ -47,6 +55,8 @@ export type FacturaResumen = {
     cuenta_bancaria_id: number | null;
     /** Alias de la cuenta por la que entró el neto. Null si aún no se cobró. */
     cuenta: string | null;
+    /** N° de operación del depósito del neto, para ubicarlo en el banco. */
+    numero_operacion: string | null;
     /** Cuándo depositó el cliente la detracción en el Banco de la Nación. */
     fecha_detraccion: string | null;
     constancia_detraccion: string | null;
@@ -103,6 +113,8 @@ export type ResumenMoneda = {
     por_cobrar: number;
     /** La detracción que falta que el cliente deposite en el Banco de la Nación. */
     detraccion_por_cobrar: number;
+    /** La detracción que la empresa tiene que depositar por los clientes que le pagan el total. */
+    detraccion_por_depositar: number;
     /** Lo que ya entró, neto y detracción. */
     cobrado: number;
 };

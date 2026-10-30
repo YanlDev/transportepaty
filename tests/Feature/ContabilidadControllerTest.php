@@ -510,3 +510,57 @@ it('keeps the visor from marking a GR as no facturable', function (): void {
         ->patch(route('contabilidad.no-facturable', $viaje), ['no_facturable' => true])
         ->assertForbidden();
 });
+
+/**
+ * La detracción que deposita la empresa no es por cobrar ni cobrada: va
+ * aparte. Y la de una factura en dólares, que se deposita en soles, suma en
+ * el bloque de soles.
+ */
+it('keeps apart the detraccion the company deposits and puts every detraccion in soles', function (): void {
+    $cuenta = CuentaBancaria::factory()->create();
+    $porEmpresa = Factura::factory()->create([
+        'monto' => 7500,
+        'detraccion_por_empresa' => true,
+        'fecha_pago' => '2026-10-20',
+        'cuenta_bancaria_id' => $cuenta->id,
+    ]);
+    $enDolares = Factura::factory()->create(['moneda' => 'USD']);
+    $enDolares->forceFill(['monto' => '2324.56', 'igv' => '418.42', 'total' => '2742.98', 'detraccion' => '377.00', 'neto' => '2633.26', 'desde_pdf' => true])->saveQuietly();
+
+    Viaje::factory()->hasAttached($porEmpresa, relationship: 'facturas')->create();
+    Viaje::factory()->hasAttached($enDolares, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('resumen.montos.0.moneda', 'PEN')
+            // El cliente pagó el total: eso es lo cobrado.
+            ->where('resumen.montos.0.cobrado', 8850)
+            ->where('resumen.montos.0.por_cobrar', 0)
+            // Solo la de Minsur, en soles, la debe el cliente.
+            ->where('resumen.montos.0.detraccion_por_cobrar', 377)
+            ->where('resumen.montos.0.detraccion_por_depositar', 354)
+            ->where('resumen.montos.1.moneda', 'USD')
+            ->where('resumen.montos.1.por_cobrar', 2633.26)
+            ->where('resumen.montos.1.detraccion_por_cobrar', 0)
+        );
+});
+
+/**
+ * Filtrar por la tienda a la que se le facturó encuentra el viaje aunque la
+ * GR diga otro cliente, y la tienda aparece entre las opciones del filtro.
+ */
+it('filters by the client billed even when the GR names another one', function (): void {
+    $factura = Factura::factory()->create(['cliente_razon_social' => 'CASAS CERAMICOS HATUN WASI E.I.R.L.']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')
+        ->create(['numero_gr' => 'EG03-SUPERPLAST', 'cliente' => 'INVERSIONES SUPERPLAST S.A.C.']);
+    Viaje::factory()->create(['numero_gr' => 'EG03-OTRO', 'cliente' => 'MINSUR S.A.']);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['cliente' => 'CASAS CERAMICOS HATUN WASI E.I.R.L.']))
+        ->assertInertia(fn ($page) => $page
+            ->has('viajes.data', 1)
+            ->where('viajes.data.0.numero_gr', 'EG03-SUPERPLAST')
+            ->where('clientes', fn ($clientes) => collect($clientes)->pluck('value')->contains('CASAS CERAMICOS HATUN WASI E.I.R.L.'))
+        );
+});

@@ -13,7 +13,7 @@ import type { CuentaOpcion, FacturaResumen } from '@/types/contabilidad';
 import type { EnumOption } from '@/types/fleet';
 
 /** Cuántas columnas dibuja una factura: tiene que coincidir con el encabezado. */
-const COLUMNAS_FACTURA = 13;
+const COLUMNAS_FACTURA = 14;
 
 /**
  * Las columnas de la hoja del contador para una factura del viaje, editables
@@ -299,6 +299,19 @@ export function CeldasCobranza({
                     )}
             </TableCell>
 
+            {/* Con qué operación entró el neto: lo que se busca en el estado
+                de cuenta del banco. */}
+            <TableCell className="font-mono text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+                <ValorEditable
+                    url={url}
+                    campo="numero_operacion"
+                    valor={factura.numero_operacion}
+                    editable={editable}
+                    ancho="min-w-32"
+                    etiqueta="N° de operación del depósito"
+                />
+            </TableCell>
+
             {/* La otra mitad del cobro. Sin detracción (flete bajo el umbral)
                 no hay nada que registrar. */}
             <TableCell className="whitespace-nowrap tabular-nums">
@@ -311,7 +324,11 @@ export function CeldasCobranza({
                             tipo="fecha"
                             editable={editable}
                             ancho="min-w-32"
-                            etiqueta="Fecha del depósito de la detracción"
+                            etiqueta={
+                                factura.detraccion_por_empresa
+                                    ? 'Fecha en que Paty depositó la detracción'
+                                    : 'Fecha del depósito de la detracción'
+                            }
                         >
                             {factura.fecha_detraccion
                                 ? formatearFecha(factura.fecha_detraccion)
@@ -321,6 +338,12 @@ export function CeldasCobranza({
                             fecha={factura.fecha_detraccion}
                             emision={factura.fecha_emision}
                         />
+                        {factura.detraccion_por_empresa &&
+                            factura.fecha_detraccion === null && (
+                                <span className="block text-xs text-violet-700 dark:text-violet-400">
+                                    Paty debe depositar
+                                </span>
+                            )}
                         <div className="text-xs text-muted-foreground">
                             <ValorEditable
                                 url={url}
@@ -437,6 +460,40 @@ function CeldaDetraccion({
                         ? 'redondeada'
                         : 'con céntimos'}
                 </button>
+            )}
+            {/* Los clientes chicos pagan el total y la detracción la
+                deposita Paty: entonces el neto es el total. */}
+            {editable && (factura.detraccion ?? 0) > 0 ? (
+                <button
+                    type="button"
+                    onClick={() =>
+                        guardar({
+                            detraccion_por_empresa:
+                                !factura.detraccion_por_empresa,
+                        })
+                    }
+                    className={cn(
+                        'block w-full text-right text-[11px] hover:underline',
+                        factura.detraccion_por_empresa
+                            ? 'text-violet-700 dark:text-violet-400'
+                            : 'text-muted-foreground/70 hover:text-foreground',
+                    )}
+                    title={
+                        factura.detraccion_por_empresa
+                            ? 'El cliente paga el total. Clic si la deposita el cliente'
+                            : 'Clic si el cliente paga el total y la deposita Paty'
+                    }
+                >
+                    {factura.detraccion_por_empresa
+                        ? 'la deposita Paty'
+                        : 'la deposita el cliente'}
+                </button>
+            ) : (
+                factura.detraccion_por_empresa && (
+                    <span className="block text-[11px] text-violet-700 dark:text-violet-400">
+                        la deposita Paty
+                    </span>
+                )
             )}
         </TableCell>
     );

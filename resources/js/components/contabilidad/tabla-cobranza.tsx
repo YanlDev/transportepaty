@@ -126,6 +126,7 @@ export function TablaCobranza({
                         <TableHead>Vence</TableHead>
                         <TableHead>F. pago neto</TableHead>
                         <TableHead>Entidad</TableHead>
+                        <TableHead>N° operación</TableHead>
                         <TableHead>F. detracción</TableHead>
                         <TableHead>Observación</TableHead>
                         <TableHead className="w-0" />

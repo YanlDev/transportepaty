@@ -270,6 +270,24 @@ class Viaje extends Model implements HasMedia
     }
 
     /**
+     * El cliente para los reportes: a quién se le facturó, si la GR ya tiene
+     * factura, y si no el cliente de la GR. La GR dice quién despachó la carga,
+     * pero el flete puede cobrársele a otro: proveedores de Lima que despachan
+     * a tiendas de Juliaca, que son las que pagan, o un transportista que
+     * subcontrató a Paty sin figurar en la GR.
+     *
+     * Con varias facturas manda la primera emitida, que es la del flete.
+     * Requiere `clienteDelPadron`, `facturas` y `facturas.clienteDelPadron`
+     * precargadas para no caer en N+1.
+     */
+    public function nombreClienteComercial(): string
+    {
+        $factura = $this->facturas->sortBy(fn (Factura $factura): string => $factura->fecha_emision->toDateString().'#'.$factura->id)->first();
+
+        return $factura?->nombreCliente() ?? $this->nombreCliente();
+    }
+
+    /**
      * La ciudad (distrito) de origen/destino, para mostrar en los listados
      * sin ocupar el espacio de la dirección completa. El texto de la GR
      * siempre trae el patrón `... - distrito - provincia - departamento` —
