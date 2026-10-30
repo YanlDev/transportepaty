@@ -242,6 +242,36 @@ it('shows for each point what was loaded this month and the last price paid', fu
         }));
 });
 
+it('lets a card speak for the whole outbound leg, from Juliaca up empty and down loaded', function (): void {
+    $tarjeta = ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole();
+    $tarjeta->update(['zona_origen' => ZonaRuta::Juliaca]);
+
+    $deJuliaca = Vuelta::factory()->create(['tracto_id' => $this->tracto->id]);
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $deJuliaca->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1,
+        'zona_origen' => ZonaRuta::Juliaca, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Vacio,
+        'lugar_origen' => null, 'lugar_destino' => null,
+    ]);
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $deJuliaca->id, 'sentido' => SentidoTramo::Ida, 'orden' => 2,
+        'zona_origen' => ZonaRuta::Mina, 'zona_destino' => $tarjeta->zona_destino, 'tipo_carga' => $tarjeta->tipo_carga,
+        'lugar_origen' => null, 'lugar_destino' => null,
+    ]);
+
+    $dotacion = app(DotacionVuelta::class)->de($deJuliaca->load('paradas.viajes'), new Collection);
+
+    expect(collect($dotacion['tarjetas'])->pluck('nombre')->all())->toBe(['Juliaca – Mina – Lima'])
+        ->and(collect($dotacion['tramos'])->firstWhere('sentido', 'ida')['previsto'])->toBe(220.0);
+
+    // La que arranca en la mina no hizo la subida desde Juliaca: no la toma.
+    $deMina = vueltaConParada(Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]), [
+        'sentido' => SentidoTramo::Ida, 'zona_origen' => ZonaRuta::Mina,
+        'zona_destino' => $tarjeta->zona_destino, 'tipo_carga' => $tarjeta->tipo_carga,
+    ]);
+
+    expect(app(DotacionVuelta::class)->reglaDe($deMina->paradas->first(), ZonaRuta::Mina))->toBeNull();
+});
+
 it('uses the configured full tank when the gallons are left empty', function (): void {
     ticketApto($this->tracto);
 

@@ -88,6 +88,21 @@ class ReglaAbastecimiento extends Model
      * `$toneladas` el peso de sus GR, si hay.
      */
     /**
+     * Una tarjeta puede hablar del tramo entero, desde donde arrancó: la ida
+     * «Juliaca – San Rafael – Pisco» sale de Juliaca, sube vacía a la mina y
+     * baja con concentrado. Le toca a la parada con carga de ese tramo (Mina
+     * → Pisco) si el tramo arrancó en su origen. Un vacío no la toma: no es
+     * la parada de la carga.
+     */
+    private function esDelInicioDelTramo(ParadaVuelta $parada, ?ZonaRuta $inicioDelTramo): bool
+    {
+        return $inicioDelTramo !== null
+            && $this->zona_origen === $inicioDelTramo
+            && $parada->zona_origen !== $inicioDelTramo
+            && ! $parada->esVacio();
+    }
+
+    /**
      * La carga de un cliente particular que sube a la mina (Metso y otros
      * proveedores de San Rafael) gasta lo mismo que los materiales de Ransa:
      * usa sus tarjetas, por peso.
@@ -99,7 +114,7 @@ class ReglaAbastecimiento extends Model
             && $parada->zona_destino === ZonaRuta::Mina;
     }
 
-    public function aplicaA(ParadaVuelta $parada, string $texto, ?float $toneladas): bool
+    public function aplicaA(ParadaVuelta $parada, string $texto, ?float $toneladas, ?ZonaRuta $inicioDelTramo = null): bool
     {
         if ($this->especificidad() === 0) {
             return false;
@@ -108,7 +123,7 @@ class ReglaAbastecimiento extends Model
         $coincide = fn (mixed $criterio, mixed $valor): bool => $criterio === null || $criterio === $valor;
 
         if (! $coincide($this->sentido, $parada->sentido)
-            || ! $coincide($this->zona_origen, $parada->zona_origen)
+            || ! ($coincide($this->zona_origen, $parada->zona_origen) || $this->esDelInicioDelTramo($parada, $inicioDelTramo))
             || ! $coincide($this->zona_destino, $parada->zona_destino)
             || ! ($coincide($this->tipo_carga, $parada->tipo_carga) || $this->esMaterialesParaParticularAMina($parada))) {
             return false;

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\SentidoTramo;
 use App\Enums\TipoLineaAbastecimiento;
+use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
 use App\Models\Ajuste;
 use App\Models\LineaReglaAbastecimiento;
@@ -51,7 +52,10 @@ class DotacionVuelta
         $porTramo = [SentidoTramo::Ida->value => [], SentidoTramo::Regreso->value => []];
 
         foreach ($vuelta->paradas as $parada) {
-            $regla = $this->reglaDe($parada);
+            // Dónde arrancó el tramo: la ida que sale de Juliaca sube vacía a
+            // la mina y recién baja con concentrado; su tarjeta («Juliaca –
+            // San Rafael – Pisco») habla del tramo entero.
+            $regla = $this->reglaDe($parada, $vuelta->paradasDe($parada->sentido)->first()?->zona_origen);
 
             if ($regla === null) {
                 continue;
@@ -192,7 +196,7 @@ class DotacionVuelta
     /**
      * La tarjeta más específica que calza con la parada, o ninguna.
      */
-    public function reglaDe(ParadaVuelta $parada): ?ReglaAbastecimiento
+    public function reglaDe(ParadaVuelta $parada, ?ZonaRuta $inicioDelTramo = null): ?ReglaAbastecimiento
     {
         $texto = implode(' ', array_filter([
             $parada->lugar_origen,
@@ -202,7 +206,7 @@ class DotacionVuelta
         $toneladas = $this->toneladas($parada);
 
         return $this->reglas()
-            ->filter(fn (ReglaAbastecimiento $regla): bool => $regla->aplicaA($parada, $texto, $toneladas))
+            ->filter(fn (ReglaAbastecimiento $regla): bool => $regla->aplicaA($parada, $texto, $toneladas, $inicioDelTramo))
             ->sortByDesc(fn (ReglaAbastecimiento $regla): int => $regla->especificidad())
             ->first();
     }
