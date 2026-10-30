@@ -369,10 +369,17 @@ const SIN_SENTIDO = {
     texto: 'text-muted-foreground/60',
 };
 
+/** Lo que va a la mina, en el azul de Minsur (el mismo del Gantt). */
+const A_MINA = {
+    linea: 'bg-[#1d3c8f] dark:bg-blue-400',
+    texto: 'text-[#1d3c8f] dark:text-blue-400',
+};
+
 /**
  * La ruta dibujada: el origen y el destino unidos por una línea del color
- * del sentido (la ida en ámbar, la vuelta en violeta), con los puntos donde
- * se carga marcados encima y sus galones debajo.
+ * del sentido (la ida en ámbar, la vuelta en violeta; lo que va a la mina,
+ * en azul Minsur), con los puntos donde se carga marcados encima y sus
+ * galones debajo.
  */
 function RutaDibujada({
     regla,
@@ -383,9 +390,12 @@ function RutaDibujada({
     opciones: OpcionesConfiguracion;
     conPuntos: boolean;
 }) {
-    const color = regla.sentido
-        ? (COLOR_SENTIDO[regla.sentido] ?? SIN_SENTIDO)
-        : SIN_SENTIDO;
+    const color =
+        regla.zona_destino === 'mina'
+            ? A_MINA
+            : regla.sentido
+              ? (COLOR_SENTIDO[regla.sentido] ?? SIN_SENTIDO)
+              : SIN_SENTIDO;
     const desde = etiquetaDe(opciones.zonas, regla.zona_origen) ?? 'Cualquiera';
     const hasta =
         etiquetaDe(opciones.zonas, regla.zona_destino) ?? 'cualquiera';
