@@ -192,6 +192,43 @@ it('registers without price when it is not known', function (): void {
     expect(Abastecimiento::query()->sole()->importe)->toBeNull();
 });
 
+it('registers fuel at a point that is not on the list, for exceptional cases', function (): void {
+    $vuelta = ticketApto($this->tracto);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), [
+            'vehiculo_id' => $this->tracto->id,
+            'punto_libre' => '  Primax   Camaná ',
+            'fecha' => now()->toDateString(),
+            'galones' => 40,
+        ])
+        ->assertSessionHasNoErrors();
+
+    $registro = Abastecimiento::query()->with('punto')->sole();
+    expect($registro->punto_abastecimiento_id)->toBeNull()
+        ->and($registro->punto_libre)->toBe('Primax Camaná')
+        ->and($registro->nombrePunto())->toBe('Primax Camaná');
+
+    $dotacion = app(DotacionVuelta::class)->de($vuelta->load('paradas.viajes'), $vuelta->abastecimientos()->with('punto')->get());
+
+    expect(collect($dotacion['combustible'])->firstWhere('punto', 'Primax Camaná')['registrado'])->toBe(40.0)
+        ->and($dotacion['total_registrado'])->toBe(40.0);
+});
+
+it('does not take a listed point and a written one at the same time', function (): void {
+    ticketApto($this->tracto);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), [
+            'vehiculo_id' => $this->tracto->id,
+            'punto_abastecimiento_id' => $this->kio->id,
+            'punto_libre' => 'Primax Camaná',
+            'fecha' => now()->toDateString(),
+            'galones' => 40,
+        ])
+        ->assertSessionHasErrors('punto_libre');
+});
+
 it('uses the configured full tank when the gallons are left empty', function (): void {
     ticketApto($this->tracto);
 

@@ -84,7 +84,8 @@ class GastosDelTicket
                     ->map(fn (Abastecimiento $abastecimiento): array => [
                         'id' => $abastecimiento->id,
                         'fecha' => $abastecimiento->fecha->toDateString(),
-                        'punto' => $abastecimiento->punto?->nombre,
+                        'punto' => $abastecimiento->nombrePunto(),
+                        'fuera_de_lista' => $abastecimiento->punto_abastecimiento_id === null && filled($abastecimiento->punto_libre),
                         'galones' => (float) $abastecimiento->galones,
                         'tanque_lleno' => $abastecimiento->tanque_lleno,
                         'precio_galon' => $abastecimiento->precio_galon === null ? null : (float) $abastecimiento->precio_galon,

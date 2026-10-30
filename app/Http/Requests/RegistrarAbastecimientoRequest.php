@@ -30,6 +30,8 @@ class RegistrarAbastecimientoRequest extends FormRequest
             'vehiculo_id' => ['required', Rule::exists('vehiculos', 'id')->where('tipo', TipoVehiculo::Tracto->value)],
             'vuelta_id' => ['nullable', Rule::exists('vueltas', 'id')],
             'punto_abastecimiento_id' => ['nullable', Rule::exists('puntos_abastecimiento', 'id')],
+            // Un grifo fuera de la lista, en un caso excepcional: o uno o el otro.
+            'punto_libre' => ['nullable', 'string', 'max:80', 'prohibits:punto_abastecimiento_id'],
             'fecha' => ['required', 'date'],
             'tanque_lleno' => ['boolean'],
             'galones' => ['nullable', 'numeric', 'min:0.1', 'max:999'],
@@ -65,6 +67,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
             'vehiculo_id' => 'unidad',
             'punto_abastecimiento_id' => 'punto',
             'precio_galon' => 'precio por galón',
+            'punto_libre' => 'punto fuera de la lista',
         ];
     }
 }

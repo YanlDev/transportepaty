@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property int $vehiculo_id
  * @property int|null $vuelta_id
  * @property int|null $punto_abastecimiento_id
+ * @property string|null $punto_libre Un grifo fuera de la lista, escrito a mano.
  * @property int|null $conductor_id
  * @property Carbon $fecha
  * @property string $galones
@@ -34,7 +35,7 @@ use Illuminate\Support\Carbon;
  * @property-read User|null $registradoPor
  */
 #[Fillable([
-    'vehiculo_id', 'vuelta_id', 'punto_abastecimiento_id', 'conductor_id', 'fecha',
+    'vehiculo_id', 'vuelta_id', 'punto_abastecimiento_id', 'punto_libre', 'conductor_id', 'fecha',
     'galones', 'tanque_lleno', 'precio_galon', 'importe', 'observacion', 'user_id',
 ])]
 class Abastecimiento extends Model
@@ -69,6 +70,15 @@ class Abastecimiento extends Model
     public function punto(): BelongsTo
     {
         return $this->belongsTo(PuntoAbastecimiento::class, 'punto_abastecimiento_id');
+    }
+
+    /**
+     * Dónde cargó: el punto de la lista o, en un caso excepcional, el grifo
+     * escrito a mano. Necesita `punto` cargado.
+     */
+    public function nombrePunto(): ?string
+    {
+        return $this->punto->nombre ?? (filled($this->punto_libre) ? $this->punto_libre : null);
     }
 
     /**

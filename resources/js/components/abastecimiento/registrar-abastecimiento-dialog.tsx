@@ -32,12 +32,17 @@ type FormData = {
     vehiculo_id: number | null;
     vuelta_id: number | null;
     punto_abastecimiento_id: number | null;
+    /** Un grifo fuera de la lista, escrito a mano. */
+    punto_libre: string;
     fecha: string;
     galones: string;
     tanque_lleno: boolean;
     precio_galon: string;
     observacion: string;
 };
+
+/** El valor del selector para un grifo que no está en la lista. */
+const OTRO_PUNTO = 'otro';
 
 /** Lo que se sabe al abrir: desde la tarjeta de una unidad, o nada. */
 export type InicialAbastecimiento = {
@@ -88,6 +93,7 @@ export function RegistrarAbastecimientoDialog({
         vehiculo_id: inicial.vehiculo_id ?? null,
         vuelta_id: inicial.vuelta_id ?? null,
         punto_abastecimiento_id: inicial.punto_abastecimiento_id ?? null,
+        punto_libre: '',
         fecha: hoy(),
         galones: inicial.galones ? String(inicial.galones) : '',
         tanque_lleno: false,
@@ -95,6 +101,9 @@ export function RegistrarAbastecimientoDialog({
         observacion: '',
     });
     const [eligiendo, setEligiendo] = useState(false);
+    // En un caso excepcional se carga en un grifo que no está en la lista:
+    // se elige «Otro punto» y se escribe cuál.
+    const [fueraDeLista, setFueraDeLista] = useState(false);
 
     const opcionesTractos: OpcionBuscable[] = tractos.map((tracto) => ({
         valor: tracto.id,
@@ -197,24 +206,36 @@ export function RegistrarAbastecimientoDialog({
                                     {() => (
                                         <Select
                                             value={
-                                                data.punto_abastecimiento_id
-                                                    ? String(
-                                                          data.punto_abastecimiento_id,
-                                                      )
-                                                    : undefined
+                                                fueraDeLista
+                                                    ? OTRO_PUNTO
+                                                    : data.punto_abastecimiento_id
+                                                      ? String(
+                                                            data.punto_abastecimiento_id,
+                                                        )
+                                                      : undefined
                                             }
-                                            onValueChange={(valor) =>
+                                            onValueChange={(valor) => {
+                                                const otro =
+                                                    valor === OTRO_PUNTO;
+
+                                                setFueraDeLista(otro);
                                                 setData((anterior) => ({
                                                     ...anterior,
                                                     punto_abastecimiento_id:
-                                                        Number(valor),
-                                                    precio_galon:
-                                                        precioDe(
-                                                            Number(valor),
-                                                        ) ||
-                                                        anterior.precio_galon,
-                                                }))
-                                            }
+                                                        otro
+                                                            ? null
+                                                            : Number(valor),
+                                                    punto_libre: otro
+                                                        ? anterior.punto_libre
+                                                        : '',
+                                                    precio_galon: otro
+                                                        ? anterior.precio_galon
+                                                        : precioDe(
+                                                              Number(valor),
+                                                          ) ||
+                                                          anterior.precio_galon,
+                                                }));
+                                            }}
                                         >
                                             <SelectTrigger className="w-full">
                                                 <SelectValue placeholder="Elegir…" />
@@ -228,6 +249,10 @@ export function RegistrarAbastecimientoDialog({
                                                         {punto.nombre}
                                                     </SelectItem>
                                                 ))}
+                                                <SelectItem value={OTRO_PUNTO}>
+                                                    Otro punto (fuera de la
+                                                    lista)…
+                                                </SelectItem>
                                             </SelectContent>
                                         </Select>
                                     )}
@@ -253,6 +278,31 @@ export function RegistrarAbastecimientoDialog({
                                     )}
                                 </Field>
                             </div>
+
+                            {fueraDeLista && (
+                                <Field
+                                    label="¿Dónde cargó?"
+                                    error={errors.punto_libre}
+                                    required
+                                    ayuda="Solo para casos excepcionales. Si se carga ahí seguido, agrégalo a la lista en la Pizarra."
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            autoFocus
+                                            placeholder="Ej.: Primax Camaná"
+                                            maxLength={80}
+                                            value={data.punto_libre}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'punto_libre',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </Field>
+                            )}
 
                             <div className="flex items-center gap-2">
                                 <Checkbox
@@ -356,7 +406,9 @@ export function RegistrarAbastecimientoDialog({
                                 disabled={
                                     processing ||
                                     (tracto !== undefined &&
-                                        tracto.bloqueo !== null)
+                                        tracto.bloqueo !== null) ||
+                                    (fueraDeLista &&
+                                        data.punto_libre.trim() === '')
                                 }
                             >
                                 Registrar

@@ -249,10 +249,9 @@ class DotacionVuelta
         }
 
         foreach ($registrados as $abastecimiento) {
-            $clave = $abastecimiento->punto_abastecimiento_id ?? 0;
-            $porPunto[$clave] ??= [
+            $porPunto[$this->claveDePunto($abastecimiento)] ??= [
                 'punto_id' => $abastecimiento->punto_abastecimiento_id,
-                'punto' => $abastecimiento->punto->nombre ?? 'Sin punto',
+                'punto' => $abastecimiento->nombrePunto() ?? 'Sin punto',
                 'previsto' => null,
                 'lleno' => false,
             ];
@@ -262,7 +261,7 @@ class DotacionVuelta
 
         foreach ($porPunto as $clave => $fila) {
             $registrado = (float) $registrados
-                ->filter(fn (Abastecimiento $abastecimiento): bool => ($abastecimiento->punto_abastecimiento_id ?? 0) === $clave)
+                ->filter(fn (Abastecimiento $abastecimiento): bool => $this->claveDePunto($abastecimiento) === $clave)
                 ->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones);
 
             $filas[] = [
@@ -281,6 +280,22 @@ class DotacionVuelta
             'total_previsto' => in_array(null, $previstos, true) ? null : (float) array_sum($previstos),
             'total_registrado' => (float) array_sum(array_column($filas, 'registrado')),
         ];
+    }
+
+    /**
+     * Dónde se junta lo autorizado: por punto de la lista; lo cargado en un
+     * grifo fuera de la lista, por el nombre que se escribió; y sin nada,
+     * con el total del tramo.
+     */
+    private function claveDePunto(Abastecimiento $abastecimiento): int|string
+    {
+        if ($abastecimiento->punto_abastecimiento_id !== null) {
+            return $abastecimiento->punto_abastecimiento_id;
+        }
+
+        return filled($abastecimiento->punto_libre)
+            ? 'libre:'.mb_strtolower(trim($abastecimiento->punto_libre))
+            : 0;
     }
 
     /**

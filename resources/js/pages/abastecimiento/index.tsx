@@ -550,6 +550,11 @@ export default function AbastecimientoIndex({
                                     </TableCell>
                                     <TableCell>
                                         {registro.punto ?? '—'}
+                                        {registro.fuera_de_lista && (
+                                            <span className="ml-1.5 rounded border border-dashed px-1 text-[10px] text-muted-foreground">
+                                                fuera de lista
+                                            </span>
+                                        )}
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">
                                         {galones(registro.galones)}
