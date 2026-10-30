@@ -239,7 +239,7 @@ function Fila({
     const siguiente = vuelta.siguiente;
 
     return (
-        <article className="flex flex-col gap-3 rounded-xl border bg-card p-4 transition hover:border-foreground/30">
+        <article className="flex min-w-0 flex-col gap-3 rounded-xl border bg-card p-4 transition hover:border-foreground/30">
             <button
                 type="button"
                 onClick={() => onAbrir(vuelta)}
@@ -261,10 +261,12 @@ function Fila({
                 </span>
             </button>
 
+            {/* `min-w-0`: sin esto la ruta larga empuja la tarjeta fuera de
+                la pantalla en vez de deslizarse dentro de ella. */}
             <button
                 type="button"
                 onClick={() => onAbrir(vuelta)}
-                className="text-left"
+                className="w-full min-w-0 text-left"
                 aria-label={`Ver el recorrido de ${vuelta.placa}`}
             >
                 <Ruta vuelta={vuelta} />

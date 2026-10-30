@@ -185,7 +185,9 @@ class PasosDelTicket
             ->first();
 
         if ($guia === null) {
-            return $this->paso($clave, $titulo, 'pendiente', 'Sin GR todavía');
+            // Lo que hay que hacer, no solo lo que falta: la GR se sube en
+            // Guías y cae sola en el ticket.
+            return $this->paso($clave, $titulo, 'pendiente', 'Sube la GR en Guías: cae sola en este ticket');
         }
 
         return $this->paso($clave, $titulo, 'hecho', 'GR '.$guia->numero_gr, $guia->fecha_traslado->toDateString());
