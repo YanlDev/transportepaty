@@ -85,7 +85,7 @@ type Eligiendo =
 /** El regreso todavía sin decidir: se programa cuando se sabe. */
 const POR_DEFINIR = 'por_definir';
 
-const ZONAS_DE_PASO = ['juliaca', 'sur', 'cusco'];
+const ZONAS_DE_PASO = ['juliaca', 'cusco', 'arequipa', 'moquegua', 'tacna'];
 
 /**
  * Cómo llega la unidad a la mina antes de cargar: casi siempre sube vacía

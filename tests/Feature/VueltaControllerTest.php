@@ -58,7 +58,7 @@ it('places each trip in its stage on the board', function (): void {
     $bajando = Vuelta::factory()->create(['inicio' => now()->subDays(2)->toDateString()]);
     $guiaEn($bajando, SentidoTramo::Ida, ZonaRuta::Mina, ZonaRuta::Pisco, now()->subDays(2)->toDateString());
     $subiendo = Vuelta::factory()->create(['inicio' => now()->subDays(8)->toDateString()]);
-    $guiaEn($subiendo, SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Sur, now()->subDays(1)->toDateString());
+    $guiaEn($subiendo, SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Arequipa, now()->subDays(1)->toDateString());
     $llego = Vuelta::factory()->create(['inicio' => now()->subDays(12)->toDateString()]);
     $guiaEn($llego, SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Juliaca, now()->subDays(4)->toDateString());
     $cerrada = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(15)->toDateString(), 'fin' => now()->subDay()->toDateString()]);
@@ -262,8 +262,8 @@ it('programs the outbound leg first and the return when it is known', function (
     actingAs(actorConRol('admin'))->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['paradas' => [
         ['id' => $ida->id, 'sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
         ['sentido' => 'ida', 'zona_origen' => 'pisco', 'zona_destino' => 'lima', 'tipo_carga' => 'vacio'],
-        ['sentido' => 'regreso', 'zona_origen' => 'lima', 'zona_destino' => 'sur', 'lugar_destino' => 'Tacna', 'tipo_carga' => 'particular'],
-        ['sentido' => 'regreso', 'zona_origen' => 'sur', 'lugar_origen' => 'Tacna', 'zona_destino' => 'juliaca', 'tipo_carga' => 'vacio'],
+        ['sentido' => 'regreso', 'zona_origen' => 'lima', 'zona_destino' => 'tacna', 'lugar_destino' => 'Tacna', 'tipo_carga' => 'particular'],
+        ['sentido' => 'regreso', 'zona_origen' => 'tacna', 'lugar_origen' => 'Tacna', 'zona_destino' => 'juliaca', 'tipo_carga' => 'vacio'],
     ]]))->assertRedirect();
 
     $regreso = $vuelta->fresh()->paradas->where('sentido', SentidoTramo::Regreso)->values();
@@ -344,8 +344,8 @@ it('accepts a stop inside the same zone when the places differ', function (): vo
     actingAs(actorConRol('admin'))
         ->post(route('vueltas.store'), vueltaDelFormulario($tracto->id, ['paradas' => [
             ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
-            ['sentido' => 'regreso', 'zona_origen' => 'pisco', 'zona_destino' => 'sur', 'tipo_carga' => 'particular', 'lugar_destino' => 'Arequipa'],
-            ['sentido' => 'regreso', 'zona_origen' => 'sur', 'zona_destino' => 'sur', 'tipo_carga' => 'particular', 'lugar_origen' => 'Arequipa', 'lugar_destino' => 'Tacna'],
+            ['sentido' => 'regreso', 'zona_origen' => 'pisco', 'zona_destino' => 'arequipa', 'tipo_carga' => 'particular', 'lugar_destino' => 'Arequipa'],
+            ['sentido' => 'regreso', 'zona_origen' => 'arequipa', 'zona_destino' => 'arequipa', 'tipo_carga' => 'particular', 'lugar_origen' => 'Arequipa', 'lugar_destino' => 'Camaná'],
         ]]))
         ->assertSessionHasNoErrors();
 });

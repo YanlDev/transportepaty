@@ -15,7 +15,9 @@ it('reads the circuit zone from a GR address', function (string $direccion, ?Zon
     'Villa El Salvador sin decir Lima' => ['TABLADA DE LURN NRO 224 -MZ. M1 LOTE 4-B- VILLA EL SALVADOR - VILLA EL', ZonaRuta::Lima],
     'Huaral' => ['PARCELA NRO 55 ZONA CAMPO GRAN - HUARAL - HUARAL - LIMA', ZonaRuta::Lima],
     'Juliaca' => ['JR. 8 NOVIEMBRE NRO. 615 OTR. CERCADO - JULIACA - SAN ROMAN - PUNO', ZonaRuta::Juliaca],
-    'Arequipa' => ['VIA EVITAMIENTO KM 3.9 - CERRO COLORADO - AREQUIPA - AREQUIPA', ZonaRuta::Sur],
+    'Arequipa' => ['VIA EVITAMIENTO KM 3.9 - CERRO COLORADO - AREQUIPA - AREQUIPA', ZonaRuta::Arequipa],
+    'Ilo, en Moquegua' => ['CAL. MOQUEGUA 120 - ILO - ILO - MOQUEGUA', ZonaRuta::Moquegua],
+    'Tacna' => ['CAR. TACNA ALTO PERU KM 88 - PALCA - TACNA - TACNA', ZonaRuta::Tacna],
     'Cusco' => ['AV. LA CULTURA 100 - WANCHAQ - CUSCO - CUSCO', ZonaRuta::Cusco],
     'kilómetro no es Ilo' => ['KILOMETRO 5 - SANTA ROSA - XX - YY', null],
     'ninguna conocida' => ['CALLE SIN NOMBRE', null],
@@ -29,7 +31,7 @@ it('sends whatever ends on the coast to the outbound leg', function (): void {
         ->and(SentidoTramo::hacia(ZonaRuta::Lima))->toBe(SentidoTramo::Ida)
         ->and(SentidoTramo::hacia(ZonaRuta::Mina))->toBe(SentidoTramo::Regreso)
         ->and(SentidoTramo::hacia(ZonaRuta::Juliaca))->toBe(SentidoTramo::Regreso)
-        ->and(SentidoTramo::hacia(ZonaRuta::Sur))->toBe(SentidoTramo::Regreso);
+        ->and(SentidoTramo::hacia(ZonaRuta::Arequipa))->toBe(SentidoTramo::Regreso);
 });
 
 /**
@@ -45,11 +47,11 @@ it('places each leg of the circuit in its part of the trip', function (?ZonaRuta
     'Lima → Juliaca, particular' => [ZonaRuta::Lima, ZonaRuta::Juliaca, false, SentidoTramo::Regreso],
     'Pisco → mina, escoria' => [ZonaRuta::Pisco, ZonaRuta::Mina, false, SentidoTramo::Regreso],
     'Callao → Lima ya regresando' => [ZonaRuta::Lima, ZonaRuta::Lima, true, SentidoTramo::Regreso],
-    'Lima → Tacna, particular' => [ZonaRuta::Lima, ZonaRuta::Sur, false, SentidoTramo::Regreso],
-    'Tacna ⇢ Juliaca: sigue el regreso' => [ZonaRuta::Sur, ZonaRuta::Juliaca, true, SentidoTramo::Regreso],
+    'Lima → Tacna, particular' => [ZonaRuta::Lima, ZonaRuta::Tacna, false, SentidoTramo::Regreso],
+    'Tacna ⇢ Juliaca: sigue el regreso' => [ZonaRuta::Tacna, ZonaRuta::Juliaca, true, SentidoTramo::Regreso],
     'Cusco ⇢ mina: sigue el regreso' => [ZonaRuta::Cusco, ZonaRuta::Mina, true, SentidoTramo::Regreso],
-    'Tacna → Ilo: dentro del Sur' => [ZonaRuta::Sur, ZonaRuta::Sur, true, SentidoTramo::Regreso],
-    'Arequipa → Lima: baja' => [ZonaRuta::Sur, ZonaRuta::Lima, true, SentidoTramo::Ida],
+    'Tacna → Ilo: dentro del sur' => [ZonaRuta::Tacna, ZonaRuta::Moquegua, true, SentidoTramo::Regreso],
+    'Arequipa → Lima: baja' => [ZonaRuta::Arequipa, ZonaRuta::Lima, true, SentidoTramo::Ida],
 ]);
 
 it('knows how long each route usually takes', function (ZonaRuta $origen, ZonaRuta $destino, int $dias): void {
@@ -59,6 +61,8 @@ it('knows how long each route usually takes', function (ZonaRuta $origen, ZonaRu
     'regreso de Lima a Juliaca' => [ZonaRuta::Lima, ZonaRuta::Juliaca, 3],
     'metálico de Pisco al Callao' => [ZonaRuta::Pisco, ZonaRuta::Lima, 1],
     'subida de Juliaca a la mina' => [ZonaRuta::Juliaca, ZonaRuta::Mina, 1],
-    'particular de Lima a Arequipa' => [ZonaRuta::Lima, ZonaRuta::Sur, 2],
-    'de Arequipa a Juliaca' => [ZonaRuta::Sur, ZonaRuta::Juliaca, 1],
+    'particular de Lima a Arequipa' => [ZonaRuta::Lima, ZonaRuta::Arequipa, 2],
+    'de Arequipa a Juliaca' => [ZonaRuta::Arequipa, ZonaRuta::Juliaca, 1],
+    'de Tacna a Cusco' => [ZonaRuta::Tacna, ZonaRuta::Cusco, 2],
+    'de Tacna a Ilo' => [ZonaRuta::Tacna, ZonaRuta::Moquegua, 1],
 ]);

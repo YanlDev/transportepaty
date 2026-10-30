@@ -48,19 +48,19 @@ it('is configured only by whoever has the permission', function (): void {
         ->assertInertia(fn (Assert $page) => $page
             ->component('vueltas/configuracion')
             ->has('opciones', 10)
-            ->has('zonas', 6));
+            ->has('zonas', 8));
 });
 
 it('teaches a new place to the zones', function (): void {
-    expect(ZonaRuta::desdeDireccion('AV. PRINCIPAL 100 - MAJES - CAYLLOMA - AREQUIPA'))->toBe(ZonaRuta::Sur)
+    expect(ZonaRuta::desdeDireccion('AV. PRINCIPAL 100 - MAJES - CAYLLOMA - AREQUIPA'))->toBe(ZonaRuta::Arequipa)
         ->and(ZonaRuta::desdeDireccion('PLANTA ATICO - ATICO - CARAVELI - XX'))->toBeNull();
 
     actingAs(actorConRol('admin'))
-        ->post(route('programacion.palabras.store'), ['zona' => 'sur', 'palabra' => ' caraveli '])
+        ->post(route('programacion.palabras.store'), ['zona' => 'arequipa', 'palabra' => ' caraveli '])
         ->assertSessionHas('toast.type', 'success');
 
     expect(PalabraZona::query()->where('palabra', 'CARAVELI')->exists())->toBeTrue()
-        ->and(ZonaRuta::desdeDireccion('PLANTA ATICO - ATICO - CARAVELI - XX'))->toBe(ZonaRuta::Sur);
+        ->and(ZonaRuta::desdeDireccion('PLANTA ATICO - ATICO - CARAVELI - XX'))->toBe(ZonaRuta::Arequipa);
 
     // Una palabra no puede reconocer dos zonas.
     actingAs(actorConRol('admin'))
@@ -76,7 +76,7 @@ it('offers the configured options and destinations when programming', function (
         'activa' => true,
         'paradas' => [['zona_origen' => 'pisco', 'zona_destino' => 'mina', 'tipo_carga' => 'sacos_nuevos']],
     ])->assertSessionHas('toast.type', 'success');
-    actingAs(actorConRol('admin'))->post(route('programacion.destinos.store'), ['lugar' => 'Camaná', 'zona' => 'sur']);
+    actingAs(actorConRol('admin'))->post(route('programacion.destinos.store'), ['lugar' => 'Camaná', 'zona' => 'arequipa']);
     OpcionTramo::query()->where('nombre', 'Vacía a Lima')->update(['activa' => false]);
 
     actingAs(actorConRol('admin'))

@@ -11,8 +11,9 @@ use App\Services\PalabrasDeZona;
  *
  * El lado (sierra o costa) es lo que parte el ticket en dos: la ida sale de
  * Juliaca o de la mina y termina en la costa, y la vuelta (el regreso)
- * termina de nuevo en la sierra. El Sur y Cusco cuentan como
- * sierra porque se llega a ellos subiendo y desde ahí la unidad sigue a mina.
+ * termina de nuevo en la sierra. Las regiones del sur (Arequipa, Moquegua,
+ * Tacna) y Cusco cuentan como sierra porque se llega a ellas subiendo y desde
+ * ahí la unidad sigue a la base.
  */
 enum ZonaRuta: string
 {
@@ -21,7 +22,9 @@ enum ZonaRuta: string
     case Mina = 'mina';
     case Juliaca = 'juliaca';
     case Cusco = 'cusco';
-    case Sur = 'sur';
+    case Arequipa = 'arequipa';
+    case Moquegua = 'moquegua';
+    case Tacna = 'tacna';
     case Pisco = 'pisco';
     case Lima = 'lima';
 
@@ -31,7 +34,9 @@ enum ZonaRuta: string
             self::Mina => 'Mina San Rafael',
             self::Juliaca => 'Juliaca',
             self::Cusco => 'Cusco',
-            self::Sur => 'Sur',
+            self::Arequipa => 'Arequipa',
+            self::Moquegua => 'Moquegua',
+            self::Tacna => 'Tacna',
             self::Pisco => 'Pisco',
             self::Lima => 'Lima',
         };
@@ -39,13 +44,22 @@ enum ZonaRuta: string
 
     public function esSierra(): bool
     {
-        return in_array($this, [self::Mina, self::Juliaca, self::Cusco, self::Sur], true);
+        return in_array($this, [self::Mina, self::Juliaca, self::Cusco], true) || $this->esSur();
+    }
+
+    /**
+     * Las regiones del sur, adonde va la carga particular: de ahí la unidad
+     * sigue a Juliaca. Para armar el viaje cuentan las tres igual.
+     */
+    public function esSur(): bool
+    {
+        return in_array($this, [self::Arequipa, self::Moquegua, self::Tacna], true);
     }
 
     /**
      * Cuántos días suele tardar la unidad de una zona a otra, cargada o
-     * vacía: de la sierra a la costa (Mina → Pisco) unos 3; del Sur a la
-     * costa o a Cusco 2; dentro de la sierra o de la costa (Juliaca → Mina,
+     * vacía: de la sierra a la costa (Mina → Pisco) unos 3; del sur
+     * (Arequipa, Moquegua, Tacna) a la costa o a Cusco 2; dentro de la sierra o de la costa (Juliaca → Mina,
      * Pisco → Callao) 1. Es lo normal sin contratiempos: sirve para dibujar
      * el viaje y saber cuándo llegó, no para cobrar.
      */
@@ -58,14 +72,14 @@ enum ZonaRuta: string
         $costa = fn (self $zona): bool => in_array($zona, [self::Pisco, self::Lima], true);
 
         if ($costa($origen) === $costa($destino)) {
-            return in_array(self::Cusco, [$origen, $destino], true) && in_array(self::Sur, [$origen, $destino], true) ? 2 : 1;
+            return in_array(self::Cusco, [$origen, $destino], true) && ($origen->esSur() || $destino->esSur()) ? 2 : 1;
         }
 
-        return in_array(self::Sur, [$origen, $destino], true) ? 2 : 3;
+        return $origen->esSur() || $destino->esSur() ? 2 : 3;
     }
 
     /**
-     * Donde empieza y termina la vuelta: Juliaca y la mina. El Sur y Cusco
+     * Donde empieza y termina la vuelta: Juliaca y la mina. El sur y Cusco
      * son destinos de paso de la carga particular: de ahí la unidad sigue a
      * Juliaca.
      */
@@ -86,7 +100,9 @@ enum ZonaRuta: string
         'lima' => ['CALLAO', 'LIMA', 'HUARAL', 'CHILCA', 'LURIN', 'VENTANILLA', 'HUAURA', 'VEGUETA', 'HUAROCHIRI', 'CAÑETE', 'VILLA EL SALVADOR'],
         'juliaca' => ['JULIACA', 'SAN ROMAN', 'PUNO', 'CHUCUITO', 'EL COLLAO', 'ILAVE', 'DESAGUADERO'],
         'cusco' => ['CUSCO', 'QUISPICANCHI'],
-        'sur' => ['AREQUIPA', 'CAYLLOMA', 'CASTILLA', 'ISLAY', 'CAMANA', 'TACNA', 'MOQUEGUA', 'MARISCAL NIETO', 'ILO'],
+        'arequipa' => ['AREQUIPA', 'CAYLLOMA', 'CASTILLA', 'ISLAY', 'CAMANA'],
+        'moquegua' => ['MOQUEGUA', 'MARISCAL NIETO', 'ILO'],
+        'tacna' => ['TACNA'],
     ];
 
     /**
@@ -95,7 +111,7 @@ enum ZonaRuta: string
      * antes que Lima porque algunas direcciones de Paracas citan la
      * Panamericana «Lima».
      */
-    private const ORDEN = ['mina', 'pisco', 'lima', 'juliaca', 'cusco', 'sur'];
+    private const ORDEN = ['mina', 'pisco', 'lima', 'juliaca', 'cusco', 'arequipa', 'moquegua', 'tacna'];
 
     /**
      * La zona de una dirección tal como viene en la GR («… - PARACAS - PISCO
