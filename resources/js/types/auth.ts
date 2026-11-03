@@ -68,6 +68,7 @@ export type Permiso =
     | 'cuentas.ver'
     | 'cuentas.gestionar'
     | 'whatsapp.administrar'
+    | 'alertas.configurar'
     | 'historial.ver';
 
 /** Un bloque de la matriz de permisos: un módulo con sus acciones. */

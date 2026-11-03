@@ -8,6 +8,7 @@ use App\Http\Requests\RevisarSalidaRequest;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
 use App\Models\Vuelta;
+use App\Services\AlertasDelTicket;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -47,20 +48,22 @@ class TallerController extends Controller
         ]);
     }
 
-    public function store(RevisarSalidaRequest $request, Vuelta $vuelta): RedirectResponse
+    public function store(RevisarSalidaRequest $request, Vuelta $vuelta, AlertasDelTicket $alertas): RedirectResponse
     {
         $this->authorize('create', [RevisionTaller::class, $vuelta]);
 
         $resultado = ResultadoTaller::from($request->string('resultado')->toString());
         $noApta = $resultado === ResultadoTaller::NoApto;
 
-        $vuelta->revisiones()->create([
+        $revision = $vuelta->revisiones()->create([
             'resultado' => $resultado,
             'disponible_estimado' => $noApta ? Carbon::parse($request->string('disponible_estimado')->toString()) : null,
             'motivo' => $noApta ? $request->string('motivo')->toString() : null,
             'trabajos' => $request->string('trabajos')->toString() ?: null,
             'user_id' => $request->user()?->id,
         ]);
+
+        $alertas->revisado($vuelta, $revision, $request->user());
 
         return back()->with('toast', [
             'type' => $noApta ? 'warning' : 'success',

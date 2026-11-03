@@ -55,6 +55,9 @@ class AppServiceProvider extends ServiceProvider
         // número habla en nombre de Transportes Paty.
         Gate::define('administrar-whatsapp', fn (User $user): bool => $user->checkPermissionTo(Permiso::WhatsappAdministrar));
 
+        // Qué alertas salen, por dónde y a quién.
+        Gate::define('configurar-alertas', fn (User $user): bool => $user->checkPermissionTo(Permiso::AlertasConfigurar));
+
         // Quién puede qué no se delega: quien pudiera repartir permisos podría
         // darse cualquiera a sí mismo. Queda en el admin, igual que los usuarios.
         Gate::define('administrar-roles', fn (User $user): bool => $user->hasRole(SincronizadorPermisos::ROL_ADMIN));

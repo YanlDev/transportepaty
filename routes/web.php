@@ -1,12 +1,14 @@
 <?php
 
 use App\Http\Controllers\AbastecimientoController;
+use App\Http\Controllers\AlertaController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\ConfiguracionAbastecimientoController;
+use App\Http\Controllers\ConfiguracionAlertaController;
 use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\ConfiguracionProgramacionController;
 use App\Http\Controllers\ContabilidadController;
@@ -317,7 +319,16 @@ Route::middleware('auth')->group(function () {
         Route::post('whatsapp/areas', [AreaAvisoController::class, 'store'])->name('whatsapp.areas.store');
         Route::put('whatsapp/areas/{area}', [AreaAvisoController::class, 'update'])->name('whatsapp.areas.update');
         Route::delete('whatsapp/areas/{area}', [AreaAvisoController::class, 'destroy'])->name('whatsapp.areas.destroy');
+
+        Route::get('alertas', [ConfiguracionAlertaController::class, 'index'])->name('alertas.configuracion');
+        Route::put('alertas/{tipo}', [ConfiguracionAlertaController::class, 'update'])->name('alertas.configuracion.update');
+        Route::post('alertas/{tipo}/probar', [ConfiguracionAlertaController::class, 'probar'])->name('alertas.configuracion.probar');
     });
+
+    // La bandeja de alertas de cada quien: sin permiso, cada uno ve las suyas.
+    Route::get('alertas', [AlertaController::class, 'index'])->name('alertas.index');
+    Route::post('alertas/leidas', [AlertaController::class, 'leerTodas'])->name('alertas.leidas');
+    Route::post('alertas/{alerta}/abrir', [AlertaController::class, 'abrir'])->name('alertas.abrir');
 
     Route::redirect('usuarios', '/settings/usuarios');
     Route::redirect('roles', '/settings/roles');

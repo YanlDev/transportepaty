@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\EstadoEnvio;
 use App\Enums\EstadoVuelta;
 use App\Enums\ResultadoTaller;
+use App\Enums\TipoAlerta;
 use App\Jobs\EnviarAvisoWhatsapp;
 use App\Models\AreaAviso;
 use App\Models\EnvioWhatsapp;
@@ -65,6 +66,23 @@ class AvisosPorWhatsapp
     }
 
     /**
+     * Anota una alerta para el número de un usuario o de un área y la encola.
+     * El texto va ya armado: una alerta cuenta lo que pasó en ese momento.
+     */
+    public function encolarAlerta(TipoAlerta $alerta, string $numero, string $destino, string $texto, ?User $usuario = null, ?AreaAviso $area = null): EnvioWhatsapp
+    {
+        return $this->encolar([
+            'tipo' => EnvioWhatsapp::TIPO_ALERTA,
+            'alerta' => $alerta->value,
+            'user_id' => $usuario?->id,
+            'area_aviso_id' => $area?->id,
+            'destino' => mb_substr($destino, 0, 60),
+            'numero' => $numero,
+            'texto' => $texto,
+        ]);
+    }
+
+    /**
      * Los tickets que ya debían salir (hasta hoy) y siguen sin GR, por
      * placa. Los que taller dio por no aptos no van: esa unidad no sale.
      *
@@ -106,6 +124,17 @@ class AvisosPorWhatsapp
      */
     public function mandar(EnvioWhatsapp $envio): void
     {
+        if ($envio->tipo === EnvioWhatsapp::TIPO_ALERTA) {
+            $envio->update([
+                'estado' => EstadoEnvio::Enviado,
+                'mensaje_id' => $this->whatsapp->enviar($envio->numero, (string) $envio->texto),
+                'error' => null,
+                'enviado_at' => now(),
+            ]);
+
+            return;
+        }
+
         if ($envio->tipo === EnvioWhatsapp::TIPO_RECORDATORIO) {
             $this->mandarRecordatorio($envio);
 

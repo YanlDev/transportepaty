@@ -41,6 +41,7 @@ type UsuarioEdit = {
     name: string;
     username: string;
     email: string | null;
+    celular: string | null;
     role: string | null;
     permisos: Permiso[];
 };
@@ -56,6 +57,7 @@ type FormData = {
     name: string;
     username: string;
     email: string;
+    celular: string;
     password: string;
     password_confirmation: string;
     role: string;
@@ -68,6 +70,7 @@ export function UserForm({ mode, usuario, roles, modulos }: Props) {
             name: usuario?.name ?? '',
             username: usuario?.username ?? '',
             email: usuario?.email ?? '',
+            celular: usuario?.celular ?? '',
             password: '',
             password_confirmation: '',
             role: usuario?.role ?? '',
@@ -162,6 +165,24 @@ export function UserForm({ mode, usuario, roles, modulos }: Props) {
                                     setData('email', e.target.value)
                                 }
                                 placeholder="usuario@ejemplo.com"
+                            />
+                        )}
+                    </Field>
+                    <Field
+                        label="Celular (WhatsApp)"
+                        error={errors.celular}
+                        ayuda="Opcional. A este número le llegan sus alertas por WhatsApp, si están prendidas."
+                    >
+                        {(id) => (
+                            <Input
+                                id={id}
+                                type="tel"
+                                inputMode="tel"
+                                value={data.celular}
+                                onChange={(e) =>
+                                    setData('celular', e.target.value)
+                                }
+                                placeholder="987 654 321"
                             />
                         )}
                     </Field>

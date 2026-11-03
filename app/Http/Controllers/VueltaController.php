@@ -21,6 +21,7 @@ use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
+use App\Services\AlertasDelTicket;
 use App\Services\AsignadorVueltas;
 use App\Services\AvisoDeVuelta;
 use App\Services\AvisosPorWhatsapp;
@@ -112,11 +113,12 @@ class VueltaController extends Controller
         ]);
     }
 
-    public function store(GuardarVueltaRequest $request): RedirectResponse
+    public function store(GuardarVueltaRequest $request, AlertasDelTicket $alertas): RedirectResponse
     {
         $this->authorize('create', Vuelta::class);
 
         $vuelta = $this->programador->programar($request->datos());
+        $alertas->programado($vuelta, $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => "Vuelta {$vuelta->codigo} programada."]);
     }
@@ -134,11 +136,12 @@ class VueltaController extends Controller
      * El candado: el ticket ya no recibe combustible ni viáticos. Las GR que
      * lleguen después arman el ticket siguiente.
      */
-    public function cerrar(Vuelta $vuelta, AsignadorVueltas $asignador): RedirectResponse
+    public function cerrar(Request $request, Vuelta $vuelta, AsignadorVueltas $asignador, AlertasDelTicket $alertas): RedirectResponse
     {
         $this->authorize('cerrar', $vuelta);
 
         $asignador->cerrar($vuelta);
+        $alertas->cerrado($vuelta, $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => "Ticket {$vuelta->codigo} cerrado: ya no recibe combustible ni viáticos."]);
     }

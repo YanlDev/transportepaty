@@ -17,9 +17,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $programacion_id De la pantalla de salidas de antes; ya no se llena.
  * @property int|null $vuelta_id
  * @property int|null $area_aviso_id
+ * @property int|null $user_id A quién iba la alerta, si fue a un usuario y no a un área.
  * @property string $tipo
+ * @property string|null $alerta El `TipoAlerta`, si el envío es una alerta.
  * @property string $destino
  * @property string $numero
+ * @property string|null $texto El mensaje de una alerta, ya armado.
  * @property EstadoEnvio $estado
  * @property string|null $mensaje_id
  * @property string|null $error
@@ -34,9 +37,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'vuelta_id',
     'area_aviso_id',
+    'user_id',
     'tipo',
+    'alerta',
     'destino',
     'numero',
+    'texto',
     'estado',
     'mensaje_id',
     'error',
@@ -56,6 +62,9 @@ class EnvioWhatsapp extends Model
 
     /** Las unidades de hoy que siguen sin GR, a un área (sin salida propia). */
     public const TIPO_RECORDATORIO = 'recordatorio';
+
+    /** Una alerta del sistema (ver `TipoAlerta`), con su texto ya armado. */
+    public const TIPO_ALERTA = 'alerta';
 
     protected $table = 'envios_whatsapp';
 

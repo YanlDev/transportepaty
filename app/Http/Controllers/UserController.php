@@ -67,6 +67,7 @@ class UserController extends Controller
             'name' => $validated['name'],
             'username' => $validated['username'],
             'email' => $validated['email'] ?? null,
+            'celular' => $this->celular($validated['celular'] ?? null),
             'password' => $validated['password'],
         ]);
 
@@ -95,6 +96,7 @@ class UserController extends Controller
                 'name' => $user->name,
                 'username' => $user->username,
                 'email' => $user->email,
+                'celular' => $user->celular,
                 'role' => $user->getRoleNames()->first(),
                 'permisos' => $user->getDirectPermissions()->pluck('name')->values(),
             ],
@@ -115,6 +117,7 @@ class UserController extends Controller
             'name' => $validated['name'],
             'username' => $validated['username'],
             'email' => $validated['email'] ?? null,
+            'celular' => $this->celular($validated['celular'] ?? null),
         ]);
 
         $user->syncRoles([$validated['role']]);
@@ -175,5 +178,13 @@ class UserController extends Controller
                 ]),
             'modulos' => RolController::modulos(),
         ];
+    }
+
+    /** El celular con solo sus dígitos, como se guardan los números de aviso. */
+    private function celular(?string $celular): ?string
+    {
+        $digitos = preg_replace('/\D/', '', (string) $celular) ?? '';
+
+        return $digitos === '' ? null : $digitos;
     }
 }

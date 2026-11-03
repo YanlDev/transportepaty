@@ -277,6 +277,9 @@ class AsignadorVueltas
         $vuelta = $parada->vuelta;
         $cambios = [];
 
+        // La primera GR de un ticket programado: la unidad salió.
+        $salio = $vuelta->estado === EstadoVuelta::Programada && $vuelta->origen === OrigenVuelta::Programacion;
+
         if ($vuelta->estado === EstadoVuelta::Programada) {
             $cambios['estado'] = EstadoVuelta::EnCurso;
         }
@@ -297,6 +300,10 @@ class AsignadorVueltas
         }
 
         $this->cerrarLasAnteriores($vuelta);
+
+        if ($salio) {
+            app(AlertasDelTicket::class)->salio($vuelta);
+        }
     }
 
     /**

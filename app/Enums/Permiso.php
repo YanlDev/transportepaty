@@ -87,6 +87,8 @@ enum Permiso: string
 
     case WhatsappAdministrar = 'whatsapp.administrar';
 
+    case AlertasConfigurar = 'alertas.configurar';
+
     case HistorialVer = 'historial.ver';
 
     /**
@@ -111,6 +113,7 @@ enum Permiso: string
         'cobranza' => 'Cobranza',
         'cuentas' => 'Cuentas bancarias',
         'whatsapp' => 'WhatsApp',
+        'alertas' => 'Alertas',
         'historial' => 'Historial de movimientos',
     ];
 
@@ -129,7 +132,7 @@ enum Permiso: string
         'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades', 'conductores', 'asistencia']],
         'comercial' => ['nombre' => 'Comercial', 'modulos' => ['cotizaciones', 'clientes', 'costos']],
         'finanzas' => ['nombre' => 'Finanzas', 'modulos' => ['cobranza', 'cuentas']],
-        'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp', 'historial']],
+        'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp', 'alertas', 'historial']],
     ];
 
     /**
@@ -207,6 +210,7 @@ enum Permiso: string
             self::CuentasVer => 'Ver las cuentas',
             self::CuentasGestionar => 'Administrar las cuentas',
             self::WhatsappAdministrar => 'Vincular el número y las áreas de aviso',
+            self::AlertasConfigurar => 'Configurar qué alertas salen, por dónde y a quién',
             self::HistorialVer => 'Ver el historial de movimientos del sistema',
         };
     }

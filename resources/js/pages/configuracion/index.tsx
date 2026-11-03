@@ -1,5 +1,6 @@
 import { Head, Link, setLayoutProps } from '@inertiajs/react';
 import {
+    BellRing,
     Calculator,
     ChevronRight,
     CircleGauge,
@@ -17,6 +18,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import configuracionAbastecimiento from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
+import alertas from '@/actions/App/Http/Controllers/ConfiguracionAlertaController';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionController';
 import configuracionProgramacion from '@/actions/App/Http/Controllers/ConfiguracionProgramacionController';
 import equipamiento from '@/actions/App/Http/Controllers/EquipamientoCarretaController';
@@ -201,6 +203,17 @@ export default function Configuracion({
                                   'El número de la empresa, las áreas que reciben avisos y el recordatorio diario.',
                               href: whatsapp.index().url,
                               icono: MessageCircle,
+                          },
+                      ]
+                    : []),
+                ...(puede('alertas.configurar')
+                    ? [
+                          {
+                              titulo: 'Alertas',
+                              descripcion:
+                                  'Qué avisa el sistema, por la app o por WhatsApp, y a quién.',
+                              href: alertas.index().url,
+                              icono: BellRing,
                           },
                       ]
                     : []),

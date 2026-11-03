@@ -201,3 +201,15 @@ it('moves the system screens under settings and keeps the old urls working', fun
     actingAs(actorConRol('admin'))->get('/roles')->assertRedirect('/settings/roles');
     actingAs(actorConRol('admin'))->get('/whatsapp')->assertRedirect('/settings/whatsapp');
 });
+
+it('says who has each role', function (): void {
+    $dania = User::factory()->create(['name' => 'Dania', 'username' => 'dania'])->assignRole('abastecimiento');
+
+    actingAs(actorConRol('admin'))
+        ->get(route('roles.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('roles', function ($roles) use ($dania): bool {
+            $abastecimiento = collect($roles)->firstWhere('name', 'abastecimiento');
+
+            return $abastecimiento['miembros'] === [['id' => $dania->id, 'nombre' => 'Dania', 'usuario' => 'dania']];
+        }));
+});

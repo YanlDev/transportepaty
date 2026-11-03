@@ -70,3 +70,29 @@ export function formatearPeso(peso: number, unidadPeso: string): string {
 
     return `${toneladas.toLocaleString(LOCALE, { maximumFractionDigits: 2 })} TNE`;
 }
+
+/**
+ * Cuánto hace de algo, corto: «recién», «hace 5 min», «hace 3 h», «ayer» o
+ * la fecha. Para las alertas, donde importa más lo reciente que la hora.
+ */
+export function haceCuanto(fecha: string): string {
+    const minutos = Math.floor(
+        (Date.now() - new Date(fecha).getTime()) / 60000,
+    );
+
+    if (minutos < 1) {
+        return 'recién';
+    }
+
+    if (minutos < 60) {
+        return `hace ${minutos} min`;
+    }
+
+    const horas = Math.floor(minutos / 60);
+
+    if (horas < 24) {
+        return `hace ${horas} h`;
+    }
+
+    return horas < 48 ? 'ayer' : formatearFecha(fecha);
+}

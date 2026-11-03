@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\AlertaController;
 use App\Services\PendientesDelInicio;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
@@ -56,6 +57,9 @@ class HandleInertiaRequests extends Middleware
             // El número junto a Taller, Abastecimiento y Programación. Se
             // calcula a lo más una vez por minuto por usuario: va en todas
             // las páginas.
+            // La campanita: cuántas alertas faltan leer y las últimas. Se
+            // pide de nuevo cada minuto desde la página abierta.
+            'alertas' => fn (): ?array => $user ? AlertaController::campanita($request) : null,
             'pendientesMenu' => fn (): array => $user
                 ? Cache::remember("pendientes-menu:{$user->id}", 60, fn (): array => app(PendientesDelInicio::class)->porEntradaDelMenu($user))
                 : [],

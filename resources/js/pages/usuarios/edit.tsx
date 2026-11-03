@@ -11,6 +11,7 @@ type Usuario = {
     name: string;
     username: string;
     email: string | null;
+    celular: string | null;
     role: string | null;
     permisos: Permiso[];
 };

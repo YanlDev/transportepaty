@@ -26,7 +26,9 @@ class ReconstructorVueltas
      */
     public function reconstruir(?int $tractoId = null): array
     {
-        return DB::transaction(function () use ($tractoId): array {
+        // Son GR viejas pasando por el camino de una GR nueva: no se avisa
+        // que salió un ticket de hace meses.
+        return Alertas::sinAvisar(fn (): array => DB::transaction(function () use ($tractoId): array {
             $this->borrarHistorial($tractoId);
 
             Viaje::query()
@@ -43,7 +45,7 @@ class ReconstructorVueltas
             $this->cerrarLasQuedadasAtras($tractoId);
 
             return $this->resumen($tractoId);
-        });
+        }));
     }
 
     private function borrarHistorial(?int $tractoId): void
