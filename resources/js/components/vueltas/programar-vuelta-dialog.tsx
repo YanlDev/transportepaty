@@ -941,8 +941,8 @@ export function ProgramarVueltaDialog({
                             </DialogTitle>
                             <DialogDescription>
                                 Programa la ida al salir; la vuelta, cuando se
-                                sepa con qué regresa. Las GR caen solas en su
-                                parada.
+                                sepa con qué regresa. Las GR se asignan a su
+                                parada desde «GR por asignar».
                             </DialogDescription>
                         </DialogHeader>
 

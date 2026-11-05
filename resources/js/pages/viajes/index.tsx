@@ -1,7 +1,14 @@
 import { Head, Link } from '@inertiajs/react';
-import { FilePenLine, Route, Route as RouteIcon, Send } from 'lucide-react';
+import {
+    FilePenLine,
+    FileStack,
+    Route,
+    Route as RouteIcon,
+    Send,
+} from 'lucide-react';
 import { useState } from 'react';
 import emisionGre from '@/actions/App/Http/Controllers/EmisionGreController';
+import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import viajes, { create } from '@/actions/App/Http/Controllers/ViajeController';
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { EmptyState } from '@/components/empty-state';
@@ -62,8 +69,16 @@ export default function ViajesIndex({
 
             <EncabezadoPantalla
                 titulo="Guías de remisión"
-                descripcion="Al subir una GR, cae sola en el ticket de su unidad."
+                descripcion="Al subir una GR, queda en «GR por asignar» hasta que alguien la pone en el ticket de su unidad."
                 icono={Route}
+                acciones={
+                    <Button asChild variant="outline">
+                        <Link href={guiasRutas.index().url}>
+                            <FileStack className="size-4" />
+                            GR por asignar
+                        </Link>
+                    </Button>
+                }
             />
 
             {/* Arrastrar el PDF desde la carpeta de la GR y soltarlo en la
