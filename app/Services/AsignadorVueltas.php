@@ -22,21 +22,22 @@ use Illuminate\Support\Str;
  *   GR va a la parada que coincide en origen, destino y carga. Si ninguna
  *   coincide, entra igual como parada «no programada»: lo planeado no se
  *   corrige solo, se muestra la diferencia.
- * - Si no hay vuelta programada, la GR sigue armando el historial con la
- *   misma regla de siempre: las GR de una misma carga se juntan, donde la
- *   unidad no arranca en la zona en que terminó hay un trayecto vacío, y la
- *   vuelta empieza cuando la unidad sale de la sierra (Juliaca, la mina…)
- *   y termina cuando vuelve a llegar a ella.
- *
- * La reconstrucción del historial (`ReconstructorVueltas`) es esto mismo
- * aplicado GR por GR, así que las dos nunca dan resultados distintos.
+ * - Si no hay vuelta programada, la GR queda suelta: desde el 05-11-2026
+ *   solo cuentan los tickets que se programan al salir de la base, nunca
+ *   las unidades que ya andaban en ruta. Si la programada ya había hecho su
+ *   regreso y la unidad vuelve a salir, esa vuelta terminó y se cierra.
+ * - Solo la reconstrucción del historial (`ReconstructorVueltas`, a pedido)
+ *   arma vueltas sin programar, con la regla de siempre: las GR de una misma
+ *   carga se juntan, donde la unidad no arranca en la zona en que terminó hay
+ *   un trayecto vacío, y la vuelta empieza cuando la unidad sale de la sierra
+ *   (Juliaca, la mina…) y termina cuando vuelve a llegar a ella.
  */
 class AsignadorVueltas
 {
     /** Cuántos días puede haber entre dos GR de la misma parada. */
     private const DIAS_MISMA_PARADA = 1;
 
-    public function asignar(Viaje $guia): ?ParadaVuelta
+    public function asignar(Viaje $guia, bool $armarHistorial = false): ?ParadaVuelta
     {
         // Recién creada puede venir sin los valores que pone la base (el
         // importador deja que el tipo de carga tome el suyo por defecto).
@@ -46,14 +47,23 @@ class AsignadorVueltas
             return null;
         }
 
-        return DB::transaction(function () use ($guia): ParadaVuelta {
+        return DB::transaction(function () use ($guia, $armarHistorial): ?ParadaVuelta {
             $vuelta = $this->vueltaVigente($guia);
             $origen = ZonaRuta::desdeDireccion($guia->origen);
             $destino = ZonaRuta::desdeDireccion($guia->destino);
+            $programada = $vuelta?->origen === OrigenVuelta::Programacion;
 
-            $parada = $vuelta?->origen === OrigenVuelta::Programacion && ! $this->yaRegreso($vuelta, $origen, $destino)
-                ? $this->enProgramada($vuelta, $guia, $origen, $destino)
-                : $this->enHistorial($vuelta, $guia, $origen, $destino);
+            if ($programada && ! $this->yaRegreso($vuelta, $origen, $destino)) {
+                $parada = $this->enProgramada($vuelta, $guia, $origen, $destino);
+            } elseif ($armarHistorial) {
+                $parada = $this->enHistorial($vuelta, $guia, $origen, $destino);
+            } else {
+                if ($programada && $vuelta->estado === EstadoVuelta::EnCurso) {
+                    $this->cerrar($vuelta);
+                }
+
+                return null;
+            }
 
             $guia->forceFill(['parada_vuelta_id' => $parada->id])->saveQuietly();
             $this->alLlegarLaGuia($parada, $guia);

@@ -40,7 +40,7 @@ class ReconstructorVueltas
                 ->orderBy('fecha_emision')
                 ->orderBy('id')
                 ->get()
-                ->each(fn (Viaje $guia) => $this->asignador->asignar($guia));
+                ->each(fn (Viaje $guia) => $this->asignador->asignar($guia, armarHistorial: true));
 
             $this->cerrarLasQuedadasAtras($tractoId);
 

@@ -141,6 +141,7 @@ it('never touches programmed trips nor their GR', function (): void {
 
 it('keeps the history trips that already have the workshop OK, fuel or allowances', function (): void {
     guia($this->tracto, '2026-09-02', MINA, PISCO, TipoCarga::Concentrado);
+    app(ReconstructorVueltas::class)->reconstruir();
     $vuelta = Vuelta::query()->sole();
     RevisionTaller::factory()->create(['vuelta_id' => $vuelta->id]);
     Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id]);
@@ -155,11 +156,7 @@ it('keeps the history trips that already have the workshop OK, fuel or allowance
 });
 
 it('does not save anything on a dry run', function (): void {
-    // Una GR de antes de que existieran las vueltas: hoy se asignaría sola
-    // al registrarse, así que se la suelta para simularlo.
     guia($this->tracto, '2026-09-02', MINA, PISCO, TipoCarga::Concentrado);
-    Viaje::query()->update(['parada_vuelta_id' => null]);
-    Vuelta::query()->delete();
 
     $this->artisan('transpaty:reconstruir-vueltas', ['--dry-run' => true])
         ->expectsOutputToContain('[dry-run] Vueltas: 1')

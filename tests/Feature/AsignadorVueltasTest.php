@@ -107,28 +107,40 @@ it('joins several GR of the same load in one stop', function (): void {
     expect($segunda->parada_vuelta_id)->toBe($primera->parada_vuelta_id);
 });
 
-it('opens the next trip when the unit goes down again after coming back up', function (): void {
+it('closes the programmed trip when the unit goes down again after coming back up', function (): void {
     $programada = programarVuelta($this->tracto, '2026-10-10');
     registrarGuia($this->tracto, '2026-10-10', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
     registrarGuia($this->tracto, '2026-10-15', DIR_HUARAL, DIR_JULIACA, TipoCarga::Particular);
 
+    // Salió de nuevo sin programar la siguiente: no se arma sola.
     $siguiente = registrarGuia($this->tracto, '2026-10-24', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
 
-    // El vacío Juliaca ⇢ mina abre la vuelta siguiente, junto con el
-    // concentrado.
-    expect($siguiente->parada->vuelta->paradas()->pluck('tipo_carga')->all())->toBe([TipoCarga::Vacio, TipoCarga::Concentrado])
-        ->and($siguiente->parada->vuelta->is($programada))->toBeFalse()
-        ->and($siguiente->parada->vuelta->estado)->toBe(EstadoVuelta::EnCurso)
+    expect($siguiente->parada_vuelta_id)->toBeNull()
+        ->and(Vuelta::query()->count())->toBe(1)
         ->and($programada->fresh()->estado)->toBe(EstadoVuelta::Cerrada)
         ->and($programada->fresh()->fin->toDateString())->toBe('2026-10-15');
 });
 
-it('keeps building the history when nothing is programmed', function (): void {
-    registrarGuia($this->tracto, '2026-09-02', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
-    registrarGuia($this->tracto, '2026-09-07', DIR_PISCO, DIR_CALLAO, TipoCarga::Metalico);
-    registrarGuia($this->tracto, '2026-09-09', DIR_HUARAL, DIR_JULIACA, TipoCarga::Particular);
-    // Vuelve a bajar después de subir: se cierra la vuelta y empieza otra.
-    $bajada = registrarGuia($this->tracto, '2026-09-16', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
+it('leaves the GR alone when the unit has no programmed trip', function (): void {
+    $guia = registrarGuia($this->tracto, '2026-11-05', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
+
+    expect($guia->parada_vuelta_id)->toBeNull()
+        ->and(Vuelta::query()->count())->toBe(0);
+});
+
+it('builds the history only when asked to', function (): void {
+    $asignador = app(AsignadorVueltas::class);
+    $guias = [
+        registrarGuia($this->tracto, '2026-09-02', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado),
+        registrarGuia($this->tracto, '2026-09-07', DIR_PISCO, DIR_CALLAO, TipoCarga::Metalico),
+        registrarGuia($this->tracto, '2026-09-09', DIR_HUARAL, DIR_JULIACA, TipoCarga::Particular),
+        // Vuelve a bajar después de subir: se cierra la vuelta y empieza otra.
+        registrarGuia($this->tracto, '2026-09-16', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado),
+    ];
+
+    foreach ($guias as $guia) {
+        $asignador->asignar($guia, armarHistorial: true);
+    }
 
     [$primera, $segunda] = Vuelta::query()->orderBy('id')->get()->all();
 
@@ -138,18 +150,18 @@ it('keeps building the history when nothing is programmed', function (): void {
         // Callao y Huaral son la misma zona: entre las dos no hay vacío.
         ->and($primera->paradas()->count())->toBe(3)
         ->and($segunda->estado)->toBe(EstadoVuelta::EnCurso)
-        ->and($bajada->parada->vuelta->is($segunda))->toBeTrue()
+        ->and($guias[3]->fresh()->parada->vuelta->is($segunda))->toBeTrue()
         // De Juliaca a la mina sí: es el comienzo de la vuelta nueva.
         ->and($segunda->paradas()->count())->toBe(2);
 });
 
-it('leaves the GR before the planned departure in the history', function (): void {
-    $programada = programarVuelta($this->tracto, '2026-10-20');
+it('leaves alone the GR before the planned departure', function (): void {
+    programarVuelta($this->tracto, '2026-10-20');
 
     $guia = registrarGuia($this->tracto, '2026-10-01', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
 
-    expect($guia->parada->vuelta->is($programada))->toBeFalse()
-        ->and($guia->parada->vuelta->origen)->toBe(OrigenVuelta::Historial);
+    expect($guia->parada_vuelta_id)->toBeNull()
+        ->and(Vuelta::query()->count())->toBe(1);
 });
 
 it('ignores a GR without a tractor', function (): void {
@@ -198,6 +210,7 @@ it('drops the loaded climb from Juliaca to the mine into its programmed stop', f
 });
 
 it('closes the previous trip when the programmed one starts, even if its GR came late', function (): void {
+    $anterior = programarVuelta($this->tracto, '2026-09-24');
     $programada = Vuelta::factory()->programada()->create(['tracto_id' => $this->tracto->id, 'inicio' => '2026-10-10']);
     ParadaVuelta::factory()->create([
         'vuelta_id' => $programada->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1,
@@ -207,8 +220,7 @@ it('closes the previous trip when the programmed one starts, even if its GR came
 
     // Las GR del viaje anterior se registran después de programar el nuevo.
     registrarGuia($this->tracto, '2026-09-24', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
-    $subida = registrarGuia($this->tracto, '2026-10-08', DIR_HUARAL, DIR_JULIACA, TipoCarga::Particular);
-    $anterior = $subida->parada->vuelta;
+    registrarGuia($this->tracto, '2026-10-08', DIR_HUARAL, DIR_JULIACA, TipoCarga::Particular);
 
     registrarGuia($this->tracto, '2026-10-12', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
 
