@@ -33,33 +33,72 @@ class PasosDelTicket
     public function de(Vuelta $vuelta, array $gastos): array
     {
         $pasos = $this->pasos($vuelta, $gastos, conAutor: true);
+        $actual = $this->indiceActual($vuelta, $pasos);
 
-        // El paso en el que está: el primero sin terminar. Uno cerrado ya no
-        // espera nada.
-        $actual = $vuelta->estado === EstadoVuelta::Cerrada
-            ? null
-            : collect($pasos)->first(fn (array $paso): bool => $paso['estado'] !== 'hecho')['clave'] ?? null;
-
-        return ['pasos' => $pasos, 'actual' => $actual];
+        return ['pasos' => $pasos, 'actual' => $actual === null ? null : $pasos[$actual]['clave']];
     }
 
     /**
-     * Lo próximo que le falta al ticket, para el seguimiento de la
-     * programación: el primer paso sin terminar. No busca quién lo programó
-     * (en el tablero sería una consulta por ticket). Null si ya está cerrado.
+     * Para el seguimiento de la programación: lo próximo que le toca al
+     * ticket desde donde va, y lo que quedó atrás sin hacer (un ticket que
+     * ya va en ida sin el OK de taller). No busca quién lo programó: en el
+     * tablero sería una consulta por ticket.
      *
      * @param  array{tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
-     * @return Paso|null
+     * @return array{siguiente: Paso|null, saltados: list<string>}
      */
-    public function siguiente(Vuelta $vuelta, array $gastos): ?array
+    public function seguimiento(Vuelta $vuelta, array $gastos): array
+    {
+        $pasos = $this->pasos($vuelta, $gastos, conAutor: false);
+        $actual = $this->indiceActual($vuelta, $pasos);
+
+        if ($actual === null) {
+            return ['siguiente' => null, 'saltados' => []];
+        }
+
+        $saltados = [];
+
+        foreach (array_slice($pasos, 0, $actual) as $paso) {
+            if ($paso['estado'] !== 'hecho') {
+                $saltados[] = $paso['titulo'];
+            }
+        }
+
+        return ['siguiente' => $pasos[$actual], 'saltados' => $saltados];
+    }
+
+    /**
+     * En qué paso va: el primero sin terminar después del último hecho. Así
+     * un ticket que ya va en ida sigue con definir la vuelta, aunque haya
+     * salido sin el OK de taller (eso queda como saltado, no como lo
+     * próximo). Uno cerrado ya no espera nada.
+     *
+     * @param  list<Paso>  $pasos
+     */
+    private function indiceActual(Vuelta $vuelta, array $pasos): ?int
     {
         if ($vuelta->estado === EstadoVuelta::Cerrada) {
             return null;
         }
 
-        foreach ($this->pasos($vuelta, $gastos, conAutor: false) as $paso) {
+        $ultimoHecho = 0;
+
+        foreach ($pasos as $indice => $paso) {
+            if ($paso['estado'] === 'hecho') {
+                $ultimoHecho = $indice;
+            }
+        }
+
+        foreach ($pasos as $indice => $paso) {
+            if ($indice > $ultimoHecho && $paso['estado'] !== 'hecho') {
+                return $indice;
+            }
+        }
+
+        // Todo lo anterior está hecho: lo que falta es lo primero sin hacer.
+        foreach ($pasos as $indice => $paso) {
             if ($paso['estado'] !== 'hecho') {
-                return $paso;
+                return $indice;
             }
         }
 

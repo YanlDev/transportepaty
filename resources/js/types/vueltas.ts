@@ -165,6 +165,8 @@ export type TarjetaVuelta = Vuelta & {
     reabrible: boolean;
     /** Lo próximo que le falta (el primer paso sin terminar); null si está cerrado. */
     siguiente?: PasoTicket | null;
+    /** Pasos que quedaron atrás sin hacer (salió sin el OK de taller). */
+    saltados?: string[];
 };
 
 export type DiaDeSemana = { fecha: string; programadas: number };

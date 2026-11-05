@@ -102,3 +102,20 @@ it('tells the board what each ticket needs next', function (): void {
             ->where('tablero.0.siguiente.clave', 'taller')
             ->where('tablero.0.siguiente.detalle', 'Esperando la revisión'));
 });
+
+it('follows on from where the unit is, and lists what was skipped', function (): void {
+    // Ya va en ida, salió sin el OK de taller ni combustible registrado.
+    Viaje::factory()->create(['tracto_id' => null, 'fecha_traslado' => now()->subDay()->toDateString()])
+        ->forceFill(['parada_vuelta_id' => $this->ida->id])->save();
+    $this->vuelta->update(['estado' => EstadoVuelta::EnCurso]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('tablero.0.siguiente.clave', 'regreso')
+            ->where('tablero.0.saltados', ['OK de taller', 'Abastecimiento de ida']));
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.show', $this->vuelta))
+        ->assertInertia(fn (Assert $page) => $page->where('actual', 'regreso'));
+});

@@ -272,7 +272,7 @@ function Fila({
                 <Ruta vuelta={vuelta} />
             </button>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-2.5 text-xs">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 border-t pt-2.5 text-xs [&>a]:ml-auto">
                 {siguiente ? (
                     <span
                         className={cn(
@@ -301,6 +301,16 @@ function Fila({
                 ) : (
                     <span className="text-muted-foreground">
                         Ticket cerrado.
+                    </span>
+                )}
+                {/* Lo que quedó atrás sin hacer: la unidad siguió igual. */}
+                {(vuelta.saltados ?? []).length > 0 && (
+                    <span
+                        className="flex items-center gap-1 text-amber-700 dark:text-amber-400"
+                        title="Pasos que quedaron atrás sin hacer"
+                    >
+                        <CircleAlert className="size-3.5" />
+                        Sin: {(vuelta.saltados ?? []).join(' · ')}
                     </span>
                 )}
                 <Link

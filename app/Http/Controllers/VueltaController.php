@@ -256,9 +256,9 @@ class VueltaController extends Controller
             ->sortBy(fn (array $fila): string => $fila['vuelta']->inicio?->toDateString().'|'.$fila['vuelta']->tracto->placa)
             ->map(fn (array $fila): array => [
                 ...$this->fila($fila['vuelta'], $fila['etapa'], $request),
-                // Lo próximo que le falta: el seguimiento lo muestra en cada
-                // fila.
-                'siguiente' => $this->pasos->siguiente($fila['vuelta'], $gastos[$fila['vuelta']->id]),
+                // Lo próximo que le toca desde donde va, y lo que quedó
+                // atrás sin hacer: el seguimiento lo muestra en cada fila.
+                ...$this->pasos->seguimiento($fila['vuelta'], $gastos[$fila['vuelta']->id]),
             ])
             ->all());
     }
