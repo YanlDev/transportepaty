@@ -7,6 +7,7 @@ use App\Enums\EstadoVuelta;
 use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
+use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Http\Requests\GuardarVueltaRequest;
@@ -16,9 +17,11 @@ use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\DestinoParticular;
 use App\Models\EnvioWhatsapp;
-use App\Models\OpcionTramo;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
+use App\Models\Ruta;
+use App\Models\RutaVuelta;
+use App\Models\VarianteRuta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
@@ -122,7 +125,7 @@ class VueltaController extends Controller
     {
         $this->authorize('create', Vuelta::class);
 
-        $vuelta = $this->programador->programar($request->datos());
+        $vuelta = $this->programador->programar($request->datos(), $request->user());
         $alertas->programado($vuelta, $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => "Vuelta {$vuelta->codigo} programada."]);
@@ -132,7 +135,7 @@ class VueltaController extends Controller
     {
         $this->authorize('update', $vuelta);
 
-        $this->programador->actualizar($vuelta, $request->datos());
+        $this->programador->actualizar($vuelta, $request->datos(), $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => "Vuelta {$vuelta->codigo} actualizada."]);
     }
@@ -471,23 +474,39 @@ class VueltaController extends Controller
     }
 
     /**
-     * Las opciones de ida y de vuelta y los destinos de la carga particular,
-     * tal como están en la configuración de la programación.
+     * Las rutas activas del catálogo para cada tramo (principales y
+     * complementos), con su dotación resumida y sus variantes, y los destinos
+     * de la carga particular a otro destino.
      *
      * @return array{ida: list<array<string, mixed>>, regreso: list<array<string, mixed>>, destinos: list<array{lugar: string, zona: string}>}
      */
     private function opcionesDeTramo(): array
     {
         $opciones = ['ida' => [], 'regreso' => []];
+        $rutas = Ruta::query()->where('activa', true)->enOrden()->with(['lineas.punto:id,nombre', 'variantes'])->get();
 
-        foreach (OpcionTramo::query()->where('activa', true)->enOrden()->get() as $opcion) {
-            $opciones[$opcion->sentido->value][] = [
-                'value' => (string) $opcion->id,
-                'label' => $opcion->nombre,
-                'descripcion' => $opcion->descripcion ?? '',
-                'pide_destino' => $opcion->pide_destino,
-                'paradas' => $opcion->paradas,
-            ];
+        foreach ($rutas as $ruta) {
+            foreach (SentidoTramo::cases() as $sentido) {
+                if (! $ruta->sirvePara($sentido)) {
+                    continue;
+                }
+
+                $opciones[$sentido->value][] = [
+                    'value' => (string) $ruta->id,
+                    'label' => $ruta->nombre,
+                    'descripcion' => $ruta->descripcion ?? '',
+                    'es_complemento' => $ruta->es_complemento,
+                    'pide_destino' => $ruta->pide_destino,
+                    'paradas' => $ruta->paradas,
+                    'tope' => $ruta->topePara(null),
+                    'dotacion' => $this->resumenDeDotacion($ruta->lineasPara(null)),
+                    'variantes' => $ruta->variantes->map(fn (VarianteRuta $variante): array => [
+                        'id' => $variante->id,
+                        'nombre' => $variante->nombre,
+                        'tope' => $ruta->topePara($variante),
+                    ])->values()->all(),
+                ];
+            }
         }
 
         return [
@@ -499,6 +518,23 @@ class VueltaController extends Controller
                 ->map(fn (DestinoParticular $destino): array => ['lugar' => $destino->lugar, 'zona' => $destino->zona->value])
                 ->all()),
         ];
+    }
+
+    /**
+     * La dotación en una línea: «Mina 100 gal · Arequipa 120 gal · viáticos
+     * S/ 843».
+     *
+     * @param  list<array{tipo: string, punto: string|null, concepto: string, galones: float|null, monto: float|null}>  $lineas
+     */
+    private function resumenDeDotacion(array $lineas): string
+    {
+        $combustible = array_map(
+            fn (array $linea): string => ($linea['punto'] ?? $linea['concepto']).' '.($linea['galones'] === null ? '¿?' : rtrim(rtrim(number_format($linea['galones'], 1, '.', ''), '0'), '.')).' gal',
+            array_values(array_filter($lineas, fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value)),
+        );
+        $viaticos = array_sum(array_column(array_filter($lineas, fn (array $linea): bool => $linea['tipo'] !== TipoLineaAbastecimiento::Combustible->value), 'monto'));
+
+        return implode(' · ', array_filter([...$combustible, $viaticos > 0 ? 'viáticos S/ '.number_format($viaticos, 0) : null]));
     }
 
     /**
@@ -608,7 +644,7 @@ class VueltaController extends Controller
             'carreta:id,placa',
             'conductor:id,nombres,apellidos,telefono,telefono_alterno',
             'revisiones.usuario:id,name',
-            'dotaciones.usuario:id,name',
+            'rutas',
             'llegadaRegistradaPor:id,name',
             'paradas.viajes' => fn ($query) => $query
                 ->select(['id', 'parada_vuelta_id', 'numero_gr', 'fecha_traslado', 'peso', 'unidad_peso', 'cliente', 'origen', 'destino', 'tipo_carga', 'asignada_por', 'asignada_at'])
@@ -665,6 +701,17 @@ class VueltaController extends Controller
                 && ! $vuelta->viaticos_exists,
             'ida' => $vuelta->paradasDe(SentidoTramo::Ida)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada, $origenes[$parada->id] ?? null))->all(),
             'regreso' => $vuelta->paradasDe(SentidoTramo::Regreso)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada, $origenes[$parada->id] ?? null))->all(),
+            // Las rutas elegidas: el formulario las vuelve a marcar al editar.
+            'rutas' => $vuelta->rutas->map(fn (RutaVuelta $ruta): array => [
+                'id' => $ruta->id,
+                'sentido' => $ruta->sentido->value,
+                'ruta_id' => $ruta->ruta_id,
+                'variante_ruta_id' => $ruta->variante_ruta_id,
+                'nombre' => $ruta->nombre,
+                'variante' => $ruta->variante,
+                'es_complemento' => $ruta->es_complemento,
+                'variante_pendiente' => $ruta->variante_pendiente,
+            ])->values()->all(),
         ];
     }
 

@@ -13,7 +13,7 @@ import {
 import {
     CombustiblesDelTicket,
     DialogoCombustible,
-    TarjetasDelTicket,
+    RutasDelTicket,
 } from '@/components/abastecimiento/combustible-ticket';
 import type { AccionCombustible } from '@/components/abastecimiento/combustible-ticket';
 import { RegistrarAbastecimientoDialog } from '@/components/abastecimiento/registrar-abastecimiento-dialog';
@@ -49,7 +49,6 @@ import { cn } from '@/lib/utils';
 import type {
     PuntoRegistro,
     RegistroAbastecimiento,
-    ReglaParaConfirmar,
     TractoAbastecimiento,
     VueltaAbastecimiento,
 } from '@/types/abastecimiento';
@@ -59,7 +58,6 @@ type Props = {
     recientes: RegistroAbastecimiento[];
     tractos: TractoAbastecimiento[];
     puntos: PuntoRegistro[];
-    reglas: ReglaParaConfirmar[];
     puedeExcederTope: boolean;
 };
 
@@ -127,8 +125,9 @@ function faltaTotal(vuelta: VueltaAbastecimiento): number | null {
     return vuelta.tramos.reduce((suma, tramo) => suma + (tramo.falta ?? 0), 0);
 }
 
-const porConfirmar = (vuelta: VueltaAbastecimiento) =>
-    vuelta.tramos.some((tramo) => !tramo.confirmada);
+/** Por qué algún tramo todavía no tiene tope; null si todos lo tienen. */
+const sinTope = (vuelta: VueltaAbastecimiento): string | null =>
+    vuelta.tramos.find((tramo) => !tramo.confirmada)?.pendiente ?? null;
 
 /**
  * El tablero de abastecimiento como tabla: una fila por unidad con su ticket
@@ -140,7 +139,6 @@ export default function AbastecimientoIndex({
     recientes,
     tractos,
     puntos,
-    reglas,
     puedeExcederTope,
 }: Props) {
     const { puede } = usePermisos();
@@ -221,7 +219,7 @@ export default function AbastecimientoIndex({
 
             <EncabezadoPantalla
                 titulo="Abastecimiento"
-                descripcion="El combustible y los viáticos de cada ticket, contra la tarjeta confirmada de cada tramo."
+                descripcion="El combustible y los viáticos de cada ticket, contra las rutas de cada tramo."
                 icono={Fuel}
             />
 
@@ -361,7 +359,7 @@ export default function AbastecimientoIndex({
                             <TableHead className="w-28">Unidad</TableHead>
                             <TableHead className="w-24">Ticket</TableHead>
                             <TableHead className="w-24">Etapa</TableHead>
-                            <TableHead>Tarjetas</TableHead>
+                            <TableHead>Rutas</TableHead>
                             <TableHead className="min-w-80">
                                 Combustible
                             </TableHead>
@@ -440,9 +438,9 @@ export default function AbastecimientoIndex({
                                                     {tarjeta.nombre}
                                                 </span>
                                             ))}
-                                            {porConfirmar(vuelta) && (
+                                            {vuelta.tarjetas.length === 0 && (
                                                 <span className="rounded border border-dashed border-amber-400 px-1.5 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
-                                                    Por confirmar
+                                                    Sin ruta
                                                 </span>
                                             )}
                                         </div>
@@ -456,9 +454,14 @@ export default function AbastecimientoIndex({
                                         <BarraViaticos vuelta={vuelta} />
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        {porConfirmar(vuelta) ? (
-                                            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
-                                                Confirmar tarjeta
+                                        {sinTope(vuelta) !== null ? (
+                                            <span
+                                                className="text-xs font-medium text-amber-700 dark:text-amber-400"
+                                                title={
+                                                    sinTope(vuelta) ?? undefined
+                                                }
+                                            >
+                                                Sin tope
                                             </span>
                                         ) : falta === 0 ? (
                                             <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
@@ -679,13 +682,12 @@ export default function AbastecimientoIndex({
 
                                 <section className="flex flex-col gap-3">
                                     <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
-                                        Tarjeta de cada tramo
+                                        Rutas de cada tramo
                                     </h3>
-                                    <TarjetasDelTicket
-                                        vueltaId={abierta.id}
+                                    <RutasDelTicket
                                         codigo={abierta.codigo}
                                         tramos={abierta.tramos}
-                                        puedeConfirmar={puedeRegistrar}
+                                        puedeElegirVariante={puedeRegistrar}
                                         onAccion={setAccionCombustible}
                                     />
                                 </section>
@@ -696,8 +698,8 @@ export default function AbastecimientoIndex({
                                     </h3>
                                     <BarraCombustible tramos={abierta.tramos} />
                                     <p className="text-xs text-muted-foreground">
-                                        El total de cada tramo es el tope de su
-                                        tarjeta; los puntos son una sugerencia.
+                                        El tope de cada tramo es la suma de sus
+                                        rutas; los puntos son una sugerencia.
                                     </p>
                                     {abierta.bloqueo_gastos !== null && (
                                         <div className="flex flex-col items-start gap-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -793,7 +795,6 @@ export default function AbastecimientoIndex({
                 <DialogoCombustible
                     key={JSON.stringify(accionCombustible)}
                     accion={accionCombustible}
-                    reglas={reglas}
                     puntos={puntos}
                     onCerrar={() => setAccionCombustible(null)}
                 />

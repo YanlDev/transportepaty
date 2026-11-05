@@ -133,7 +133,7 @@ it('continues a stop from the real place where the previous one ended', function
  */
 function vueltaDelFormulario(int $tractoId, array $cambios = []): array
 {
-    return [
+    $datos = [
         'tracto_id' => $tractoId,
         'carreta_id' => null,
         'conductor_id' => null,
@@ -145,6 +145,10 @@ function vueltaDelFormulario(int $tractoId, array $cambios = []): array
         ],
         ...$cambios,
     ];
+
+    // Las rutas salen de las paradas que se manden, salvo que el test diga
+    // otras.
+    return ['rutas' => rutasParaProgramar($datos['paradas']), ...$datos];
 }
 
 it('programs a trip with its stops, outbound leg first', function (): void {

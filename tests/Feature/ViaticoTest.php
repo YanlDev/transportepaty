@@ -6,15 +6,14 @@ use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
 use App\Models\HistorialCambio;
-use App\Models\LineaReglaAbastecimiento;
+use App\Models\LineaRuta;
 use App\Models\ParadaVuelta;
 use App\Models\PuntoAbastecimiento;
-use App\Models\ReglaAbastecimiento;
 use App\Models\RevisionTaller;
+use App\Models\RutaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viatico;
 use App\Models\Vuelta;
-use App\Services\DotacionVuelta;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -39,11 +38,11 @@ beforeEach(function (): void {
     ]);
     RevisionTaller::factory()->create(['vuelta_id' => $this->vuelta->id]);
 
-    // Los viáticos de la pizarra son los de la tarjeta confirmada del tramo.
-    $tarjeta = ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole();
-    app(DotacionVuelta::class)->confirmar($this->vuelta, SentidoTramo::Ida, $tarjeta, actorConRol('admin'));
+    // Los viáticos que se esperan son los de la ruta elegida para el tramo.
+    $ruta = rutaDelCatalogo('Concentrado a Pisco')->load(['lineas.punto', 'variantes']);
+    $this->vuelta->rutas()->create([...RutaVuelta::copiaDe($ruta, null), 'sentido' => SentidoTramo::Ida, 'orden' => 1]);
 
-    $lineas = $tarjeta->lineas->keyBy('concepto');
+    $lineas = $ruta->lineas->keyBy('concepto');
     $this->viaticoMina = $lineas['Viático mina'];
     $this->viaticoLima = $lineas['Viático Lima'];
 });
@@ -60,7 +59,7 @@ function depositar(array $datos, string $rol = 'abastecimiento')
 it('does not deposit allowances without the workshop OK', function (): void {
     $this->vuelta->revisiones()->delete();
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143])
         ->assertSessionHasErrors('vuelta_id');
 
     expect(Viatico::query()->count())->toBe(0);
@@ -71,13 +70,13 @@ it('deposits a board allowance on a ticket that already has fuel at several poin
         Abastecimiento::factory()->paraVuelta($this->vuelta)->create(['punto_abastecimiento_id' => $punto->id]);
     }
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143])
         ->assertSessionHasNoErrors()
         ->assertSessionHas('toast.type', 'success');
 });
 
 it('deposits a board allowance with the amount actually deposited', function (): void {
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 150])
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 150])
         ->assertSessionHasNoErrors()
         ->assertSessionHas('toast.type', 'success');
 
@@ -92,7 +91,7 @@ it('deposits a board allowance with the amount actually deposited', function ():
 
 it('shows each allowance pending or deposited on the board', function (): void {
     Viatico::factory()->create([
-        'vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id,
+        'vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id,
         'concepto' => 'Viático mina', 'monto_previsto' => 143, 'monto' => 143,
     ]);
 
@@ -109,37 +108,39 @@ it('shows each allowance pending or deposited on the board', function (): void {
 });
 
 it('does not deposit the same board allowance twice', function (): void {
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143]);
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143]);
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
-        ->assertSessionHasErrors('linea_regla_abastecimiento_id');
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143])
+        ->assertSessionHasErrors('linea_ruta_id');
 
     expect(Viatico::query()->count())->toBe(1);
 });
 
-it('does not deposit a board allowance before its card is confirmed, and keeps the confirmed amount', function (): void {
-    $this->vuelta->dotaciones()->delete();
+it('does not deposit a route allowance the ticket does not have, and keeps the amount it was programmed with', function (): void {
+    $copia = $this->vuelta->rutas()->sole();
+    $copia->delete();
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
-        ->assertSessionHasErrors('linea_regla_abastecimiento_id');
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143])
+        ->assertSessionHasErrors('linea_ruta_id');
 
-    app(DotacionVuelta::class)->confirmar($this->vuelta, SentidoTramo::Ida, ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole(), actorConRol('admin'));
+    $this->vuelta->rutas()->create($copia->only(['sentido', 'ruta_id', 'es_complemento', 'nombre', 'lineas', 'orden']));
+    // El catálogo cambia después de programar: el ticket no.
     $this->viaticoMina->update(['monto' => 999]);
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143])
         ->assertSessionHasNoErrors();
 
     expect((float) Viatico::query()->sole()->monto_previsto)->toBe(143.0);
 });
 
-it('does not deposit an allowance from another card', function (): void {
-    $otra = LineaReglaAbastecimiento::query()
+it('does not deposit an allowance from another route', function (): void {
+    $otra = LineaRuta::query()
         ->where('tipo', 'viatico')
         ->whereNotIn('id', [$this->viaticoMina->id, $this->viaticoLima->id])
         ->firstOrFail();
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $otra->id, 'monto' => 100])
-        ->assertSessionHasErrors('linea_regla_abastecimiento_id');
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $otra->id, 'monto' => 100])
+        ->assertSessionHasErrors('linea_ruta_id');
 });
 
 it('adds an unplanned allowance with its own concept', function (): void {
@@ -150,24 +151,24 @@ it('adds an unplanned allowance with its own concept', function (): void {
         ->assertSessionHasNoErrors();
 
     $viatico = Viatico::query()->sole();
-    expect($viatico->linea_regla_abastecimiento_id)->toBeNull()
+    expect($viatico->linea_ruta_id)->toBeNull()
         ->and($viatico->monto_previsto)->toBeNull()
         ->and($viatico->concepto)->toBe('Alojamiento en Arequipa');
 });
 
 it('rejects an amount of zero or a future date', function (): void {
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 0])
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 0])
         ->assertSessionHasErrors('monto');
 
     depositar([
-        'vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id,
+        'vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id,
         'monto' => 143, 'fecha' => now()->addDays(5)->toDateString(),
     ])->assertSessionHasErrors('fecha');
 });
 
 it('lets billing correct a deposit and keeps the previous value in the history', function (): void {
     $viatico = Viatico::factory()->create([
-        'vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoLima->id,
+        'vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoLima->id,
         'concepto' => 'Viático Lima', 'monto_previsto' => 700, 'monto' => 700,
     ]);
     $facturacion = actorConRol('contador');
@@ -185,7 +186,7 @@ it('lets billing correct a deposit and keeps the previous value in the history',
 
 it('does not change the concept of a board allowance', function (): void {
     $viatico = Viatico::factory()->create([
-        'vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoLima->id,
+        'vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoLima->id,
         'concepto' => 'Viático Lima', 'monto' => 700,
     ]);
 
@@ -196,7 +197,7 @@ it('does not change the concept of a board allowance', function (): void {
 
 it('voids a deposit with its reason instead of deleting it, and frees the allowance', function (): void {
     $viatico = Viatico::factory()->create([
-        'vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id,
+        'vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id,
         'concepto' => 'Viático mina', 'monto' => 143,
     ]);
 
@@ -217,18 +218,18 @@ it('voids a deposit with its reason instead of deleting it, and frees the allowa
         ->put(route('viaticos.update', $viatico), ['monto' => 1, 'fecha' => now()->toDateString()])
         ->assertForbidden();
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143])
         ->assertSessionHasNoErrors();
 });
 
 it('keeps the allowances to abastecimiento, billing and the admin', function (): void {
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143], 'visor')
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143], 'visor')
         ->assertForbidden();
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143], 'contador')
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoMina->id, 'monto' => 143], 'contador')
         ->assertSessionHasNoErrors();
 
-    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoLima->id, 'monto' => 700], 'admin')
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_ruta_id' => $this->viaticoLima->id, 'monto' => 700], 'admin')
         ->assertSessionHasNoErrors();
 });
 

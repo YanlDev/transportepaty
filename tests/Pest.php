@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Ruta;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
@@ -84,6 +85,33 @@ expect()->extend('toBeOne', function () {
 function actorConRol(string $rol): User
 {
     return User::factory()->create()->assignRole($rol);
+}
+
+/**
+ * Una ruta del catálogo que cargan las migraciones (la de la oficina).
+ */
+function rutaDelCatalogo(string $nombre): Ruta
+{
+    return Ruta::query()->where('nombre', $nombre)->sole();
+}
+
+/**
+ * Las rutas que manda el formulario de programar para esas paradas: la ida
+ * con concentrado a Pisco y la vuelta con escoria, si el tramo tiene paradas.
+ *
+ * @param  list<array<string, mixed>>  $paradas
+ * @return list<array{sentido: string, ruta_id: int, variante_ruta_id: null}>
+ */
+function rutasParaProgramar(array $paradas): array
+{
+    $porTramo = ['ida' => 'Concentrado a Pisco', 'regreso' => 'Escoria a mina'];
+    $sentidos = array_values(array_unique(array_column($paradas, 'sentido')));
+
+    return array_values(array_map(fn (string $sentido): array => [
+        'sentido' => $sentido,
+        'ruta_id' => rutaDelCatalogo($porTramo[$sentido])->id,
+        'variante_ruta_id' => null,
+    ], array_filter(['ida', 'regreso'], fn (string $sentido): bool => in_array($sentido, $sentidos, true))));
 }
 
 /** Un JWT con forma real (SUNAT no se verifica acá, solo se lee su `exp`). */

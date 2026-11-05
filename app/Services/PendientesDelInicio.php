@@ -183,7 +183,7 @@ class PendientesDelInicio
                 $tramo = collect($this->gastos()[$vuelta->id]['tramos'])->firstWhere('sentido', $tramoBuscado);
 
                 if ($tramo && ! $tramo['confirmada']) {
-                    return 'Confirmar la tarjeta';
+                    return $tramo['pendiente'] ?? 'Sin tope';
                 }
 
                 return $tramo && $tramo['falta'] !== null ? 'Faltan '.round($tramo['falta'], 1).' gal' : null;
@@ -406,7 +406,7 @@ class PendientesDelInicio
                 'conductor:id,nombres,apellidos',
                 'paradas.viajes:id,parada_vuelta_id,numero_gr,origen,destino,peso,unidad_peso,fecha_traslado',
                 'revision',
-                'dotaciones',
+                'rutas.ruta.variantes',
             ])
             ->orderBy('inicio')
             ->orderBy('id')

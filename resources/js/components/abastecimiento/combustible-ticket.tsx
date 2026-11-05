@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils';
 import type {
     CombustibleDelTicket,
     PuntoRegistro,
-    ReglaParaConfirmar,
+    RutaDelTramo,
     TramoCombustible,
 } from '@/types/abastecimiento';
 
@@ -46,31 +46,28 @@ const nombreTramo = (sentido: 'ida' | 'regreso') =>
 /** Qué diálogo del combustible del ticket está abierto. */
 export type AccionCombustible =
     | {
-          tipo: 'tarjeta';
-          vueltaId: number;
+          tipo: 'variante';
           codigo: string | null;
-          sentido: 'ida' | 'regreso';
-          sugeridaId: number | null;
+          ruta: RutaDelTramo;
       }
     | { tipo: 'despacho'; registro: CombustibleDelTicket }
     | { tipo: 'anular'; registro: CombustibleDelTicket };
 
 /**
- * La tarjeta de cada tramo: la confirmada (con quién y cuándo) o la sugerida,
- * con el botón para confirmarla o elegir otra. Lo confirmado es lo
- * autorizado: si la pizarra cambia después, el ticket no.
+ * Las rutas de cada tramo, como se eligieron al programar: son lo autorizado.
+ * Si a una le falta la variante (la dotación por peso), se elige acá; el
+ * sistema sugiere la que corresponde al peso de las GR. La ruta no se cambia
+ * acá: eso es de programación.
  */
-export function TarjetasDelTicket({
-    vueltaId,
+export function RutasDelTicket({
     codigo,
     tramos,
-    puedeConfirmar,
+    puedeElegirVariante,
     onAccion,
 }: {
-    vueltaId: number;
     codigo: string | null;
     tramos: TramoCombustible[];
-    puedeConfirmar: boolean;
+    puedeElegirVariante: boolean;
     onAccion: (accion: AccionCombustible) => void;
 }) {
     return (
@@ -78,9 +75,9 @@ export function TarjetasDelTicket({
             {tramos.map((tramo) => (
                 <li
                     key={tramo.sentido}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border p-2"
+                    className="flex flex-col gap-1.5 rounded-lg border p-2"
                 >
-                    <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="flex items-center justify-between gap-2">
                         <span
                             className={cn(
                                 'text-[11px] font-medium',
@@ -89,47 +86,60 @@ export function TarjetasDelTicket({
                         >
                             {nombreTramo(tramo.sentido)}
                         </span>
-                        {tramo.confirmada ? (
-                            <>
-                                <span
-                                    className={cn(
-                                        'truncate rounded px-1.5 py-0.5 text-xs font-medium',
-                                        colorTarjeta(tramo.color).cabecera,
-                                    )}
-                                >
-                                    {tramo.tarjeta}
-                                </span>
-                                <span className="text-[11px] text-muted-foreground">
-                                    Tope {galones(tramo.previsto)} · confirmó{' '}
-                                    {tramo.confirmada_por ?? '—'}
-                                </span>
-                            </>
-                        ) : (
-                            <span className="text-xs text-amber-700 dark:text-amber-400">
-                                Por confirmar
-                                {tramo.sugerida
-                                    ? ` · sugerida: ${tramo.sugerida.nombre}`
-                                    : ' · ninguna tarjeta calza sola'}
-                            </span>
-                        )}
+                        <span className="text-[11px] text-muted-foreground tabular-nums">
+                            {tramo.previsto === null
+                                ? (tramo.pendiente ?? 'Sin tope')
+                                : `Tope ${galones(tramo.previsto)}`}
+                        </span>
                     </span>
-                    {puedeConfirmar && (
-                        <Button
-                            size="sm"
-                            variant={tramo.confirmada ? 'ghost' : 'default'}
-                            onClick={() =>
-                                onAccion({
-                                    tipo: 'tarjeta',
-                                    vueltaId,
-                                    codigo,
-                                    sentido: tramo.sentido,
-                                    sugeridaId: tramo.sugerida?.id ?? null,
-                                })
-                            }
-                        >
-                            {tramo.confirmada ? 'Cambiar' : 'Confirmar'}
-                        </Button>
+                    {tramo.rutas.length === 0 && (
+                        <span className="text-xs text-amber-700 dark:text-amber-400">
+                            Sin ruta: se elige al programar el ticket.
+                        </span>
                     )}
+                    {tramo.rutas.map((ruta) => (
+                        <span
+                            key={ruta.id}
+                            className="flex flex-wrap items-center justify-between gap-2"
+                        >
+                            <span
+                                className={cn(
+                                    'truncate rounded px-1.5 py-0.5 text-xs font-medium',
+                                    colorTarjeta(ruta.color).cabecera,
+                                )}
+                            >
+                                {ruta.es_complemento && '+ '}
+                                {ruta.nombre}
+                                {ruta.variante && ` · ${ruta.variante}`}
+                            </span>
+                            {ruta.variante_pendiente ? (
+                                puedeElegirVariante ? (
+                                    <Button
+                                        size="sm"
+                                        onClick={() =>
+                                            onAccion({
+                                                tipo: 'variante',
+                                                codigo,
+                                                ruta,
+                                            })
+                                        }
+                                    >
+                                        Elegir variante
+                                    </Button>
+                                ) : (
+                                    <span className="text-xs text-amber-700 dark:text-amber-400">
+                                        Falta la variante
+                                    </span>
+                                )
+                            ) : (
+                                <span className="text-[11px] text-muted-foreground tabular-nums">
+                                    {ruta.tope === null
+                                        ? 'galones por definir'
+                                        : galones(ruta.tope)}
+                                </span>
+                            )}
+                        </span>
+                    ))}
                 </li>
             ))}
         </ul>
@@ -250,24 +260,18 @@ export function CombustiblesDelTicket({
 /** Los diálogos del combustible del ticket, según la acción. */
 export function DialogoCombustible({
     accion,
-    reglas,
     puntos,
     onCerrar,
 }: {
     accion: AccionCombustible;
-    reglas: ReglaParaConfirmar[];
     puntos: PuntoRegistro[];
     onCerrar: () => void;
 }) {
     return (
         <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
             <DialogContent className="flex flex-col overflow-hidden md:max-h-[85dvh] md:max-w-md">
-                {accion.tipo === 'tarjeta' && (
-                    <FormTarjeta
-                        accion={accion}
-                        reglas={reglas}
-                        onCerrar={onCerrar}
-                    />
+                {accion.tipo === 'variante' && (
+                    <FormVariante accion={accion} onCerrar={onCerrar} />
                 )}
                 {accion.tipo === 'despacho' && (
                     <FormDespacho
@@ -287,32 +291,24 @@ export function DialogoCombustible({
     );
 }
 
-function FormTarjeta({
+/**
+ * La variante de una ruta del ticket: la dotación según el peso. Viene
+ * puesta la que corresponde al peso de las GR, si ya hay.
+ */
+function FormVariante({
     accion,
-    reglas,
     onCerrar,
 }: {
-    accion: Extract<AccionCombustible, { tipo: 'tarjeta' }>;
-    reglas: ReglaParaConfirmar[];
+    accion: Extract<AccionCombustible, { tipo: 'variante' }>;
     onCerrar: () => void;
 }) {
     const { data, setData, post, processing, errors } = useForm({
-        sentido: accion.sentido,
-        regla_abastecimiento_id: accion.sugeridaId,
+        variante_ruta_id: accion.ruta.sugerida,
     });
-    // Primero las del mismo tramo; las demás también se pueden elegir.
-    const ordenadas = [...reglas].sort(
-        (a, b) =>
-            Number(b.sentido === accion.sentido) -
-            Number(a.sentido === accion.sentido),
-    );
-    const elegida = reglas.find(
-        (regla) => regla.id === data.regla_abastecimiento_id,
-    );
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
-        post(abastecimiento.confirmarDotacion(accion.vueltaId).url, {
+        post(abastecimiento.elegirVariante(accion.ruta.id).url, {
             preserveScroll: true,
             onSuccess: onCerrar,
         });
@@ -322,58 +318,52 @@ function FormTarjeta({
         <>
             <DialogHeader>
                 <DialogTitle>
-                    Tarjeta de la {nombreTramo(accion.sentido).toLowerCase()} ·{' '}
-                    {accion.codigo}
+                    {accion.ruta.nombre} · {accion.codigo}
                 </DialogTitle>
                 <DialogDescription>
-                    Lo que dice la tarjeta queda como lo autorizado para este
-                    tramo. Si después cambia la pizarra, el ticket no cambia.
+                    La dotación depende del peso de la carga. Elige la variante:
+                    desde ahí el tramo tiene tope.
                 </DialogDescription>
             </DialogHeader>
 
             <form
-                id="confirmar-tarjeta"
+                id="elegir-variante"
                 onSubmit={enviar}
                 className="flex flex-col gap-4 px-1"
             >
                 <Field
-                    label="Tarjeta"
-                    error={errors.regla_abastecimiento_id}
+                    label="Variante"
+                    error={errors.variante_ruta_id}
                     required
                     ayuda={
-                        elegida
-                            ? elegida.tope === null
-                                ? 'Tiene galones por definir: complétala en la pizarra antes de autorizar combustible.'
-                                : `${elegida.resumen} · tope ${galones(elegida.tope)}`
-                            : undefined
+                        accion.ruta.sugerida !== null
+                            ? 'Viene puesta la que corresponde al peso de las GR.'
+                            : 'Todavía no hay GR para saber el peso.'
                     }
                 >
                     {() => (
                         <Select
                             value={
-                                data.regla_abastecimiento_id
-                                    ? String(data.regla_abastecimiento_id)
+                                data.variante_ruta_id
+                                    ? String(data.variante_ruta_id)
                                     : undefined
                             }
                             onValueChange={(valor) =>
-                                setData(
-                                    'regla_abastecimiento_id',
-                                    Number(valor),
-                                )
+                                setData('variante_ruta_id', Number(valor))
                             }
                         >
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Elegir…" />
                             </SelectTrigger>
                             <SelectContent>
-                                {ordenadas.map((regla) => (
+                                {accion.ruta.variantes.map((variante) => (
                                     <SelectItem
-                                        key={regla.id}
-                                        value={String(regla.id)}
+                                        key={variante.id}
+                                        value={String(variante.id)}
                                     >
-                                        {regla.nombre}
-                                        {regla.id === accion.sugeridaId &&
-                                            ' (sugerida)'}
+                                        {variante.nombre}
+                                        {variante.id === accion.ruta.sugerida &&
+                                            ' (según el peso)'}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -385,10 +375,10 @@ function FormTarjeta({
             <DialogFooter>
                 <Button
                     type="submit"
-                    form="confirmar-tarjeta"
-                    disabled={processing || !data.regla_abastecimiento_id}
+                    form="elegir-variante"
+                    disabled={processing || !data.variante_ruta_id}
                 >
-                    Confirmar tarjeta
+                    Guardar variante
                 </Button>
             </DialogFooter>
         </>

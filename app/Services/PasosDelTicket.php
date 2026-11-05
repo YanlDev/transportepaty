@@ -27,7 +27,7 @@ class PasosDelTicket
      * El ticket tiene que venir con `paradas.viajes` (con fecha y número) y
      * `revisiones.usuario`.
      *
-     * @param  array{tramos: list<array{sentido: string, confirmada: bool, sugerida: array{id: int, nombre: string}|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return array{pasos: list<Paso>, actual: string|null}
      */
     public function de(Vuelta $vuelta, array $gastos): array
@@ -44,7 +44,7 @@ class PasosDelTicket
      * ya va en ida sin el OK de taller). No busca quién lo programó: en el
      * tablero sería una consulta por ticket.
      *
-     * @param  array{tramos: list<array{sentido: string, confirmada: bool, sugerida: array{id: int, nombre: string}|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return array{siguiente: Paso|null, saltados: list<string>}
      */
     public function seguimiento(Vuelta $vuelta, array $gastos): array
@@ -106,7 +106,7 @@ class PasosDelTicket
     }
 
     /**
-     * @param  array{tramos: list<array{sentido: string, confirmada: bool, sugerida: array{id: int, nombre: string}|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return list<Paso>
      */
     private function pasos(Vuelta $vuelta, array $gastos, bool $conAutor): array
@@ -171,10 +171,10 @@ class PasosDelTicket
     }
 
     /**
-     * El combustible de un tramo contra el tope de su tarjeta; el de ida
+     * El combustible de un tramo contra el tope de sus rutas; el de ida
      * suma los viáticos, que se depositan antes de salir.
      *
-     * @param  array{tramos: list<array{sentido: string, confirmada: bool, sugerida: array{id: int, nombre: string}|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return Paso
      */
     private function abastecimiento(array $gastos, SentidoTramo $sentido, bool $conViaticos): array
@@ -191,9 +191,7 @@ class PasosDelTicket
             $partes[] = 'Sin vuelta definida';
             $completo = false;
         } elseif (! $tramo['confirmada']) {
-            $partes[] = $tramo['sugerida'] === null
-                ? 'Falta confirmar la tarjeta'
-                : "Falta confirmar la tarjeta (sugerida: {$tramo['sugerida']['nombre']})";
+            $partes[] = $tramo['pendiente'] ?? 'Sin tope';
             $completo = false;
             $algo = $tramo['registrado'] > 0;
         } else {

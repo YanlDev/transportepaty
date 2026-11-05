@@ -48,7 +48,7 @@ class LiquidacionTicket
         }
 
         if ($gastos['viatico_pendiente'] > 0) {
-            $avisos[] = 'Hay viáticos de la tarjeta sin depositar por S/ '.number_format($gastos['viatico_pendiente'], 2).'.';
+            $avisos[] = 'Hay viáticos de la ruta sin depositar por S/ '.number_format($gastos['viatico_pendiente'], 2).'.';
         }
 
         if ($vuelta->paradas->every(fn ($parada): bool => $parada->viajes->isEmpty())) {

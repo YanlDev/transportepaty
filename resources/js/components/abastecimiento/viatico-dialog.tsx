@@ -90,8 +90,7 @@ function FormDeposito({
 
     const { data, setData, post, put, processing, errors } = useForm({
         vuelta_id: accion.tipo === 'corregir' ? null : accion.vueltaId,
-        linea_regla_abastecimiento_id:
-            accion.tipo === 'depositar' ? accion.lineaId : null,
+        linea_ruta_id: accion.tipo === 'depositar' ? accion.lineaId : null,
         concepto: accion.tipo === 'corregir' ? accion.concepto : '',
         monto:
             accion.tipo === 'corregir'
@@ -144,9 +143,9 @@ function FormDeposito({
                 onSubmit={enviar}
                 className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-1"
             >
-                {errors.linea_regla_abastecimiento_id && (
+                {errors.linea_ruta_id && (
                     <p className="text-sm text-destructive">
-                        {errors.linea_regla_abastecimiento_id}
+                        {errors.linea_ruta_id}
                     </p>
                 )}
 

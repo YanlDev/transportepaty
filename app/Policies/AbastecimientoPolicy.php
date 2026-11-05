@@ -9,7 +9,7 @@ use App\Models\User;
 
 /**
  * El área de abastecimiento: ver el tablero, registrar el combustible que se
- * autoriza y configurar la pizarra de dotaciones son tres permisos aparte,
+ * autoriza y configurar los puntos de carga son tres permisos aparte,
  * porque la pizarra la decide quien manda en el área, no quien registra.
  */
 class AbastecimientoPolicy
@@ -48,14 +48,6 @@ class AbastecimientoPolicy
         return ! $abastecimiento->estaAnulado()
             && $abastecimiento->vuelta?->estado !== EstadoVuelta::Cerrada
             && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
-    }
-
-    /**
-     * Confirmar la tarjeta de la pizarra de un tramo: es lo que se autoriza.
-     */
-    public function confirmarDotacion(User $user): bool
-    {
-        return $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
     }
 
     /**

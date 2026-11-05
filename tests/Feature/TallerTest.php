@@ -4,9 +4,9 @@ use App\Enums\EstadoVuelta;
 use App\Enums\ResultadoTaller;
 use App\Enums\TipoVehiculo;
 use App\Models\Abastecimiento;
-use App\Models\DotacionTramo;
 use App\Models\LecturaKilometraje;
 use App\Models\RevisionTaller;
+use App\Models\RutaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Vuelta;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -78,7 +78,7 @@ it('keeps the history and the last review is the one that counts', function (): 
 });
 
 it('does not let fuel be registered without the workshop OK', function (): void {
-    DotacionTramo::factory()->for($this->vuelta)->create();
+    RutaVuelta::factory()->for($this->vuelta)->create();
     $datos = [
         'vehiculo_id' => $this->tracto->id,
         'vuelta_id' => $this->vuelta->id,

@@ -51,7 +51,7 @@ class GastosDelTicket
     public function de(Collection $vueltas): array
     {
         $ids = $vueltas->pluck('id');
-        (new EloquentCollection($vueltas->all()))->loadMissing('dotaciones.usuario:id,name');
+        (new EloquentCollection($vueltas->all()))->loadMissing('rutas.ruta.variantes');
 
         $registrados = Abastecimiento::query()
             ->whereIn('vuelta_id', $ids)
@@ -160,7 +160,7 @@ class GastosDelTicket
                     'fecha' => $fila['deposito']->fecha->toDateString(),
                     'numero_operacion' => $fila['deposito']->numero_operacion,
                     'observacion' => $fila['deposito']->observacion,
-                    'imprevisto' => $fila['deposito']->linea_regla_abastecimiento_id === null,
+                    'imprevisto' => $fila['deposito']->linea_ruta_id === null,
                     'registrado_por' => $fila['deposito']->registradoPor?->name,
                 ],
             ], $filas),

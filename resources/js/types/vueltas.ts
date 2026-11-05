@@ -58,22 +58,45 @@ export type Vuelta = {
     quitable: boolean;
     ida: ParadaVuelta[];
     regreso: ParadaVuelta[];
+    /** Las rutas elegidas para cada tramo: la principal y sus complementos. */
+    rutas: RutaDelTicket[];
+};
+
+/** Una ruta elegida para un tramo del ticket (su copia). */
+export type RutaDelTicket = {
+    id: number;
+    sentido: Sentido;
+    ruta_id: number | null;
+    variante_ruta_id: number | null;
+    nombre: string;
+    variante: string | null;
+    es_complemento: boolean;
+    variante_pendiente: boolean;
 };
 
 export type Opcion = { value: string; label: string };
 
-/** Una opción para programar un tramo (ver `App\Enums\OpcionTramo`). */
+/** Una ruta del catálogo, para elegirla al programar un tramo. */
 export type OpcionTramo = {
     value: string;
     label: string;
     descripcion: string;
-    /** La carga particular de regreso: hay que elegir a dónde va. */
+    /** Se suma a la ruta principal del tramo en vez de definirlo. */
+    es_complemento: boolean;
+    /** La carga particular a otro destino: hay que elegir a dónde va. */
     pide_destino: boolean;
     paradas: {
         zona_origen: string;
         zona_destino: string | null;
         tipo_carga: string;
+        lugar_origen?: string | null;
+        lugar_destino?: string | null;
     }[];
+    /** Galones de la dotación; null con variantes o galones por definir. */
+    tope: number | null;
+    /** La dotación en una línea, para decidir al elegir. */
+    dotacion: string;
+    variantes: { id: number; nombre: string; tope: number | null }[];
 };
 
 /** Lo que necesita el formulario de programar una vuelta. */

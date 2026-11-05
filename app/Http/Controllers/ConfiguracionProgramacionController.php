@@ -3,11 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Permiso;
-use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\ZonaRuta;
 use App\Models\DestinoParticular;
-use App\Models\OpcionTramo;
 use App\Models\PalabraZona;
 use App\Services\PalabrasDeZona;
 use Illuminate\Http\RedirectResponse;
@@ -17,9 +15,9 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Lo que antes estaba fijo en el código de la programación: las opciones
- * para programar la ida y la vuelta, los destinos de la carga particular y
- * las palabras con que se reconoce cada zona en las GR.
+ * Lo que antes estaba fijo en el código de la programación: los destinos de
+ * la carga particular y las palabras con que se reconoce cada zona en las
+ * GR. Las rutas (recorrido y dotación) tienen su propio catálogo.
  */
 class ConfiguracionProgramacionController extends Controller
 {
@@ -30,17 +28,6 @@ class ConfiguracionProgramacionController extends Controller
         $this->autorizar($request);
 
         return Inertia::render('vueltas/configuracion', [
-            'opciones' => OpcionTramo::query()->enOrden()->get()
-                ->map(fn (OpcionTramo $opcion): array => [
-                    'id' => $opcion->id,
-                    'nombre' => $opcion->nombre,
-                    'descripcion' => $opcion->descripcion,
-                    'sentido' => $opcion->sentido->value,
-                    'paradas' => $opcion->paradas,
-                    'pide_destino' => $opcion->pide_destino,
-                    'activa' => $opcion->activa,
-                ])
-                ->all(),
             'destinos' => DestinoParticular::query()->enOrden()->get()
                 ->map(fn (DestinoParticular $destino): array => [
                     'id' => $destino->id,
@@ -63,36 +50,6 @@ class ConfiguracionProgramacionController extends Controller
             ], ZonaRuta::cases()),
             'cargas' => TipoCarga::options(),
         ]);
-    }
-
-    public function storeOpcion(Request $request): RedirectResponse
-    {
-        $this->autorizar($request);
-
-        OpcionTramo::query()->create([
-            ...$this->datosDeOpcion($request),
-            'orden' => (int) OpcionTramo::query()->max('orden') + 1,
-        ]);
-
-        return back()->with('toast', ['type' => 'success', 'message' => 'Opción agregada.']);
-    }
-
-    public function updateOpcion(Request $request, OpcionTramo $opcion): RedirectResponse
-    {
-        $this->autorizar($request);
-
-        $opcion->update($this->datosDeOpcion($request));
-
-        return back()->with('toast', ['type' => 'success', 'message' => 'Opción actualizada.']);
-    }
-
-    public function destroyOpcion(Request $request, OpcionTramo $opcion): RedirectResponse
-    {
-        $this->autorizar($request);
-
-        $opcion->delete();
-
-        return back()->with('toast', ['type' => 'success', 'message' => 'Opción quitada.']);
     }
 
     public function storeDestino(Request $request): RedirectResponse
@@ -158,41 +115,6 @@ class ConfiguracionProgramacionController extends Controller
     private function autorizar(Request $request): void
     {
         abort_unless($request->user()?->checkPermissionTo(Permiso::ProgramacionConfigurar), 403);
-    }
-
-    /**
-     * Una opción pide destino si alguna parada lo deja vacío (la carga
-     * particular): ese destino se elige al programar.
-     *
-     * @return array<string, mixed>
-     */
-    private function datosDeOpcion(Request $request): array
-    {
-        $datos = $request->validate([
-            'nombre' => ['required', 'string', 'max:80'],
-            'descripcion' => ['nullable', 'string', 'max:120'],
-            'sentido' => ['required', Rule::enum(SentidoTramo::class)],
-            'activa' => ['boolean'],
-            'paradas' => ['required', 'array', 'min:1', 'max:6'],
-            'paradas.*.zona_origen' => ['required', Rule::enum(ZonaRuta::class)],
-            'paradas.*.zona_destino' => ['nullable', Rule::enum(ZonaRuta::class)],
-            'paradas.*.tipo_carga' => ['required', Rule::enum(TipoCarga::class)],
-        ], [], ['paradas.*.zona_origen' => 'desde', 'paradas.*.tipo_carga' => 'carga']);
-
-        $paradas = array_map(fn (array $parada): array => [
-            'zona_origen' => $parada['zona_origen'],
-            'zona_destino' => $parada['zona_destino'] ?? null,
-            'tipo_carga' => $parada['tipo_carga'],
-        ], array_values($datos['paradas']));
-
-        return [
-            'nombre' => $datos['nombre'],
-            'descripcion' => $datos['descripcion'] ?? null,
-            'sentido' => $datos['sentido'],
-            'activa' => $datos['activa'] ?? true,
-            'paradas' => $paradas,
-            'pide_destino' => in_array(null, array_column($paradas, 'zona_destino'), true),
-        ];
     }
 
     /**

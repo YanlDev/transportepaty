@@ -20,7 +20,7 @@ use Illuminate\Support\Carbon;
  * @property int $vuelta_id
  * @property int $vehiculo_id
  * @property int|null $conductor_id
- * @property int|null $linea_regla_abastecimiento_id Null si es un imprevisto.
+ * @property int|null $linea_ruta_id La línea de la ruta del ticket; null si es un imprevisto.
  * @property string $concepto
  * @property string|null $monto_previsto Lo que dice la pizarra.
  * @property string $monto Lo depositado.
@@ -36,12 +36,12 @@ use Illuminate\Support\Carbon;
  * @property-read Vuelta $vuelta
  * @property-read Vehiculo $vehiculo
  * @property-read Conductor|null $conductor
- * @property-read LineaReglaAbastecimiento|null $linea
+ * @property-read LineaRuta|null $linea
  * @property-read User|null $registradoPor
  * @property-read User|null $anuladoPor
  */
 #[Fillable([
-    'vuelta_id', 'vehiculo_id', 'conductor_id', 'linea_regla_abastecimiento_id', 'concepto',
+    'vuelta_id', 'vehiculo_id', 'conductor_id', 'linea_ruta_id', 'concepto',
     'monto_previsto', 'monto', 'fecha', 'numero_operacion', 'observacion', 'user_id',
     'anulado_at', 'anulado_por', 'motivo_anulacion',
 ])]
@@ -93,11 +93,11 @@ class Viatico extends Model
     }
 
     /**
-     * @return BelongsTo<LineaReglaAbastecimiento, $this>
+     * @return BelongsTo<LineaRuta, $this>
      */
     public function linea(): BelongsTo
     {
-        return $this->belongsTo(LineaReglaAbastecimiento::class, 'linea_regla_abastecimiento_id');
+        return $this->belongsTo(LineaRuta::class, 'linea_ruta_id');
     }
 
     /**

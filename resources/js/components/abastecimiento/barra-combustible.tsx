@@ -18,9 +18,9 @@ export const soles = (valor: number | null): string =>
 /**
  * El combustible de un ticket de un vistazo: una barra por tramo (la ida y,
  * si tiene, la vuelta) que se llena de verde con lo autorizado contra el
- * tope de su tarjeta confirmada. Los puntos de carga no se separan: van
- * marcados dentro de la barra, con su nombre debajo. Un tramo sin tarjeta
- * confirmada no tiene barra: dice qué tarjeta se sugiere.
+ * tope de sus rutas. Los puntos de carga no se separan: van marcados dentro
+ * de la barra, con su nombre debajo. Un tramo sin tope (falta la variante o
+ * hay galones por definir) no tiene barra: dice qué falta.
  */
 export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
     if (tramos.length === 0) {
@@ -48,10 +48,11 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                             >
                                 {tramo.sentido === 'ida' ? 'Ida' : 'Vuelta'}
                             </span>
-                            <span className="truncate text-[11px] text-amber-700 dark:text-amber-400">
-                                Tarjeta por confirmar
-                                {tramo.sugerida &&
-                                    ` · sugerida: ${tramo.sugerida.nombre}`}
+                            <span
+                                className="truncate text-[11px] text-amber-700 dark:text-amber-400"
+                                title={tramo.pendiente ?? undefined}
+                            >
+                                {tramo.pendiente ?? 'Sin tope'}
                             </span>
                         </div>
                     );

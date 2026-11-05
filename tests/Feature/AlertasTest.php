@@ -62,6 +62,7 @@ it('tells the workshop when a ticket is programmed, not whoever programmed it', 
         'conductor_id' => null,
         'inicio' => now()->toDateString(),
         'paradas' => [['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado']],
+        'rutas' => [['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Concentrado a Pisco')->id, 'variante_ruta_id' => null]],
     ])->assertSessionHasNoErrors();
 
     $alerta = $taller->fresh()->notifications->sole();

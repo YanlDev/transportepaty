@@ -7,10 +7,10 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
-use App\Models\DotacionTramo;
 use App\Models\LecturaKilometraje;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
+use App\Models\RutaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Viatico;
@@ -49,7 +49,7 @@ function ticketConRansa(Vehiculo $tracto, string $fechaGr): Vuelta
     ]);
     Viaje::factory()->create(['tracto_id' => null, 'fecha_traslado' => $fechaGr])
         ->forceFill(['parada_vuelta_id' => $parada->id])->save();
-    DotacionTramo::factory()->for($vuelta)->regreso()->create();
+    RutaVuelta::factory()->for($vuelta)->regreso()->create();
 
     return $vuelta->load('paradas.viajes');
 }
@@ -104,6 +104,7 @@ it('does not program the next ticket while the unit is still on the road', funct
         'tracto_id' => $this->tracto->id,
         'inicio' => now()->toDateString(),
         'paradas' => [['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado']],
+        'rutas' => [['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Concentrado a Pisco')->id, 'variante_ruta_id' => null]],
     ];
 
     actingAs(actorConRol('admin'))->post(route('vueltas.store'), $datos)->assertSessionHasErrors('tracto_id');

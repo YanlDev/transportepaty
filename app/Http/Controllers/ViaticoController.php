@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\GuardarViaticoRequest;
-use App\Models\LineaReglaAbastecimiento;
+use App\Models\LineaRuta;
 use App\Models\Viatico;
 use App\Models\Vuelta;
 use App\Services\DotacionVuelta;
@@ -12,7 +12,7 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Los viáticos de cada ticket: depositarlos (los de la pizarra o un
+ * Los viáticos de cada ticket: depositarlos (los de la ruta o un
  * imprevisto), corregirlos y anularlos. No se borran: cada movimiento queda
  * en el historial.
  */
@@ -24,9 +24,9 @@ class ViaticoController extends Controller
     {
         $this->authorize('create', Viatico::class);
 
-        $vuelta = Vuelta::query()->with(['paradas.viajes', 'dotaciones'])->findOrFail($request->integer('vuelta_id'));
-        $linea = $request->filled('linea_regla_abastecimiento_id')
-            ? LineaReglaAbastecimiento::query()->findOrFail($request->integer('linea_regla_abastecimiento_id'))
+        $vuelta = Vuelta::query()->with(['paradas.viajes', 'rutas'])->findOrFail($request->integer('vuelta_id'));
+        $linea = $request->filled('linea_ruta_id')
+            ? LineaRuta::query()->findOrFail($request->integer('linea_ruta_id'))
             : null;
 
         if (($bloqueo = $vuelta->bloqueoDeGastos()) !== null) {
@@ -39,9 +39,9 @@ class ViaticoController extends Controller
             'vuelta_id' => $vuelta->id,
             'vehiculo_id' => $vuelta->tracto_id,
             'conductor_id' => $vuelta->conductor_id,
-            'linea_regla_abastecimiento_id' => $linea?->id,
-            // Lo de la tarjeta confirmada para el ticket, aunque la pizarra
-            // haya cambiado después.
+            'linea_ruta_id' => $linea?->id,
+            // Lo de la ruta como estaba al elegirla, aunque el catálogo haya
+            // cambiado después.
             'concepto' => $previsto['concepto'] ?? $request->string('concepto')->trim()->toString(),
             'monto_previsto' => $previsto['monto'] ?? null,
             ...$this->datos($request),
@@ -56,7 +56,7 @@ class ViaticoController extends Controller
         $this->authorize('update', $viatico);
 
         $viatico->update([
-            ...($viatico->linea_regla_abastecimiento_id === null ? ['concepto' => $request->string('concepto')->trim()->toString()] : []),
+            ...($viatico->linea_ruta_id === null ? ['concepto' => $request->string('concepto')->trim()->toString()] : []),
             ...$this->datos($request),
         ]);
 
@@ -83,12 +83,12 @@ class ViaticoController extends Controller
      * ya (tantas veces como toque).
      */
     /**
-     * La línea tiene que ser de una tarjeta confirmada del ticket, y no estar
-     * ya depositada. Devuelve cómo estaba en la tarjeta al confirmarla.
+     * La línea tiene que ser de una ruta del ticket, y no estar ya
+     * depositada. Devuelve cómo estaba en la ruta al elegirla.
      *
      * @return array{linea_id: int|null, concepto: string, tipo: string, monto: float}
      */
-    private function asegurarQueLeToca(Vuelta $vuelta, LineaReglaAbastecimiento $linea): array
+    private function asegurarQueLeToca(Vuelta $vuelta, LineaRuta $linea): array
     {
         $deLaLinea = collect($this->dotacion->de($vuelta, $vuelta->abastecimientos()->with('punto')->get())['viaticos'])
             ->where('linea_id', $linea->id);
@@ -96,15 +96,15 @@ class ViaticoController extends Controller
 
         if ($previstas === 0) {
             throw ValidationException::withMessages([
-                'linea_regla_abastecimiento_id' => "«{$linea->concepto}» no es de una tarjeta confirmada del ticket {$vuelta->codigo}.",
+                'linea_ruta_id' => "«{$linea->concepto}» no es de las rutas del ticket {$vuelta->codigo}.",
             ]);
         }
 
-        $depositadas = $vuelta->viaticos()->vigentes()->where('linea_regla_abastecimiento_id', $linea->id)->count();
+        $depositadas = $vuelta->viaticos()->vigentes()->where('linea_ruta_id', $linea->id)->count();
 
         if ($depositadas >= $previstas) {
             throw ValidationException::withMessages([
-                'linea_regla_abastecimiento_id' => "«{$linea->concepto}» ya está depositado en el ticket {$vuelta->codigo}: corrígelo o anúlalo.",
+                'linea_ruta_id' => "«{$linea->concepto}» ya está depositado en el ticket {$vuelta->codigo}: corrígelo o anúlalo.",
             ]);
         }
 

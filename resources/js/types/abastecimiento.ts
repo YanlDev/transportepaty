@@ -26,7 +26,7 @@ export type VueltaAbastecimiento = {
     tracto: { id: number; placa: string };
     conductor: string | null;
     recorrido: { sentido: 'ida' | 'regreso'; texto: string; carga: string }[];
-    /** Las tarjetas confirmadas, una por tramo. */
+    /** Las rutas del ticket, de los dos tramos. */
     tarjetas: {
         sentido: 'ida' | 'regreso';
         id: number | null;
@@ -82,24 +82,39 @@ export type CombustibleDelTicket = {
     } | null;
 };
 
+/** Una ruta de un tramo del ticket, con su variante si la necesita. */
+export type RutaDelTramo = {
+    id: number;
+    nombre: string;
+    variante: string | null;
+    color: string | null;
+    es_complemento: boolean;
+    variante_pendiente: boolean;
+    tope: number | null;
+    variantes: { id: number; nombre: string }[];
+    /** La variante que corresponde al peso de las GR, si ya hay. */
+    sugerida: number | null;
+};
+
 /**
- * El combustible de un tramo: la tarjeta confirmada (su tope), lo autorizado
- * y lo despachado. Sin confirmar, solo la tarjeta sugerida.
+ * El combustible de un tramo: el tope de sus rutas, lo autorizado y lo
+ * despachado. Sin tope (falta la variante o hay galones por definir), dice
+ * por qué en `pendiente`.
  */
 export type TramoCombustible = {
     sentido: 'ida' | 'regreso';
+    /** Tiene tope: se le puede autorizar combustible. */
     confirmada: boolean;
+    rutas: RutaDelTramo[];
+    /** La ruta principal del tramo. */
     tarjeta: string | null;
     color: string | null;
-    confirmada_por: string | null;
-    confirmada_at: string | null;
-    /** El tope; null sin tarjeta confirmada o con galones por definir. */
     previsto: number | null;
     registrado: number;
     despachado: number;
     falta: number | null;
     puntos: { punto: string; previsto: number | null }[];
-    sugerida: { id: number; nombre: string } | null;
+    pendiente: string | null;
 };
 
 export type RegistroAbastecimiento = {
@@ -142,17 +157,6 @@ export type TractoAbastecimiento = {
     }[];
 };
 
-/** Una tarjeta de la pizarra para confirmar en un tramo. */
-export type ReglaParaConfirmar = {
-    id: number;
-    nombre: string;
-    color: string | null;
-    sentido: 'ida' | 'regreso' | null;
-    /** null si tiene galones por definir. */
-    tope: number | null;
-    resumen: string;
-};
-
 export type PuntoAbastecimiento = {
     id: number;
     nombre: string;
@@ -166,42 +170,66 @@ export type PuntoAbastecimiento = {
     ultimo_precio?: number | null;
 };
 
-export type LineaRegla = {
+/** Una fila de la dotación de una ruta del catálogo. */
+export type LineaRuta = {
+    /** null mientras no se guarda. */
+    id: number | null;
+    /** La variante por posición en la lista de variantes; null: toda la ruta. */
+    variante: number | null;
     tipo: 'combustible' | 'viatico' | 'peaje';
     concepto: string;
     punto_abastecimiento_id: number | null;
     punto?: string | null;
+    /** null: galones por definir. */
     galones: number | null;
     monto: number | null;
 };
 
-/** Una tarjeta de la pizarra. */
-export type ReglaAbastecimiento = {
-    id: number;
+export type VarianteRutaCatalogo = {
+    id: number | null;
     nombre: string;
-    color: string | null;
-    sentido: string | null;
-    zona_origen: string | null;
-    zona_destino: string | null;
-    tipo_carga: string | null;
-    lugares: string | null;
     peso_desde: number | null;
     peso_hasta: number | null;
+};
+
+export type ParadaRutaCatalogo = {
+    zona_origen: string;
+    zona_destino: string | null;
+    tipo_carga: string;
+    lugar_origen?: string | null;
+    lugar_destino?: string | null;
+};
+
+/** Una ruta del catálogo: recorrido, dotación y variantes por peso. */
+export type RutaCatalogo = {
+    id: number;
+    nombre: string;
+    descripcion: string | null;
+    sentido: 'ida' | 'regreso' | null;
+    es_complemento: boolean;
+    paradas: ParadaRutaCatalogo[];
+    pide_destino: boolean;
+    dias_viaje: number | null;
+    km_estandar: number | null;
+    color: string | null;
     nota: string | null;
     activa: boolean;
-    /** Sin ningún criterio es solo de referencia. */
-    se_aplica_sola: boolean;
-    lineas: LineaRegla[];
+    variantes: VarianteRutaCatalogo[];
+    lineas: LineaRuta[];
+    /** Sin variantes: el tope de combustible (null con galones por definir). */
+    tope: number | null;
+    /** Ya está en algún ticket: no se borra, se desactiva. */
+    usada: boolean;
 };
 
-export type OpcionesConfiguracion = {
+export type OpcionesRutas = {
     zonas: Opcion[];
-    sentidos: Opcion[];
     cargas: Opcion[];
     tiposLinea: Opcion[];
+    puntos: Opcion[];
 };
 
-/** Un viático del ticket: el de la pizarra o un imprevisto. */
+/** Un viático del ticket: el de su ruta o un imprevisto. */
 export type ViaticoTicket = {
     /** null si es un imprevisto. */
     linea_id: number | null;

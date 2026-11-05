@@ -10,12 +10,11 @@ use App\Models\AreaAviso;
 use App\Models\Conductor;
 use App\Models\EnvioWhatsapp;
 use App\Models\ParadaVuelta;
-use App\Models\User;
+use App\Models\RutaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Vuelta;
 use App\Services\AvisoDeVuelta;
 use App\Services\AvisosPorWhatsapp;
-use App\Services\DotacionVuelta;
 use App\Services\WhatsappServicio;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -64,14 +63,13 @@ it('writes the trip for the driver with its ticket and both legs', function (): 
 });
 
 it('tells the areas only what was confirmed from the board for the trip', function (): void {
-    $dotacion = app(DotacionVuelta::class);
-    $vuelta = $this->vuelta->fresh(['paradas.viajes']);
-
     expect(app(AvisoDeVuelta::class)->mensajeParaArea($this->vuelta->fresh(['tracto', 'carreta', 'conductor', 'paradas.viajes'])))
         ->not->toContain('Combustible:');
 
-    foreach (SentidoTramo::cases() as $sentido) {
-        $dotacion->confirmar($vuelta, $sentido, $dotacion->sugerida($vuelta, $sentido), User::factory()->create());
+    // Las rutas que se eligieron al programar, copiadas al ticket.
+    foreach (['ida' => 'Concentrado a Pisco', 'regreso' => 'Escoria a mina'] as $sentido => $nombre) {
+        $ruta = rutaDelCatalogo($nombre)->load(['lineas.punto', 'variantes']);
+        $this->vuelta->rutas()->create([...RutaVuelta::copiaDe($ruta, null), 'sentido' => $sentido, 'orden' => 1]);
     }
 
     $mensaje = app(AvisoDeVuelta::class)->mensajeParaArea($this->vuelta->fresh(['tracto', 'carreta', 'conductor', 'paradas.viajes']));

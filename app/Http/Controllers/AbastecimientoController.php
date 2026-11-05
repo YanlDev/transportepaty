@@ -5,15 +5,14 @@ namespace App\Http\Controllers;
 use App\Enums\EstadoVehiculo;
 use App\Enums\EstadoVuelta;
 use App\Enums\SentidoTramo;
-use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\RegistrarAbastecimientoRequest;
 use App\Http\Requests\RegistrarDespachoRequest;
 use App\Models\Abastecimiento;
-use App\Models\DotacionTramo;
 use App\Models\ParadaVuelta;
 use App\Models\PuntoAbastecimiento;
-use App\Models\ReglaAbastecimiento;
+use App\Models\RutaVuelta;
+use App\Models\VarianteRuta;
 use App\Models\Vehiculo;
 use App\Models\Vuelta;
 use App\Services\DotacionVuelta;
@@ -26,8 +25,8 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * El tablero de abastecimiento: cada ticket abierto con la tarjeta confirmada
- * de cada tramo, lo que ya se le autorizó, lo que le falta y lo que de verdad
+ * El tablero de abastecimiento: cada ticket abierto con las rutas de cada
+ * tramo (lo autorizado), lo que ya se le autorizó, lo que le falta y lo que de verdad
  * se despachó; y el registro de lo que se autoriza por el QR de Repsol (o en
  * Kio).
  */
@@ -52,7 +51,7 @@ class AbastecimientoController extends Controller
                 'conductor:id,nombres,apellidos',
                 'paradas.viajes:id,parada_vuelta_id,numero_gr,origen,destino,peso,unidad_peso,fecha_traslado',
                 'revision.usuario:id,name',
-                'dotaciones.usuario:id,name',
+                'rutas.ruta.variantes',
             ])
             ->get()
             ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa.'|'.$vuelta->inicio?->toDateString())
@@ -102,7 +101,6 @@ class AbastecimientoController extends Controller
                 ->all(),
             'tractos' => fn (): array => $this->opcionesTractos(),
             'puntos' => fn (): array => $this->opcionesPuntos(),
-            'reglas' => fn (): array => $this->opcionesReglas(),
             'puedeExcederTope' => fn (): bool => request()->user()?->can('excederTope', Abastecimiento::class) ?? false,
         ]);
     }
@@ -181,27 +179,22 @@ class AbastecimientoController extends Controller
     }
 
     /**
-     * Confirma la tarjeta de la pizarra de un tramo del ticket: desde ahí es
-     * lo autorizado, aunque la pizarra cambie después.
+     * Elige la variante (por peso) de una ruta del ticket: hasta entonces el
+     * tramo no tiene tope. El sistema sugiere la que corresponde al peso de
+     * las GR; la elige una persona.
      */
-    public function confirmarDotacion(Request $request, Vuelta $vuelta, DotacionVuelta $dotacion): RedirectResponse
+    public function elegirVariante(Request $request, RutaVuelta $rutaVuelta, DotacionVuelta $dotacion): RedirectResponse
     {
-        $this->authorize('confirmarDotacion', Abastecimiento::class);
+        $this->authorize('elegirVariante', $rutaVuelta);
 
-        $datos = $request->validate([
-            'sentido' => ['required', Rule::enum(SentidoTramo::class)],
-            'regla_abastecimiento_id' => ['required', Rule::exists('reglas_abastecimiento', 'id')->where('activa', true)],
+        $request->validate([
+            'variante_ruta_id' => ['required', 'integer', Rule::exists('variantes_ruta', 'id')->where('ruta_id', $rutaVuelta->ruta_id)],
         ]);
 
-        if (! $vuelta->estaAbierta()) {
-            return back()->with('toast', ['type' => 'error', 'message' => "El ticket {$vuelta->codigo} está cerrado: no cambia su tarjeta."]);
-        }
+        $variante = VarianteRuta::query()->findOrFail($request->integer('variante_ruta_id'));
+        $dotacion->elegirVariante($rutaVuelta, $variante, $request->user());
 
-        $sentido = SentidoTramo::from($datos['sentido']);
-        $regla = ReglaAbastecimiento::query()->findOrFail($request->integer('regla_abastecimiento_id'));
-        $dotacion->confirmar($vuelta, $sentido, $regla, $request->user());
-
-        return back()->with('toast', ['type' => 'success', 'message' => "Tarjeta «{$regla->nombre}» confirmada para la {$sentido->label()} del ticket {$vuelta->codigo}."]);
+        return back()->with('toast', ['type' => 'success', 'message' => "«{$rutaVuelta->nombre}»: {$variante->nombre}."]);
     }
 
     /**
@@ -262,7 +255,7 @@ class AbastecimientoController extends Controller
         $abiertas = Vuelta::query()
             ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
             ->orderBy('inicio')
-            ->with(['revision', 'dotaciones', 'paradas.viajes:id,parada_vuelta_id'])
+            ->with(['revision', 'rutas', 'paradas.viajes:id,parada_vuelta_id'])
             ->get()
             ->groupBy('tracto_id');
 
@@ -280,45 +273,15 @@ class AbastecimientoController extends Controller
                         'codigo' => $vuelta->codigo,
                         'etapa' => $vuelta->etapa(),
                         'bloqueo' => $vuelta->bloqueoDeGastos(),
-                        // Los tramos con tarjeta confirmada: solo a esos se
-                        // les puede autorizar combustible.
-                        'tramos' => array_values($vuelta->dotaciones->map(fn (DotacionTramo $dotacion): string => $dotacion->sentido->value)->all()),
+                        // Los tramos con tope (ruta y variante elegidas):
+                        // solo a esos se les puede autorizar combustible.
+                        'tramos' => array_values(array_map(
+                            fn (SentidoTramo $sentido): string => $sentido->value,
+                            array_filter(SentidoTramo::cases(), fn (SentidoTramo $sentido): bool => $vuelta->topeDe($sentido) !== null),
+                        )),
                     ])
                     ->all()),
             ])
-            ->all());
-    }
-
-    /**
-     * Las tarjetas activas de la pizarra, para confirmar la de un tramo.
-     *
-     * @return list<array{id: int, nombre: string, color: string|null, sentido: string|null, tope: float|null, resumen: string}>
-     */
-    private function opcionesReglas(): array
-    {
-        return array_values(ReglaAbastecimiento::query()
-            ->where('activa', true)
-            ->enOrden()
-            ->with('lineas.punto')
-            ->get()
-            ->map(function (ReglaAbastecimiento $regla): array {
-                $lineas = DotacionTramo::lineasDe($regla);
-                $galones = array_column(array_filter($lineas, fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value), 'galones');
-
-                return [
-                    'id' => $regla->id,
-                    'nombre' => $regla->nombre,
-                    'color' => $regla->color,
-                    'sentido' => $regla->sentido?->value,
-                    'tope' => in_array(null, $galones, true) ? null : (float) array_sum($galones),
-                    'resumen' => implode(' · ', array_map(
-                        fn (array $linea): string => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value
-                            ? ($linea['punto'] ?? 'Combustible').' '.($linea['galones'] === null ? '¿? gal' : $linea['galones'].' gal')
-                            : $linea['concepto'].' S/ '.number_format((float) $linea['monto'], 2),
-                        $lineas,
-                    )),
-                ];
-            })
             ->all());
     }
 }

@@ -30,6 +30,7 @@ use App\Http\Controllers\ParametroCostoController;
 use App\Http\Controllers\PlanMantenimientoController;
 use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\RolController;
+use App\Http\Controllers\RutaController;
 use App\Http\Controllers\TallerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
@@ -176,7 +177,14 @@ Route::middleware('auth')->group(function () {
     Route::post('abastecimiento', [AbastecimientoController::class, 'store'])->name('abastecimiento.store');
     Route::post('abastecimiento/{abastecimiento}/anular', [AbastecimientoController::class, 'anular'])->name('abastecimiento.anular');
     Route::put('abastecimiento/{abastecimiento}/despacho', [AbastecimientoController::class, 'despacho'])->name('abastecimiento.despacho');
-    Route::post('vueltas/{vuelta}/dotacion', [AbastecimientoController::class, 'confirmarDotacion'])->name('abastecimiento.dotacion');
+    Route::post('rutas-vuelta/{rutaVuelta}/variante', [AbastecimientoController::class, 'elegirVariante'])->name('abastecimiento.variante');
+
+    // El catálogo de rutas: el recorrido y la dotación de cada tramo
+    // estándar. Lo que se elige al programar y lo que abastecimiento ejecuta.
+    Route::get('rutas', [RutaController::class, 'index'])->name('rutas.index');
+    Route::post('rutas', [RutaController::class, 'store'])->name('rutas.store');
+    Route::put('rutas/{ruta}', [RutaController::class, 'update'])->name('rutas.update');
+    Route::delete('rutas/{ruta}', [RutaController::class, 'destroy'])->name('rutas.destroy');
     // Los viáticos de cada ticket: se depositan, se corrigen y se anulan;
     // nunca se borran.
     Route::post('abastecimiento/viaticos', [ViaticoController::class, 'store'])->name('viaticos.store');
@@ -190,24 +198,12 @@ Route::middleware('auth')->group(function () {
         ->name('abastecimiento.puntos.update');
     Route::delete('abastecimiento/puntos/{punto}', [ConfiguracionAbastecimientoController::class, 'destroyPunto'])
         ->name('abastecimiento.puntos.destroy');
-    Route::post('abastecimiento/reglas', [ConfiguracionAbastecimientoController::class, 'storeRegla'])
-        ->name('abastecimiento.reglas.store');
-    Route::put('abastecimiento/reglas/{regla}', [ConfiguracionAbastecimientoController::class, 'updateRegla'])
-        ->name('abastecimiento.reglas.update');
-    Route::delete('abastecimiento/reglas/{regla}', [ConfiguracionAbastecimientoController::class, 'destroyRegla'])
-        ->name('abastecimiento.reglas.destroy');
 
-    // La configuración de la programación: opciones de tramo, destinos de
-    // la carga particular y palabras de cada zona. Antes que las rutas con
+    // La configuración de la programación: destinos de la carga particular
+    // y palabras de cada zona. Antes que las rutas con
     // {vuelta} para que «configuracion» no se lea como una vuelta.
     Route::get('vueltas/configuracion', [ConfiguracionProgramacionController::class, 'index'])
         ->name('programacion.configuracion');
-    Route::post('vueltas/configuracion/opciones', [ConfiguracionProgramacionController::class, 'storeOpcion'])
-        ->name('programacion.opciones.store');
-    Route::put('vueltas/configuracion/opciones/{opcion}', [ConfiguracionProgramacionController::class, 'updateOpcion'])
-        ->name('programacion.opciones.update');
-    Route::delete('vueltas/configuracion/opciones/{opcion}', [ConfiguracionProgramacionController::class, 'destroyOpcion'])
-        ->name('programacion.opciones.destroy');
     Route::post('vueltas/configuracion/destinos', [ConfiguracionProgramacionController::class, 'storeDestino'])
         ->name('programacion.destinos.store');
     Route::put('vueltas/configuracion/destinos/{destino}', [ConfiguracionProgramacionController::class, 'updateDestino'])

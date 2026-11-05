@@ -166,7 +166,7 @@ class AvisoDeVuelta
     {
         $dotacion = $this->dotacion->de($vuelta, new ColeccionEloquent);
 
-        // Solo lo autorizado: las tarjetas confirmadas, no las sugeridas.
+        // Solo lo autorizado: los tramos cuyas rutas ya tienen tope.
         $tramos = array_values(array_filter($dotacion['tramos'], fn (array $tramo): bool => $tramo['confirmada']));
 
         if ($tramos === [] && $dotacion['viaticos'] === []) {

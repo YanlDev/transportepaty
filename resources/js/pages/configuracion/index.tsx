@@ -27,6 +27,7 @@ import llantas from '@/actions/App/Http/Controllers/LlantaController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
 import { edit as editarPlan } from '@/actions/App/Http/Controllers/PlanMantenimientoController';
 import roles from '@/actions/App/Http/Controllers/RolController';
+import rutas from '@/actions/App/Http/Controllers/RutaController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
@@ -104,23 +105,35 @@ export default function Configuracion({
         {
             titulo: 'Operación',
             ajustes: [
+                ...(puede('programacion.configurar') ||
+                puede('abastecimiento.configurar')
+                    ? [
+                          {
+                              titulo: 'Rutas y dotaciones',
+                              descripcion:
+                                  'Cada tramo estándar: su recorrido, el combustible, los viáticos y las variantes por peso. Es lo que se elige al programar.',
+                              href: rutas.index().url,
+                              icono: Route,
+                          },
+                      ]
+                    : []),
                 ...(puede('programacion.configurar')
                     ? [
                           {
-                              titulo: 'Rutas y tramos',
+                              titulo: 'Programación',
                               descripcion:
-                                  'Las opciones de ida y vuelta al programar, los destinos particulares y las palabras de cada zona.',
+                                  'Los destinos de la carga particular y las palabras con que se reconoce cada zona en las GR.',
                               href: configuracionProgramacion.index().url,
-                              icono: Route,
+                              icono: Settings,
                           },
                       ]
                     : []),
                 ...(puede('abastecimiento.configurar')
                     ? [
                           {
-                              titulo: 'Pizarra de abastecimiento',
+                              titulo: 'Puntos de carga',
                               descripcion:
-                                  'Los galones y viáticos de cada ruta y los puntos (grifos).',
+                                  'Los grifos y puntos donde se carga combustible.',
                               href: configuracionAbastecimiento.index().url,
                               icono: Fuel,
                           },

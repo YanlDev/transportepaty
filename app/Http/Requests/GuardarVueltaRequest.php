@@ -9,6 +9,7 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Conductor;
+use App\Models\Ruta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
@@ -51,6 +52,12 @@ class GuardarVueltaRequest extends FormRequest
             // El lugar exacto cuando la zona no alcanza: «Tacna», «Ilo».
             'paradas.*.lugar_origen' => ['nullable', 'string', 'max:100'],
             'paradas.*.lugar_destino' => ['nullable', 'string', 'max:100'],
+            // Las rutas de cada tramo: la principal y sus complementos, con
+            // la variante si ya se sabe. De ahí sale lo autorizado.
+            'rutas' => ['array', 'max:10'],
+            'rutas.*.sentido' => ['required', Rule::enum(SentidoTramo::class)],
+            'rutas.*.ruta_id' => ['required', 'integer', Rule::exists('rutas', 'id')],
+            'rutas.*.variante_ruta_id' => ['nullable', 'integer', Rule::exists('variantes_ruta', 'id')],
         ];
     }
 
@@ -108,6 +115,8 @@ class GuardarVueltaRequest extends FormRequest
 
                 $vuelta = $this->vueltaEditada();
 
+                $this->validarRutas($validator, $vuelta);
+
                 // Dos tickets por salir de la misma unidad: las GR caerían
                 // en uno solo y el otro quedaría colgado para siempre.
                 $otra = Vuelta::query()
@@ -145,6 +154,56 @@ class GuardarVueltaRequest extends FormRequest
         ];
     }
 
+    /**
+     * Cada tramo con paradas lleva una sola ruta principal (y los
+     * complementos que hagan falta); cada ruta sirve para su tramo y la
+     * variante es de esa ruta. Una ruta ya desactivada se puede dejar en el
+     * ticket que la tenía, pero no elegir de nuevo.
+     */
+    private function validarRutas(Validator $validator, ?Vuelta $vuelta): void
+    {
+        if ($validator->errors()->hasAny(['rutas', 'rutas.*'])) {
+            return;
+        }
+
+        $elegidas = collect((array) $this->input('rutas', []));
+        $catalogo = Ruta::query()->with('variantes')->findMany($elegidas->pluck('ruta_id'))->keyBy('id');
+        $yaTenia = $vuelta?->rutas()->pluck('ruta_id')->all() ?? [];
+
+        foreach ($elegidas as $indice => $elegida) {
+            $ruta = $catalogo->get((int) $elegida['ruta_id']);
+            $sentido = SentidoTramo::from($elegida['sentido']);
+
+            if ($ruta === null) {
+                continue;
+            }
+
+            if (! $ruta->sirvePara($sentido)) {
+                $validator->errors()->add("rutas.{$indice}.ruta_id", "«{$ruta->nombre}» no es una ruta de {$sentido->label()}.");
+            } elseif (! $ruta->activa && ! in_array($ruta->id, $yaTenia, true)) {
+                $validator->errors()->add("rutas.{$indice}.ruta_id", "«{$ruta->nombre}» está desactivada.");
+            }
+
+            if (filled($elegida['variante_ruta_id'] ?? null) && ! $ruta->variantes->contains('id', (int) $elegida['variante_ruta_id'])) {
+                $validator->errors()->add("rutas.{$indice}.variante_ruta_id", "Esa variante no es de «{$ruta->nombre}».");
+            }
+        }
+
+        foreach (SentidoTramo::cases() as $sentido) {
+            $conParadas = collect((array) $this->input('paradas', []))->contains(fn (array $parada): bool => ($parada['sentido'] ?? null) === $sentido->value);
+            $principales = $elegidas
+                ->filter(fn (array $elegida): bool => $elegida['sentido'] === $sentido->value)
+                ->filter(fn (array $elegida): bool => ! ($catalogo->get((int) $elegida['ruta_id'])->es_complemento ?? true))
+                ->count();
+
+            if ($conParadas && $principales === 0) {
+                $validator->errors()->add('rutas', "Elige la ruta de la {$sentido->label()}: de ahí sale lo que se le autoriza.");
+            } elseif ($principales > 1) {
+                $validator->errors()->add('rutas', "La {$sentido->label()} tiene más de una ruta principal: deja una y agrega lo demás como complemento.");
+            }
+        }
+    }
+
     private function vueltaEditada(): ?Vuelta
     {
         $vuelta = $this->route('vuelta');
@@ -155,11 +214,16 @@ class GuardarVueltaRequest extends FormRequest
     /**
      * Lo validado, con cada campo en su tipo.
      *
-     * @return array{tracto_id: int, carreta_id: int|null, conductor_id: int|null, inicio: string, paradas: list<array<string, mixed>>}
+     * @return array{tracto_id: int, carreta_id: int|null, conductor_id: int|null, inicio: string, paradas: list<array<string, mixed>>, rutas: list<array{sentido: string, ruta_id: int, variante_ruta_id: int|null}>}
      */
     public function datos(): array
     {
         return [
+            'rutas' => array_values(array_map(fn (array $ruta): array => [
+                'sentido' => $ruta['sentido'],
+                'ruta_id' => (int) $ruta['ruta_id'],
+                'variante_ruta_id' => filled($ruta['variante_ruta_id'] ?? null) ? (int) $ruta['variante_ruta_id'] : null,
+            ], (array) $this->validated('rutas', []))),
             'tracto_id' => $this->integer('tracto_id'),
             'carreta_id' => $this->filled('carreta_id') ? $this->integer('carreta_id') : null,
             'conductor_id' => $this->filled('conductor_id') ? $this->integer('conductor_id') : null,

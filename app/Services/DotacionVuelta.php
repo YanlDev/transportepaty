@@ -3,12 +3,12 @@
 namespace App\Services;
 
 use App\Enums\SentidoTramo;
-use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
-use App\Models\DotacionTramo;
 use App\Models\ParadaVuelta;
-use App\Models\ReglaAbastecimiento;
+use App\Models\Ruta;
+use App\Models\RutaVuelta;
 use App\Models\User;
+use App\Models\VarianteRuta;
 use App\Models\Viaje;
 use App\Models\Viatico;
 use App\Models\Vuelta;
@@ -17,25 +17,22 @@ use Illuminate\Database\Eloquent\Collection;
 /**
  * Lo autorizado para cada tramo de un ticket contra lo que ya se le dio.
  *
- * Lo autorizado es la tarjeta de la pizarra que alguien confirmó para ese
- * tramo, copiada como estaba (`DotacionTramo`): si la pizarra cambia después,
- * los tickets en ruta no se mueven. Mientras no se confirme, el sistema solo
- * sugiere la tarjeta que calza con las paradas; no cuenta como autorizada.
+ * Lo autorizado sale de las rutas elegidas al programar (`RutaVuelta`),
+ * copiadas como estaban: si el catálogo cambia después, los tickets en ruta
+ * no se mueven. El tope de un tramo es la suma de sus rutas; si a una le
+ * falta elegir la variante (por peso), el tope no se conoce todavía.
  *
  * El combustible cuenta en el tramo que se eligió al registrarlo, nunca se
  * reparte solo.
  *
- * @phpstan-type Tramo array{sentido: string, confirmada: bool, tarjeta: string|null, color: string|null, confirmada_por: string|null, confirmada_at: string|null, previsto: float|null, registrado: float, despachado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null}>, sugerida: array{id: int, nombre: string}|null}
+ * @phpstan-type Tramo array{sentido: string, confirmada: bool, rutas: list<array{id: int, nombre: string, variante: string|null, color: string|null, es_complemento: bool, variante_pendiente: bool, tope: float|null, variantes: list<array{id: int, nombre: string}>, sugerida: int|null}>, tarjeta: string|null, color: string|null, previsto: float|null, registrado: float, despachado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null}>, pendiente: string|null}
  * @phpstan-type FilaCombustible array{punto_id: int|null, punto: string, previsto: float|null, registrado: float, despachado: float, falta: float|null}
  */
 class DotacionVuelta
 {
-    /** @var Collection<int, ReglaAbastecimiento>|null */
-    private ?Collection $reglas = null;
-
     /**
-     * El ticket tiene que venir con `paradas.viajes`; las tarjetas
-     * confirmadas se cargan si faltan.
+     * El ticket tiene que venir con `paradas.viajes`; las rutas se cargan si
+     * faltan.
      *
      * @param  Collection<int, Abastecimiento>  $registrados  los del ticket, anulados incluidos
      * @return array{
@@ -50,7 +47,7 @@ class DotacionVuelta
      */
     public function de(Vuelta $vuelta, Collection $registrados): array
     {
-        $vuelta->loadMissing('dotaciones.usuario:id,name');
+        $vuelta->loadMissing('rutas.ruta.variantes');
         $vigentes = $registrados->reject(fn (Abastecimiento $abastecimiento): bool => $abastecimiento->estaAnulado())->values();
         $tramos = [];
         $lineasDeCombustible = [];
@@ -58,23 +55,23 @@ class DotacionVuelta
         $tarjetas = [];
 
         foreach (SentidoTramo::cases() as $sentido) {
-            $dotacion = $vuelta->dotacionDe($sentido);
+            $rutas = $vuelta->rutasDe($sentido);
             $delTramo = $vigentes->where('sentido', $sentido)->values();
 
-            if ($sentido === SentidoTramo::Regreso && $dotacion === null && $delTramo->isEmpty() && $vuelta->paradasDe($sentido)->isEmpty()) {
+            if ($sentido === SentidoTramo::Regreso && $rutas->isEmpty() && $delTramo->isEmpty() && $vuelta->paradasDe($sentido)->isEmpty()) {
                 continue;
             }
 
-            if ($dotacion !== null) {
-                $tarjetas[] = ['sentido' => $sentido->value, 'id' => $dotacion->regla_abastecimiento_id, 'nombre' => $dotacion->nombre, 'color' => $dotacion->color];
-                array_push($lineasDeCombustible, ...$dotacion->lineasDeCombustible());
+            foreach ($rutas as $ruta) {
+                $tarjetas[] = ['sentido' => $sentido->value, 'id' => $ruta->ruta_id, 'nombre' => $ruta->nombre.($ruta->variante ? " · {$ruta->variante}" : ''), 'color' => $ruta->color];
+                array_push($lineasDeCombustible, ...$ruta->lineasDeCombustible());
 
-                foreach ($dotacion->lineasDeViaticos() as $linea) {
+                foreach ($ruta->lineasDeViaticos() as $linea) {
                     $viaticos[] = ['linea_id' => $linea['linea_id'], 'concepto' => $linea['concepto'], 'tipo' => $linea['tipo'], 'monto' => (float) $linea['monto']];
                 }
             }
 
-            $tramos[] = $this->tramo($vuelta, $sentido, $dotacion, $delTramo);
+            $tramos[] = $this->tramo($vuelta, $sentido, $rutas, $delTramo);
         }
 
         $combustible = $this->combustible($lineasDeCombustible, $vigentes);
@@ -92,48 +89,37 @@ class DotacionVuelta
     }
 
     /**
-     * Confirma la tarjeta de un tramo: la copia al ticket como está ahora.
-     * Confirmar otra reemplaza la anterior (queda en el historial).
+     * Elige la variante de una ruta del ticket (la dotación por peso) y la
+     * copia como está ahora.
      */
-    public function confirmar(Vuelta $vuelta, SentidoTramo $sentido, ReglaAbastecimiento $regla, User $usuario): DotacionTramo
+    public function elegirVariante(RutaVuelta $rutaVuelta, VarianteRuta $variante, User $usuario): void
     {
-        $regla->loadMissing('lineas.punto');
+        $ruta = Ruta::query()->with(['lineas.punto', 'variantes'])->findOrFail($variante->ruta_id);
 
-        return DotacionTramo::query()->updateOrCreate(
-            ['vuelta_id' => $vuelta->id, 'sentido' => $sentido],
-            [
-                'regla_abastecimiento_id' => $regla->id,
-                'nombre' => $regla->nombre,
-                'color' => $regla->color,
-                'lineas' => DotacionTramo::lineasDe($regla),
-                'user_id' => $usuario->id,
-            ],
-        );
+        $rutaVuelta->update([...RutaVuelta::copiaDe($ruta, $variante), 'user_id' => $usuario->id]);
     }
 
     /**
-     * La tarjeta que el sistema propone para un tramo: la más específica que
-     * calza con alguna de sus paradas. Es solo una sugerencia.
+     * La variante que corresponde al peso de las GR de las paradas de esa
+     * ruta, o null si todavía no hay GR o la ruta no tiene variantes.
      */
-    public function sugerida(Vuelta $vuelta, SentidoTramo $sentido): ?ReglaAbastecimiento
+    public function varianteSugerida(Vuelta $vuelta, RutaVuelta $rutaVuelta): ?VarianteRuta
     {
-        $paradas = $vuelta->paradasDe($sentido);
-        $inicio = $paradas->first()?->zona_origen;
+        $ruta = $rutaVuelta->ruta;
 
-        foreach ($paradas as $parada) {
-            if (($regla = $this->reglaDe($parada, $inicio)) !== null) {
-                return $regla;
-            }
+        if ($ruta === null || $ruta->variantes->isEmpty()) {
+            return null;
         }
 
-        return null;
+        $toneladas = $this->toneladasDeLaRuta($vuelta, $rutaVuelta, $ruta);
+
+        return $toneladas === null ? null : $ruta->varianteParaPeso($toneladas);
     }
 
     /**
-     * Los viáticos de las tarjetas confirmadas contra lo depositado: cada
-     * línea con su depósito (o pendiente) y, aparte, los imprevistos. Si la
-     * misma línea toca dos veces, se espera dos depósitos. Los anulados no
-     * cuentan.
+     * Los viáticos de las rutas contra lo depositado: cada línea con su
+     * depósito (o pendiente) y, aparte, los imprevistos. Si la misma línea
+     * toca dos veces, se espera dos depósitos. Los anulados no cuentan.
      *
      * @param  list<array{linea_id: int|null, concepto: string, tipo: string, monto: float}>  $dePizarra
      * @param  Collection<int, Viatico>  $depositados  vigentes, del más viejo al más nuevo
@@ -147,7 +133,7 @@ class DotacionVuelta
         foreach ($dePizarra as $linea) {
             $clave = $linea['linea_id'] === null
                 ? null
-                : array_find_key($libres, fn (Viatico $viatico): bool => $viatico->linea_regla_abastecimiento_id === $linea['linea_id']);
+                : array_find_key($libres, fn (Viatico $viatico): bool => $viatico->linea_ruta_id === $linea['linea_id']);
             $deposito = null;
 
             if ($clave !== null) {
@@ -158,11 +144,11 @@ class DotacionVuelta
             $filas[] = ['linea_id' => $linea['linea_id'], 'concepto' => $linea['concepto'], 'previsto' => $linea['monto'], 'deposito' => $deposito];
         }
 
-        // Lo que no calzó con la pizarra: los imprevistos y los de una línea
-        // que la tarjeta ya no tiene.
+        // Lo que no calzó con las rutas: los imprevistos y los de una línea
+        // que la ruta ya no tiene.
         foreach ($libres as $viatico) {
             $filas[] = [
-                'linea_id' => $viatico->linea_regla_abastecimiento_id,
+                'linea_id' => $viatico->linea_ruta_id,
                 'concepto' => $viatico->concepto,
                 'previsto' => $viatico->monto_previsto === null ? null : (float) $viatico->monto_previsto,
                 'deposito' => $viatico,
@@ -173,63 +159,82 @@ class DotacionVuelta
     }
 
     /**
-     * La tarjeta más específica que calza con la parada, o ninguna.
-     */
-    public function reglaDe(ParadaVuelta $parada, ?ZonaRuta $inicioDelTramo = null): ?ReglaAbastecimiento
-    {
-        $texto = implode(' ', array_filter([
-            $parada->lugar_origen,
-            $parada->lugar_destino,
-            ...$parada->viajes->flatMap(fn (Viaje $viaje): array => [$viaje->origen, $viaje->destino])->all(),
-        ]));
-        $toneladas = $this->toneladas($parada);
-
-        return $this->reglas()
-            ->filter(fn (ReglaAbastecimiento $regla): bool => $regla->aplicaA($parada, $texto, $toneladas, $inicioDelTramo))
-            ->sortByDesc(fn (ReglaAbastecimiento $regla): int => $regla->especificidad())
-            ->first();
-    }
-
-    /**
+     * @param  Collection<int, RutaVuelta>  $rutas
      * @param  Collection<int, Abastecimiento>  $delTramo  vigentes
      * @return Tramo
      */
-    private function tramo(Vuelta $vuelta, SentidoTramo $sentido, ?DotacionTramo $dotacion, Collection $delTramo): array
+    private function tramo(Vuelta $vuelta, SentidoTramo $sentido, Collection $rutas, Collection $delTramo): array
     {
         $registrado = (float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones);
-        $previsto = $dotacion?->tope();
-        $sugerida = $dotacion === null ? $this->sugerida($vuelta, $sentido) : null;
-
+        $previsto = $vuelta->topeDe($sentido);
         $puntos = [];
 
-        foreach ($dotacion?->lineasDeCombustible() ?? [] as $linea) {
-            $clave = $linea['punto_id'] ?? 'linea:'.($linea['punto'] ?? '');
-            $puntos[$clave] ??= ['punto' => $linea['punto'] ?? 'Total del tramo', 'previsto' => 0.0];
-            $puntos[$clave]['previsto'] = $puntos[$clave]['previsto'] === null || $linea['galones'] === null
-                ? null
-                : $puntos[$clave]['previsto'] + (float) $linea['galones'];
+        foreach ($rutas as $ruta) {
+            foreach ($ruta->lineasDeCombustible() as $linea) {
+                $clave = $linea['punto_id'] ?? 'linea:'.($linea['punto'] ?? '');
+                $puntos[$clave] ??= ['punto' => $linea['punto'] ?? 'Total del tramo', 'previsto' => 0.0];
+                $puntos[$clave]['previsto'] = $puntos[$clave]['previsto'] === null || $linea['galones'] === null
+                    ? null
+                    : $puntos[$clave]['previsto'] + (float) $linea['galones'];
+            }
         }
+
+        $principal = $rutas->first(fn (RutaVuelta $ruta): bool => ! $ruta->es_complemento) ?? $rutas->first();
 
         return [
             'sentido' => $sentido->value,
-            'confirmada' => $dotacion !== null,
-            'tarjeta' => $dotacion?->nombre,
-            'color' => $dotacion?->color,
-            'confirmada_por' => $dotacion?->usuario?->name,
-            'confirmada_at' => $dotacion?->updated_at->format('Y-m-d H:i'),
+            // Tiene lo autorizado: rutas, variantes elegidas y galones definidos.
+            'confirmada' => $previsto !== null,
+            'rutas' => array_values($rutas->map(fn (RutaVuelta $ruta): array => [
+                'id' => $ruta->id,
+                'nombre' => $ruta->nombre,
+                'variante' => $ruta->variante,
+                'color' => $ruta->color,
+                'es_complemento' => $ruta->es_complemento,
+                'variante_pendiente' => $ruta->variante_pendiente,
+                'tope' => $ruta->tope(),
+                'variantes' => array_values(($ruta->ruta->variantes ?? new Collection)
+                    ->map(fn (VarianteRuta $variante): array => ['id' => $variante->id, 'nombre' => $variante->nombre])
+                    ->all()),
+                'sugerida' => $ruta->variante_pendiente ? $this->varianteSugerida($vuelta, $ruta)?->id : null,
+            ])->all()),
+            'tarjeta' => $principal?->nombre,
+            'color' => $principal?->color,
             'previsto' => $previsto,
             'registrado' => $registrado,
             'despachado' => (float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados),
             'falta' => $previsto === null ? null : max(0.0, $previsto - $registrado),
             'puntos' => array_values($puntos),
-            'sugerida' => $sugerida === null ? null : ['id' => $sugerida->id, 'nombre' => $sugerida->nombre],
+            'pendiente' => $this->pendiente($rutas),
         ];
     }
 
     /**
+     * Por qué el tramo todavía no tiene tope, en una frase; null si lo tiene.
+     *
+     * @param  Collection<int, RutaVuelta>  $rutas
+     */
+    private function pendiente(Collection $rutas): ?string
+    {
+        if ($rutas->isEmpty()) {
+            return 'Sin ruta: se elige al programar';
+        }
+
+        $sinVariante = $rutas->first(fn (RutaVuelta $ruta): bool => $ruta->variante_pendiente);
+
+        if ($sinVariante !== null) {
+            return "Falta elegir la variante de «{$sinVariante->nombre}» (según el peso)";
+        }
+
+        $porDefinir = $rutas->first(fn (RutaVuelta $ruta): bool => $ruta->tope() === null);
+
+        return $porDefinir === null ? null : "«{$porDefinir->nombre}» tiene galones por definir en el catálogo de rutas";
+    }
+
+    /**
      * Galones previstos por punto contra los autorizados y despachados. Lo
-     * autorizado en un punto que la tarjeta no nombra también se muestra,
-     * con lo previsto vacío.
+     * autorizado en un punto que la ruta no nombra también se muestra, con
+     * lo previsto vacío.
      *
      * @param  list<array{punto_id: int|null, punto: string|null, galones: float|null}>  $lineas
      * @param  Collection<int, Abastecimiento>  $vigentes
@@ -285,33 +290,30 @@ class DotacionVuelta
 
         return filled($abastecimiento->punto_libre)
             ? 'libre:'.mb_strtolower(trim($abastecimiento->punto_libre))
-            : 0;
+            : 'linea:';
     }
 
     /**
-     * El peso de las GR de la parada, en toneladas. Las GR vienen unas en
-     * toneladas y otras en kilos. Null si todavía no tiene GR.
+     * El peso de las GR de las paradas que hace esa ruta (mismo trayecto y
+     * carga que su recorrido), en toneladas. Las GR vienen unas en
+     * toneladas y otras en kilos. Null si todavía no hay GR.
      */
-    private function toneladas(ParadaVuelta $parada): ?float
+    private function toneladasDeLaRuta(Vuelta $vuelta, RutaVuelta $rutaVuelta, Ruta $ruta): ?float
     {
-        if ($parada->viajes->isEmpty()) {
+        $guias = $vuelta->paradasDe($rutaVuelta->sentido)
+            ->filter(fn (ParadaVuelta $parada): bool => collect($ruta->paradas)->contains(
+                fn (array $plantilla): bool => $plantilla['zona_origen'] === $parada->zona_origen?->value
+                    && ($plantilla['zona_destino'] ?? null) === $parada->zona_destino?->value
+                    && $plantilla['tipo_carga'] === $parada->tipo_carga->value,
+            ))
+            ->flatMap(fn (ParadaVuelta $parada) => $parada->viajes);
+
+        if ($guias->isEmpty()) {
             return null;
         }
 
-        return (float) $parada->viajes->sum(fn (Viaje $viaje): float => strtoupper($viaje->unidad_peso) === 'KGM'
+        return (float) $guias->sum(fn (Viaje $viaje): float => strtoupper($viaje->unidad_peso) === 'KGM'
             ? (float) $viaje->peso / 1000
             : (float) $viaje->peso);
-    }
-
-    /**
-     * @return Collection<int, ReglaAbastecimiento>
-     */
-    private function reglas(): Collection
-    {
-        return $this->reglas ??= ReglaAbastecimiento::query()
-            ->where('activa', true)
-            ->enOrden()
-            ->with('lineas.punto')
-            ->get();
     }
 }

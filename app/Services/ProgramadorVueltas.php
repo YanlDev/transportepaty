@@ -9,6 +9,9 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVuelta;
 use App\Models\Cliente;
 use App\Models\ParadaVuelta;
+use App\Models\Ruta;
+use App\Models\RutaVuelta;
+use App\Models\User;
 use App\Models\Vuelta;
 use Illuminate\Support\Facades\DB;
 
@@ -22,11 +25,11 @@ use Illuminate\Support\Facades\DB;
 class ProgramadorVueltas
 {
     /**
-     * @param  array{tracto_id: int, carreta_id: int|null, conductor_id: int|null, inicio: string, paradas: list<array<string, mixed>>}  $datos
+     * @param  array{tracto_id: int, carreta_id: int|null, conductor_id: int|null, inicio: string, paradas: list<array<string, mixed>>, rutas?: list<array{sentido: string, ruta_id: int, variante_ruta_id: int|null}>}  $datos
      */
-    public function programar(array $datos): Vuelta
+    public function programar(array $datos, ?User $usuario = null): Vuelta
     {
-        return DB::transaction(function () use ($datos): Vuelta {
+        return DB::transaction(function () use ($datos, $usuario): Vuelta {
             $vuelta = Vuelta::query()->create([
                 'tracto_id' => $datos['tracto_id'],
                 'carreta_id' => $datos['carreta_id'],
@@ -38,17 +41,18 @@ class ProgramadorVueltas
             ]);
 
             $this->guardarParadas($vuelta, $datos['paradas']);
+            $this->guardarRutas($vuelta, $datos['rutas'] ?? [], $usuario);
 
             return $vuelta;
         });
     }
 
     /**
-     * @param  array{tracto_id: int, carreta_id: int|null, conductor_id: int|null, inicio: string, paradas: list<array<string, mixed>>}  $datos
+     * @param  array{tracto_id: int, carreta_id: int|null, conductor_id: int|null, inicio: string, paradas: list<array<string, mixed>>, rutas?: list<array{sentido: string, ruta_id: int, variante_ruta_id: int|null}>}  $datos
      */
-    public function actualizar(Vuelta $vuelta, array $datos): Vuelta
+    public function actualizar(Vuelta $vuelta, array $datos, ?User $usuario = null): Vuelta
     {
-        return DB::transaction(function () use ($vuelta, $datos): Vuelta {
+        return DB::transaction(function () use ($vuelta, $datos, $usuario): Vuelta {
             $tieneGuias = $vuelta->viajes()->exists();
 
             $vuelta->update([
@@ -61,9 +65,59 @@ class ProgramadorVueltas
             ]);
 
             $this->guardarParadas($vuelta, $datos['paradas']);
+            $this->guardarRutas($vuelta, $datos['rutas'] ?? [], $usuario);
 
             return $vuelta;
         });
+    }
+
+    /**
+     * Las rutas de cada tramo, copiadas al ticket. La que ya estaba con la
+     * misma variante se conserva tal cual (lo autorizado no se refresca con
+     * el catálogo); la nueva, o la que cambió de variante, se copia como
+     * está ahora. La que se sacó se quita.
+     *
+     * @param  list<array{sentido: string, ruta_id: int, variante_ruta_id: int|null}>  $elegidas
+     */
+    private function guardarRutas(Vuelta $vuelta, array $elegidas, ?User $usuario): void
+    {
+        $existentes = $vuelta->rutas()->get();
+        $catalogo = Ruta::query()->with(['lineas.punto', 'variantes'])->findMany(array_column($elegidas, 'ruta_id'))->keyBy('id');
+        $conservadas = [];
+
+        foreach ($elegidas as $orden => $elegida) {
+            $ruta = $catalogo->get($elegida['ruta_id']);
+
+            if ($ruta === null) {
+                continue;
+            }
+
+            $existente = $existentes->first(fn (RutaVuelta $rutaVuelta): bool => $rutaVuelta->sentido->value === $elegida['sentido']
+                && $rutaVuelta->ruta_id === $ruta->id
+                && ! in_array($rutaVuelta->id, $conservadas, true));
+            $mismaVariante = $existente !== null
+                && ($elegida['variante_ruta_id'] === null || $existente->variante_ruta_id === $elegida['variante_ruta_id']);
+
+            if ($mismaVariante) {
+                $existente->update(['orden' => $orden + 1]);
+                $conservadas[] = $existente->id;
+
+                continue;
+            }
+
+            $variante = $ruta->variantes->firstWhere('id', $elegida['variante_ruta_id']);
+            $datos = [...RutaVuelta::copiaDe($ruta, $variante), 'sentido' => $elegida['sentido'], 'orden' => $orden + 1, 'user_id' => $usuario?->id];
+
+            if ($existente !== null) {
+                $existente->update($datos);
+                $conservadas[] = $existente->id;
+            } else {
+                $conservadas[] = $vuelta->rutas()->create($datos)->id;
+            }
+        }
+
+        $existentes->reject(fn (RutaVuelta $rutaVuelta): bool => in_array($rutaVuelta->id, $conservadas, true))->each->delete();
+        $vuelta->unsetRelation('rutas');
     }
 
     /**

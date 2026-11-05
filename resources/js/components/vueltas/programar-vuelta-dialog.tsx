@@ -265,6 +265,7 @@ function TarjetaOpcion({
     descripcion,
     elegida,
     sentido,
+    dotacion = null,
     bloqueo = null,
     onElegir,
 }: {
@@ -273,6 +274,8 @@ function TarjetaOpcion({
     descripcion: string;
     elegida: boolean;
     sentido: Sentido;
+    /** Lo que se autoriza con esta ruta, en una línea. */
+    dotacion?: string | null;
     /** Por qué no se puede elegir: no arranca donde está la unidad. */
     bloqueo?: string | null;
     onElegir: () => void;
@@ -311,6 +314,11 @@ function TarjetaOpcion({
                 <span className="block text-xs text-muted-foreground">
                     {descripcion}
                 </span>
+                {dotacion && (
+                    <span className="mt-0.5 block text-[11px] text-emerald-700 dark:text-emerald-400">
+                        {dotacion}
+                    </span>
+                )}
                 {bloqueo !== null && (
                     <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
                         <Lock className="size-3" />
@@ -351,33 +359,66 @@ export function ProgramarVueltaDialog({
 
     // La clave del diálogo en la página lo remonta al cambiar de vuelta, así
     // que estos valores iniciales ya son los correctos.
-    const { data, setData, post, put, processing, errors } = useForm<FormData>({
-        tracto_id: vuelta?.tracto_id ?? tractoInicial ?? null,
-        carreta_id: vuelta?.carreta_id ?? unidadInicial?.carreta_id ?? null,
-        conductor_id:
-            vuelta?.conductor_id ?? unidadInicial?.conductor_id ?? null,
-        inicio: vuelta?.inicio ?? fechaInicial ?? hoy(),
-        paradas: vuelta
-            ? [...vuelta.ida, ...vuelta.regreso].map((parada, indice) => {
-                  const cargada = desdeParada(parada);
-                  const sinGuias = [...vuelta.ida, ...vuelta.regreso].every(
-                      (otra) => otra.guias.length === 0,
-                  );
+    const { data, setData, post, put, transform, processing, errors } =
+        useForm<FormData>({
+            tracto_id: vuelta?.tracto_id ?? tractoInicial ?? null,
+            carreta_id: vuelta?.carreta_id ?? unidadInicial?.carreta_id ?? null,
+            conductor_id:
+                vuelta?.conductor_id ?? unidadInicial?.conductor_id ?? null,
+            inicio: vuelta?.inicio ?? fechaInicial ?? hoy(),
+            paradas: vuelta
+                ? [...vuelta.ida, ...vuelta.regreso].map((parada, indice) => {
+                      const cargada = desdeParada(parada);
+                      const sinGuias = [...vuelta.ida, ...vuelta.regreso].every(
+                          (otra) => otra.guias.length === 0,
+                      );
 
-                  // Sin GR, la subida a la mina guardada la maneja el
-                  // selector «¿Cómo llega a la mina?».
-                  return indice === 0 && sinGuias && esSubida(cargada)
-                      ? { ...cargada, auto: true }
-                      : cargada;
-              })
-            : [],
-    });
+                      // Sin GR, la subida a la mina guardada la maneja el
+                      // selector «¿Cómo llega a la mina?».
+                      return indice === 0 && sinGuias && esSubida(cargada)
+                          ? { ...cargada, auto: true }
+                          : cargada;
+                  })
+                : [],
+        });
 
     const [eligiendo, setEligiendo] = useState<Eligiendo>(null);
+    const rutasDelTicket = vuelta?.rutas ?? [];
+    const principalDe = (sentido: Sentido) =>
+        rutasDelTicket.find(
+            (ruta) => ruta.sentido === sentido && !ruta.es_complemento,
+        )?.ruta_id;
     const [elegida, setElegida] = useState<Record<Sentido, string | null>>({
-        ida: null,
-        regreso: vuelta && vuelta.regreso.length > 0 ? null : POR_DEFINIR,
+        ida: principalDe('ida') ? String(principalDe('ida')) : null,
+        regreso: principalDe('regreso')
+            ? String(principalDe('regreso'))
+            : vuelta && vuelta.regreso.length > 0
+              ? null
+              : POR_DEFINIR,
     });
+    // Los complementos de cada tramo: se suman a la ruta principal.
+    const [complementos, setComplementos] = useState<Record<Sentido, string[]>>(
+        {
+            ida: rutasDelTicket
+                .filter((ruta) => ruta.sentido === 'ida' && ruta.es_complemento)
+                .map((ruta) => String(ruta.ruta_id)),
+            regreso: rutasDelTicket
+                .filter(
+                    (ruta) => ruta.sentido === 'regreso' && ruta.es_complemento,
+                )
+                .map((ruta) => String(ruta.ruta_id)),
+        },
+    );
+    // La variante elegida (por peso) de cada ruta, por «tramo:ruta». Sin
+    // elegir, se define después con el peso de la GR.
+    const [variantes, setVariantes] = useState<Record<string, number | null>>(
+        Object.fromEntries(
+            rutasDelTicket.map((ruta) => [
+                `${ruta.sentido}:${ruta.ruta_id}`,
+                ruta.variante_ruta_id,
+            ]),
+        ),
+    );
     const [destino, setDestino] = useState<string | null>(null);
     const [subida, setSubida] = useState<Subida>(() => {
         const primera = vuelta?.ida[0];
@@ -400,9 +441,11 @@ export function ProgramarVueltaDialog({
     // Lo de una parada suelta también se dice arriba: con el editor a mano
     // cerrado, el borde rojo de su campo no se ve.
     const errorParadas =
+        errores.rutas ??
         errores.paradas ??
-        Object.entries(errores).find(([campo]) =>
-            campo.startsWith('paradas.'),
+        Object.entries(errores).find(
+            ([campo]) =>
+                campo.startsWith('paradas.') || campo.startsWith('rutas.'),
         )?.[1];
     const conGuias = data.paradas.some((parada) => parada.bloqueada);
     const etiquetaZona = (zona: string | null) =>
@@ -490,22 +533,22 @@ export function ProgramarVueltaDialog({
     };
 
     /**
-     * Elegir una opción reemplaza lo que ese tramo todavía no tiene con GR.
-     * La carga particular de regreso necesita el destino; si no es Juliaca,
-     * la unidad descarga ahí y sigue vacía a Juliaca.
+     * Arma un tramo con su ruta principal y sus complementos: reemplaza lo
+     * que ese tramo todavía no tiene con GR. La carga particular a otro
+     * destino necesita el destino; si no es Juliaca, la unidad descarga ahí
+     * y sigue vacía a Juliaca.
      */
-    const elegirOpcion = (
+    const armarTramo = (
         sentido: Sentido,
-        valor: string,
+        valor: string | null,
+        extras: string[],
         lugar: string | null = destino,
     ) => {
-        setElegida((anterior) => ({ ...anterior, [sentido]: valor }));
-
         const fijas = data.paradas.filter(
             (parada) => parada.sentido !== sentido || parada.bloqueada,
         );
 
-        if (valor === POR_DEFINIR) {
+        if (valor === null || valor === POR_DEFINIR) {
             fijarParadas(fijas.filter((parada) => !parada.auto));
 
             return;
@@ -529,19 +572,26 @@ export function ProgramarVueltaDialog({
             return;
         }
 
-        const nuevas = opcion.paradas.map((parada) =>
+        const desdePlantilla = (plantilla: OpcionTramo['paradas'][number]) =>
             nuevaParada(sentido, {
-                zona_origen: parada.zona_origen,
-                zona_destino: parada.zona_destino ?? elegidoDestino?.zona ?? '',
+                zona_origen: plantilla.zona_origen,
+                zona_destino:
+                    plantilla.zona_destino ?? elegidoDestino?.zona ?? '',
+                lugar_origen: plantilla.lugar_origen ?? null,
                 lugar_destino:
-                    parada.zona_destino === null
+                    plantilla.zona_destino === null
                         ? (elegidoDestino?.lugar ?? null)
-                        : null,
-                tipo_carga: parada.tipo_carga,
-            }),
-        );
+                        : (plantilla.lugar_destino ?? null),
+                tipo_carga: plantilla.tipo_carga,
+            });
 
-        if (elegidoDestino && elegidoDestino.zona !== 'juliaca') {
+        const nuevas = opcion.paradas.map(desdePlantilla);
+
+        if (
+            opcion.pide_destino &&
+            elegidoDestino &&
+            elegidoDestino.zona !== 'juliaca'
+        ) {
             nuevas.push(
                 nuevaParada(sentido, {
                     zona_origen: elegidoDestino.zona,
@@ -550,6 +600,14 @@ export function ProgramarVueltaDialog({
                     tipo_carga: 'vacio',
                 }),
             );
+        }
+
+        for (const extra of extras) {
+            const complemento = opciones.tramos[sentido].find(
+                (candidata) => candidata.value === extra,
+            );
+
+            nuevas.push(...(complemento?.paradas ?? []).map(desdePlantilla));
         }
 
         const ida =
@@ -569,6 +627,58 @@ export function ProgramarVueltaDialog({
 
         fijarParadas([...ida, ...regreso]);
     };
+
+    const elegirOpcion = (
+        sentido: Sentido,
+        valor: string,
+        lugar: string | null = destino,
+    ) => {
+        setElegida((anterior) => ({ ...anterior, [sentido]: valor }));
+
+        // Sin ruta principal no hay complementos.
+        const extras = valor === POR_DEFINIR ? [] : complementos[sentido];
+
+        if (valor === POR_DEFINIR) {
+            setComplementos((anterior) => ({ ...anterior, [sentido]: [] }));
+        }
+
+        armarTramo(sentido, valor, extras, lugar);
+    };
+
+    const alternarComplemento = (sentido: Sentido, valor: string) => {
+        const extras = complementos[sentido].includes(valor)
+            ? complementos[sentido].filter((otro) => otro !== valor)
+            : [...complementos[sentido], valor];
+
+        setComplementos((anterior) => ({ ...anterior, [sentido]: extras }));
+        armarTramo(sentido, elegida[sentido], extras);
+    };
+
+    const elegirVariante = (
+        sentido: Sentido,
+        rutaId: string,
+        varianteId: number | null,
+    ) =>
+        setVariantes((anterior) => ({
+            ...anterior,
+            [`${sentido}:${rutaId}`]: varianteId,
+        }));
+
+    /** Las rutas elegidas, como las guarda el ticket: principal primero. */
+    const rutasElegidas = () =>
+        (['ida', 'regreso'] as const).flatMap((sentido) => {
+            const principal = elegida[sentido];
+
+            if (principal === null || principal === POR_DEFINIR) {
+                return [];
+            }
+
+            return [principal, ...complementos[sentido]].map((rutaId) => ({
+                sentido,
+                ruta_id: Number(rutaId),
+                variante_ruta_id: variantes[`${sentido}:${rutaId}`] ?? null,
+            }));
+        });
 
     const elegirDestino = (lugar: string) => {
         setDestino(lugar);
@@ -641,6 +751,8 @@ export function ProgramarVueltaDialog({
             preserveScroll: true,
             onSuccess: () => onOpenChange(false),
         };
+
+        transform((datos) => ({ ...datos, rutas: rutasElegidas() }));
 
         if (vuelta) {
             put(update(vuelta.id).url, opcionesEnvio);
@@ -737,9 +849,28 @@ export function ProgramarVueltaDialog({
                       descripcion: 'Se programa cuando se sepa',
                       pide_destino: false,
                   },
-                  ...opciones.tramos.regreso,
+                  ...opciones.tramos.regreso.filter(
+                      (opcion) => !opcion.es_complemento,
+                  ),
               ]
-            : opciones.tramos.ida;
+            : opciones.tramos.ida.filter((opcion) => !opcion.es_complemento);
+        const extras = opciones.tramos[sentido].filter(
+            (opcion) => opcion.es_complemento,
+        );
+        const principal = opciones.tramos[sentido].find(
+            (opcion) => opcion.value === elegida[sentido],
+        );
+        // Las rutas elegidas que tienen dotación por peso: se elige la
+        // variante si se sabe; si no, después con el peso de la GR.
+        const conVariantes = [
+            principal,
+            ...complementos[sentido].map((valor) =>
+                extras.find((opcion) => opcion.value === valor),
+            ),
+        ].filter(
+            (opcion): opcion is OpcionTramo =>
+                opcion !== undefined && opcion.variantes.length > 0,
+        );
         const fijas = data.paradas.filter(
             (parada) => parada.sentido === sentido && parada.bloqueada,
         );
@@ -814,6 +945,9 @@ export function ProgramarVueltaDialog({
                             }
                             titulo={opcion.label}
                             descripcion={opcion.descripcion}
+                            dotacion={
+                                'dotacion' in opcion ? opcion.dotacion : null
+                            }
                             sentido={sentido}
                             elegida={elegida[sentido] === opcion.value}
                             bloqueo={bloqueoDe(
@@ -823,6 +957,101 @@ export function ProgramarVueltaDialog({
                         />
                     ))}
                 </div>
+
+                {principal && extras.length > 0 && (
+                    <div className="flex flex-col gap-2">
+                        <span className="text-xs font-medium text-muted-foreground">
+                            Complementos (se suman a la ruta)
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                            {extras.map((extra) => {
+                                const marcado = complementos[sentido].includes(
+                                    extra.value,
+                                );
+
+                                return (
+                                    <button
+                                        key={extra.value}
+                                        type="button"
+                                        title={
+                                            [extra.descripcion, extra.dotacion]
+                                                .filter(Boolean)
+                                                .join(' · ') || undefined
+                                        }
+                                        aria-pressed={marcado}
+                                        onClick={() =>
+                                            alternarComplemento(
+                                                sentido,
+                                                extra.value,
+                                            )
+                                        }
+                                        className={cn(
+                                            'rounded-full border px-3 py-1 text-xs transition',
+                                            marcado
+                                                ? subiendo
+                                                    ? 'border-violet-500 bg-violet-500 text-white'
+                                                    : 'border-amber-500 bg-amber-500 text-white'
+                                                : 'hover:bg-accent',
+                                        )}
+                                    >
+                                        {marcado ? '✓ ' : '+ '}
+                                        {extra.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
+
+                {conVariantes.map((ruta) => {
+                    const clave = `${sentido}:${ruta.value}`;
+                    const actual = variantes[clave] ?? null;
+
+                    return (
+                        <div key={clave} className="flex flex-col gap-2">
+                            <span className="text-xs font-medium text-muted-foreground">
+                                {ruta.label}: ¿cuánto pesa la carga?
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {[
+                                    {
+                                        id: null,
+                                        nombre: 'Según la GR',
+                                        tope: null,
+                                    },
+                                    ...ruta.variantes,
+                                ].map((variante) => (
+                                    <button
+                                        key={variante.id ?? 'gr'}
+                                        type="button"
+                                        title={
+                                            variante.id === null
+                                                ? 'Se elige después, con el peso de la GR'
+                                                : variante.tope !== null
+                                                  ? `${variante.tope} gal`
+                                                  : undefined
+                                        }
+                                        onClick={() =>
+                                            elegirVariante(
+                                                sentido,
+                                                ruta.value,
+                                                variante.id,
+                                            )
+                                        }
+                                        className={cn(
+                                            'rounded-full border px-3 py-1 text-xs transition',
+                                            actual === variante.id
+                                                ? 'border-emerald-600 bg-emerald-600 text-white'
+                                                : 'hover:bg-accent',
+                                        )}
+                                    >
+                                        {variante.nombre}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    );
+                })}
 
                 {!subiendo &&
                     fijas.length === 0 &&

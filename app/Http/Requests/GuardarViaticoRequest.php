@@ -11,7 +11,7 @@ use Illuminate\Validation\Rule;
 
 /**
  * El depósito de un viático o su corrección: cuánto, cuándo, el número de
- * operación y una nota. Al depositar se elige la línea de la pizarra o, si es
+ * operación y una nota. Al depositar se elige la línea de la ruta o, si es
  * un imprevisto, se escribe el concepto. El ticket y la línea no cambian al
  * corregir: si estaban mal, se anula y se deposita de nuevo.
  */
@@ -29,13 +29,13 @@ class GuardarViaticoRequest extends FormRequest
     {
         $corrigiendo = $this->route('viatico') instanceof Viatico;
         $imprevisto = $corrigiendo
-            ? $this->route('viatico')->linea_regla_abastecimiento_id === null
-            : ! $this->filled('linea_regla_abastecimiento_id');
+            ? $this->route('viatico')->linea_ruta_id === null
+            : ! $this->filled('linea_ruta_id');
 
         return [
             ...($corrigiendo ? [] : [
                 'vuelta_id' => ['required', Rule::exists('vueltas', 'id')->whereNot('estado', EstadoVuelta::Anulada->value)],
-                'linea_regla_abastecimiento_id' => ['nullable', Rule::exists('lineas_regla_abastecimiento', 'id')->where('tipo', TipoLineaAbastecimiento::Viatico->value)],
+                'linea_ruta_id' => ['nullable', Rule::exists('lineas_ruta', 'id')->whereIn('tipo', [TipoLineaAbastecimiento::Viatico->value, TipoLineaAbastecimiento::Peaje->value])],
             ]),
             'concepto' => $imprevisto ? ['required', 'string', 'max:120'] : ['prohibited'],
             'monto' => ['required', 'numeric', 'min:0.01', 'max:99999.99'],
@@ -51,7 +51,7 @@ class GuardarViaticoRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'concepto.prohibited' => 'El concepto es el de la pizarra: no se cambia.',
+            'concepto.prohibited' => 'El concepto es el de la ruta: no se cambia.',
             'fecha.before_or_equal' => 'La fecha del depósito no puede ser futura.',
         ];
     }
@@ -63,7 +63,7 @@ class GuardarViaticoRequest extends FormRequest
     {
         return [
             'vuelta_id' => 'ticket',
-            'linea_regla_abastecimiento_id' => 'viático de la pizarra',
+            'linea_ruta_id' => 'viático de la ruta',
             'numero_operacion' => 'número de operación',
             'observacion' => 'observación',
         ];

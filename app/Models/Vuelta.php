@@ -55,7 +55,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, EnvioWhatsapp> $envios
  * @property-read Collection<int, RevisionTaller> $revisiones
  * @property-read RevisionTaller|null $revision La última: la que vale.
- * @property-read Collection<int, DotacionTramo> $dotaciones
+ * @property-read Collection<int, RutaVuelta> $rutas Las rutas de cada tramo, copiadas al elegirlas.
  * @property-read User|null $llegadaRegistradaPor
  * @property-read bool|null $abastecimientos_exists Solo si se cargó con `withExists`.
  * @property-read bool|null $viaticos_exists Solo si se cargó con `withExists`.
@@ -132,18 +132,39 @@ class Vuelta extends Model
     }
 
     /**
-     * La tarjeta confirmada de cada tramo.
+     * Las rutas elegidas para cada tramo: la principal primero y después sus
+     * complementos.
      *
-     * @return HasMany<DotacionTramo, $this>
+     * @return HasMany<RutaVuelta, $this>
      */
-    public function dotaciones(): HasMany
+    public function rutas(): HasMany
     {
-        return $this->hasMany(DotacionTramo::class);
+        return $this->hasMany(RutaVuelta::class)->orderBy('orden')->orderBy('id');
     }
 
-    public function dotacionDe(SentidoTramo $sentido): ?DotacionTramo
+    /**
+     * @return Collection<int, RutaVuelta>
+     */
+    public function rutasDe(SentidoTramo $sentido): Collection
     {
-        return $this->dotaciones->firstWhere('sentido', $sentido);
+        return $this->rutas->where('sentido', $sentido)->values();
+    }
+
+    /**
+     * El tope de combustible del tramo: la suma de sus rutas. Null si no
+     * tiene ruta, si falta elegir una variante o hay galones por definir.
+     */
+    public function topeDe(SentidoTramo $sentido): ?float
+    {
+        $rutas = $this->rutasDe($sentido);
+
+        if ($rutas->isEmpty()) {
+            return null;
+        }
+
+        $topes = $rutas->map(fn (RutaVuelta $ruta): ?float => $ruta->tope());
+
+        return $topes->containsStrict(null) ? null : (float) $topes->sum();
     }
 
     /**
@@ -282,9 +303,16 @@ class Vuelta extends Model
     {
         $salio = $parada->viajes->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString());
 
-        return $salio === null
-            ? null
-            : CarbonImmutable::parse($salio)->addDays(ZonaRuta::diasDeViaje($parada->zona_origen, $parada->zona_destino));
+        if ($salio === null) {
+            return null;
+        }
+
+        // Lo que tarda la ruta principal del tramo, si el catálogo lo dice;
+        // si no, lo de siempre entre esas zonas.
+        $dias = $this->rutasDe($parada->sentido)->first(fn (RutaVuelta $ruta): bool => ! $ruta->es_complemento)->dias_viaje
+            ?? ZonaRuta::diasDeViaje($parada->zona_origen, $parada->zona_destino);
+
+        return CarbonImmutable::parse($salio)->addDays($dias);
     }
 
     /**

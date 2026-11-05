@@ -20,7 +20,7 @@ class ViaticoFactory extends Factory
             'vuelta_id' => Vuelta::factory(),
             'vehiculo_id' => fn (array $atributos): int => Vuelta::query()->whereKey($atributos['vuelta_id'])->firstOrFail()->tracto_id,
             'conductor_id' => null,
-            'linea_regla_abastecimiento_id' => null,
+            'linea_ruta_id' => null,
             'concepto' => 'Viático',
             'monto_previsto' => null,
             'monto' => fake()->randomElement([143, 180, 700]),

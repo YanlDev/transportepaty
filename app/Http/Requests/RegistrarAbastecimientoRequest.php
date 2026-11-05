@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoVehiculo;
 use App\Models\Abastecimiento;
+use App\Models\RutaVuelta;
 use App\Models\Vuelta;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -14,8 +15,8 @@ use Illuminate\Validation\Validator;
 /**
  * El combustible que abastecimiento autoriza (el QR de Repsol, o Kio). Nada
  * se deduce: el ticket y el tramo los elige quien registra, el ticket tiene
- * que ser de esa unidad y estar listo (OK de taller, tarjeta confirmada), y
- * lo que pase del tope de la tarjeta necesita motivo y permiso.
+ * que ser de esa unidad y estar listo (OK de taller, ruta con tope), y lo
+ * que pase del tope de sus rutas necesita motivo y permiso.
  */
 class RegistrarAbastecimientoRequest extends FormRequest
 {
@@ -69,18 +70,21 @@ class RegistrarAbastecimientoRequest extends FormRequest
                 }
 
                 $sentido = SentidoTramo::from($this->string('sentido')->toString());
-                $dotacion = $vuelta->dotacionDe($sentido);
+                $rutas = $vuelta->rutasDe($sentido);
 
-                if ($dotacion === null) {
-                    $validator->errors()->add('sentido', "Primero confirma la tarjeta de la {$sentido->label()} del ticket {$vuelta->codigo}: es lo que se autoriza.");
+                if ($rutas->isEmpty()) {
+                    $validator->errors()->add('sentido', "La {$sentido->label()} del ticket {$vuelta->codigo} no tiene ruta: se elige al programarlo.");
 
                     return;
                 }
 
-                $tope = $dotacion->tope();
+                $tope = $vuelta->topeDe($sentido);
 
                 if ($tope === null) {
-                    $validator->errors()->add('sentido', "La tarjeta «{$dotacion->nombre}» tiene galones por definir: complétala en la pizarra y vuelve a confirmarla.");
+                    $sinVariante = $rutas->first(fn (RutaVuelta $ruta): bool => $ruta->variante_pendiente);
+                    $validator->errors()->add('sentido', $sinVariante !== null
+                        ? "Falta elegir la variante de «{$sinVariante->nombre}» (según el peso) para saber el tope."
+                        : 'Una ruta del tramo tiene galones por definir: complétala en el catálogo de rutas.');
 
                     return;
                 }
@@ -98,9 +102,9 @@ class RegistrarAbastecimientoRequest extends FormRequest
                 $disponible = max(0.0, $tope - $autorizado);
 
                 if (! $this->user()?->can('excederTope', Abastecimiento::class)) {
-                    $validator->errors()->add('galones', 'Pasa el tope de la tarjeta ('.$this->galones($tope).' gal; quedan '.$this->galones($disponible).'): solo quien tiene permiso puede autorizar más.');
+                    $validator->errors()->add('galones', 'Pasa el tope de las rutas ('.$this->galones($tope).' gal; quedan '.$this->galones($disponible).'): solo quien tiene permiso puede autorizar más.');
                 } elseif (blank($this->input('motivo_exceso'))) {
-                    $validator->errors()->add('motivo_exceso', 'Pasa el tope de la tarjeta ('.$this->galones($tope).' gal; quedan '.$this->galones($disponible).'): escribe por qué.');
+                    $validator->errors()->add('motivo_exceso', 'Pasa el tope de las rutas ('.$this->galones($tope).' gal; quedan '.$this->galones($disponible).'): escribe por qué.');
                 }
             },
         ];
@@ -108,7 +112,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
 
     public function vuelta(): Vuelta
     {
-        return Vuelta::query()->with(['tracto:id,placa', 'dotaciones', 'revision'])->findOrFail($this->integer('vuelta_id'));
+        return Vuelta::query()->with(['tracto:id,placa', 'rutas', 'revision'])->findOrFail($this->integer('vuelta_id'));
     }
 
     private function galones(float $galones): string
