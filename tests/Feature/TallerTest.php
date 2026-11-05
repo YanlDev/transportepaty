@@ -4,6 +4,8 @@ use App\Enums\EstadoVuelta;
 use App\Enums\ResultadoTaller;
 use App\Enums\TipoVehiculo;
 use App\Models\Abastecimiento;
+use App\Models\DotacionTramo;
+use App\Models\LecturaKilometraje;
 use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
 use App\Models\Vuelta;
@@ -76,21 +78,24 @@ it('keeps the history and the last review is the one that counts', function (): 
 });
 
 it('does not let fuel be registered without the workshop OK', function (): void {
+    DotacionTramo::factory()->for($this->vuelta)->create();
     $datos = [
         'vehiculo_id' => $this->tracto->id,
+        'vuelta_id' => $this->vuelta->id,
+        'sentido' => 'ida',
         'fecha' => now()->toDateString(),
         'galones' => 100,
     ];
 
     actingAs(actorConRol('abastecimiento'))
         ->post(route('abastecimiento.store'), $datos)
-        ->assertSessionHasErrors('vehiculo_id');
+        ->assertSessionHasErrors('vuelta_id');
 
     RevisionTaller::factory()->noApta()->create(['vuelta_id' => $this->vuelta->id]);
 
     actingAs(actorConRol('abastecimiento'))
         ->post(route('abastecimiento.store'), $datos)
-        ->assertSessionHasErrors('vehiculo_id');
+        ->assertSessionHasErrors('vuelta_id');
 
     RevisionTaller::factory()->create(['vuelta_id' => $this->vuelta->id]);
 
@@ -107,10 +112,24 @@ it('does not register fuel for a unit without an open ticket', function (): void
     actingAs(actorConRol('abastecimiento'))
         ->post(route('abastecimiento.store'), [
             'vehiculo_id' => $sinTicket->id,
+            'sentido' => 'ida',
             'fecha' => now()->toDateString(),
             'galones' => 100,
         ])
-        ->assertSessionHasErrors('vehiculo_id');
+        ->assertSessionHasErrors('vuelta_id');
+});
+
+it('takes the odometer when it gives the OK, for the trip and for maintenance', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('taller.store', $this->vuelta), ['resultado' => 'apto', 'kilometraje' => 250000])
+        ->assertSessionHasNoErrors();
+
+    expect($this->vuelta->revision()->first()->kilometraje)->toBe(250000)
+        ->and(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->value('kilometraje'))->toBe(250000);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('taller.store', $this->vuelta), ['resultado' => 'apto', 'kilometraje' => 240000])
+        ->assertSessionHasErrors('kilometraje');
 });
 
 it('only lets the workshop give the OK', function (): void {

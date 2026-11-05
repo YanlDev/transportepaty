@@ -136,7 +136,6 @@ export function ReglaDialog({
                 concepto: '',
                 punto_abastecimiento_id: null,
                 galones: null,
-                tanque_lleno: false,
                 monto: null,
             },
         ]);
@@ -388,8 +387,13 @@ export function ReglaDialog({
                                                         type="number"
                                                         min="0"
                                                         placeholder="gal"
-                                                        disabled={
-                                                            linea.tanque_lleno
+                                                        required
+                                                        aria-invalid={
+                                                            Boolean(
+                                                                errores[
+                                                                    `lineas.${indice}.galones`
+                                                                ],
+                                                            ) || undefined
                                                         }
                                                         value={
                                                             linea.galones ?? ''
@@ -413,26 +417,6 @@ export function ReglaDialog({
                                                             )
                                                         }
                                                     />
-                                                    <label className="flex items-center gap-1 text-xs whitespace-nowrap">
-                                                        <Checkbox
-                                                            checked={
-                                                                linea.tanque_lleno
-                                                            }
-                                                            onCheckedChange={(
-                                                                marcado,
-                                                            ) =>
-                                                                cambiarLinea(
-                                                                    indice,
-                                                                    {
-                                                                        tanque_lleno:
-                                                                            marcado ===
-                                                                            true,
-                                                                    },
-                                                                )
-                                                            }
-                                                        />
-                                                        full
-                                                    </label>
                                                 </div>
                                             </>
                                         ) : (

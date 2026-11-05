@@ -1,10 +1,10 @@
 import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/AbastecimientoController';
+import { galones } from '@/components/abastecimiento/barra-combustible';
 import { CampoSelector, PanelBuscador } from '@/components/selector-en-dialogo';
 import type { OpcionBuscable } from '@/components/selector-en-dialogo';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -15,7 +15,6 @@ import {
 } from '@/components/ui/dialogo-responsivo';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -23,32 +22,36 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import type {
     PuntoRegistro,
     TractoAbastecimiento,
+    VueltaAbastecimiento,
 } from '@/types/abastecimiento';
+
+type Sentido = 'ida' | 'regreso';
 
 type FormData = {
     vehiculo_id: number | null;
     vuelta_id: number | null;
+    sentido: Sentido | '';
     punto_abastecimiento_id: number | null;
     /** Un grifo fuera de la lista, escrito a mano. */
     punto_libre: string;
     fecha: string;
     galones: string;
-    tanque_lleno: boolean;
-    precio_galon: string;
+    motivo_exceso: string;
     observacion: string;
 };
 
 /** El valor del selector para un grifo que no está en la lista. */
 const OTRO_PUNTO = 'otro';
 
-/** Lo que se sabe al abrir: desde la tarjeta de una unidad, o nada. */
+/** Lo que se sabe al abrir: desde la fila de un ticket, o nada. */
 export type InicialAbastecimiento = {
     vehiculo_id?: number;
     vuelta_id?: number | null;
-    punto_abastecimiento_id?: number | null;
+    sentido?: Sentido | null;
     galones?: number | null;
 };
 
@@ -60,11 +63,14 @@ function hoy(): string {
     return `${ahora.getFullYear()}-${mes}-${dia}`;
 }
 
+const nombreTramo = (sentido: Sentido) =>
+    sentido === 'ida' ? 'Ida' : 'Vuelta';
+
 /**
- * Registrar lo que abastecimiento autorizó por el QR de Repsol (o en Kio):
- * unidad, punto, galones y a cuánto el galón. Desde la tarjeta de una unidad
- * llega con todo puesto, incluidos los galones que le faltan; el precio lo
- * propone el último que se pagó en ese punto.
+ * Autorizar combustible (el QR de Repsol, o Kio). Nada se deduce: quien
+ * registra elige el ticket de la unidad y el tramo, y solo se puede en un
+ * tramo con su tarjeta confirmada. Lo que pase del tope pide motivo (y solo
+ * lo autoriza quien tiene permiso). El precio llega después, con el voucher.
  */
 export function RegistrarAbastecimientoDialog({
     open,
@@ -72,32 +78,45 @@ export function RegistrarAbastecimientoDialog({
     inicial,
     tractos,
     puntos,
-    galonesTanqueLleno,
+    vueltas,
+    puedeExcederTope,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     inicial: InicialAbastecimiento;
     tractos: TractoAbastecimiento[];
     puntos: PuntoRegistro[];
-    galonesTanqueLleno: number | null;
+    /** Los tickets del tablero: de ahí sale cuánto le queda a cada tramo. */
+    vueltas: VueltaAbastecimiento[];
+    puedeExcederTope: boolean;
 }) {
-    const precioDe = (puntoId: number | null | undefined): string => {
-        const precio = puntos.find(
-            (punto) => punto.id === puntoId,
-        )?.ultimo_precio;
+    const ticketsDe = (vehiculoId: number | null) =>
+        tractos.find((tracto) => tracto.id === vehiculoId)?.tickets ?? [];
+    const unicoTicket = (vehiculoId: number | null) => {
+        const tickets = ticketsDe(vehiculoId);
 
-        return precio ? String(precio) : '';
+        return tickets.length === 1 ? tickets[0].id : null;
+    };
+    const unicoTramo = (vueltaId: number | null): Sentido | '' => {
+        const tramos =
+            ticketsDe(inicial.vehiculo_id ?? null).find(
+                (ticket) => ticket.id === vueltaId,
+            )?.tramos ?? [];
+
+        return tramos.length === 1 ? tramos[0] : '';
     };
 
+    const vueltaInicial =
+        inicial.vuelta_id ?? unicoTicket(inicial.vehiculo_id ?? null);
     const { data, setData, post, processing, errors } = useForm<FormData>({
         vehiculo_id: inicial.vehiculo_id ?? null,
-        vuelta_id: inicial.vuelta_id ?? null,
-        punto_abastecimiento_id: inicial.punto_abastecimiento_id ?? null,
+        vuelta_id: vueltaInicial,
+        sentido: inicial.sentido ?? unicoTramo(vueltaInicial),
+        punto_abastecimiento_id: null,
         punto_libre: '',
         fecha: hoy(),
         galones: inicial.galones ? String(inicial.galones) : '',
-        tanque_lleno: false,
-        precio_galon: precioDe(inicial.punto_abastecimiento_id),
+        motivo_exceso: '',
         observacion: '',
     });
     const [eligiendo, setEligiendo] = useState(false);
@@ -108,19 +127,24 @@ export function RegistrarAbastecimientoDialog({
     const opcionesTractos: OpcionBuscable[] = tractos.map((tracto) => ({
         valor: tracto.id,
         etiqueta: tracto.placa,
-        detalle: tracto.vuelta ?? undefined,
+        detalle:
+            tracto.tickets.map((ticket) => ticket.codigo).join(' · ') ||
+            undefined,
     }));
-    const tracto = tractos.find((opcion) => opcion.id === data.vehiculo_id);
-    const galonesDelRegistro =
-        data.galones !== ''
-            ? Number(data.galones)
-            : data.tanque_lleno
-              ? galonesTanqueLleno
-              : null;
-    const importe =
-        galonesDelRegistro !== null && data.precio_galon !== ''
-            ? galonesDelRegistro * Number(data.precio_galon)
+    const tickets = ticketsDe(data.vehiculo_id);
+    const ticket = tickets.find((opcion) => opcion.id === data.vuelta_id);
+    const tramo =
+        data.sentido === ''
+            ? undefined
+            : vueltas
+                  .find((vuelta) => vuelta.id === data.vuelta_id)
+                  ?.tramos.find((opcion) => opcion.sentido === data.sentido);
+    const queda =
+        tramo?.previsto != null
+            ? Math.max(0, tramo.previsto - tramo.registrado)
             : null;
+    const excede =
+        queda !== null && data.galones !== '' && Number(data.galones) > queda;
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -143,13 +167,18 @@ export function RegistrarAbastecimientoDialog({
                             valor={data.vehiculo_id}
                             opciones={opcionesTractos}
                             onElegir={(valor) => {
-                                const elegido = tractos.find(
-                                    (opcion) => opcion.id === valor,
-                                );
+                                const vueltaId = unicoTicket(Number(valor));
+                                const tramos =
+                                    ticketsDe(Number(valor)).find(
+                                        (opcion) => opcion.id === vueltaId,
+                                    )?.tramos ?? [];
+
                                 setData((anterior) => ({
                                     ...anterior,
-                                    vehiculo_id: valor,
-                                    vuelta_id: elegido?.vuelta_id ?? null,
+                                    vehiculo_id: Number(valor),
+                                    vuelta_id: vueltaId,
+                                    sentido:
+                                        tramos.length === 1 ? tramos[0] : '',
                                 }));
                                 setEligiendo(false);
                             }}
@@ -159,9 +188,11 @@ export function RegistrarAbastecimientoDialog({
                 ) : (
                     <>
                         <DialogHeader>
-                            <DialogTitle>Registrar abastecimiento</DialogTitle>
+                            <DialogTitle>Autorizar combustible</DialogTitle>
                             <DialogDescription>
-                                Lo que se autorizó por el QR de Repsol o en Kio.
+                                Lo que se autoriza por el QR de Repsol o en Kio.
+                                Los galones reales y el precio se registran
+                                después, con el voucher.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -175,11 +206,9 @@ export function RegistrarAbastecimientoDialog({
                                 error={errors.vehiculo_id}
                                 required
                                 ayuda={
-                                    tracto
-                                        ? tracto.vuelta
-                                            ? (tracto.bloqueo ??
-                                              `Va al ticket ${tracto.vuelta}.`)
-                                            : 'No tiene un ticket abierto: primero se programa.'
+                                    data.vehiculo_id !== null &&
+                                    tickets.length === 0
+                                        ? 'No tiene un ticket abierto: primero se programa.'
                                         : undefined
                                 }
                             >
@@ -197,6 +226,107 @@ export function RegistrarAbastecimientoDialog({
                                     />
                                 )}
                             </Field>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <Field
+                                    label="Ticket"
+                                    error={errors.vuelta_id}
+                                    required
+                                >
+                                    {() => (
+                                        <Select
+                                            value={
+                                                data.vuelta_id
+                                                    ? String(data.vuelta_id)
+                                                    : undefined
+                                            }
+                                            disabled={tickets.length === 0}
+                                            onValueChange={(valor) => {
+                                                const tramos =
+                                                    tickets.find(
+                                                        (opcion) =>
+                                                            opcion.id ===
+                                                            Number(valor),
+                                                    )?.tramos ?? [];
+                                                setData((anterior) => ({
+                                                    ...anterior,
+                                                    vuelta_id: Number(valor),
+                                                    sentido:
+                                                        tramos.length === 1
+                                                            ? tramos[0]
+                                                            : '',
+                                                }));
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Elegir…" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {tickets.map((opcion) => (
+                                                    <SelectItem
+                                                        key={opcion.id}
+                                                        value={String(
+                                                            opcion.id,
+                                                        )}
+                                                    >
+                                                        {opcion.codigo}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </Field>
+
+                                <Field
+                                    label="Tramo"
+                                    error={errors.sentido}
+                                    required
+                                >
+                                    {() => (
+                                        <Select
+                                            value={data.sentido || undefined}
+                                            disabled={ticket === undefined}
+                                            onValueChange={(valor) =>
+                                                setData(
+                                                    'sentido',
+                                                    valor as Sentido,
+                                                )
+                                            }
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue placeholder="Elegir…" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(
+                                                    ['ida', 'regreso'] as const
+                                                ).map((sentido) => (
+                                                    <SelectItem
+                                                        key={sentido}
+                                                        value={sentido}
+                                                        disabled={
+                                                            !ticket?.tramos.includes(
+                                                                sentido,
+                                                            )
+                                                        }
+                                                    >
+                                                        {nombreTramo(sentido)}
+                                                        {!ticket?.tramos.includes(
+                                                            sentido,
+                                                        ) &&
+                                                            ' · sin tarjeta confirmada'}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                </Field>
+                            </div>
+
+                            {ticket?.bloqueo && (
+                                <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                                    {ticket.bloqueo}
+                                </p>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <Field
@@ -228,12 +358,6 @@ export function RegistrarAbastecimientoDialog({
                                                     punto_libre: otro
                                                         ? anterior.punto_libre
                                                         : '',
-                                                    precio_galon: otro
-                                                        ? anterior.precio_galon
-                                                        : precioDe(
-                                                              Number(valor),
-                                                          ) ||
-                                                          anterior.precio_galon,
                                                 }));
                                             }}
                                         >
@@ -304,81 +428,63 @@ export function RegistrarAbastecimientoDialog({
                                 </Field>
                             )}
 
-                            <div className="flex items-center gap-2">
-                                <Checkbox
-                                    id="tanque-lleno"
-                                    checked={data.tanque_lleno}
-                                    onCheckedChange={(marcado) =>
-                                        setData(
-                                            'tanque_lleno',
-                                            marcado === true,
-                                        )
-                                    }
-                                />
-                                <Label htmlFor="tanque-lleno">
-                                    Tanque lleno (full)
-                                    {galonesTanqueLleno !== null &&
-                                        ` · ${galonesTanqueLleno} gal`}
-                                </Label>
-                            </div>
+                            <Field
+                                label="Galones autorizados"
+                                error={errors.galones}
+                                required
+                                ayuda={
+                                    queda !== null
+                                        ? `Quedan ${galones(queda)} del tope de la tarjeta (${galones(tramo?.previsto ?? null)}).`
+                                        : undefined
+                                }
+                            >
+                                {(id) => (
+                                    <Input
+                                        id={id}
+                                        type="number"
+                                        inputMode="decimal"
+                                        min="0"
+                                        step="0.1"
+                                        value={data.galones}
+                                        onChange={(evento) =>
+                                            setData(
+                                                'galones',
+                                                evento.target.value,
+                                            )
+                                        }
+                                    />
+                                )}
+                            </Field>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            {(excede || errors.motivo_exceso) && (
                                 <Field
-                                    label="Galones"
-                                    error={errors.galones}
-                                    required={!data.tanque_lleno}
+                                    label="¿Por qué pasa el tope?"
+                                    error={errors.motivo_exceso}
+                                    required
                                     ayuda={
-                                        data.tanque_lleno &&
-                                        galonesTanqueLleno !== null
-                                            ? 'Vacío: el tanque lleno configurado.'
-                                            : undefined
+                                        puedeExcederTope
+                                            ? 'Queda registrado quién lo autorizó y por qué.'
+                                            : 'Pasar el tope lo autoriza solo quien tiene permiso: pídeselo.'
                                     }
                                 >
                                     {(id) => (
-                                        <Input
+                                        <Textarea
                                             id={id}
-                                            type="number"
-                                            inputMode="decimal"
-                                            min="0"
-                                            step="0.1"
-                                            value={data.galones}
+                                            rows={2}
+                                            maxLength={500}
+                                            disabled={!puedeExcederTope}
+                                            placeholder="Ej.: desvío por huaico en Camaná"
+                                            value={data.motivo_exceso}
                                             onChange={(evento) =>
                                                 setData(
-                                                    'galones',
+                                                    'motivo_exceso',
                                                     evento.target.value,
                                                 )
                                             }
                                         />
                                     )}
                                 </Field>
-
-                                <Field
-                                    label="Precio por galón (S/)"
-                                    error={errors.precio_galon}
-                                    ayuda={
-                                        importe !== null
-                                            ? `Importe: S/ ${importe.toFixed(2)}`
-                                            : 'Opcional: el del grifo ese día.'
-                                    }
-                                >
-                                    {(id) => (
-                                        <Input
-                                            id={id}
-                                            type="number"
-                                            inputMode="decimal"
-                                            min="0"
-                                            step="0.001"
-                                            value={data.precio_galon}
-                                            onChange={(evento) =>
-                                                setData(
-                                                    'precio_galon',
-                                                    evento.target.value,
-                                                )
-                                            }
-                                        />
-                                    )}
-                                </Field>
-                            </div>
+                            )}
 
                             <Field
                                 label="Observación"
@@ -405,13 +511,15 @@ export function RegistrarAbastecimientoDialog({
                                 form="registrar-abastecimiento"
                                 disabled={
                                     processing ||
-                                    (tracto !== undefined &&
-                                        tracto.bloqueo !== null) ||
+                                    data.vuelta_id === null ||
+                                    data.sentido === '' ||
+                                    Boolean(ticket?.bloqueo) ||
+                                    (excede && !puedeExcederTope) ||
                                     (fueraDeLista &&
                                         data.punto_libre.trim() === '')
                                 }
                             >
-                                Registrar
+                                Autorizar
                             </Button>
                         </DialogFooter>
                     </>

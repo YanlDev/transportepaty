@@ -27,7 +27,7 @@ class PasosDelTicket
      * El ticket tiene que venir con `paradas.viajes` (con fecha y número) y
      * `revisiones.usuario`.
      *
-     * @param  array{tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, sugerida: array{id: int, nombre: string}|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return array{pasos: list<Paso>, actual: string|null}
      */
     public function de(Vuelta $vuelta, array $gastos): array
@@ -44,7 +44,7 @@ class PasosDelTicket
      * ya va en ida sin el OK de taller). No busca quién lo programó: en el
      * tablero sería una consulta por ticket.
      *
-     * @param  array{tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, sugerida: array{id: int, nombre: string}|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return array{siguiente: Paso|null, saltados: list<string>}
      */
     public function seguimiento(Vuelta $vuelta, array $gastos): array
@@ -106,7 +106,7 @@ class PasosDelTicket
     }
 
     /**
-     * @param  array{tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, sugerida: array{id: int, nombre: string}|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return list<Paso>
      */
     private function pasos(Vuelta $vuelta, array $gastos, bool $conAutor): array
@@ -174,7 +174,7 @@ class PasosDelTicket
      * El combustible de un tramo contra el tope de su tarjeta; el de ida
      * suma los viáticos, que se depositan antes de salir.
      *
-     * @param  array{tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, sugerida: array{id: int, nombre: string}|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return Paso
      */
     private function abastecimiento(array $gastos, SentidoTramo $sentido, bool $conViaticos): array
@@ -188,10 +188,16 @@ class PasosDelTicket
         $algo = false;
 
         if ($tramo === null) {
-            $partes[] = 'Sin tarjeta en la pizarra';
+            $partes[] = 'Sin vuelta definida';
             $completo = false;
+        } elseif (! $tramo['confirmada']) {
+            $partes[] = $tramo['sugerida'] === null
+                ? 'Falta confirmar la tarjeta'
+                : "Falta confirmar la tarjeta (sugerida: {$tramo['sugerida']['nombre']})";
+            $completo = false;
+            $algo = $tramo['registrado'] > 0;
         } else {
-            $partes[] = 'Combustible '.$this->galones($tramo['registrado']).'/'.($tramo['previsto'] === null ? 'lleno' : $this->galones($tramo['previsto'])).' gal';
+            $partes[] = 'Combustible '.$this->galones($tramo['registrado']).'/'.($tramo['previsto'] === null ? '¿?' : $this->galones($tramo['previsto'])).' gal';
             $completo = $tramo['falta'] === 0.0;
             $algo = $tramo['registrado'] > 0;
         }
@@ -225,8 +231,8 @@ class PasosDelTicket
 
         if ($guia === null) {
             // Lo que hay que hacer, no solo lo que falta: la GR se sube en
-            // Guías y cae sola en el ticket.
-            return $this->paso($clave, $titulo, 'pendiente', 'Sube la GR en Guías: cae sola en este ticket');
+            // Guías y se asigna a este ticket desde «GR por asignar».
+            return $this->paso($clave, $titulo, 'pendiente', 'Sube la GR en Guías y asígnala desde «GR por asignar»');
         }
 
         return $this->paso($clave, $titulo, 'hecho', 'GR '.$guia->numero_gr, $guia->fecha_traslado->toDateString());
@@ -251,20 +257,30 @@ class PasosDelTicket
     }
 
     /**
-     * Llegó a la base: el día de la GR de regreso más lo que tarda la ruta.
+     * Llegó a la base: lo registra una persona, con el día y el km. Mientras
+     * tanto se muestra cuándo debería llegar (y si ya se atrasó).
      *
      * @return Paso
      */
     private function llego(Vuelta $vuelta): array
     {
-        $ultima = $vuelta->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
-        $llegada = $ultima?->sentido === SentidoTramo::Regreso ? $vuelta->llegadaEstimada($ultima) : null;
-
-        if ($vuelta->etapa() === 'en_base' && $llegada !== null) {
-            return $this->paso('llego', 'Llegó a base', 'hecho', $ultima->lugar_destino ?? $ultima->zona_destino?->label(), $llegada->toDateString());
+        if ($vuelta->llegoABase()) {
+            return $this->paso('llego', 'Llegó a base', 'hecho',
+                $vuelta->km_llegada === null ? null : number_format($vuelta->km_llegada, 0, '.', ',').' km',
+                $vuelta->llegada_el->toDateString(),
+                $vuelta->llegadaRegistradaPor?->name,
+            );
         }
 
-        return $this->paso('llego', 'Llegó a base', 'pendiente', $llegada ? 'Llega aprox. el '.$llegada->format('d/m') : null);
+        $prevista = $vuelta->llegadaPrevista();
+
+        if ($prevista === null || $vuelta->etapa() !== 'en_vuelta') {
+            return $this->paso('llego', 'Llegó a base', 'pendiente', 'Lo registra programación al volver');
+        }
+
+        return $this->paso('llego', 'Llegó a base', $prevista->lt(RelojOperativo::fechaDeHoy()) ? 'alerta' : 'pendiente',
+            'Debería llegar el '.$prevista->format('d/m').': regístrala al volver',
+        );
     }
 
     /**
@@ -273,10 +289,10 @@ class PasosDelTicket
     private function cerrado(Vuelta $vuelta): array
     {
         if ($vuelta->estado === EstadoVuelta::Cerrada) {
-            return $this->paso('cerrado', 'Cerrado', 'hecho', 'Ya no recibe gastos', $vuelta->fin?->toDateString());
+            return $this->paso('cerrado', 'Liquidado y cerrado', 'hecho', 'Ya no recibe gastos', $vuelta->fin?->toDateString());
         }
 
-        return $this->paso('cerrado', 'Cerrado', 'pendiente', 'Abierto: todavía recibe gastos');
+        return $this->paso('cerrado', 'Liquidado y cerrado', 'pendiente', 'Se cierra con la liquidación completa');
     }
 
     private function galones(float $valor): string

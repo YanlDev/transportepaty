@@ -13,6 +13,7 @@ use App\Models\ParadaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
+use App\Services\AsignadorVueltas;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -39,9 +40,9 @@ it('is read by whoever reads the programación', function (): void {
 });
 
 /**
- * El kanban: cada vuelta en su etapa. Una en curso está «bajando» hasta que
- * su regreso tiene GR, «subiendo» hasta que esa GR llega a la base (Juliaca
- * o la mina), y ahí queda «en base», disponible para la siguiente.
+ * Cada vuelta en su etapa. Una en curso está en ida hasta que su regreso
+ * tiene GR, en vuelta hasta que alguien registra la llegada a la base, y
+ * ahí queda en base, disponible para la siguiente.
  */
 it('places each trip in its stage on the board', function (): void {
     $guiaEn = function (Vuelta $vuelta, SentidoTramo $sentido, ZonaRuta $origen, ZonaRuta $destino, string $fecha): void {
@@ -59,12 +60,12 @@ it('places each trip in its stage on the board', function (): void {
     $guiaEn($bajando, SentidoTramo::Ida, ZonaRuta::Mina, ZonaRuta::Pisco, now()->subDays(2)->toDateString());
     $subiendo = Vuelta::factory()->create(['inicio' => now()->subDays(8)->toDateString()]);
     $guiaEn($subiendo, SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Arequipa, now()->subDays(1)->toDateString());
-    $llego = Vuelta::factory()->create(['inicio' => now()->subDays(12)->toDateString()]);
+    $llego = Vuelta::factory()->create(['inicio' => now()->subDays(12)->toDateString(), 'llegada_el' => now()->subDay()->toDateString()]);
     $guiaEn($llego, SentidoTramo::Regreso, ZonaRuta::Lima, ZonaRuta::Juliaca, now()->subDays(4)->toDateString());
     $cerrada = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(15)->toDateString(), 'fin' => now()->subDay()->toDateString()]);
     $parada = Vuelta::factory()->create(['estado' => EstadoVuelta::Cerrada, 'inicio' => now()->subDays(60)->toDateString(), 'fin' => now()->subDays(45)->toDateString()]);
     // Llegó a la base pero ya tiene la siguiente programada: se ve una vez.
-    $conSiguiente = Vuelta::factory()->create(['inicio' => now()->subDays(12)->toDateString()]);
+    $conSiguiente = Vuelta::factory()->create(['inicio' => now()->subDays(12)->toDateString(), 'llegada_el' => now()->subDay()->toDateString()]);
     $guiaEn($conSiguiente, SentidoTramo::Regreso, ZonaRuta::Pisco, ZonaRuta::Mina, now()->subDays(3)->toDateString());
     $siguiente = Vuelta::factory()->programada()->create(['tracto_id' => $conSiguiente->tracto_id, 'inicio' => now()->addDays(2)->toDateString()]);
 
@@ -83,8 +84,7 @@ it('places each trip in its stage on the board', function (): void {
                     && $etapas->get($siguiente->id) === 'programada'
                     && ! $etapas->has($parada->id)
                     && ! $etapas->has($conSiguiente->id)
-                    // Salió de Lima hace 4 días y el viaje a Juliaca dura 3:
-                    // está en base desde ayer.
+                    // Se registró que llegó ayer.
                     && collect($tablero)->firstWhere('id', $llego->id)['dias_en_base'] === 1
                     && collect($tablero)->firstWhere('id', $bajando->id)['dias_en_ruta'] === 3
                     && collect($tablero)->firstWhere('id', $bajando->id)['actual']['texto'] === 'Mina San Rafael → Pisco';
@@ -149,7 +149,7 @@ function vueltaDelFormulario(int $tractoId, array $cambios = []): array
 
 it('programs a trip with its stops, outbound leg first', function (): void {
     $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
-    $anterior = Vuelta::factory()->create(['tracto_id' => $tracto->id, 'inicio' => '2026-10-10']);
+    $anterior = Vuelta::factory()->create(['tracto_id' => $tracto->id, 'inicio' => '2026-10-10', 'llegada_el' => '2026-10-20']);
 
     actingAs(actorConRol('admin'))
         ->post(route('vueltas.store'), vueltaDelFormulario($tracto->id))
@@ -162,8 +162,9 @@ it('programs a trip with its stops, outbound leg first', function (): void {
         ->and($vuelta->tipo)->toBe(TipoVuelta::Mina)
         ->and($vuelta->inicio->toDateString())->toBe('2026-10-28')
         ->and($vuelta->paradas->pluck('tipo_carga')->all())->toBe([TipoCarga::Concentrado, TipoCarga::Escoria])
-        // Programar la siguiente da por terminada la que estaba andando.
-        ->and($anterior->fresh()->estado)->toBe(EstadoVuelta::Cerrada);
+        // Programar la siguiente no cierra la anterior: eso es de la
+        // liquidación.
+        ->and($anterior->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
 });
 
 it('checks the stops of a programmed trip', function (): void {
@@ -194,12 +195,12 @@ it('edits what has not happened yet and keeps the stops with GR', function (): v
     $vuelta = Vuelta::query()->where('origen', OrigenVuelta::Programacion)->sole();
     [$concentrado, $escoria] = $vuelta->paradas->all();
 
-    // Llega la GR de la escoria: esa parada ya pasó.
-    Viaje::factory()->create([
+    // Se asigna la GR de la escoria: esa parada ya pasó.
+    app(AsignadorVueltas::class)->asignar(Viaje::factory()->create([
         'tracto_id' => $tracto->id, 'fecha_traslado' => '2026-10-28', 'fecha_emision' => '2026-10-28',
         'origen' => 'KM 245 - PARACAS - PISCO - ICA', 'destino' => 'SAN RAFAEL - ANTAUTA - MELGAR - PUNO',
         'tipo_carga' => TipoCarga::Escoria,
-    ]);
+    ]), $vuelta, $escoria, SentidoTramo::Regreso, actorConRol('admin'));
 
     // En el formulario se suma el metálico a la ida. La escoria viaja con
     // su id e intenta cambiarse: no debe tocarse.
@@ -398,11 +399,11 @@ it('does not move the departure after the first GR of the trip', function (): vo
     actingAs(actorConRol('admin'))->post(route('vueltas.store'), vueltaDelFormulario($tracto->id));
     $vuelta = Vuelta::query()->where('origen', OrigenVuelta::Programacion)->sole();
 
-    Viaje::factory()->create([
+    app(AsignadorVueltas::class)->asignar(Viaje::factory()->create([
         'tracto_id' => $tracto->id, 'fecha_traslado' => '2026-10-28', 'fecha_emision' => '2026-10-28',
         'origen' => 'SAN RAFAEL - ANTAUTA - MELGAR - PUNO', 'destino' => 'KM 245 - PARACAS - PISCO - ICA',
         'tipo_carga' => TipoCarga::Concentrado,
-    ]);
+    ]), $vuelta, $vuelta->paradas->first(), SentidoTramo::Ida, actorConRol('admin'));
 
     actingAs(actorConRol('admin'))
         ->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['inicio' => '2026-11-02']))

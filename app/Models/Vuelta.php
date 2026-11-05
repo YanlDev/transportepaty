@@ -8,7 +8,6 @@ use App\Enums\SentidoTramo;
 use App\Enums\TipoVuelta;
 use App\Enums\ZonaRuta;
 use App\Models\Concerns\RegistraHistorial;
-use App\Services\RelojOperativo;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterface;
 use Database\Factories\VueltaFactory;
@@ -30,8 +29,9 @@ use Illuminate\Support\Carbon;
  * la carga.
  *
  * El código lo recibe al crearse (V-00001) y es la referencia que se le da
- * a las áreas. Las vueltas del historial se rearman desde las GR y su código
- * puede cambiar al rehacerlas; las programadas lo conservan.
+ * a las áreas. Cada paso lo da una persona: se programa, taller da el OK,
+ * las GR se asignan a mano, se registra la llegada a la base y se cierra.
+ * Nada cambia de estado porque se dedujo.
  *
  * @property int $id
  * @property string|null $codigo
@@ -43,6 +43,9 @@ use Illuminate\Support\Carbon;
  * @property OrigenVuelta $origen
  * @property Carbon|null $inicio
  * @property Carbon|null $fin
+ * @property Carbon|null $llegada_el El día en que alguien registró que llegó a la base.
+ * @property int|null $km_llegada
+ * @property int|null $llegada_por
  * @property-read Vehiculo $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
@@ -52,10 +55,12 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, EnvioWhatsapp> $envios
  * @property-read Collection<int, RevisionTaller> $revisiones
  * @property-read RevisionTaller|null $revision La última: la que vale.
+ * @property-read Collection<int, DotacionTramo> $dotaciones
+ * @property-read User|null $llegadaRegistradaPor
  * @property-read bool|null $abastecimientos_exists Solo si se cargó con `withExists`.
  * @property-read bool|null $viaticos_exists Solo si se cargó con `withExists`.
  */
-#[Fillable(['tracto_id', 'carreta_id', 'conductor_id', 'tipo', 'estado', 'origen', 'inicio', 'fin'])]
+#[Fillable(['tracto_id', 'carreta_id', 'conductor_id', 'tipo', 'estado', 'origen', 'inicio', 'fin', 'llegada_el', 'km_llegada', 'llegada_por'])]
 class Vuelta extends Model
 {
     /** @use HasFactory<VueltaFactory> */
@@ -124,6 +129,39 @@ class Vuelta extends Model
     public function revisiones(): HasMany
     {
         return $this->hasMany(RevisionTaller::class)->latest('id');
+    }
+
+    /**
+     * La tarjeta confirmada de cada tramo.
+     *
+     * @return HasMany<DotacionTramo, $this>
+     */
+    public function dotaciones(): HasMany
+    {
+        return $this->hasMany(DotacionTramo::class);
+    }
+
+    public function dotacionDe(SentidoTramo $sentido): ?DotacionTramo
+    {
+        return $this->dotaciones->firstWhere('sentido', $sentido);
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function llegadaRegistradaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'llegada_por');
+    }
+
+    public function estaAbierta(): bool
+    {
+        return in_array($this->estado, [EstadoVuelta::Programada, EstadoVuelta::EnCurso], true);
+    }
+
+    public function llegoABase(): bool
+    {
+        return $this->llegada_el !== null;
     }
 
     /**
@@ -200,10 +238,10 @@ class Vuelta extends Model
 
     /**
      * En qué anda la unidad con este ticket: por salir, en ida hasta que la
-     * vuelta (el regreso) tiene GR, en vuelta hasta que llega a la base
-     * (Juliaca o la mina: el día de la GR más lo que tarda la ruta), y en
-     * base cuando ya está disponible para el siguiente. Necesita
-     * `paradas.viajes` cargadas, con su fecha de traslado.
+     * vuelta (el regreso) tiene GR, en vuelta hasta que alguien registra que
+     * llegó a la base, y en base desde entonces (aunque el ticket siga
+     * abierto, esperando su liquidación). No se estima: la llegada la marca
+     * una persona. Necesita `paradas.viajes` cargadas.
      *
      * @return 'programada'|'en_ida'|'en_vuelta'|'en_base'
      */
@@ -213,21 +251,25 @@ class Vuelta extends Model
             return 'programada';
         }
 
-        if ($this->estado !== EstadoVuelta::EnCurso) {
+        if ($this->estado !== EstadoVuelta::EnCurso || $this->llegoABase()) {
             return 'en_base';
         }
 
         $ultima = $this->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
 
-        if ($ultima?->sentido !== SentidoTramo::Regreso) {
-            return 'en_ida';
-        }
+        return $ultima?->sentido === SentidoTramo::Regreso ? 'en_vuelta' : 'en_ida';
+    }
 
-        if (! $ultima->zona_destino?->esBase()) {
-            return 'en_vuelta';
-        }
+    /**
+     * Cuándo debería llegar a la base, como referencia para avisar de un
+     * atraso: el día de la última GR más lo que tarda esa ruta. Null si
+     * todavía no tiene GR. Necesita `paradas.viajes` cargadas.
+     */
+    public function llegadaPrevista(): ?CarbonImmutable
+    {
+        $ultima = $this->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
 
-        return $this->llegadaEstimada($ultima)?->isAfter(RelojOperativo::fechaDeHoy()) ? 'en_vuelta' : 'en_base';
+        return $ultima === null ? null : $this->llegadaEstimada($ultima);
     }
 
     /**
@@ -279,6 +321,8 @@ class Vuelta extends Model
             'origen' => OrigenVuelta::class,
             'inicio' => 'date',
             'fin' => 'date',
+            'llegada_el' => 'date',
+            'km_llegada' => 'integer',
         ];
     }
 }

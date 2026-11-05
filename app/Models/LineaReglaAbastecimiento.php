@@ -18,12 +18,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $concepto
  * @property int|null $punto_abastecimiento_id
  * @property string|null $galones
- * @property bool $tanque_lleno
  * @property string|null $monto
  * @property int $orden
  * @property-read PuntoAbastecimiento|null $punto
  */
-#[Fillable(['regla_abastecimiento_id', 'tipo', 'concepto', 'punto_abastecimiento_id', 'galones', 'tanque_lleno', 'monto', 'orden'])]
+#[Fillable(['regla_abastecimiento_id', 'tipo', 'concepto', 'punto_abastecimiento_id', 'galones', 'monto', 'orden'])]
 class LineaReglaAbastecimiento extends Model
 {
     use RegistraHistorial;
@@ -46,7 +45,6 @@ class LineaReglaAbastecimiento extends Model
         return [
             'tipo' => TipoLineaAbastecimiento::class,
             'galones' => 'decimal:2',
-            'tanque_lleno' => 'boolean',
             'monto' => 'decimal:2',
             'orden' => 'integer',
         ];

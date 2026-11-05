@@ -32,7 +32,6 @@ import type {
 } from '@/types/abastecimiento';
 
 type Props = {
-    galonesTanqueLleno: string | null;
     puntos: PuntoAbastecimiento[];
     reglas: ReglaAbastecimiento[];
     opciones: OpcionesConfiguracion;
@@ -300,24 +299,20 @@ function combustibleDe(regla: ReglaAbastecimiento): {
         return { total: '—', puntos: '' };
     }
 
-    const lleno = lineas.some((linea) => linea.tanque_lleno);
+    const porDefinir = lineas.some((linea) => linea.galones === null);
     const galones = lineas.reduce(
         (suma, linea) => suma + (linea.galones ?? 0),
         0,
     );
 
     return {
-        total: lleno
-            ? galones > 0
-                ? `Full + ${galones} gal`
-                : 'Full'
-            : `${galones} gal`,
+        total: porDefinir ? '¿? gal (por definir)' : `${galones} gal`,
         puntos:
             lineas.length > 1 || lineas[0].punto
                 ? lineas
                       .map(
                           (linea) =>
-                              `${linea.punto ?? linea.concepto} ${linea.tanque_lleno ? 'full' : (linea.galones ?? '—')}`,
+                              `${linea.punto ?? linea.concepto} ${linea.galones ?? '¿?'}`,
                       )
                       .join(' · ')
                 : '',
@@ -445,9 +440,7 @@ function RutaDibujada({
                         <span className="absolute top-full mt-1 text-[10px] leading-none whitespace-nowrap text-muted-foreground">
                             {linea.punto}{' '}
                             <span className="font-medium text-foreground tabular-nums">
-                                {linea.tanque_lleno
-                                    ? 'full'
-                                    : (linea.galones ?? '—')}
+                                {linea.galones ?? '¿?'}
                             </span>
                         </span>
                     </span>
@@ -567,7 +560,6 @@ function FilaRuta({
  * en el mes y el último precio.
  */
 export default function AbastecimientoConfiguracion({
-    galonesTanqueLleno,
     puntos,
     reglas,
     opciones,
@@ -579,7 +571,6 @@ export default function AbastecimientoConfiguracion({
     const [regla, setRegla] = useState<ReglaAbastecimiento | null | false>(
         false,
     );
-    const tanque = useForm({ galones: galonesTanqueLleno ?? '' });
 
     setLayoutProps({
         breadcrumbs: [
@@ -621,46 +612,6 @@ export default function AbastecimientoConfiguracion({
                 titulo="Pizarra de abastecimiento"
                 descripcion="Cuánto combustible y viáticos le toca a cada ruta, y los puntos donde se carga."
                 icono={Fuel}
-                acciones={
-                    <form
-                        className="flex items-center gap-2"
-                        onSubmit={(evento) => {
-                            evento.preventDefault();
-                            tanque.put(configuracion.actualizarTanque().url, {
-                                preserveScroll: true,
-                            });
-                        }}
-                    >
-                        <label
-                            htmlFor="tanque-lleno"
-                            className="text-xs whitespace-nowrap text-muted-foreground"
-                        >
-                            Tanque lleno
-                        </label>
-                        <Input
-                            id="tanque-lleno"
-                            type="number"
-                            min="1"
-                            placeholder="gal"
-                            className="h-8 w-24"
-                            value={tanque.data.galones}
-                            aria-invalid={
-                                Boolean(tanque.errors.galones) || undefined
-                            }
-                            onChange={(evento) =>
-                                tanque.setData('galones', evento.target.value)
-                            }
-                        />
-                        <Button
-                            type="submit"
-                            size="sm"
-                            variant="outline"
-                            disabled={tanque.processing}
-                        >
-                            Guardar
-                        </Button>
-                    </form>
-                }
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3 border-b">

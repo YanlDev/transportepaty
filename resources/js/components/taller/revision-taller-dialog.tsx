@@ -21,6 +21,8 @@ type FormData = {
     disponible_estimado: string;
     motivo: string;
     trabajos: string;
+    /** El km con que sale: con el de llegada da el rendimiento. */
+    kilometraje: string;
 };
 
 /**
@@ -43,6 +45,7 @@ export function RevisionTallerDialog({
             disponible_estimado: '',
             motivo: '',
             trabajos: '',
+            kilometraje: '',
         });
 
     const cerrar = () => {
@@ -185,6 +188,31 @@ export function RevisionTallerDialog({
                                     value={data.trabajos}
                                     onChange={(evento) =>
                                         setData('trabajos', evento.target.value)
+                                    }
+                                />
+                            )}
+                        </Field>
+                    )}
+
+                    {data.resultado === 'apto' && (
+                        <Field
+                            label="Kilometraje de salida"
+                            error={errors.kilometraje}
+                            ayuda="El odómetro con que sale: con el de llegada se calcula lo recorrido y el rendimiento."
+                        >
+                            {(id) => (
+                                <Input
+                                    id={id}
+                                    type="number"
+                                    inputMode="numeric"
+                                    min="0"
+                                    step="1"
+                                    value={data.kilometraje}
+                                    onChange={(evento) =>
+                                        setData(
+                                            'kilometraje',
+                                            evento.target.value,
+                                        )
                                     }
                                 />
                             )}

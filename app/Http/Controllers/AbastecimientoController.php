@@ -4,36 +4,37 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoVehiculo;
 use App\Enums\EstadoVuelta;
-use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
+use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\RegistrarAbastecimientoRequest;
+use App\Http\Requests\RegistrarDespachoRequest;
 use App\Models\Abastecimiento;
-use App\Models\Ajuste;
+use App\Models\DotacionTramo;
 use App\Models\ParadaVuelta;
 use App\Models\PuntoAbastecimiento;
+use App\Models\ReglaAbastecimiento;
 use App\Models\Vehiculo;
 use App\Models\Vuelta;
+use App\Services\DotacionVuelta;
 use App\Services\GastosDelTicket;
-use App\Services\RelojOperativo;
+use App\Services\OdometroDeUnidad;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Support\Carbon;
-use Illuminate\Validation\ValidationException;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * El tablero de abastecimiento: cada unidad con su vuelta abierta, lo que le
- * toca según la pizarra, lo que ya se le autorizó y lo que le falta; y el
- * registro de lo que se autoriza por el QR de Repsol (o en Kio).
+ * El tablero de abastecimiento: cada ticket abierto con la tarjeta confirmada
+ * de cada tramo, lo que ya se le autorizó, lo que le falta y lo que de verdad
+ * se despachó; y el registro de lo que se autoriza por el QR de Repsol (o en
+ * Kio).
  */
 class AbastecimientoController extends Controller
 {
     /** Cuántos registros recientes se muestran debajo del tablero. */
     private const RECIENTES = 40;
-
-    /** Cuántos días después de llegar a la base se sigue viendo un ticket del historial. */
-    private const DIAS_PARA_COMPLETAR = 7;
 
     public function __construct(private readonly GastosDelTicket $gastos) {}
 
@@ -41,6 +42,9 @@ class AbastecimientoController extends Controller
     {
         $this->authorize('viewAny', Abastecimiento::class);
 
+        // Todo ticket abierto, también el que ya llegó a la base: sigue acá
+        // hasta que se liquida y se cierra (el despacho del regreso a veces
+        // se registra tarde).
         $vueltas = Vuelta::query()
             ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
             ->with([
@@ -48,15 +52,9 @@ class AbastecimientoController extends Controller
                 'conductor:id,nombres,apellidos',
                 'paradas.viajes:id,parada_vuelta_id,numero_gr,origen,destino,peso,unidad_peso,fecha_traslado',
                 'revision.usuario:id,name',
+                'dotaciones.usuario:id,name',
             ])
             ->get()
-            // La que ya volvió a la base se sigue viendo mientras nadie le
-            // ponga el candado: el combustible del regreso (Kio, Arequipa) a
-            // veces se registra tarde. Las armadas solas desde las GR, solo
-            // unos días: si no, se llenaría de viajes viejos que nadie cierra.
-            ->reject(fn (Vuelta $vuelta): bool => $vuelta->etapa() === 'en_base'
-                && $vuelta->origen === OrigenVuelta::Historial
-                && ! $this->llegoHacePoco($vuelta))
             ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa.'|'.$vuelta->inicio?->toDateString())
             ->values();
 
@@ -92,17 +90,20 @@ class AbastecimientoController extends Controller
                     'punto' => $abastecimiento->nombrePunto(),
                     'fuera_de_lista' => $abastecimiento->punto_abastecimiento_id === null && filled($abastecimiento->punto_libre),
                     'vuelta' => $abastecimiento->vuelta?->codigo,
+                    'sentido' => $abastecimiento->sentido?->value,
                     'galones' => (float) $abastecimiento->galones,
-                    'tanque_lleno' => $abastecimiento->tanque_lleno,
+                    'galones_despachados' => $abastecimiento->galones_despachados === null ? null : (float) $abastecimiento->galones_despachados,
                     'precio_galon' => $abastecimiento->precio_galon === null ? null : (float) $abastecimiento->precio_galon,
                     'importe' => $abastecimiento->importe === null ? null : (float) $abastecimiento->importe,
+                    'anulado' => $abastecimiento->estaAnulado(),
                     'observacion' => $abastecimiento->observacion,
                     'registrado_por' => $abastecimiento->registradoPor?->name,
                 ])
                 ->all(),
             'tractos' => fn (): array => $this->opcionesTractos(),
             'puntos' => fn (): array => $this->opcionesPuntos(),
-            'galonesTanqueLleno' => fn (): ?float => ($valor = Ajuste::valor(Ajuste::GALONES_TANQUE_LLENO)) === null ? null : (float) $valor,
+            'reglas' => fn (): array => $this->opcionesReglas(),
+            'puedeExcederTope' => fn (): bool => request()->user()?->can('excederTope', Abastecimiento::class) ?? false,
         ]);
     }
 
@@ -110,79 +111,97 @@ class AbastecimientoController extends Controller
     {
         $this->authorize('create', Abastecimiento::class);
 
-        $fecha = Carbon::parse($request->string('fecha')->toString());
-        $vuelta = $request->filled('vuelta_id')
-            ? Vuelta::query()->find($request->integer('vuelta_id'))
-            : $this->vueltaAbierta($request->integer('vehiculo_id'), $fecha);
-
-        if ($vuelta === null) {
-            throw ValidationException::withMessages([
-                'vehiculo_id' => 'La unidad no tiene un ticket abierto: primero se programa y taller da el OK.',
-            ]);
-        }
-
-        if (($bloqueo = $vuelta->bloqueoDeGastos()) !== null) {
-            throw ValidationException::withMessages(['vehiculo_id' => $bloqueo]);
-        }
-
-        $lleno = $request->boolean('tanque_lleno');
-        $galones = $request->filled('galones')
-            ? $request->float('galones')
-            : (float) Ajuste::valor(Ajuste::GALONES_TANQUE_LLENO);
-        $precio = $request->filled('precio_galon') ? $request->float('precio_galon') : null;
+        $vuelta = $request->vuelta();
 
         Abastecimiento::query()->create([
-            'vehiculo_id' => $request->integer('vehiculo_id'),
+            'vehiculo_id' => $vuelta->tracto_id,
             'vuelta_id' => $vuelta->id,
+            'sentido' => $request->enum('sentido', SentidoTramo::class),
             'punto_abastecimiento_id' => $request->filled('punto_abastecimiento_id') ? $request->integer('punto_abastecimiento_id') : null,
             'punto_libre' => $request->filled('punto_libre') ? $request->string('punto_libre')->squish()->toString() : null,
             'conductor_id' => $vuelta->conductor_id,
-            'fecha' => $fecha,
-            'galones' => $galones,
-            'tanque_lleno' => $lleno,
-            'precio_galon' => $precio,
-            'importe' => $precio === null ? null : round($galones * $precio, 2),
+            'fecha' => $request->date('fecha'),
+            'galones' => $request->float('galones'),
+            'motivo_exceso' => $request->filled('motivo_exceso') ? $request->string('motivo_exceso')->squish()->toString() : null,
             'observacion' => $request->string('observacion')->toString() ?: null,
             'user_id' => $request->user()?->id,
         ]);
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "Abastecimiento registrado en el ticket {$vuelta->codigo}.",
+            'message' => "Combustible autorizado en el ticket {$vuelta->codigo}.",
         ]);
     }
 
-    public function destroy(Abastecimiento $abastecimiento): RedirectResponse
+    /**
+     * Nada se borra: queda anulado, con quién, cuándo y por qué.
+     */
+    public function anular(Request $request, Abastecimiento $abastecimiento): RedirectResponse
     {
-        $this->authorize('delete', $abastecimiento);
+        $this->authorize('anular', $abastecimiento);
 
-        $abastecimiento->delete();
+        $datos = $request->validate(['motivo' => ['required', 'string', 'max:500']]);
 
-        return back()->with('toast', ['type' => 'success', 'message' => 'Registro quitado.']);
+        $abastecimiento->update([
+            'anulado_at' => now(),
+            'anulado_por' => $request->user()?->id,
+            'motivo_anulacion' => $datos['motivo'],
+        ]);
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Combustible anulado.']);
     }
 
     /**
-     * Si llegó a la base hace a lo más `DIAS_PARA_COMPLETAR` días.
+     * Lo que de verdad cargó, según el voucher. El kilometraje también queda
+     * como lectura para mantenimiento.
      */
-    private function llegoHacePoco(Vuelta $vuelta): bool
+    public function despacho(RegistrarDespachoRequest $request, Abastecimiento $abastecimiento, OdometroDeUnidad $odometro): RedirectResponse
     {
-        $ultima = $vuelta->paradas->last(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty());
-        $llego = $ultima === null ? null : $vuelta->llegadaEstimada($ultima);
+        $this->authorize('registrarDespacho', $abastecimiento);
 
-        return $llego !== null && $llego->greaterThanOrEqualTo(RelojOperativo::fechaDeHoy()->subDays(self::DIAS_PARA_COMPLETAR));
+        $galones = $request->float('galones_despachados');
+        $precio = $request->float('precio_galon');
+        $kilometraje = $request->filled('kilometraje') ? $request->integer('kilometraje') : null;
+        $kmNuevo = $kilometraje !== null && $kilometraje !== $abastecimiento->kilometraje;
+
+        $abastecimiento->update([
+            'galones_despachados' => $galones,
+            'precio_galon' => $precio,
+            'importe' => round($galones * $precio, 2),
+            'kilometraje' => $kilometraje,
+            'despachado_el' => $request->date('despachado_el'),
+            'despacho_por' => $request->user()?->id,
+        ]);
+
+        if ($kmNuevo) {
+            $odometro->anotar($abastecimiento->vehiculo_id, $kilometraje, $request->user(), 'Al cargar combustible ('.($abastecimiento->vuelta->codigo ?? 'sin ticket').')');
+        }
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Despacho registrado.']);
     }
 
     /**
-     * La vuelta en la que anda la unidad ese día: la abierta más reciente que
-     * ya arrancó (o arranca en un par de días: se abastece antes de salir).
+     * Confirma la tarjeta de la pizarra de un tramo del ticket: desde ahí es
+     * lo autorizado, aunque la pizarra cambie después.
      */
-    private function vueltaAbierta(int $tractoId, Carbon $fecha): ?Vuelta
+    public function confirmarDotacion(Request $request, Vuelta $vuelta, DotacionVuelta $dotacion): RedirectResponse
     {
-        return Vuelta::query()
-            ->abiertasDeLaUnidad($tractoId, $fecha->copy()->addDays(2))
-            ->orderByDesc('inicio')
-            ->orderByDesc('id')
-            ->first();
+        $this->authorize('confirmarDotacion', Abastecimiento::class);
+
+        $datos = $request->validate([
+            'sentido' => ['required', Rule::enum(SentidoTramo::class)],
+            'regla_abastecimiento_id' => ['required', Rule::exists('reglas_abastecimiento', 'id')->where('activa', true)],
+        ]);
+
+        if (! $vuelta->estaAbierta()) {
+            return back()->with('toast', ['type' => 'error', 'message' => "El ticket {$vuelta->codigo} está cerrado: no cambia su tarjeta."]);
+        }
+
+        $sentido = SentidoTramo::from($datos['sentido']);
+        $regla = ReglaAbastecimiento::query()->findOrFail($request->integer('regla_abastecimiento_id'));
+        $dotacion->confirmar($vuelta, $sentido, $regla, $request->user());
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Tarjeta «{$regla->nombre}» confirmada para la {$sentido->label()} del ticket {$vuelta->codigo}."]);
     }
 
     /**
@@ -233,21 +252,21 @@ class AbastecimientoController extends Controller
     }
 
     /**
-     * Los tractos activos, con su vuelta abierta si tienen y si ya tiene el
-     * OK de taller: elegir la unidad deja puesta la vuelta.
+     * Los tractos activos con sus tickets abiertos: quien registra elige el
+     * ticket; si la unidad tiene uno solo, queda puesto.
      *
-     * @return array<int, array{id: int, placa: string, vuelta_id: int|null, vuelta: string|null, bloqueo: string|null}>
+     * @return list<array{id: int, placa: string, tickets: list<array{id: int, codigo: string|null, etapa: string, bloqueo: string|null, tramos: list<string>}>}>
      */
     private function opcionesTractos(): array
     {
         $abiertas = Vuelta::query()
             ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
             ->orderBy('inicio')
-            ->with('revision')
-            ->get(['id', 'codigo', 'tracto_id', 'estado'])
-            ->keyBy('tracto_id');
+            ->with(['revision', 'dotaciones', 'paradas.viajes:id,parada_vuelta_id'])
+            ->get()
+            ->groupBy('tracto_id');
 
-        return Vehiculo::query()
+        return array_values(Vehiculo::query()
             ->where('tipo', TipoVehiculo::Tracto)
             ->where('estado', EstadoVehiculo::Activo)
             ->orderBy('placa')
@@ -255,10 +274,51 @@ class AbastecimientoController extends Controller
             ->map(fn (Vehiculo $tracto): array => [
                 'id' => $tracto->id,
                 'placa' => $tracto->placa,
-                'vuelta_id' => $abiertas->get($tracto->id)?->id,
-                'vuelta' => $abiertas->get($tracto->id)?->codigo,
-                'bloqueo' => $abiertas->get($tracto->id)?->bloqueoDeGastos(),
+                'tickets' => array_values($abiertas->get($tracto->id, collect())
+                    ->map(fn (Vuelta $vuelta): array => [
+                        'id' => $vuelta->id,
+                        'codigo' => $vuelta->codigo,
+                        'etapa' => $vuelta->etapa(),
+                        'bloqueo' => $vuelta->bloqueoDeGastos(),
+                        // Los tramos con tarjeta confirmada: solo a esos se
+                        // les puede autorizar combustible.
+                        'tramos' => array_values($vuelta->dotaciones->map(fn (DotacionTramo $dotacion): string => $dotacion->sentido->value)->all()),
+                    ])
+                    ->all()),
             ])
-            ->all();
+            ->all());
+    }
+
+    /**
+     * Las tarjetas activas de la pizarra, para confirmar la de un tramo.
+     *
+     * @return list<array{id: int, nombre: string, color: string|null, sentido: string|null, tope: float|null, resumen: string}>
+     */
+    private function opcionesReglas(): array
+    {
+        return array_values(ReglaAbastecimiento::query()
+            ->where('activa', true)
+            ->enOrden()
+            ->with('lineas.punto')
+            ->get()
+            ->map(function (ReglaAbastecimiento $regla): array {
+                $lineas = DotacionTramo::lineasDe($regla);
+                $galones = array_column(array_filter($lineas, fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value), 'galones');
+
+                return [
+                    'id' => $regla->id,
+                    'nombre' => $regla->nombre,
+                    'color' => $regla->color,
+                    'sentido' => $regla->sentido?->value,
+                    'tope' => in_array(null, $galones, true) ? null : (float) array_sum($galones),
+                    'resumen' => implode(' · ', array_map(
+                        fn (array $linea): string => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value
+                            ? ($linea['punto'] ?? 'Combustible').' '.($linea['galones'] === null ? '¿? gal' : $linea['galones'].' gal')
+                            : $linea['concepto'].' S/ '.number_format((float) $linea['monto'], 2),
+                        $lineas,
+                    )),
+                ];
+            })
+            ->all());
     }
 }

@@ -10,6 +10,7 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Http\Requests\GuardarVueltaRequest;
+use App\Http\Requests\RegistrarLlegadaRequest;
 use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
@@ -26,11 +27,12 @@ use App\Services\AsignadorVueltas;
 use App\Services\AvisoDeVuelta;
 use App\Services\AvisosPorWhatsapp;
 use App\Services\GastosDelTicket;
+use App\Services\LiquidacionTicket;
+use App\Services\OdometroDeUnidad;
 use App\Services\PasosDelTicket;
 use App\Services\ProgramadorVueltas;
 use App\Services\RelojOperativo;
 use App\Services\WhatsappServicio;
-use Carbon\CarbonImmutable;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -66,6 +68,8 @@ class VueltaController extends Controller
             // Hoy: la fecha de salida que se propone al programar.
             'fecha' => RelojOperativo::fechaDeHoy()->toDateString(),
             'tablero' => $this->tablero($request),
+            // Las GR que esperan que alguien las ponga en un ticket.
+            'guiasPorAsignar' => fn (): int => Viaje::query()->whereNull('parada_vuelta_id')->whereNull('sin_ticket_at')->count(),
             ...$this->opcionesDelFormulario(),
         ]);
     }
@@ -93,7 +97,7 @@ class VueltaController extends Controller
      * sola pantalla. Cada área sigue trabajando en su bandeja; acá se ve el
      * conjunto y se salta a donde haga falta.
      */
-    public function show(Request $request, Vuelta $vuelta, WhatsappServicio $whatsapp): Response
+    public function show(Request $request, Vuelta $vuelta, WhatsappServicio $whatsapp, LiquidacionTicket $liquidacion): Response
     {
         $this->authorize('viewAny', Vuelta::class);
 
@@ -105,7 +109,8 @@ class VueltaController extends Controller
             'ticket' => $this->fila($vuelta, $vuelta->etapa(), $request),
             ...$this->pasos->de($vuelta, $gastos),
             'gastos' => $gastos,
-            'guias' => $this->guias($vuelta),
+            'liquidacion' => $liquidacion->de($vuelta, $gastos),
+            'guias' => $this->guias($vuelta, $request),
             'aviso' => $this->avisoDe($vuelta),
             'puedeAvisar' => $request->user()?->can('avisar', $vuelta) ?? false,
             'whatsappConectado' => fn (): bool => $whatsapp->conectado(),
@@ -133,17 +138,48 @@ class VueltaController extends Controller
     }
 
     /**
-     * El candado: el ticket ya no recibe combustible ni viáticos. Las GR que
-     * lleguen después arman el ticket siguiente.
+     * Liquidar y cerrar: solo con el ticket completo (llegó a la base y cada
+     * combustible tiene su despacho). Cerrado, ya no recibe nada.
      */
-    public function cerrar(Request $request, Vuelta $vuelta, AsignadorVueltas $asignador, AlertasDelTicket $alertas): RedirectResponse
+    public function cerrar(Request $request, Vuelta $vuelta, AsignadorVueltas $asignador, AlertasDelTicket $alertas, LiquidacionTicket $liquidacion): RedirectResponse
     {
         $this->authorize('cerrar', $vuelta);
+
+        $vuelta->load($this->relaciones());
+        $pendientes = $liquidacion->de($vuelta, $this->gastos->de(collect([$vuelta]))[$vuelta->id])['pendientes'];
+
+        if ($pendientes !== []) {
+            return back()->with('toast', ['type' => 'error', 'message' => "El ticket {$vuelta->codigo} todavía no se puede cerrar: ".implode(' ', $pendientes)]);
+        }
 
         $asignador->cerrar($vuelta);
         $alertas->cerrado($vuelta, $request->user());
 
-        return back()->with('toast', ['type' => 'success', 'message' => "Ticket {$vuelta->codigo} cerrado: ya no recibe combustible ni viáticos."]);
+        return back()->with('toast', ['type' => 'success', 'message' => "Ticket {$vuelta->codigo} liquidado y cerrado."]);
+    }
+
+    /**
+     * Que la unidad volvió a la base, con el día y el kilometraje: desde ahí
+     * el ticket está «en base» y se puede programar el siguiente.
+     */
+    public function registrarLlegada(RegistrarLlegadaRequest $request, Vuelta $vuelta, OdometroDeUnidad $odometro): RedirectResponse
+    {
+        $this->authorize('registrarLlegada', $vuelta);
+
+        $kilometraje = $request->filled('km_llegada') ? $request->integer('km_llegada') : null;
+        $kmNuevo = $kilometraje !== null && $kilometraje !== $vuelta->km_llegada;
+
+        $vuelta->update([
+            'llegada_el' => $request->date('llegada_el'),
+            'km_llegada' => $kilometraje,
+            'llegada_por' => $request->user()?->id,
+        ]);
+
+        if ($kmNuevo) {
+            $odometro->anotar($vuelta->tracto_id, $kilometraje, $request->user(), "Llegada a la base ({$vuelta->codigo})");
+        }
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Llegada del ticket {$vuelta->codigo} registrada."]);
     }
 
     public function reabrir(Vuelta $vuelta): RedirectResponse
@@ -272,7 +308,8 @@ class VueltaController extends Controller
     private function fila(Vuelta $vuelta, string $etapa, Request $request): array
     {
         $hoy = RelojOperativo::fechaDeHoy();
-        $llegada = $etapa === 'en_base' ? $this->ultimaGuia($vuelta) : null;
+        $llegada = $etapa === 'en_base' ? ($vuelta->llegada_el ?? $vuelta->fin) : null;
+        $prevista = $etapa === 'en_vuelta' ? $vuelta->llegadaPrevista() : null;
 
         return [
             ...$this->vuelta($vuelta, $request),
@@ -282,6 +319,16 @@ class VueltaController extends Controller
                 ? (int) $vuelta->inicio->diffInDays($hoy) + 1
                 : null,
             'dias_en_base' => $llegada ? (int) $llegada->diffInDays($hoy) : null,
+            'llegada' => $vuelta->llegoABase() ? [
+                'fecha' => $vuelta->llegada_el->toDateString(),
+                'km' => $vuelta->km_llegada,
+                'por' => $vuelta->llegadaRegistradaPor?->name,
+            ] : null,
+            // Referencia para avisar de un atraso; la llegada la marca una
+            // persona, nunca esta fecha.
+            'llegada_prevista' => $prevista?->toDateString(),
+            'atrasada' => $prevista !== null && $prevista->lt($hoy),
+            'registrable_llegada' => $request->user()?->can('registrarLlegada', $vuelta) ?? false,
             'taller' => $vuelta->revisiones->first()?->resumen(),
             'taller_anteriores' => array_values($vuelta->revisiones
                 ->skip(1)
@@ -299,9 +346,10 @@ class VueltaController extends Controller
      *
      * @return list<array<string, mixed>>
      */
-    private function guias(Vuelta $vuelta): array
+    private function guias(Vuelta $vuelta, Request $request): array
     {
         $guias = [];
+        $puedeQuitar = $vuelta->estaAbierta() && ($request->user()?->can('asignarGuias', Vuelta::class) ?? false);
 
         foreach ($vuelta->paradas as $parada) {
             foreach ($parada->viajes as $viaje) {
@@ -315,6 +363,10 @@ class VueltaController extends Controller
                     'cliente' => $viaje->cliente,
                     'peso' => (float) $viaje->peso,
                     'unidad_peso' => $viaje->unidad_peso,
+                    'no_programada' => $parada->fuera_de_programa,
+                    'asignada_por' => $viaje->asignadaPor?->name,
+                    'asignada_at' => $viaje->asignada_at?->format('Y-m-d H:i'),
+                    'quitable' => $puedeQuitar,
                 ];
             }
         }
@@ -360,20 +412,6 @@ class VueltaController extends Controller
     private function etapa(Vuelta $vuelta): string
     {
         return $vuelta->etapa();
-    }
-
-    /**
-     * Cuándo llegó a la base: el día de la última GR más lo que tarda ese
-     * tramo (la GR dice cuándo salió, no cuándo llegó).
-     */
-    private function ultimaGuia(Vuelta $vuelta): ?CarbonImmutable
-    {
-        $ultima = $vuelta->paradas
-            ->filter(fn (ParadaVuelta $parada): bool => $parada->viajes->isNotEmpty())
-            ->sortBy(fn (ParadaVuelta $parada): string => (string) $parada->viajes->max(fn (Viaje $viaje): string => $viaje->fecha_traslado->toDateString()))
-            ->last();
-
-        return $ultima === null ? null : $vuelta->llegadaEstimada($ultima)?->min(RelojOperativo::fechaDeHoy());
     }
 
     /**
@@ -570,8 +608,11 @@ class VueltaController extends Controller
             'carreta:id,placa',
             'conductor:id,nombres,apellidos,telefono,telefono_alterno',
             'revisiones.usuario:id,name',
+            'dotaciones.usuario:id,name',
+            'llegadaRegistradaPor:id,name',
             'paradas.viajes' => fn ($query) => $query
-                ->select(['id', 'parada_vuelta_id', 'numero_gr', 'fecha_traslado', 'peso', 'unidad_peso', 'cliente', 'origen', 'destino', 'tipo_carga'])
+                ->select(['id', 'parada_vuelta_id', 'numero_gr', 'fecha_traslado', 'peso', 'unidad_peso', 'cliente', 'origen', 'destino', 'tipo_carga', 'asignada_por', 'asignada_at'])
+                ->with('asignadaPor:id,name')
                 ->orderBy('fecha_traslado')
                 ->orderBy('id'),
         ];

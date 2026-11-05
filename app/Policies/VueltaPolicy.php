@@ -52,19 +52,39 @@ class VueltaPolicy
     }
 
     /**
-     * El candado: cerrado, el ticket ya no recibe combustible ni viáticos.
-     * Lo cierra quien ve toda la operación, cuando el viaje terminó de
-     * verdad (no al llegar la GR de regreso: esa se emite al cargar).
+     * Liquidar y cerrar: cerrado, el ticket ya no recibe nada. Lo cierra
+     * quien ve toda la operación, después de la llegada a la base (lo que
+     * falta para poder cerrarlo lo dice la liquidación).
      */
     public function cerrar(User $user, Vuelta $vuelta): bool
     {
-        return in_array($vuelta->estado, [EstadoVuelta::Programada, EstadoVuelta::EnCurso], true)
+        return $vuelta->estado === EstadoVuelta::EnCurso
+            && $vuelta->llegoABase()
             && $user->checkPermissionTo(Permiso::ProgramacionCerrar);
     }
 
     /**
-     * Solo el último ticket de la unidad se reabre: las GR nuevas caen en el
-     * abierto más reciente, y reabrir uno viejo las mandaría al pasado.
+     * Que la unidad volvió a la base: lo registra una persona, con el día y
+     * el kilometraje. Se puede corregir mientras el ticket siga abierto.
+     */
+    public function registrarLlegada(User $user, Vuelta $vuelta): bool
+    {
+        return $vuelta->estado === EstadoVuelta::EnCurso
+            && $user->checkPermissionTo(Permiso::ProgramacionLlegada);
+    }
+
+    /**
+     * Poner una GR en un ticket (o sacarla) es una decisión de una persona:
+     * el sistema solo sugiere.
+     */
+    public function asignarGuias(User $user): bool
+    {
+        return $user->checkPermissionTo(Permiso::ProgramacionAsignarGr);
+    }
+
+    /**
+     * Solo el último ticket de la unidad se reabre: reabrir uno viejo
+     * dejaría dos abiertos a la vez en el pasado.
      */
     public function reabrir(User $user, Vuelta $vuelta): bool
     {

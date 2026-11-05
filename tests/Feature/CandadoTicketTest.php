@@ -7,6 +7,8 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
+use App\Models\DotacionTramo;
+use App\Models\LecturaKilometraje;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
@@ -20,8 +22,8 @@ use function Pest\Laravel\actingAs;
 
 /**
  * La GR de regreso se emite al cargar (la de Ransa, en el Callao): la unidad
- * sigue en vuelta hasta llegar, y el ticket recibe combustible hasta que
- * alguien le pone el candado.
+ * sigue en vuelta hasta que alguien registra que llegó a la base, y el
+ * ticket se cierra solo con la liquidación completa.
  */
 beforeEach(function (): void {
     foreach (['admin', 'operaciones'] as $rol) {
@@ -32,27 +34,86 @@ beforeEach(function (): void {
 });
 
 /**
- * Un ticket apto de taller cuya GR de Ransa (Lima → mina) salió ese día.
+ * Un ticket apto de taller (salió con 250 000 km) cuya GR de Ransa (Lima →
+ * mina) salió ese día, con la tarjeta del regreso confirmada.
  */
 function ticketConRansa(Vehiculo $tracto, string $fechaGr): Vuelta
 {
     $vuelta = Vuelta::factory()->create([
         'tracto_id' => $tracto->id, 'origen' => OrigenVuelta::Programacion, 'inicio' => now()->subDays(10)->toDateString(),
     ]);
-    RevisionTaller::factory()->create(['vuelta_id' => $vuelta->id]);
+    RevisionTaller::factory()->create(['vuelta_id' => $vuelta->id, 'kilometraje' => 250000]);
     $parada = ParadaVuelta::factory()->create([
         'vuelta_id' => $vuelta->id, 'sentido' => SentidoTramo::Regreso, 'orden' => 1,
         'zona_origen' => ZonaRuta::Lima, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Materiales,
     ]);
     Viaje::factory()->create(['tracto_id' => null, 'fecha_traslado' => $fechaGr])
         ->forceFill(['parada_vuelta_id' => $parada->id])->save();
+    DotacionTramo::factory()->for($vuelta)->regreso()->create();
 
     return $vuelta->load('paradas.viajes');
 }
 
-it('keeps the unit on its way back until it arrives, not when the GR is issued', function (): void {
-    expect(ticketConRansa($this->tracto, now()->toDateString())->etapa())->toBe('en_vuelta')
-        ->and(ticketConRansa(Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]), now()->subDays(3)->toDateString())->etapa())->toBe('en_base');
+function llegar(Vuelta $vuelta, string $fecha, ?int $km = 251800): void
+{
+    actingAs(actorConRol('admin'))
+        ->post(route('vueltas.llegada', $vuelta), ['llegada_el' => $fecha, 'km_llegada' => $km])
+        ->assertSessionHasNoErrors();
+}
+
+it('keeps the unit on its way back until someone registers that it arrived', function (): void {
+    $vuelta = ticketConRansa($this->tracto, now()->subDays(10)->toDateString());
+
+    // Días después de la GR sigue en vuelta: la llegada no se calcula.
+    expect($vuelta->etapa())->toBe('en_vuelta');
+
+    llegar($vuelta, now()->toDateString());
+
+    $vuelta->refresh();
+    expect($vuelta->etapa())->toBe('en_base')
+        ->and($vuelta->km_llegada)->toBe(251800)
+        ->and(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->value('kilometraje'))->toBe(251800);
+});
+
+it('flags the arrival as late once the expected day went by', function (): void {
+    ticketConRansa($this->tracto, now()->subDays(10)->toDateString());
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('tablero.0.atrasada', true)->where('tablero.0.etapa', 'en_vuelta'));
+});
+
+it('checks the day and the odometer of the arrival', function (): void {
+    $vuelta = ticketConRansa($this->tracto, now()->subDays(2)->toDateString());
+    LecturaKilometraje::factory()->create(['vehiculo_id' => $this->tracto->id, 'kilometraje' => 260000]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('vueltas.llegada', $vuelta), ['llegada_el' => now()->subDays(3)->toDateString(), 'km_llegada' => 261000])
+        ->assertSessionHasErrors('llegada_el');
+    actingAs(actorConRol('admin'))
+        ->post(route('vueltas.llegada', $vuelta), ['llegada_el' => now()->toDateString(), 'km_llegada' => 255000])
+        ->assertSessionHasErrors('km_llegada');
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('vueltas.llegada', $vuelta), ['llegada_el' => now()->toDateString()])
+        ->assertForbidden();
+});
+
+it('does not program the next ticket while the unit is still on the road', function (): void {
+    $vuelta = ticketConRansa($this->tracto, now()->subDays(2)->toDateString());
+    $datos = [
+        'tracto_id' => $this->tracto->id,
+        'inicio' => now()->toDateString(),
+        'paradas' => [['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado']],
+    ];
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), $datos)->assertSessionHasErrors('tracto_id');
+
+    llegar($vuelta, now()->toDateString());
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), $datos)->assertSessionHasNoErrors();
+
+    // Programar el siguiente no cierra el anterior: eso es de la liquidación.
+    expect($vuelta->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
 });
 
 it('still lets fuel be registered at Kio after the Ransa GR', function (): void {
@@ -63,46 +124,66 @@ it('still lets fuel be registered at Kio after the Ransa GR', function (): void 
         ->assertInertia(fn (Assert $page) => $page->where('vueltas.0.id', $vuelta->id)->where('vueltas.0.etapa', 'en_vuelta'));
 
     actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'fecha' => now()->toDateString(), 'galones' => 80])
+        ->post(route('abastecimiento.store'), ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'sentido' => 'regreso', 'fecha' => now()->toDateString(), 'galones' => 80])
         ->assertSessionHasNoErrors();
 });
 
-it('keeps a programmed ticket in base visible until it is locked', function (): void {
-    $programada = ticketConRansa($this->tracto, now()->subDays(20)->toDateString());
+it('keeps a ticket in base visible until it is closed', function (): void {
+    $vuelta = ticketConRansa($this->tracto, now()->subDays(20)->toDateString());
+    llegar($vuelta, now()->subDays(15)->toDateString());
 
     actingAs(actorConRol('abastecimiento'))
         ->get(route('abastecimiento.index'))
-        ->assertInertia(fn (Assert $page) => $page->where('vueltas.0.id', $programada->id)->where('vueltas.0.etapa', 'en_base'));
+        ->assertInertia(fn (Assert $page) => $page->where('vueltas.0.id', $vuelta->id)->where('vueltas.0.etapa', 'en_base'));
 
-    $programada->update(['estado' => EstadoVuelta::Cerrada]);
+    $vuelta->update(['estado' => EstadoVuelta::Cerrada]);
 
     actingAs(actorConRol('abastecimiento'))
         ->get(route('abastecimiento.index'))
         ->assertInertia(fn (Assert $page) => $page->has('vueltas', 0));
 });
 
-it('shows the history tickets that arrived at base only for a few days', function (): void {
-    $reciente = ticketConRansa($this->tracto, now()->subDays(5)->toDateString());
-    $vieja = ticketConRansa(Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]), now()->subDays(20)->toDateString());
-    Vuelta::query()->update(['origen' => OrigenVuelta::Historial]);
+it('closes only with the settlement complete: arrival and every voucher', function (): void {
+    $vuelta = ticketConRansa($this->tracto, now()->subDays(2)->toDateString());
+    $combustible = Abastecimiento::factory()->paraVuelta($vuelta, SentidoTramo::Regreso)->create(['galones' => 130]);
 
-    actingAs(actorConRol('abastecimiento'))
-        ->get(route('abastecimiento.index'))
-        ->assertInertia(fn (Assert $page) => $page->where('vueltas', fn ($vueltas): bool => collect($vueltas)->pluck('id')->all() === [$reciente->id]));
+    // Sin llegada, ni se ofrece.
+    actingAs(actorConRol('admin'))->post(route('vueltas.cerrar', $vuelta))->assertForbidden();
 
-    expect($vieja->etapa())->toBe('en_base');
-});
+    llegar($vuelta, now()->toDateString());
 
-it('locks a ticket: no more fuel nor allowances until it is reopened', function (): void {
-    $vuelta = ticketConRansa($this->tracto, now()->toDateString());
+    actingAs(actorConRol('admin'))
+        ->post(route('vueltas.cerrar', $vuelta))
+        ->assertSessionHas('toast.type', 'error');
+    expect($vuelta->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
+
+    actingAs(actorConRol('admin'))->put(route('abastecimiento.despacho', $combustible), [
+        'galones_despachados' => 120, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(),
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.show', $vuelta))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('liquidacion.puede_cerrar', true)
+            ->where('liquidacion.km.recorridos', 1800)
+            ->where('liquidacion.rendimiento', 15)
+            ->where('liquidacion.combustible.diferencia', -10)
+            ->where('liquidacion.combustible.importe', 1920));
 
     actingAs(actorConRol('admin'))->post(route('vueltas.cerrar', $vuelta))->assertSessionHas('toast.type', 'success');
 
-    expect($vuelta->fresh()->estado)->toBe(EstadoVuelta::Cerrada);
+    expect($vuelta->fresh()->estado)->toBe(EstadoVuelta::Cerrada)
+        ->and($vuelta->fresh()->fin->toDateString())->toBe(now()->toDateString());
+});
+
+it('locks a closed ticket: no more fuel nor allowances until it is reopened', function (): void {
+    $vuelta = ticketConRansa($this->tracto, now()->toDateString());
+    $vuelta->update(['estado' => EstadoVuelta::Cerrada]);
+    $datos = ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'sentido' => 'regreso', 'fecha' => now()->toDateString(), 'galones' => 80];
 
     actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'fecha' => now()->toDateString(), 'galones' => 80])
-        ->assertSessionHasErrors('vehiculo_id');
+        ->post(route('abastecimiento.store'), $datos)
+        ->assertSessionHasErrors('vuelta_id');
 
     actingAs(actorConRol('abastecimiento'))
         ->post(route('viaticos.store'), ['vuelta_id' => $vuelta->id, 'concepto' => 'Imprevisto', 'monto' => 50, 'fecha' => now()->toDateString()])
@@ -113,22 +194,26 @@ it('locks a ticket: no more fuel nor allowances until it is reopened', function 
     expect($vuelta->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
 
     actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'fecha' => now()->toDateString(), 'galones' => 80])
+        ->post(route('abastecimiento.store'), $datos)
         ->assertSessionHasNoErrors();
 });
 
-it('does not touch what a locked ticket already has', function (): void {
+it('does not touch what a closed ticket already has', function (): void {
     $vuelta = ticketConRansa($this->tracto, now()->toDateString());
-    $abastecimiento = Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id]);
+    $abastecimiento = Abastecimiento::factory()->paraVuelta($vuelta)->create();
     $viatico = Viatico::factory()->create(['vuelta_id' => $vuelta->id, 'vehiculo_id' => $this->tracto->id]);
     $vuelta->update(['estado' => EstadoVuelta::Cerrada]);
 
-    actingAs(actorConRol('abastecimiento'))->delete(route('abastecimiento.destroy', $abastecimiento))->assertForbidden();
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.anular', $abastecimiento), ['motivo' => 'error'])->assertForbidden();
+    actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.despacho', $abastecimiento), [
+        'galones_despachados' => 50, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(),
+    ])->assertForbidden();
     actingAs(actorConRol('abastecimiento'))->post(route('viaticos.anular', $viatico), ['motivo' => 'error'])->assertForbidden();
 });
 
-it('only lets whoever has the permission lock, and reopens only the latest ticket', function (): void {
+it('only lets whoever has the permission close, and reopens only the latest ticket', function (): void {
     $vuelta = ticketConRansa($this->tracto, now()->subDays(5)->toDateString());
+    llegar($vuelta, now()->toDateString());
 
     actingAs(actorConRol('abastecimiento'))->post(route('vueltas.cerrar', $vuelta))->assertForbidden();
 

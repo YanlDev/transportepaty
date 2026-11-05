@@ -24,7 +24,7 @@ class ViaticoController extends Controller
     {
         $this->authorize('create', Viatico::class);
 
-        $vuelta = Vuelta::query()->with('paradas.viajes')->findOrFail($request->integer('vuelta_id'));
+        $vuelta = Vuelta::query()->with(['paradas.viajes', 'dotaciones'])->findOrFail($request->integer('vuelta_id'));
         $linea = $request->filled('linea_regla_abastecimiento_id')
             ? LineaReglaAbastecimiento::query()->findOrFail($request->integer('linea_regla_abastecimiento_id'))
             : null;
@@ -33,17 +33,17 @@ class ViaticoController extends Controller
             throw ValidationException::withMessages(['vuelta_id' => $bloqueo]);
         }
 
-        if ($linea !== null) {
-            $this->asegurarQueLeToca($vuelta, $linea);
-        }
+        $previsto = $linea === null ? null : $this->asegurarQueLeToca($vuelta, $linea);
 
         Viatico::query()->create([
             'vuelta_id' => $vuelta->id,
             'vehiculo_id' => $vuelta->tracto_id,
             'conductor_id' => $vuelta->conductor_id,
             'linea_regla_abastecimiento_id' => $linea?->id,
-            'concepto' => $linea->concepto ?? $request->string('concepto')->trim()->toString(),
-            'monto_previsto' => $linea?->monto,
+            // Lo de la tarjeta confirmada para el ticket, aunque la pizarra
+            // haya cambiado después.
+            'concepto' => $previsto['concepto'] ?? $request->string('concepto')->trim()->toString(),
+            'monto_previsto' => $previsto['monto'] ?? null,
             ...$this->datos($request),
             'user_id' => $request->user()?->id,
         ]);
@@ -82,15 +82,21 @@ class ViaticoController extends Controller
      * La línea tiene que ser de la tarjeta del ticket y no estar depositada
      * ya (tantas veces como toque).
      */
-    private function asegurarQueLeToca(Vuelta $vuelta, LineaReglaAbastecimiento $linea): void
+    /**
+     * La línea tiene que ser de una tarjeta confirmada del ticket, y no estar
+     * ya depositada. Devuelve cómo estaba en la tarjeta al confirmarla.
+     *
+     * @return array{linea_id: int|null, concepto: string, tipo: string, monto: float}
+     */
+    private function asegurarQueLeToca(Vuelta $vuelta, LineaReglaAbastecimiento $linea): array
     {
-        $previstas = collect($this->dotacion->de($vuelta, $vuelta->abastecimientos()->with('punto')->get())['viaticos'])
-            ->where('linea_id', $linea->id)
-            ->count();
+        $deLaLinea = collect($this->dotacion->de($vuelta, $vuelta->abastecimientos()->with('punto')->get())['viaticos'])
+            ->where('linea_id', $linea->id);
+        $previstas = $deLaLinea->count();
 
         if ($previstas === 0) {
             throw ValidationException::withMessages([
-                'linea_regla_abastecimiento_id' => "«{$linea->concepto}» no es de la tarjeta del ticket {$vuelta->codigo}.",
+                'linea_regla_abastecimiento_id' => "«{$linea->concepto}» no es de una tarjeta confirmada del ticket {$vuelta->codigo}.",
             ]);
         }
 
@@ -101,6 +107,8 @@ class ViaticoController extends Controller
                 'linea_regla_abastecimiento_id' => "«{$linea->concepto}» ya está depositado en el ticket {$vuelta->codigo}: corrígelo o anúlalo.",
             ]);
         }
+
+        return $deLaLinea->first();
     }
 
     /**

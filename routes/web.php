@@ -5,6 +5,7 @@ use App\Http\Controllers\AlertaController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\ConciliacionCombustibleController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
 use App\Http\Controllers\ConfiguracionAbastecimientoController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmisionGreController;
 use App\Http\Controllers\EquipamientoCarretaController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\GuiaPorAsignarController;
 use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\LecturaKilometrajeController;
 use App\Http\Controllers\LlantaController;
@@ -165,11 +167,16 @@ Route::middleware('auth')->group(function () {
     Route::get('taller', [TallerController::class, 'index'])->name('taller.index');
     Route::post('vueltas/{vuelta}/revision-taller', [TallerController::class, 'store'])->name('taller.store');
 
-    // Abastecimiento: el tablero con lo que le toca a cada unidad y el
-    // registro del combustible autorizado; aparte, la pizarra de dotaciones.
+    // Abastecimiento: el tablero con lo autorizado a cada ticket (la
+    // tarjeta confirmada de cada tramo), el combustible autorizado, que se
+    // anula y nunca se borra, y el despacho real del voucher; aparte, la
+    // pizarra de dotaciones y la conciliación del mes.
     Route::get('abastecimiento', [AbastecimientoController::class, 'index'])->name('abastecimiento.index');
+    Route::get('abastecimiento/conciliacion', [ConciliacionCombustibleController::class, 'index'])->name('abastecimiento.conciliacion');
     Route::post('abastecimiento', [AbastecimientoController::class, 'store'])->name('abastecimiento.store');
-    Route::delete('abastecimiento/{abastecimiento}', [AbastecimientoController::class, 'destroy'])->name('abastecimiento.destroy');
+    Route::post('abastecimiento/{abastecimiento}/anular', [AbastecimientoController::class, 'anular'])->name('abastecimiento.anular');
+    Route::put('abastecimiento/{abastecimiento}/despacho', [AbastecimientoController::class, 'despacho'])->name('abastecimiento.despacho');
+    Route::post('vueltas/{vuelta}/dotacion', [AbastecimientoController::class, 'confirmarDotacion'])->name('abastecimiento.dotacion');
     // Los viáticos de cada ticket: se depositan, se corrigen y se anulan;
     // nunca se borran.
     Route::post('abastecimiento/viaticos', [ViaticoController::class, 'store'])->name('viaticos.store');
@@ -177,8 +184,6 @@ Route::middleware('auth')->group(function () {
     Route::post('abastecimiento/viaticos/{viatico}/anular', [ViaticoController::class, 'anular'])->name('viaticos.anular');
     Route::get('abastecimiento/configuracion', [ConfiguracionAbastecimientoController::class, 'index'])
         ->name('abastecimiento.configuracion');
-    Route::put('abastecimiento/configuracion/tanque', [ConfiguracionAbastecimientoController::class, 'actualizarTanque'])
-        ->name('abastecimiento.tanque');
     Route::post('abastecimiento/puntos', [ConfiguracionAbastecimientoController::class, 'storePunto'])
         ->name('abastecimiento.puntos.store');
     Route::put('abastecimiento/puntos/{punto}', [ConfiguracionAbastecimientoController::class, 'updatePunto'])
@@ -214,13 +219,22 @@ Route::middleware('auth')->group(function () {
     Route::delete('vueltas/configuracion/palabras/{palabra}', [ConfiguracionProgramacionController::class, 'destroyPalabra'])
         ->name('programacion.palabras.destroy');
 
-    // La vuelta de cada unidad —ida y regreso— armada desde sus GR.
+    // Las GR por asignar: ninguna cae sola en un ticket. Quien programa la
+    // asigna (o la marca sin ticket, con motivo) y la puede volver a sacar.
+    Route::get('vueltas/guias', [GuiaPorAsignarController::class, 'index'])->name('vueltas.guias');
+    Route::post('viajes/{viaje}/ticket', [GuiaPorAsignarController::class, 'asignar'])->name('viajes.ticket.asignar');
+    Route::delete('viajes/{viaje}/ticket', [GuiaPorAsignarController::class, 'quitar'])->name('viajes.ticket.quitar');
+    Route::post('viajes/{viaje}/sin-ticket', [GuiaPorAsignarController::class, 'sinTicket'])->name('viajes.sinTicket');
+    Route::delete('viajes/{viaje}/sin-ticket', [GuiaPorAsignarController::class, 'devolver'])->name('viajes.sinTicket.devolver');
+
+    // El ticket de cada unidad: ida y vuelta, programado por una persona.
     Route::get('vueltas', [VueltaController::class, 'index'])->name('vueltas.index');
     Route::get('vueltas/unidades/{vehiculo}', [VueltaController::class, 'unidad'])->name('vueltas.unidad');
     Route::get('vueltas/{vuelta}', [VueltaController::class, 'show'])->whereNumber('vuelta')->name('vueltas.show');
     Route::post('vueltas', [VueltaController::class, 'store'])->name('vueltas.store');
     Route::put('vueltas/{vuelta}', [VueltaController::class, 'update'])->name('vueltas.update');
     Route::delete('vueltas/{vuelta}', [VueltaController::class, 'destroy'])->name('vueltas.destroy');
+    Route::post('vueltas/{vuelta}/llegada', [VueltaController::class, 'registrarLlegada'])->name('vueltas.llegada');
     Route::post('vueltas/{vuelta}/cerrar', [VueltaController::class, 'cerrar'])->name('vueltas.cerrar');
     Route::post('vueltas/{vuelta}/reabrir', [VueltaController::class, 'reabrir'])->name('vueltas.reabrir');
     Route::post('vueltas/{vuelta}/aviso', [VueltaController::class, 'avisarConductor'])->name('vueltas.aviso');

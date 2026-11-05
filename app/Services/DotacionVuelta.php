@@ -3,94 +3,139 @@
 namespace App\Services;
 
 use App\Enums\SentidoTramo;
-use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
-use App\Models\Ajuste;
-use App\Models\LineaReglaAbastecimiento;
+use App\Models\DotacionTramo;
 use App\Models\ParadaVuelta;
 use App\Models\ReglaAbastecimiento;
+use App\Models\User;
 use App\Models\Viaje;
 use App\Models\Viatico;
 use App\Models\Vuelta;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
- * Lo que le toca a una vuelta según la pizarra, contra lo que ya se le
- * autorizó: a cada parada se le busca su tarjeta, y de las tarjetas salen
- * los galones por punto y los viáticos.
+ * Lo autorizado para cada tramo de un ticket contra lo que ya se le dio.
  *
- * Es una lectura: no guarda nada. Si mañana cambia la pizarra, cambia lo
- * previsto de las vueltas que siguen abiertas.
+ * Lo autorizado es la tarjeta de la pizarra que alguien confirmó para ese
+ * tramo, copiada como estaba (`DotacionTramo`): si la pizarra cambia después,
+ * los tickets en ruta no se mueven. Mientras no se confirme, el sistema solo
+ * sugiere la tarjeta que calza con las paradas; no cuenta como autorizada.
+ *
+ * El combustible cuenta en el tramo que se eligió al registrarlo, nunca se
+ * reparte solo.
+ *
+ * @phpstan-type Tramo array{sentido: string, confirmada: bool, tarjeta: string|null, color: string|null, confirmada_por: string|null, confirmada_at: string|null, previsto: float|null, registrado: float, despachado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null}>, sugerida: array{id: int, nombre: string}|null}
+ * @phpstan-type FilaCombustible array{punto_id: int|null, punto: string, previsto: float|null, registrado: float, despachado: float, falta: float|null}
  */
 class DotacionVuelta
 {
     /** @var Collection<int, ReglaAbastecimiento>|null */
     private ?Collection $reglas = null;
 
-    private ?float $galonesTanqueLleno = null;
-
-    private bool $tanqueLeido = false;
-
     /**
-     * La vuelta tiene que venir con `paradas.viajes` cargadas.
+     * El ticket tiene que venir con `paradas.viajes`; las tarjetas
+     * confirmadas se cargan si faltan.
      *
-     * @param  Collection<int, Abastecimiento>  $registrados  los abastecimientos de la vuelta
+     * @param  Collection<int, Abastecimiento>  $registrados  los del ticket, anulados incluidos
      * @return array{
-     *     tarjetas: list<array{id: int, nombre: string, color: string|null, parada_id: int}>,
-     *     combustible: list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>,
-     *     viaticos: list<array{linea_id: int, concepto: string, tipo: string, monto: float}>,
+     *     tarjetas: list<array{sentido: string, id: int|null, nombre: string, color: string|null}>,
+     *     combustible: list<FilaCombustible>,
      *     total_previsto: float|null,
      *     total_registrado: float,
-     *     tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null, lleno: bool}>}>
+     *     total_despachado: float,
+     *     tramos: list<Tramo>,
+     *     viaticos: list<array{linea_id: int|null, concepto: string, tipo: string, monto: float}>
      * }
      */
     public function de(Vuelta $vuelta, Collection $registrados): array
     {
+        $vuelta->loadMissing('dotaciones.usuario:id,name');
+        $vigentes = $registrados->reject(fn (Abastecimiento $abastecimiento): bool => $abastecimiento->estaAnulado())->values();
+        $tramos = [];
+        $lineasDeCombustible = [];
+        $viaticos = [];
         $tarjetas = [];
-        $lineas = [];
-        $porTramo = [SentidoTramo::Ida->value => [], SentidoTramo::Regreso->value => []];
 
-        foreach ($vuelta->paradas as $parada) {
-            // Dónde arrancó el tramo: la ida que sale de Juliaca sube vacía a
-            // la mina y recién baja con concentrado; su tarjeta («Juliaca –
-            // San Rafael – Pisco») habla del tramo entero.
-            $regla = $this->reglaDe($parada, $vuelta->paradasDe($parada->sentido)->first()?->zona_origen);
+        foreach (SentidoTramo::cases() as $sentido) {
+            $dotacion = $vuelta->dotacionDe($sentido);
+            $delTramo = $vigentes->where('sentido', $sentido)->values();
 
-            if ($regla === null) {
+            if ($sentido === SentidoTramo::Regreso && $dotacion === null && $delTramo->isEmpty() && $vuelta->paradasDe($sentido)->isEmpty()) {
                 continue;
             }
 
-            $tarjetas[] = ['id' => $regla->id, 'nombre' => $regla->nombre, 'color' => $regla->color, 'parada_id' => $parada->id];
-            array_push($lineas, ...$regla->lineas->all());
-            array_push($porTramo[$parada->sentido->value], ...$regla->lineas->all());
+            if ($dotacion !== null) {
+                $tarjetas[] = ['sentido' => $sentido->value, 'id' => $dotacion->regla_abastecimiento_id, 'nombre' => $dotacion->nombre, 'color' => $dotacion->color];
+                array_push($lineasDeCombustible, ...$dotacion->lineasDeCombustible());
+
+                foreach ($dotacion->lineasDeViaticos() as $linea) {
+                    $viaticos[] = ['linea_id' => $linea['linea_id'], 'concepto' => $linea['concepto'], 'tipo' => $linea['tipo'], 'monto' => (float) $linea['monto']];
+                }
+            }
+
+            $tramos[] = $this->tramo($vuelta, $sentido, $dotacion, $delTramo);
         }
 
-        $combustible = $this->combustible($lineas, $registrados);
+        $combustible = $this->combustible($lineasDeCombustible, $vigentes);
+        $previstos = array_column($combustible, 'previsto');
 
         return [
             'tarjetas' => $tarjetas,
-            ...$combustible,
-            'tramos' => $this->porTramo($porTramo, $combustible['combustible']),
-            'viaticos' => array_values(collect($lineas)
-                ->reject(fn (LineaReglaAbastecimiento $linea): bool => $linea->tipo === TipoLineaAbastecimiento::Combustible)
-                ->map(fn (LineaReglaAbastecimiento $linea): array => [
-                    'linea_id' => $linea->id,
-                    'concepto' => $linea->concepto,
-                    'tipo' => $linea->tipo->value,
-                    'monto' => (float) $linea->monto,
-                ])
-                ->all()),
+            'combustible' => $combustible,
+            'total_previsto' => in_array(null, $previstos, true) ? null : (float) array_sum($previstos),
+            'total_registrado' => (float) $vigentes->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones),
+            'total_despachado' => (float) $vigentes->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados),
+            'tramos' => $tramos,
+            'viaticos' => $viaticos,
         ];
     }
 
     /**
-     * Los viáticos de la pizarra contra lo depositado: cada línea con su
-     * depósito (o pendiente) y, aparte, los imprevistos. Si la misma línea
-     * toca dos veces (dos paradas con la misma tarjeta), se espera dos
-     * depósitos. Los anulados no cuentan.
+     * Confirma la tarjeta de un tramo: la copia al ticket como está ahora.
+     * Confirmar otra reemplaza la anterior (queda en el historial).
+     */
+    public function confirmar(Vuelta $vuelta, SentidoTramo $sentido, ReglaAbastecimiento $regla, User $usuario): DotacionTramo
+    {
+        $regla->loadMissing('lineas.punto');
+
+        return DotacionTramo::query()->updateOrCreate(
+            ['vuelta_id' => $vuelta->id, 'sentido' => $sentido],
+            [
+                'regla_abastecimiento_id' => $regla->id,
+                'nombre' => $regla->nombre,
+                'color' => $regla->color,
+                'lineas' => DotacionTramo::lineasDe($regla),
+                'user_id' => $usuario->id,
+            ],
+        );
+    }
+
+    /**
+     * La tarjeta que el sistema propone para un tramo: la más específica que
+     * calza con alguna de sus paradas. Es solo una sugerencia.
+     */
+    public function sugerida(Vuelta $vuelta, SentidoTramo $sentido): ?ReglaAbastecimiento
+    {
+        $paradas = $vuelta->paradasDe($sentido);
+        $inicio = $paradas->first()?->zona_origen;
+
+        foreach ($paradas as $parada) {
+            if (($regla = $this->reglaDe($parada, $inicio)) !== null) {
+                return $regla;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Los viáticos de las tarjetas confirmadas contra lo depositado: cada
+     * línea con su depósito (o pendiente) y, aparte, los imprevistos. Si la
+     * misma línea toca dos veces, se espera dos depósitos. Los anulados no
+     * cuentan.
      *
-     * @param  list<array{linea_id: int, concepto: string, tipo: string, monto: float}>  $dePizarra
+     * @param  list<array{linea_id: int|null, concepto: string, tipo: string, monto: float}>  $dePizarra
      * @param  Collection<int, Viatico>  $depositados  vigentes, del más viejo al más nuevo
      * @return list<array{linea_id: int|null, concepto: string, previsto: float|null, deposito: Viatico|null}>
      */
@@ -100,7 +145,9 @@ class DotacionVuelta
         $filas = [];
 
         foreach ($dePizarra as $linea) {
-            $clave = array_find_key($libres, fn (Viatico $viatico): bool => $viatico->linea_regla_abastecimiento_id === $linea['linea_id']);
+            $clave = $linea['linea_id'] === null
+                ? null
+                : array_find_key($libres, fn (Viatico $viatico): bool => $viatico->linea_regla_abastecimiento_id === $linea['linea_id']);
             $deposito = null;
 
             if ($clave !== null) {
@@ -112,7 +159,7 @@ class DotacionVuelta
         }
 
         // Lo que no calzó con la pizarra: los imprevistos y los de una línea
-        // que la pizarra ya no tiene.
+        // que la tarjeta ya no tiene.
         foreach ($libres as $viatico) {
             $filas[] = [
                 'linea_id' => $viatico->linea_regla_abastecimiento_id,
@@ -123,74 +170,6 @@ class DotacionVuelta
         }
 
         return $filas;
-    }
-
-    /**
-     * El combustible de la ida y de la vuelta por separado. El total de la
-     * tarjeta es el tope del tramo (Juliaca – Mina – Lima: 220 gal); cómo se
-     * reparte entre los puntos varía (150 en Juliaca y 70 en Arequipa, o 100
-     * y 120), así que los puntos son una referencia y todo lo autorizado, en
-     * cualquier punto, cuenta contra el tope. Se reparte en orden: primero
-     * cubre la ida y lo que sobra va a la vuelta.
-     *
-     * @param  array<string, list<LineaReglaAbastecimiento>>  $porTramo
-     * @param  list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>  $porPunto
-     * @return list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null, lleno: bool}>}>
-     */
-    private function porTramo(array $porTramo, array $porPunto): array
-    {
-        $disponible = (float) array_sum(array_column($porPunto, 'registrado'));
-        $tramos = [];
-
-        foreach ($porTramo as $sentido => $lineas) {
-            $puntos = [];
-
-            foreach ($lineas as $linea) {
-                if ($linea->tipo !== TipoLineaAbastecimiento::Combustible) {
-                    continue;
-                }
-
-                $clave = $linea->punto_abastecimiento_id ?? 0;
-                $puntos[$clave] ??= ['punto' => $linea->punto->nombre ?? 'Total del tramo', 'previsto' => 0.0, 'lleno' => false];
-
-                if ($linea->tanque_lleno) {
-                    $lleno = $this->galonesTanqueLleno();
-                    $puntos[$clave]['lleno'] = true;
-                    $puntos[$clave]['previsto'] = $lleno === null || $puntos[$clave]['previsto'] === null
-                        ? null
-                        : $puntos[$clave]['previsto'] + $lleno;
-                } elseif ($puntos[$clave]['previsto'] !== null) {
-                    $puntos[$clave]['previsto'] += (float) $linea->galones;
-                }
-            }
-
-            if ($puntos === []) {
-                continue;
-            }
-
-            $previstos = array_column($puntos, 'previsto');
-            $previsto = in_array(null, $previstos, true) ? null : (float) array_sum($previstos);
-            $toma = $previsto === null ? $disponible : min($disponible, $previsto);
-            $disponible -= $toma;
-
-            $tramos[] = [
-                'sentido' => $sentido,
-                'previsto' => $previsto,
-                'registrado' => $toma,
-                'falta' => $previsto === null ? null : max(0.0, $previsto - $toma),
-                'puntos' => array_values($puntos),
-            ];
-        }
-
-        // Lo autorizado de más (pasó el tope) se suma al último tramo, para
-        // que se vea que se pasó.
-        if ($disponible > 0 && $tramos !== []) {
-            $ultimo = array_pop($tramos);
-            $ultimo['registrado'] += $disponible;
-            $tramos[] = $ultimo;
-        }
-
-        return $tramos;
     }
 
     /**
@@ -212,78 +191,85 @@ class DotacionVuelta
     }
 
     /**
-     * Galones previstos por punto contra los registrados. Lo registrado en
-     * un punto que la pizarra no nombra también se muestra, con lo previsto
-     * vacío.
-     *
-     * @param  list<LineaReglaAbastecimiento>  $lineas
-     * @param  Collection<int, Abastecimiento>  $registrados
-     * @return array{combustible: list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>, total_previsto: float|null, total_registrado: float}
+     * @param  Collection<int, Abastecimiento>  $delTramo  vigentes
+     * @return Tramo
      */
-    private function combustible(array $lineas, Collection $registrados): array
+    private function tramo(Vuelta $vuelta, SentidoTramo $sentido, ?DotacionTramo $dotacion, Collection $delTramo): array
+    {
+        $registrado = (float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones);
+        $previsto = $dotacion?->tope();
+        $sugerida = $dotacion === null ? $this->sugerida($vuelta, $sentido) : null;
+
+        $puntos = [];
+
+        foreach ($dotacion?->lineasDeCombustible() ?? [] as $linea) {
+            $clave = $linea['punto_id'] ?? 'linea:'.($linea['punto'] ?? '');
+            $puntos[$clave] ??= ['punto' => $linea['punto'] ?? 'Total del tramo', 'previsto' => 0.0];
+            $puntos[$clave]['previsto'] = $puntos[$clave]['previsto'] === null || $linea['galones'] === null
+                ? null
+                : $puntos[$clave]['previsto'] + (float) $linea['galones'];
+        }
+
+        return [
+            'sentido' => $sentido->value,
+            'confirmada' => $dotacion !== null,
+            'tarjeta' => $dotacion?->nombre,
+            'color' => $dotacion?->color,
+            'confirmada_por' => $dotacion?->usuario?->name,
+            'confirmada_at' => $dotacion?->updated_at->format('Y-m-d H:i'),
+            'previsto' => $previsto,
+            'registrado' => $registrado,
+            'despachado' => (float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados),
+            'falta' => $previsto === null ? null : max(0.0, $previsto - $registrado),
+            'puntos' => array_values($puntos),
+            'sugerida' => $sugerida === null ? null : ['id' => $sugerida->id, 'nombre' => $sugerida->nombre],
+        ];
+    }
+
+    /**
+     * Galones previstos por punto contra los autorizados y despachados. Lo
+     * autorizado en un punto que la tarjeta no nombra también se muestra,
+     * con lo previsto vacío.
+     *
+     * @param  list<array{punto_id: int|null, punto: string|null, galones: float|null}>  $lineas
+     * @param  Collection<int, Abastecimiento>  $vigentes
+     * @return list<FilaCombustible>
+     */
+    private function combustible(array $lineas, Collection $vigentes): array
     {
         $porPunto = [];
 
         foreach ($lineas as $linea) {
-            if ($linea->tipo !== TipoLineaAbastecimiento::Combustible) {
-                continue;
-            }
-
-            $clave = $linea->punto_abastecimiento_id ?? 0;
-            $porPunto[$clave] ??= [
-                'punto_id' => $linea->punto_abastecimiento_id,
-                'punto' => $linea->punto->nombre ?? 'Total del tramo',
-                'previsto' => 0.0,
-                'lleno' => false,
-            ];
-
-            if ($linea->tanque_lleno) {
-                $porPunto[$clave]['lleno'] = true;
-                $lleno = $this->galonesTanqueLleno();
-                $porPunto[$clave]['previsto'] = $lleno === null || $porPunto[$clave]['previsto'] === null
-                    ? null
-                    : $porPunto[$clave]['previsto'] + $lleno;
-
-                continue;
-            }
-
-            if ($porPunto[$clave]['previsto'] !== null) {
-                $porPunto[$clave]['previsto'] += (float) $linea->galones;
-            }
+            $clave = $linea['punto_id'] ?? 'linea:'.($linea['punto'] ?? '');
+            $porPunto[$clave] ??= ['punto_id' => $linea['punto_id'], 'punto' => $linea['punto'] ?? 'Total del tramo', 'previsto' => 0.0];
+            $porPunto[$clave]['previsto'] = $porPunto[$clave]['previsto'] === null || $linea['galones'] === null
+                ? null
+                : $porPunto[$clave]['previsto'] + (float) $linea['galones'];
         }
 
-        foreach ($registrados as $abastecimiento) {
+        foreach ($vigentes as $abastecimiento) {
             $porPunto[$this->claveDePunto($abastecimiento)] ??= [
                 'punto_id' => $abastecimiento->punto_abastecimiento_id,
                 'punto' => $abastecimiento->nombrePunto() ?? 'Sin punto',
                 'previsto' => null,
-                'lleno' => false,
             ];
         }
 
         $filas = [];
 
         foreach ($porPunto as $clave => $fila) {
-            $registrado = (float) $registrados
-                ->filter(fn (Abastecimiento $abastecimiento): bool => $this->claveDePunto($abastecimiento) === $clave)
-                ->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones);
+            $delPunto = $vigentes->filter(fn (Abastecimiento $abastecimiento): bool => $this->claveDePunto($abastecimiento) === $clave);
+            $registrado = (float) $delPunto->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones);
 
             $filas[] = [
                 ...$fila,
                 'registrado' => $registrado,
+                'despachado' => (float) $delPunto->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados),
                 'falta' => $fila['previsto'] === null ? null : max(0.0, $fila['previsto'] - $registrado),
             ];
         }
 
-        $previstos = array_column($filas, 'previsto');
-
-        return [
-            'combustible' => $filas,
-            // Un «tanque lleno» sin galones configurados deja el total sin
-            // calcular: sumar sin él daría un número engañoso.
-            'total_previsto' => in_array(null, $previstos, true) ? null : (float) array_sum($previstos),
-            'total_registrado' => (float) array_sum(array_column($filas, 'registrado')),
-        ];
+        return $filas;
     }
 
     /**
@@ -327,16 +313,5 @@ class DotacionVuelta
             ->enOrden()
             ->with('lineas.punto')
             ->get();
-    }
-
-    private function galonesTanqueLleno(): ?float
-    {
-        if (! $this->tanqueLeido) {
-            $valor = Ajuste::valor(Ajuste::GALONES_TANQUE_LLENO);
-            $this->galonesTanqueLleno = $valor === null ? null : (float) $valor;
-            $this->tanqueLeido = true;
-        }
-
-        return $this->galonesTanqueLleno;
     }
 }

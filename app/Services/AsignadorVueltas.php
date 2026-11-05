@@ -9,193 +9,162 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoVuelta;
 use App\Enums\ZonaRuta;
 use App\Models\ParadaVuelta;
+use App\Models\User;
 use App\Models\Viaje;
 use App\Models\Vuelta;
-use Illuminate\Support\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 /**
- * Pone cada GR en la vuelta de su unidad, en el momento en que se registra.
+ * Pone una GR en un ticket, siempre por decisión de una persona.
  *
- * - Si la unidad tiene una vuelta **programada** vigente para esa fecha, la
- *   GR va a la parada que coincide en origen, destino y carga. Si ninguna
- *   coincide, entra igual como parada «no programada»: lo planeado no se
- *   corrige solo, se muestra la diferencia.
- * - Si no hay vuelta programada, la GR queda suelta: desde el 05-11-2026
- *   solo cuentan los tickets que se programan al salir de la base, nunca
- *   las unidades que ya andaban en ruta. Si la programada ya había hecho su
- *   regreso y la unidad vuelve a salir, esa vuelta terminó y se cierra.
- * - Solo la reconstrucción del historial (`ReconstructorVueltas`, a pedido)
- *   arma vueltas sin programar, con la regla de siempre: las GR de una misma
- *   carga se juntan, donde la unidad no arranca en la zona en que terminó hay
- *   un trayecto vacío, y la vuelta empieza cuando la unidad sale de la sierra
- *   (Juliaca, la mina…) y termina cuando vuelve a llegar a ella.
+ * Al registrarse, la GR queda en la bandeja «GR por asignar»: el sistema solo
+ * sugiere el ticket abierto de su unidad y la parada que coincide en
+ * trayecto y carga, y alguien confirma. Si la GR no calza con lo programado,
+ * esa persona decide si entra como parada «no programada». Lo que no va en
+ * ningún ticket se marca «sin ticket» con su motivo.
+ *
+ * Las zonas se deducen de la dirección solo para sugerir: nunca deciden.
  */
 class AsignadorVueltas
 {
-    /** Cuántos días puede haber entre dos GR de la misma parada. */
-    private const DIAS_MISMA_PARADA = 1;
-
-    public function asignar(Viaje $guia, bool $armarHistorial = false): ?ParadaVuelta
+    /**
+     * Los tickets abiertos de la unidad de la GR: a esos se puede asignar.
+     *
+     * @return Collection<int, Vuelta>
+     */
+    public function ticketsPara(Viaje $guia): Collection
     {
-        // Recién creada puede venir sin los valores que pone la base (el
-        // importador deja que el tipo de carga tome el suyo por defecto).
-        $guia = $guia->fresh() ?? $guia;
-
-        if ($guia->tracto_id === null || $guia->parada_vuelta_id !== null || $guia->estaAnulada()) {
-            return null;
+        if ($guia->tracto_id === null) {
+            return new Collection;
         }
 
-        return DB::transaction(function () use ($guia, $armarHistorial): ?ParadaVuelta {
-            $vuelta = $this->vueltaVigente($guia);
-            $origen = ZonaRuta::desdeDireccion($guia->origen);
-            $destino = ZonaRuta::desdeDireccion($guia->destino);
-            $programada = $vuelta?->origen === OrigenVuelta::Programacion;
+        return Vuelta::query()
+            ->where('tracto_id', $guia->tracto_id)
+            ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
+            ->with(['paradas' => fn ($query) => $query->withCount('viajes')])
+            ->orderBy('inicio')
+            ->orderBy('id')
+            ->get();
+    }
 
-            if ($programada && ! $this->yaRegreso($vuelta, $origen, $destino)) {
-                $parada = $this->enProgramada($vuelta, $guia, $origen, $destino);
-            } elseif ($armarHistorial) {
-                $parada = $this->enHistorial($vuelta, $guia, $origen, $destino);
-            } else {
-                if ($programada && $vuelta->estado === EstadoVuelta::EnCurso) {
-                    $this->cerrar($vuelta);
-                }
+    /**
+     * Lo que el sistema propone: el ticket (el único abierto o, si hay más,
+     * el último que ya salió para la fecha de la GR), la parada que coincide
+     * en trayecto y carga, y si no hay parada, en qué tramo iría.
+     *
+     * @param  Collection<int, Vuelta>  $tickets  los de `ticketsPara()`
+     * @return array{vuelta_id: int|null, parada_id: int|null, sentido: string}
+     */
+    public function sugerencia(Viaje $guia, Collection $tickets): array
+    {
+        $origen = ZonaRuta::desdeDireccion($guia->origen);
+        $destino = ZonaRuta::desdeDireccion($guia->destino);
 
-                return null;
+        $vuelta = $tickets->count() === 1
+            ? $tickets->first()
+            : $tickets
+                ->filter(fn (Vuelta $vuelta): bool => $vuelta->inicio === null || $vuelta->inicio->lte($guia->fecha_traslado->copy()->addDay()))
+                ->last();
+
+        if ($vuelta === null) {
+            return ['vuelta_id' => null, 'parada_id' => null, 'sentido' => SentidoTramo::entre($origen, $destino, false)->value];
+        }
+
+        $delTrayecto = $vuelta->paradas
+            ->filter(fn (ParadaVuelta $parada): bool => ! $parada->esVacio()
+                && $parada->zona_origen === $origen
+                && $parada->zona_destino === $destino);
+
+        $parada = $delTrayecto->first(fn (ParadaVuelta $parada): bool => $parada->tipo_carga === $guia->tipo_carga)
+            ?? $delTrayecto->first(fn (ParadaVuelta $parada): bool => (int) $parada->viajes_count === 0);
+
+        $yaEmpezoElRegreso = $vuelta->paradas
+            ->contains(fn (ParadaVuelta $parada): bool => $parada->sentido === SentidoTramo::Regreso && (int) $parada->viajes_count > 0);
+
+        return [
+            'vuelta_id' => $vuelta->id,
+            'parada_id' => $parada?->id,
+            'sentido' => ($parada->sentido ?? SentidoTramo::entre($origen, $destino, $yaEmpezoElRegreso))->value,
+        ];
+    }
+
+    /**
+     * Asigna la GR al ticket: a una parada suya o, si no se elige ninguna,
+     * a una parada nueva «no programada» en el tramo indicado. Quien llama
+     * ya validó que el ticket es de la misma unidad y está abierto.
+     */
+    public function asignar(Viaje $guia, Vuelta $vuelta, ?ParadaVuelta $parada, SentidoTramo $sentido, User $usuario): ParadaVuelta
+    {
+        return DB::transaction(function () use ($guia, $vuelta, $parada, $sentido, $usuario): ParadaVuelta {
+            if ($parada === null) {
+                $parada = $this->paradaNoProgramada($vuelta, $guia, $sentido);
+            } elseif ($parada->tipo_carga !== $guia->tipo_carga && ! $parada->viajes()->exists()) {
+                // Se programó «con carga» sin saber cuál (la subida cargada
+                // de Juliaca a la mina): manda la que dice la GR.
+                $parada->update(['tipo_carga' => $guia->tipo_carga]);
             }
 
-            $guia->forceFill(['parada_vuelta_id' => $parada->id])->saveQuietly();
-            $this->alLlegarLaGuia($parada, $guia);
+            $guia->forceFill([
+                'parada_vuelta_id' => $parada->id,
+                'asignada_por' => $usuario->id,
+                'asignada_at' => now(),
+                'sin_ticket_at' => null,
+                'sin_ticket_por' => null,
+                'motivo_sin_ticket' => null,
+            ])->save();
+
+            $this->alLlegarLaGuia($parada, $vuelta, $guia);
 
             return $parada;
         });
     }
 
     /**
-     * La vuelta en la que cae una GR por su fecha: la última que arrancó
-     * hasta ese día. Un día de tolerancia, porque la GR de la salida puede
-     * salir fechada la víspera.
+     * Saca la GR de su ticket y la devuelve a la bandeja. Si estaba sola en
+     * una parada no programada, la parada se va con ella; si el ticket se
+     * queda sin GR, vuelve a «por salir».
      */
-    private function vueltaVigente(Viaje $guia): ?Vuelta
+    public function quitar(Viaje $guia): void
     {
-        return Vuelta::query()
-            ->where('tracto_id', $guia->tracto_id)
-            ->where('estado', '!=', EstadoVuelta::Anulada)
-            ->where(fn ($query) => $query
-                ->whereNull('inicio')
-                ->orWhereDate('inicio', '<=', $guia->fecha_traslado->copy()->addDay()))
-            ->orderByDesc('inicio')
-            ->orderByDesc('id')
-            ->first();
+        DB::transaction(function () use ($guia): void {
+            $parada = $guia->loadMissing('parada.vuelta')->parada;
+
+            $guia->forceFill(['parada_vuelta_id' => null, 'asignada_por' => null, 'asignada_at' => null])->save();
+
+            if ($parada === null) {
+                return;
+            }
+
+            $vuelta = $parada->vuelta;
+
+            if ($parada->fuera_de_programa && ! $parada->viajes()->exists()) {
+                $parada->delete();
+            }
+
+            if ($vuelta->estado === EstadoVuelta::EnCurso && ! $vuelta->viajes()->exists()) {
+                $vuelta->update(['estado' => EstadoVuelta::Programada]);
+            }
+        });
+    }
+
+    public function marcarSinTicket(Viaje $guia, string $motivo, User $usuario): void
+    {
+        $guia->forceFill([
+            'sin_ticket_at' => now(),
+            'sin_ticket_por' => $usuario->id,
+            'motivo_sin_ticket' => $motivo,
+        ])->save();
+    }
+
+    public function devolverABandeja(Viaje $guia): void
+    {
+        $guia->forceFill(['sin_ticket_at' => null, 'sin_ticket_por' => null, 'motivo_sin_ticket' => null])->save();
     }
 
     /**
-     * La unidad ya hizo el regreso de su vuelta programada y esta GR vuelve a
-     * salir de la sierra: es la ida de la vuelta siguiente, no algo fuera de
-     * programa.
-     */
-    private function yaRegreso(Vuelta $vuelta, ?ZonaRuta $origen, ?ZonaRuta $destino): bool
-    {
-        return $this->sentidoDe($vuelta, $origen, $destino) === SentidoTramo::Ida
-            && $vuelta->paradas()->where('sentido', SentidoTramo::Regreso)->whereHas('viajes')->exists();
-    }
-
-    /**
-     * La parada programada en la que cae la GR: la de su misma carga y
-     * trayecto. Si no hay, una cargada del mismo trayecto que todavía espera
-     * su GR —se programó «con carga» sin saber cuál, como la subida cargada
-     * de Juliaca a la mina— y la carga pasa a ser la que dice la GR.
-     */
-    private function enProgramada(Vuelta $vuelta, Viaje $guia, ?ZonaRuta $origen, ?ZonaRuta $destino): ParadaVuelta
-    {
-        $delTrayecto = $vuelta->paradas()
-            ->where('zona_origen', $origen)
-            ->where('zona_destino', $destino)
-            ->get();
-
-        $coincide = $delTrayecto
-            ->where('tipo_carga', $guia->tipo_carga)
-            ->first(fn (ParadaVuelta $parada): bool => $this->admiteLaGuia($parada, $guia));
-
-        if ($coincide !== null) {
-            return $coincide;
-        }
-
-        $pendiente = $guia->tipo_carga === TipoCarga::Vacio ? null : $delTrayecto
-            ->first(fn (ParadaVuelta $parada): bool => ! $parada->esVacio() && ! $parada->viajes()->exists());
-
-        if ($pendiente !== null) {
-            $pendiente->update(['tipo_carga' => $guia->tipo_carga]);
-
-            return $pendiente;
-        }
-
-        return $this->agregarParada($vuelta, $guia, $origen, $destino, fueraDePrograma: true);
-    }
-
-    private function enHistorial(?Vuelta $vuelta, Viaje $guia, ?ZonaRuta $origen, ?ZonaRuta $destino): ParadaVuelta
-    {
-        $ultima = $vuelta?->paradas()->reorder()->orderByDesc('orden')->first();
-
-        if ($ultima !== null
-            && $ultima->zona_origen === $origen
-            && $ultima->zona_destino === $destino
-            && $ultima->tipo_carga === $guia->tipo_carga
-            && $this->admiteLaGuia($ultima, $guia)) {
-            return $ultima;
-        }
-
-        // Donde la unidad no arranca en la zona en que terminó, hizo ese
-        // trayecto vacía.
-        if ($ultima?->zona_destino !== null && $origen !== null && $ultima->zona_destino !== $origen) {
-            $sentidoDelVacio = $this->sentidoDe($vuelta, $ultima->zona_destino, $origen);
-            $vuelta = $this->vueltaParaElTramo($vuelta, $guia, $sentidoDelVacio);
-            $this->crearParada($vuelta, [
-                'sentido' => $sentidoDelVacio,
-                'zona_origen' => $ultima->zona_destino,
-                'zona_destino' => $origen,
-                'lugar_origen' => $ultima->lugar_destino,
-                'lugar_destino' => $this->lugar($guia->origen),
-                'tipo_carga' => TipoCarga::Vacio,
-            ]);
-        }
-
-        $sentido = $this->sentidoDe($vuelta, $origen, $destino);
-        $vuelta = $this->vueltaParaElTramo($vuelta, $guia, $sentido);
-
-        return $this->agregarParada($vuelta, $guia, $origen, $destino, sentido: $sentido);
-    }
-
-    /**
-     * La misma vuelta, o una nueva si la unidad vuelve a salir de la sierra
-     * después de haber regresado: ahí se cierra la anterior.
-     */
-    private function vueltaParaElTramo(?Vuelta $vuelta, Viaje $guia, SentidoTramo $sentido): Vuelta
-    {
-        $empiezaOtra = $vuelta === null
-            || ($sentido === SentidoTramo::Ida && $vuelta->paradas()->where('sentido', SentidoTramo::Regreso)->exists());
-
-        if (! $empiezaOtra) {
-            return $vuelta;
-        }
-
-        if ($vuelta !== null) {
-            $this->cerrar($vuelta);
-        }
-
-        return Vuelta::query()->create([
-            'tracto_id' => $guia->tracto_id,
-            'carreta_id' => $guia->carreta_id,
-            'conductor_id' => $guia->conductor_id,
-            'tipo' => TipoVuelta::Particular,
-            'estado' => EstadoVuelta::EnCurso,
-            'origen' => OrigenVuelta::Historial,
-        ]);
-    }
-
-    /**
-     * Cierra una vuelta en el día de su última GR.
+     * Cierra el ticket en el día de su última GR (o de su salida, si no tuvo).
      */
     public function cerrar(Vuelta $vuelta): void
     {
@@ -203,78 +172,41 @@ class AsignadorVueltas
 
         $vuelta->update([
             'estado' => EstadoVuelta::Cerrada,
-            'fin' => $ultimaGuia ?? $vuelta->inicio,
+            'fin' => $vuelta->llegada_el ?? $ultimaGuia ?? $vuelta->inicio,
         ]);
     }
 
-    private function agregarParada(
-        Vuelta $vuelta,
-        Viaje $guia,
-        ?ZonaRuta $origen,
-        ?ZonaRuta $destino,
-        ?SentidoTramo $sentido = null,
-        bool $fueraDePrograma = false,
-    ): ParadaVuelta {
-        return $this->crearParada($vuelta, [
-            'sentido' => $sentido ?? $this->sentidoDe($vuelta, $origen, $destino),
-            'zona_origen' => $origen,
-            'zona_destino' => $destino,
+    private function paradaNoProgramada(Vuelta $vuelta, Viaje $guia, SentidoTramo $sentido): ParadaVuelta
+    {
+        // Va al final de su tramo: las de ida antes que las de regreso.
+        $paradas = $vuelta->paradas()->get();
+        $ultimaDelTramo = $paradas->where('sentido', $sentido)->max('orden');
+        $orden = $ultimaDelTramo === null
+            ? ($sentido === SentidoTramo::Ida ? 1 : (int) $paradas->max('orden') + 1)
+            : (int) $ultimaDelTramo + 1;
+
+        $vuelta->paradas()->where('orden', '>=', $orden)->increment('orden');
+
+        return $vuelta->paradas()->create([
+            'sentido' => $sentido,
+            'orden' => $orden,
+            'zona_origen' => ZonaRuta::desdeDireccion($guia->origen),
+            'zona_destino' => ZonaRuta::desdeDireccion($guia->destino),
             'lugar_origen' => $this->lugar($guia->origen),
             'lugar_destino' => $this->lugar($guia->destino),
             'tipo_carga' => $guia->tipo_carga,
             'cliente_id' => $guia->cliente_id,
             'cliente' => $guia->cliente,
             'fecha' => $guia->fecha_traslado,
-            'fuera_de_programa' => $fueraDePrograma,
+            'fuera_de_programa' => true,
         ]);
     }
 
     /**
-     * @param  array<string, mixed>  $datos
+     * Lo que la GR le dice a la parada y al ticket: el lugar real, la fecha
+     * y que la unidad ya salió.
      */
-    private function crearParada(Vuelta $vuelta, array $datos): ParadaVuelta
-    {
-        $orden = (int) $vuelta->paradas()->reorder()->max('orden') + 1;
-
-        return $vuelta->paradas()->create([...$datos, 'orden' => $orden]);
-    }
-
-    /**
-     * Ver `SentidoTramo::entre()`: sale de la sierra, ida; llega a la sierra,
-     * regreso; de costa a costa, el tramo en que va la vuelta.
-     */
-    private function sentidoDe(?Vuelta $vuelta, ?ZonaRuta $origen, ?ZonaRuta $destino): SentidoTramo
-    {
-        // El regreso empezó si ya tiene algo recorrido (una GR o un vacío), no
-        // si solo está planeado.
-        $yaEmpezoElRegreso = (bool) $vuelta?->paradas()
-            ->where('sentido', SentidoTramo::Regreso)
-            ->where(fn ($query) => $query->whereHas('viajes')->orWhere('tipo_carga', TipoCarga::Vacio))
-            ->exists();
-
-        return SentidoTramo::entre($origen, $destino, $yaEmpezoElRegreso);
-    }
-
-    /**
-     * Una parada recibe la GR si todavía no tiene ninguna o si la suya es de
-     * la misma carga (los materiales salen con varias GR el mismo día).
-     */
-    private function admiteLaGuia(ParadaVuelta $parada, Viaje $guia): bool
-    {
-        $ultima = $parada->viajes()->max('fecha_traslado');
-
-        if ($ultima === null) {
-            return ! $parada->esVacio();
-        }
-
-        return Carbon::parse($ultima)->diffInDays($guia->fecha_traslado, absolute: true) <= self::DIAS_MISMA_PARADA;
-    }
-
-    /**
-     * Lo que la GR le dice a la parada y a la vuelta: el lugar real, la fecha
-     * en que se hizo y que la vuelta ya está andando.
-     */
-    private function alLlegarLaGuia(ParadaVuelta $parada, Viaje $guia): void
+    private function alLlegarLaGuia(ParadaVuelta $parada, Vuelta $vuelta, Viaje $guia): void
     {
         $parada->update([
             'lugar_origen' => $parada->lugar_origen ?? $this->lugar($guia->origen),
@@ -284,56 +216,24 @@ class AsignadorVueltas
             'fecha' => $parada->fecha ?? $guia->fecha_traslado,
         ]);
 
-        $vuelta = $parada->vuelta;
-        $cambios = [];
-
-        // La primera GR de un ticket programado: la unidad salió.
         $salio = $vuelta->estado === EstadoVuelta::Programada && $vuelta->origen === OrigenVuelta::Programacion;
+        $cambios = [];
 
         if ($vuelta->estado === EstadoVuelta::Programada) {
             $cambios['estado'] = EstadoVuelta::EnCurso;
         }
 
-        if ($guia->tipo_carga !== TipoCarga::Particular && $vuelta->tipo !== TipoVuelta::Mina) {
+        if (! in_array($guia->tipo_carga, [TipoCarga::Particular, TipoCarga::Vacio], true) && $vuelta->tipo !== TipoVuelta::Mina) {
             $cambios['tipo'] = TipoVuelta::Mina;
-        }
-
-        // La fecha de salida de una programada es la planeada; la del
-        // historial es la de su primera GR.
-        if ($vuelta->origen === OrigenVuelta::Historial
-            && ($vuelta->inicio === null || $guia->fecha_traslado->lt($vuelta->inicio))) {
-            $cambios['inicio'] = $guia->fecha_traslado;
         }
 
         if ($cambios !== []) {
             $vuelta->update($cambios);
         }
 
-        $this->cerrarLasAnteriores($vuelta);
-
         if ($salio) {
             app(AlertasDelTicket::class)->salio($vuelta);
         }
-    }
-
-    /**
-     * Si la vuelta ya anda, la anterior de la unidad terminó: pasa cuando
-     * las GR del viaje anterior se registran después de programar el
-     * siguiente, y sin esto la unidad quedaría con dos vueltas en curso.
-     */
-    private function cerrarLasAnteriores(Vuelta $vuelta): void
-    {
-        if ($vuelta->estado !== EstadoVuelta::EnCurso || $vuelta->inicio === null) {
-            return;
-        }
-
-        Vuelta::query()
-            ->where('tracto_id', $vuelta->tracto_id)
-            ->where('estado', EstadoVuelta::EnCurso)
-            ->whereKeyNot($vuelta->id)
-            ->whereDate('inicio', '<', $vuelta->inicio->toDateString())
-            ->get()
-            ->each(fn (Vuelta $anterior) => $this->cerrar($anterior));
     }
 
     /**

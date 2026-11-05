@@ -120,6 +120,18 @@ class GuardarVueltaRequest extends FormRequest
                     $validator->errors()->add('tracto_id', "La unidad ya tiene el ticket {$otra->codigo} por salir el {$otra->inicio?->format('d/m')}: edítalo en vez de programar otro.");
                 }
 
+                // El siguiente se programa cuando la unidad volvió: mientras
+                // anda, su ticket sigue abierto y nada lo cierra solo.
+                $enRuta = $vuelta !== null ? null : Vuelta::query()
+                    ->where('tracto_id', $this->integer('tracto_id'))
+                    ->where('estado', EstadoVuelta::EnCurso)
+                    ->whereNull('llegada_el')
+                    ->first();
+
+                if ($enRuta !== null) {
+                    $validator->errors()->add('tracto_id', "La unidad sigue en ruta con el ticket {$enRuta->codigo}: registra su llegada a la base antes de programar el siguiente.");
+                }
+
                 // Con GR, la salida no puede quedar después de la primera:
                 // un día de holgura, como al asignar las GR.
                 $primera = $vuelta === null ? null : Viaje::query()

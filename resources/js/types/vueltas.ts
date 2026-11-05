@@ -137,6 +137,8 @@ export type RevisionTaller = {
     disponible_estimado: string | null;
     motivo: string | null;
     trabajos: string | null;
+    /** El km con que sale la unidad. */
+    kilometraje: number | null;
     por: string | null;
     en: string;
 };
@@ -159,7 +161,15 @@ export type TarjetaVuelta = Vuelta & {
     taller_anteriores: RevisionTaller[];
     /** Si el usuario puede dar el apto o no apto. */
     revisable: boolean;
-    /** Puede ponerle el candado: ya no recibe combustible ni viáticos. */
+    /** La llegada a la base, como la registró una persona. */
+    llegada: { fecha: string; km: number | null; por: string | null } | null;
+    /** Cuándo debería llegar (solo en vuelta): referencia para el atraso. */
+    llegada_prevista: string | null;
+    /** Ya pasó el día en que debía llegar y nadie registró la llegada. */
+    atrasada: boolean;
+    /** Puede registrar (o corregir) la llegada a la base. */
+    registrable_llegada: boolean;
+    /** Puede liquidarlo y cerrarlo: ya llegó a la base. */
     cerrable: boolean;
     /** Puede quitarle el candado (solo el último ticket de la unidad). */
     reabrible: boolean;
@@ -202,4 +212,34 @@ export type GuiaTicket = {
     cliente: string;
     peso: number;
     unidad_peso: string;
+    /** Entró como parada que no estaba programada. */
+    no_programada: boolean;
+    asignada_por: string | null;
+    asignada_at: string | null;
+    /** Se puede sacar del ticket (vuelve a la bandeja). */
+    quitable: boolean;
+};
+
+/** La liquidación del ticket: lo autorizado contra lo real, y qué falta para cerrarlo. */
+export type LiquidacionTicket = {
+    /** Lo que impide cerrarlo. */
+    pendientes: string[];
+    /** Lo que no impide cerrarlo, pero conviene revisar. */
+    avisos: string[];
+    puede_cerrar: boolean;
+    combustible: {
+        autorizado: number;
+        despachado: number;
+        diferencia: number;
+        importe: number;
+    };
+    viaticos: { depositado: number; pendiente: number };
+    km: {
+        salida: number | null;
+        llegada: number | null;
+        recorridos: number | null;
+    };
+    /** Km por galón despachado; null sin los dos kilometrajes. */
+    rendimiento: number | null;
+    total: number;
 };

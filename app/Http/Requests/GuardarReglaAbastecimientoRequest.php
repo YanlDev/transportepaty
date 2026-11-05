@@ -42,9 +42,19 @@ class GuardarReglaAbastecimientoRequest extends FormRequest
             'lineas.*.tipo' => ['required', Rule::enum(TipoLineaAbastecimiento::class)],
             'lineas.*.concepto' => ['required', 'string', 'max:100'],
             'lineas.*.punto_abastecimiento_id' => ['nullable', Rule::exists('puntos_abastecimiento', 'id')],
-            'lineas.*.galones' => ['nullable', 'numeric', 'min:0', 'max:999'],
-            'lineas.*.tanque_lleno' => ['boolean'],
+            // Sin «tanque lleno»: cada línea de combustible dice sus galones.
+            'lineas.*.galones' => ['nullable', 'required_if:lineas.*.tipo,'.TipoLineaAbastecimiento::Combustible->value, 'numeric', 'min:0.1', 'max:999'],
             'lineas.*.monto' => ['nullable', 'numeric', 'min:0', 'max:99999'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'lineas.*.galones.required_if' => 'Escribe los galones de cada línea de combustible.',
         ];
     }
 

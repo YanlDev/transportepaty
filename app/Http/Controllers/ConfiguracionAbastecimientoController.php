@@ -9,21 +9,19 @@ use App\Enums\ZonaRuta;
 use App\Http\Requests\GuardarPuntoAbastecimientoRequest;
 use App\Http\Requests\GuardarReglaAbastecimientoRequest;
 use App\Models\Abastecimiento;
-use App\Models\Ajuste;
 use App\Models\LineaReglaAbastecimiento;
 use App\Models\PuntoAbastecimiento;
 use App\Models\ReglaAbastecimiento;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * La pizarra de abastecimiento hecha pantalla: los puntos donde se carga,
- * cuántos galones son un tanque lleno y las tarjetas de dotación. Cambiar
- * un monto es editar la tarjeta, no tocar código.
+ * La pizarra de abastecimiento hecha pantalla: los puntos donde se carga y
+ * las tarjetas de dotación. Cambiar un monto es editar la tarjeta, no tocar
+ * código; los tickets que ya confirmaron su tarjeta no cambian.
  */
 class ConfiguracionAbastecimientoController extends Controller
 {
@@ -50,7 +48,6 @@ class ConfiguracionAbastecimientoController extends Controller
             ->pluck('precio_galon', 'punto_abastecimiento_id');
 
         return Inertia::render('abastecimiento/configuracion', [
-            'galonesTanqueLleno' => Ajuste::valor(Ajuste::GALONES_TANQUE_LLENO),
             'puntos' => PuntoAbastecimiento::query()
                 ->enOrden()
                 ->get()
@@ -90,7 +87,6 @@ class ConfiguracionAbastecimientoController extends Controller
                             'punto_abastecimiento_id' => $linea->punto_abastecimiento_id,
                             'punto' => $linea->punto?->nombre,
                             'galones' => $linea->galones === null ? null : (float) $linea->galones,
-                            'tanque_lleno' => $linea->tanque_lleno,
                             'monto' => $linea->monto === null ? null : (float) $linea->monto,
                         ])
                         ->all(),
@@ -106,17 +102,6 @@ class ConfiguracionAbastecimientoController extends Controller
                 'tiposLinea' => TipoLineaAbastecimiento::options(),
             ],
         ]);
-    }
-
-    public function actualizarTanque(Request $request): RedirectResponse
-    {
-        $this->authorize('configurar', Abastecimiento::class);
-
-        $request->validate(['galones' => ['nullable', 'numeric', 'min:1', 'max:999']]);
-
-        Ajuste::guardar(Ajuste::GALONES_TANQUE_LLENO, $request->filled('galones') ? (string) $request->float('galones') : null);
-
-        return back()->with('toast', ['type' => 'success', 'message' => 'Tanque lleno actualizado.']);
     }
 
     public function storePunto(GuardarPuntoAbastecimientoRequest $request): RedirectResponse
@@ -218,14 +203,12 @@ class ConfiguracionAbastecimientoController extends Controller
 
         foreach ($lineas as $orden => $linea) {
             $esCombustible = $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value;
-            $lleno = $esCombustible && (bool) ($linea['tanque_lleno'] ?? false);
 
             $regla->lineas()->create([
                 'tipo' => $linea['tipo'],
                 'concepto' => $linea['concepto'],
                 'punto_abastecimiento_id' => $esCombustible ? ($linea['punto_abastecimiento_id'] ?? null) : null,
-                'galones' => $esCombustible && ! $lleno ? ($linea['galones'] ?? null) : null,
-                'tanque_lleno' => $lleno,
+                'galones' => $esCombustible ? ($linea['galones'] ?? null) : null,
                 'monto' => $esCombustible ? null : ($linea['monto'] ?? null),
                 'orden' => $orden + 1,
             ]);

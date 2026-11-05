@@ -22,12 +22,13 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $disponible_estimado
  * @property string|null $motivo
  * @property string|null $trabajos
+ * @property int|null $kilometraje El km con que sale la unidad.
  * @property int|null $user_id
  * @property Carbon $created_at
  * @property-read Vuelta $vuelta
  * @property-read User|null $usuario
  */
-#[Fillable(['vuelta_id', 'resultado', 'disponible_estimado', 'motivo', 'trabajos', 'user_id'])]
+#[Fillable(['vuelta_id', 'resultado', 'disponible_estimado', 'motivo', 'trabajos', 'kilometraje', 'user_id'])]
 class RevisionTaller extends Model
 {
     /** @use HasFactory<RevisionTallerFactory> */
@@ -64,7 +65,7 @@ class RevisionTaller extends Model
     /**
      * Lo que se muestra en el ticket. Necesita `usuario` cargado.
      *
-     * @return array{resultado: string, resultado_label: string, disponible_estimado: string|null, motivo: string|null, trabajos: string|null, por: string|null, en: string}
+     * @return array{resultado: string, resultado_label: string, disponible_estimado: string|null, motivo: string|null, trabajos: string|null, kilometraje: int|null, por: string|null, en: string}
      */
     public function resumen(): array
     {
@@ -74,6 +75,7 @@ class RevisionTaller extends Model
             'disponible_estimado' => $this->disponible_estimado?->format('Y-m-d H:i'),
             'motivo' => $this->motivo,
             'trabajos' => $this->trabajos,
+            'kilometraje' => $this->kilometraje,
             'por' => $this->usuario?->name,
             'en' => $this->created_at->format('Y-m-d H:i'),
         ];
@@ -87,6 +89,7 @@ class RevisionTaller extends Model
         return [
             'resultado' => ResultadoTaller::class,
             'disponible_estimado' => 'datetime',
+            'kilometraje' => 'integer',
         ];
     }
 }

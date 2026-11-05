@@ -82,7 +82,7 @@ it('shows fuel what leaves without its fuel, only once the workshop said yes', f
         ->and(collect($pendientes)->pluck('items')->flatten(1)->pluck('texto')->implode(' '))->not->toContain($sinOk->codigo);
 });
 
-it('shows programming the late departures, the returns to define and what to lock', function (): void {
+it('shows programming the late departures, the returns to define, the late arrivals and what to settle', function (): void {
     ticketMinaPisco(['inicio' => now()->subDays(3)->toDateString()]);
 
     $enIda = ticketMinaPisco(['estado' => EstadoVuelta::EnCurso]);
@@ -99,10 +99,28 @@ it('shows programming the late departures, the returns to define and what to loc
 
     $pendientes = pendientesDe('admin');
 
+    // Ya debía haber llegado, pero nadie registró la llegada.
     expect($pendientes['atrasadas']['cantidad'])->toBe(1)
         ->and($pendientes['regresos']['cantidad'])->toBe(1)
+        ->and($pendientes['llegadas']['cantidad'])->toBe(1)
+        ->and($pendientes['por_cerrar']['cantidad'])->toBe(0);
+
+    $llego->update(['llegada_el' => now()->subDay()->toDateString()]);
+    $pendientes = pendientesDe('admin');
+
+    expect($pendientes['llegadas']['cantidad'])->toBe(0)
         ->and($pendientes['por_cerrar']['cantidad'])->toBe(1)
         ->and($pendientes['en_base']['cantidad'])->toBe(1);
+});
+
+it('shows programming the GR that wait for a ticket', function (): void {
+    Viaje::factory()->create(['tracto_id' => null, 'numero_gr' => 'EG03-00099999']);
+    Viaje::factory()->create(['tracto_id' => null, 'sin_ticket_at' => now(), 'motivo_sin_ticket' => 'En ruta']);
+
+    $pendientes = pendientesDe('admin');
+
+    expect($pendientes['guias_por_asignar']['cantidad'])->toBe(1)
+        ->and($pendientes['guias_por_asignar']['items'][0]['texto'])->toContain('EG03-00099999');
 });
 
 it('shows billing only the GR without invoice', function (): void {

@@ -1,7 +1,14 @@
 import { Head, Link, setLayoutProps, usePoll } from '@inertiajs/react';
-import { CalendarCheck, CalendarPlus, Search, Settings } from 'lucide-react';
+import {
+    CalendarCheck,
+    CalendarPlus,
+    FileStack,
+    Search,
+    Settings,
+} from 'lucide-react';
 import { useMemo, useState } from 'react';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionProgramacionController';
+import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Button } from '@/components/ui/button';
@@ -26,6 +33,8 @@ type Props = OpcionesVuelta & {
     fecha: string;
     /** Cada ticket abierto en su etapa, y las unidades en base. */
     tablero: TarjetaVuelta[];
+    /** Las GR que todavía no están en ningún ticket. */
+    guiasPorAsignar: number;
 };
 
 type Vista = 'seguimiento' | 'tablero' | 'gantt';
@@ -55,7 +64,12 @@ function filtrar(lista: TarjetaVuelta[], buscar: string): TarjetaVuelta[] {
  * —por salir, en ida, en vuelta, en base— como Gantt o como lista. Clic en
  * un ticket abre su detalle.
  */
-export default function Programacion({ fecha, tablero, ...opciones }: Props) {
+export default function Programacion({
+    fecha,
+    tablero,
+    guiasPorAsignar,
+    ...opciones
+}: Props) {
     const { puede } = usePermisos();
     const [vista, setVista] = useState<Vista>('seguimiento');
     const [etapa, setEtapa] = useState<EtapaVuelta | null>(null);
@@ -67,9 +81,9 @@ export default function Programacion({ fecha, tablero, ...opciones }: Props) {
         breadcrumbs: [{ title: 'Programación', href: vueltas.index().url }],
     });
 
-    // Cada 15 segundos: las unidades cambian de etapa solas cuando llegan
-    // sus GR.
-    usePoll(15_000, { only: ['tablero'] });
+    // Cada 15 segundos: lo que otras áreas registran (GR asignadas, OK de
+    // taller, llegadas) se ve sin recargar.
+    usePoll(15_000, { only: ['tablero', 'guiasPorAsignar'] });
 
     const filtradas = useMemo(
         () => filtrar(tablero, buscar),
@@ -177,6 +191,19 @@ export default function Programacion({ fecha, tablero, ...opciones }: Props) {
                             className="pl-8"
                         />
                     </div>
+                    <Button variant="outline" asChild>
+                        <Link href={guiasRutas.index().url}>
+                            <FileStack className="size-4" />
+                            <span className="max-sm:hidden">
+                                GR por asignar
+                            </span>
+                            {guiasPorAsignar > 0 && (
+                                <span className="rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white tabular-nums">
+                                    {guiasPorAsignar}
+                                </span>
+                            )}
+                        </Link>
+                    </Button>
                     {puede('programacion.configurar') && (
                         <Button variant="outline" size="icon" asChild>
                             <Link

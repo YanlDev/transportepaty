@@ -4,18 +4,22 @@ import {
     ChevronRight,
     CircleAlert,
     Fuel,
+    House,
     Lock,
     LockOpen,
     Pencil,
+    Undo2,
 } from 'lucide-react';
 import { useState } from 'react';
 import abastecimientoRutas from '@/actions/App/Http/Controllers/AbastecimientoController';
+import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import vueltasRutas from '@/actions/App/Http/Controllers/VueltaController';
 import {
     BarraCombustible,
     galones,
     soles,
 } from '@/components/abastecimiento/barra-combustible';
+import { CombustiblesDelTicket } from '@/components/abastecimiento/combustible-ticket';
 import { Placa } from '@/components/placa';
 import { TallerVuelta } from '@/components/taller/taller-vuelta';
 import { Button } from '@/components/ui/button';
@@ -31,6 +35,7 @@ import {
 import { AvisosVuelta } from '@/components/vueltas/avisos-vuelta';
 import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
+import { LlegadaDialog } from '@/components/vueltas/llegada-dialog';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
 import {
     EstadoVueltaBadge,
@@ -40,10 +45,15 @@ import { usePermisos } from '@/hooks/use-permisos';
 import { colorDeSentido } from '@/lib/etapas';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { TramoCombustible, ViaticoTicket } from '@/types/abastecimiento';
+import type {
+    CombustibleDelTicket,
+    TramoCombustible,
+    ViaticoTicket,
+} from '@/types/abastecimiento';
 import type {
     AvisoVuelta,
     GuiaTicket,
+    LiquidacionTicket,
     OpcionesVuelta,
     PasoTicket,
     TarjetaVuelta,
@@ -52,21 +62,12 @@ import type {
 type Gastos = {
     tramos: TramoCombustible[];
     total_registrado: number;
+    total_despachado: number;
     importe_registrado: number;
     viaticos: ViaticoTicket[];
     viatico_depositado: number;
     viatico_pendiente: number;
-    abastecimientos: {
-        id: number;
-        fecha: string;
-        punto: string | null;
-        fuera_de_lista: boolean;
-        galones: number;
-        tanque_lleno: boolean;
-        precio_galon: number | null;
-        importe: number | null;
-        registrado_por: string | null;
-    }[];
+    abastecimientos: CombustibleDelTicket[];
 };
 
 type Props = OpcionesVuelta & {
@@ -75,13 +76,20 @@ type Props = OpcionesVuelta & {
     /** El paso en el que va: el primero sin terminar. */
     actual: PasoTicket['clave'] | null;
     gastos: Gastos;
+    liquidacion: LiquidacionTicket;
     guias: GuiaTicket[];
     aviso: AvisoVuelta;
     puedeAvisar: boolean;
     whatsappConectado: boolean;
 };
 
-type Pestana = 'recorrido' | 'taller' | 'gastos' | 'guias' | 'costo' | 'avisos';
+type Pestana =
+    | 'recorrido'
+    | 'taller'
+    | 'gastos'
+    | 'guias'
+    | 'liquidacion'
+    | 'avisos';
 
 /** El color de cada estado de un paso, igual en todo el sistema. */
 const ESTILO_PASO: Record<PasoTicket['estado'], string> = {
@@ -218,6 +226,7 @@ export default function ExpedienteTicket({
     pasos,
     actual,
     gastos,
+    liquidacion,
     guias,
     aviso,
     puedeAvisar,
@@ -227,6 +236,7 @@ export default function ExpedienteTicket({
     const { puede } = usePermisos();
     const [pestana, setPestana] = useState<Pestana>('recorrido');
     const [editando, setEditando] = useState(false);
+    const [llegando, setLlegando] = useState(false);
 
     setLayoutProps({
         breadcrumbs: [
@@ -238,10 +248,6 @@ export default function ExpedienteTicket({
         ],
     });
 
-    const sinPrecio = gastos.abastecimientos.some(
-        (registro) => registro.importe === null,
-    );
-    const gastoTotal = gastos.importe_registrado + gastos.viatico_depositado;
     const enAbastecimiento =
         puede('abastecimiento.ver') || puede('abastecimiento.viaticos');
 
@@ -250,7 +256,7 @@ export default function ExpedienteTicket({
         { valor: 'taller', titulo: 'Taller' },
         { valor: 'gastos', titulo: 'Combustible y viáticos' },
         { valor: 'guias', titulo: `GR (${guias.length})` },
-        { valor: 'costo', titulo: 'Costo' },
+        { valor: 'liquidacion', titulo: 'Liquidación' },
         { valor: 'avisos', titulo: 'Avisos' },
     ];
 
@@ -286,6 +292,31 @@ export default function ExpedienteTicket({
                         {ticket.carreta &&
                             ` · carreta ${formatearPlaca(ticket.carreta)}`}
                     </p>
+                    {ticket.llegada ? (
+                        <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                            Llegó a la base el{' '}
+                            {formatearFecha(ticket.llegada.fecha)}
+                            {ticket.llegada.km !== null &&
+                                ` con ${ticket.llegada.km.toLocaleString('es-PE')} km`}
+                            {ticket.llegada.por && ` · ${ticket.llegada.por}`}
+                        </p>
+                    ) : (
+                        ticket.llegada_prevista && (
+                            <p
+                                className={cn(
+                                    'text-sm',
+                                    ticket.atrasada
+                                        ? 'font-medium text-red-700 dark:text-red-400'
+                                        : 'text-muted-foreground',
+                                )}
+                            >
+                                Debería llegar el{' '}
+                                {formatearFecha(ticket.llegada_prevista)}
+                                {ticket.atrasada &&
+                                    ': ya pasó, registra la llegada o revisa el atraso'}
+                            </p>
+                        )
+                    )}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
@@ -299,26 +330,26 @@ export default function ExpedienteTicket({
                             Editar
                         </Button>
                     )}
+                    {ticket.registrable_llegada && (
+                        <Button
+                            variant={ticket.llegada ? 'ghost' : 'outline'}
+                            size="sm"
+                            onClick={() => setLlegando(true)}
+                        >
+                            <House className="size-3.5" />
+                            {ticket.llegada
+                                ? 'Corregir llegada'
+                                : 'Registrar llegada'}
+                        </Button>
+                    )}
                     {ticket.cerrable && (
                         <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => {
-                                if (
-                                    window.confirm(
-                                        `¿Cerrar el ticket ${ticket.codigo}? Ya no se le podrá registrar combustible ni viáticos.`,
-                                    )
-                                ) {
-                                    router.post(
-                                        vueltasRutas.cerrar(ticket.id).url,
-                                        {},
-                                        { preserveScroll: true },
-                                    );
-                                }
-                            }}
+                            onClick={() => setPestana('liquidacion')}
                         >
                             <Lock className="size-3.5" />
-                            Cerrar ticket
+                            Liquidar y cerrar
                         </Button>
                     )}
                     {ticket.reabrible && (
@@ -408,8 +439,8 @@ export default function ExpedienteTicket({
                     <div className="flex flex-col gap-5">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <p className="text-sm text-muted-foreground">
-                                Lo que dice la pizarra contra lo que se
-                                registró.
+                                La tarjeta confirmada de cada tramo contra lo
+                                autorizado y lo que dicen los vouchers.
                             </p>
                             {enAbastecimiento && (
                                 <Button size="sm" asChild>
@@ -421,7 +452,7 @@ export default function ExpedienteTicket({
                                         }
                                     >
                                         <Fuel className="size-3.5" />
-                                        Registrar en Abastecimiento
+                                        Gestionar en Abastecimiento
                                     </Link>
                                 </Button>
                             )}
@@ -432,72 +463,11 @@ export default function ExpedienteTicket({
                                 Combustible
                             </h3>
                             <BarraCombustible tramos={gastos.tramos} />
-                            {gastos.abastecimientos.length > 0 && (
-                                <div className="overflow-x-auto rounded-xl border">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow className="hover:bg-transparent">
-                                                <TableHead>Fecha</TableHead>
-                                                <TableHead>Punto</TableHead>
-                                                <TableHead className="text-right">
-                                                    Galones
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    S/ gal
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Importe
-                                                </TableHead>
-                                                <TableHead>Registró</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {gastos.abastecimientos.map(
-                                                (registro) => (
-                                                    <TableRow key={registro.id}>
-                                                        <TableCell className="tabular-nums">
-                                                            {formatearFecha(
-                                                                registro.fecha,
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell>
-                                                            {registro.punto ??
-                                                                '—'}
-                                                            {registro.fuera_de_lista && (
-                                                                <span className="ml-1.5 rounded border border-dashed px-1 text-[10px] text-muted-foreground">
-                                                                    fuera de
-                                                                    lista
-                                                                </span>
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell className="text-right tabular-nums">
-                                                            {galones(
-                                                                registro.galones,
-                                                            )}
-                                                            {registro.tanque_lleno &&
-                                                                ' (full)'}
-                                                        </TableCell>
-                                                        <TableCell className="text-right text-muted-foreground tabular-nums">
-                                                            {registro.precio_galon?.toFixed(
-                                                                3,
-                                                            ) ?? '—'}
-                                                        </TableCell>
-                                                        <TableCell className="text-right tabular-nums">
-                                                            {soles(
-                                                                registro.importe,
-                                                            )}
-                                                        </TableCell>
-                                                        <TableCell className="text-muted-foreground">
-                                                            {registro.registrado_por ??
-                                                                '—'}
-                                                        </TableCell>
-                                                    </TableRow>
-                                                ),
-                                            )}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
+                            <CombustiblesDelTicket
+                                registros={gastos.abastecimientos}
+                                puedeGestionar={false}
+                                onAccion={() => undefined}
+                            />
                         </section>
 
                         <section className="flex flex-col gap-2">
@@ -568,8 +538,15 @@ export default function ExpedienteTicket({
                 {pestana === 'guias' &&
                     (guias.length === 0 ? (
                         <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                            Todavía no tiene GR. Cuando se suba la de ida, cae
-                            sola en su parada.
+                            Todavía no tiene GR. Se suben en Guías y se asignan
+                            al ticket desde{' '}
+                            <Link
+                                href={guiasRutas.index().url}
+                                className="underline underline-offset-2"
+                            >
+                                GR por asignar
+                            </Link>
+                            .
                         </p>
                     ) : (
                         <div className="overflow-x-auto rounded-xl border">
@@ -584,6 +561,8 @@ export default function ExpedienteTicket({
                                         <TableHead className="text-right">
                                             Peso
                                         </TableHead>
+                                        <TableHead>Asignó</TableHead>
+                                        <TableHead className="w-0" />
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -611,6 +590,11 @@ export default function ExpedienteTicket({
                                                         : 'Vuelta'}
                                                 </span>
                                                 {guia.tramo}
+                                                {guia.no_programada && (
+                                                    <span className="ml-1.5 rounded border border-dashed border-amber-400 px-1 text-[10px] text-amber-700 dark:text-amber-400">
+                                                        no programada
+                                                    </span>
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 {guia.tipo_carga_label}
@@ -624,6 +608,39 @@ export default function ExpedienteTicket({
                                                     ? 'kg'
                                                     : 't'}
                                             </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground">
+                                                {guia.asignada_por ?? '—'}
+                                                {guia.asignada_at &&
+                                                    ` · ${fechaCorta(guia.asignada_at)}`}
+                                            </TableCell>
+                                            <TableCell>
+                                                {guia.quitable && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        title="Sacarla del ticket: vuelve a la bandeja de GR por asignar"
+                                                        onClick={() => {
+                                                            if (
+                                                                window.confirm(
+                                                                    `¿Sacar la GR ${guia.numero_gr} del ticket ${ticket.codigo}? Vuelve a la bandeja.`,
+                                                                )
+                                                            ) {
+                                                                router.delete(
+                                                                    guiasRutas.quitar(
+                                                                        guia.id,
+                                                                    ).url,
+                                                                    {
+                                                                        preserveScroll: true,
+                                                                    },
+                                                                );
+                                                            }
+                                                        }}
+                                                    >
+                                                        <Undo2 className="size-3.5" />
+                                                        Sacar
+                                                    </Button>
+                                                )}
+                                            </TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -631,34 +648,100 @@ export default function ExpedienteTicket({
                         </div>
                     ))}
 
-                {pestana === 'costo' && (
-                    <div className="flex flex-col gap-3">
-                        <div className="grid gap-3 sm:grid-cols-3">
+                {pestana === 'liquidacion' && (
+                    <div className="flex flex-col gap-4">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <Tarjeta
                                 titulo="Combustible"
-                                valor={soles(gastos.importe_registrado)}
-                                detalle={`${galones(gastos.total_registrado)} autorizados`}
+                                valor={soles(liquidacion.combustible.importe)}
+                                detalle={`${galones(liquidacion.combustible.autorizado)} autorizados · ${galones(liquidacion.combustible.despachado)} despachados`}
                             />
                             <Tarjeta
                                 titulo="Viáticos depositados"
-                                valor={soles(gastos.viatico_depositado)}
+                                valor={soles(liquidacion.viaticos.depositado)}
                                 detalle={
-                                    gastos.viatico_pendiente > 0
-                                        ? `Faltan ${soles(gastos.viatico_pendiente)} según la pizarra`
+                                    liquidacion.viaticos.pendiente > 0
+                                        ? `Faltan ${soles(liquidacion.viaticos.pendiente)} de la tarjeta`
                                         : undefined
                                 }
                             />
                             <Tarjeta
+                                titulo="Recorrido"
+                                valor={
+                                    liquidacion.km.recorridos === null
+                                        ? '—'
+                                        : `${liquidacion.km.recorridos.toLocaleString('es-PE')} km`
+                                }
+                                detalle={
+                                    liquidacion.rendimiento === null
+                                        ? 'Falta el km de salida o de llegada'
+                                        : `${liquidacion.rendimiento.toFixed(2)} km por galón`
+                                }
+                            />
+                            <Tarjeta
                                 titulo="Gasto del ticket"
-                                valor={soles(gastoTotal)}
+                                valor={soles(liquidacion.total)}
                                 detalle="Combustible + viáticos"
                             />
                         </div>
-                        {sinPrecio && (
-                            <p className="text-xs text-amber-700 dark:text-amber-400">
-                                Hay combustible registrado sin precio: no suma
-                                en soles.
+
+                        {liquidacion.combustible.diferencia !== 0 && (
+                            <p className="text-sm text-muted-foreground">
+                                Los vouchers dicen{' '}
+                                {liquidacion.combustible.diferencia > 0
+                                    ? 'más'
+                                    : 'menos'}{' '}
+                                que lo autorizado:{' '}
+                                {galones(
+                                    Math.abs(
+                                        liquidacion.combustible.diferencia,
+                                    ),
+                                )}
+                                .
                             </p>
+                        )}
+
+                        {liquidacion.pendientes.length > 0 && (
+                            <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                                <p className="font-medium">
+                                    Para cerrar el ticket falta:
+                                </p>
+                                <ul className="mt-1 list-disc pl-5">
+                                    {liquidacion.pendientes.map((pendiente) => (
+                                        <li key={pendiente}>{pendiente}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
+                        {liquidacion.avisos.length > 0 && (
+                            <ul className="list-disc pl-5 text-sm text-muted-foreground">
+                                {liquidacion.avisos.map((aviso) => (
+                                    <li key={aviso}>{aviso}</li>
+                                ))}
+                            </ul>
+                        )}
+
+                        {ticket.cerrable && (
+                            <Button
+                                className="self-start"
+                                disabled={!liquidacion.puede_cerrar}
+                                onClick={() => {
+                                    if (
+                                        window.confirm(
+                                            `¿Liquidar y cerrar el ticket ${ticket.codigo}? Ya no se le podrá registrar nada; para corregir habrá que reabrirlo.`,
+                                        )
+                                    ) {
+                                        router.post(
+                                            vueltasRutas.cerrar(ticket.id).url,
+                                            {},
+                                            { preserveScroll: true },
+                                        );
+                                    }
+                                }}
+                            >
+                                <Lock className="size-4" />
+                                Liquidar y cerrar
+                            </Button>
                         )}
                     </div>
                 )}
@@ -671,6 +754,13 @@ export default function ExpedienteTicket({
                     />
                 )}
             </div>
+
+            {llegando && (
+                <LlegadaDialog
+                    ticket={ticket}
+                    onCerrar={() => setLlegando(false)}
+                />
+            )}
 
             {editando && (
                 <ProgramarVueltaDialog

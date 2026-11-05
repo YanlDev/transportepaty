@@ -14,6 +14,7 @@ use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
 use App\Models\Viatico;
 use App\Models\Vuelta;
+use App\Services\DotacionVuelta;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -38,7 +39,11 @@ beforeEach(function (): void {
     ]);
     RevisionTaller::factory()->create(['vuelta_id' => $this->vuelta->id]);
 
-    $lineas = ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole()->lineas->keyBy('concepto');
+    // Los viáticos de la pizarra son los de la tarjeta confirmada del tramo.
+    $tarjeta = ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole();
+    app(DotacionVuelta::class)->confirmar($this->vuelta, SentidoTramo::Ida, $tarjeta, actorConRol('admin'));
+
+    $lineas = $tarjeta->lineas->keyBy('concepto');
     $this->viaticoMina = $lineas['Viático mina'];
     $this->viaticoLima = $lineas['Viático Lima'];
 });
@@ -63,7 +68,7 @@ it('does not deposit allowances without the workshop OK', function (): void {
 
 it('deposits a board allowance on a ticket that already has fuel at several points', function (): void {
     foreach (PuntoAbastecimiento::query()->whereIn('nombre', ['Mina', 'Kio'])->get() as $punto) {
-        Abastecimiento::factory()->create(['vehiculo_id' => $this->vuelta->tracto_id, 'vuelta_id' => $this->vuelta->id, 'punto_abastecimiento_id' => $punto->id]);
+        Abastecimiento::factory()->paraVuelta($this->vuelta)->create(['punto_abastecimiento_id' => $punto->id]);
     }
 
     depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
@@ -110,6 +115,21 @@ it('does not deposit the same board allowance twice', function (): void {
         ->assertSessionHasErrors('linea_regla_abastecimiento_id');
 
     expect(Viatico::query()->count())->toBe(1);
+});
+
+it('does not deposit a board allowance before its card is confirmed, and keeps the confirmed amount', function (): void {
+    $this->vuelta->dotaciones()->delete();
+
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
+        ->assertSessionHasErrors('linea_regla_abastecimiento_id');
+
+    app(DotacionVuelta::class)->confirmar($this->vuelta, SentidoTramo::Ida, ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole(), actorConRol('admin'));
+    $this->viaticoMina->update(['monto' => 999]);
+
+    depositar(['vuelta_id' => $this->vuelta->id, 'linea_regla_abastecimiento_id' => $this->viaticoMina->id, 'monto' => 143])
+        ->assertSessionHasNoErrors();
+
+    expect((float) Viatico::query()->sole()->monto_previsto)->toBe(143.0);
 });
 
 it('does not deposit an allowance from another card', function (): void {

@@ -6,7 +6,8 @@ use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
-use App\Models\Ajuste;
+use App\Models\DotacionTramo;
+use App\Models\LecturaKilometraje;
 use App\Models\ParadaVuelta;
 use App\Models\PuntoAbastecimiento;
 use App\Models\ReglaAbastecimiento;
@@ -49,6 +50,34 @@ function ticketApto(Vehiculo $tracto, array $atributos = []): Vuelta
 }
 
 /**
+ * Un ticket listo para abastecer la ida: OK de taller y la tarjeta de 220
+ * galones (150 Juliaca + 70 Arequipa) confirmada.
+ */
+function ticketListo(Vehiculo $tracto): Vuelta
+{
+    $vuelta = ticketApto($tracto);
+    DotacionTramo::factory()->for($vuelta)->create();
+
+    return $vuelta;
+}
+
+/**
+ * @param  array<string, mixed>  $datos
+ * @return array<string, mixed>
+ */
+function autorizacion(Vuelta $vuelta, array $datos = []): array
+{
+    return [
+        'vehiculo_id' => $vuelta->tracto_id,
+        'vuelta_id' => $vuelta->id,
+        'sentido' => 'ida',
+        'fecha' => now()->toDateString(),
+        'galones' => 50,
+        ...$datos,
+    ];
+}
+
+/**
  * Una vuelta abierta con una parada (y su GR, si se pasa la dirección).
  */
 function vueltaConParada(Vehiculo $tracto, array $parada, ?array $guia = null): Vuelta
@@ -73,19 +102,39 @@ it('loads the office board', function (): void {
         ->and(ReglaAbastecimiento::query()->where('nombre', 'like', '%Desaguadero%')->exists())->toBeFalse();
 });
 
-it('gives the descent with concentrate its board allowance', function (): void {
+it('suggests the descent with concentrate its card, and only the confirmed one counts', function (): void {
     $vuelta = vueltaConParada($this->tracto, [
         'sentido' => SentidoTramo::Ida, 'zona_origen' => ZonaRuta::Mina, 'zona_destino' => ZonaRuta::Pisco, 'tipo_carga' => TipoCarga::Concentrado,
     ]);
-    Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'punto_abastecimiento_id' => $this->mina->id, 'galones' => 100]);
+    $dotacion = app(DotacionVuelta::class);
 
-    $dotacion = app(DotacionVuelta::class)->de($vuelta, $vuelta->abastecimientos()->with('punto')->get());
+    $sinConfirmar = $dotacion->de($vuelta, new Collection);
+    $ida = collect($sinConfirmar['tramos'])->firstWhere('sentido', 'ida');
+    expect($ida['confirmada'])->toBeFalse()
+        ->and($ida['sugerida']['nombre'])->toBe('Juliaca – Mina – Lima')
+        ->and($ida['previsto'])->toBeNull()
+        ->and($sinConfirmar['viaticos'])->toBe([]);
 
-    expect($dotacion['tarjetas'][0]['nombre'])->toBe('Juliaca – Mina – Lima')
-        ->and(collect($dotacion['combustible'])->keyBy('punto')->map(fn (array $fila): array => [$fila['previsto'], $fila['registrado'], $fila['falta']])->all())
+    $dotacion->confirmar($vuelta, SentidoTramo::Ida, ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole(), actorConRol('admin'));
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['punto_abastecimiento_id' => $this->mina->id, 'galones' => 100]);
+
+    $confirmada = $dotacion->de($vuelta->fresh('paradas.viajes'), $vuelta->abastecimientos()->with('punto')->get());
+
+    expect($confirmada['tarjetas'][0]['nombre'])->toBe('Juliaca – Mina – Lima')
+        ->and(collect($confirmada['combustible'])->keyBy('punto')->map(fn (array $fila): array => [$fila['previsto'], $fila['registrado'], $fila['falta']])->all())
         ->toBe(['Mina' => [100.0, 100.0, 0.0], 'Arequipa' => [120.0, 0.0, 120.0]])
-        ->and($dotacion['total_previsto'])->toBe(220.0)
-        ->and(collect($dotacion['viaticos'])->sum('monto'))->toBe(843.0);
+        ->and($confirmada['total_previsto'])->toBe(220.0)
+        ->and(collect($confirmada['viaticos'])->sum('monto'))->toBe(843.0);
+});
+
+it('keeps what was confirmed for a ticket even if the board changes later', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $tarjeta = ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole();
+    app(DotacionVuelta::class)->confirmar($vuelta, SentidoTramo::Ida, $tarjeta, actorConRol('admin'));
+
+    $tarjeta->lineas()->where('tipo', TipoLineaAbastecimiento::Combustible)->update(['galones' => 10]);
+
+    expect($vuelta->fresh()->dotacionDe(SentidoTramo::Ida)->tope())->toBe(220.0);
 });
 
 it('prefers the most specific card: Chilca over the general private return', function (): void {
@@ -125,83 +174,146 @@ it('keeps the private return to Juliaca on its own card', function (): void {
     expect(app(DotacionVuelta::class)->reglaDe($vuelta->paradas->first())->nombre)->toBe('Retorno con material particular');
 });
 
-it('counts a full tank only once its gallons are configured', function (): void {
-    $vuelta = vueltaConParada($this->tracto, [
-        'sentido' => SentidoTramo::Regreso, 'zona_origen' => ZonaRuta::Lima, 'zona_destino' => ZonaRuta::Cusco, 'tipo_carga' => TipoCarga::Particular,
-    ]);
+it('turns the old full-tank lines into lines whose gallons are still to be set', function (): void {
+    $tarjeta = ReglaAbastecimiento::query()->where('nombre', 'Retorno por Cusco')->with('lineas.punto')->sole();
+    $kio = $tarjeta->lineas->first(fn ($linea): bool => $linea->punto?->nombre === 'Kio');
 
-    $sinConfigurar = app(DotacionVuelta::class)->de($vuelta, new Collection);
-    expect($sinConfigurar['total_previsto'])->toBeNull()
-        ->and(collect($sinConfigurar['combustible'])->firstWhere('punto', 'Kio')['lleno'])->toBeTrue();
-
-    Ajuste::guardar(Ajuste::GALONES_TANQUE_LLENO, '150');
-
-    expect(app(DotacionVuelta::class)->de($vuelta, new Collection)['total_previsto'])->toBe(350.0);
+    expect($kio->galones)->toBeNull()
+        ->and($tarjeta->nota)->toContain('falta poner los galones');
 });
 
-it('registers the authorized fuel on the open trip of the unit', function (): void {
-    $vuelta = ticketApto($this->tracto);
+it('registers the authorized fuel on the ticket and leg the person chose', function (): void {
+    $vuelta = ticketListo($this->tracto);
 
     actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), [
-            'vehiculo_id' => $this->tracto->id,
-            'punto_abastecimiento_id' => $this->arequipa->id,
-            'fecha' => now()->toDateString(),
-            'galones' => 120,
-        ])
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['punto_abastecimiento_id' => $this->arequipa->id, 'galones' => 120]))
+        ->assertSessionHasNoErrors()
         ->assertSessionHas('toast.type', 'success');
 
     $registro = Abastecimiento::query()->sole();
     expect($registro->vuelta_id)->toBe($vuelta->id)
-        ->and((float) $registro->galones)->toBe(120.0);
+        ->and($registro->sentido)->toBe(SentidoTramo::Ida)
+        ->and((float) $registro->galones)->toBe(120.0)
+        ->and($registro->importe)->toBeNull();
 });
 
-it('keeps the price per gallon and the amount, and proposes the last price of the point', function (): void {
-    ticketApto($this->tracto);
+it('asks for the ticket and the leg instead of guessing them', function (): void {
+    ticketListo($this->tracto);
 
     actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), [
-            'vehiculo_id' => $this->tracto->id,
-            'punto_abastecimiento_id' => $this->arequipa->id,
-            'fecha' => now()->toDateString(),
-            'galones' => 120,
-            'precio_galon' => 16.45,
-        ])
+        ->post(route('abastecimiento.store'), ['vehiculo_id' => $this->tracto->id, 'fecha' => now()->toDateString(), 'galones' => 50])
+        ->assertSessionHasErrors(['vuelta_id', 'sentido']);
+
+    expect(Abastecimiento::query()->count())->toBe(0);
+});
+
+it('does not put fuel of one unit on the ticket of another', function (): void {
+    $ajeno = ticketListo(Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]));
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), [...autorizacion($ajeno), 'vehiculo_id' => $this->tracto->id])
+        ->assertSessionHasErrors('vuelta_id');
+
+    expect(Abastecimiento::query()->count())->toBe(0);
+});
+
+it('does not authorize fuel for a leg without its confirmed card', function (): void {
+    $vuelta = ticketApto($this->tracto);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta))
+        ->assertSessionHasErrors('sentido');
+
+    // Ni con una tarjeta que dejó galones por definir.
+    DotacionTramo::factory()->for($vuelta)->create(['lineas' => [
+        ['linea_id' => null, 'tipo' => 'combustible', 'concepto' => 'Combustible', 'punto_id' => null, 'punto' => 'Kio', 'galones' => null, 'monto' => null],
+    ]]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta))
+        ->assertSessionHasErrors('sentido');
+});
+
+it('needs the permission and a reason to go over the cap of the card', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 200]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['galones' => 30, 'motivo_exceso' => 'Desvío por huaico']))
+        ->assertSessionHasErrors('galones');
+
+    actingAs(actorConRol('admin'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['galones' => 30]))
+        ->assertSessionHasErrors('motivo_exceso');
+
+    actingAs(actorConRol('admin'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['galones' => 30, 'motivo_exceso' => 'Desvío por huaico']))
+        ->assertSessionHasNoErrors();
+
+    // Hasta el tope no pide nada.
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion(ticketListo(Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto])), ['galones' => 220]))
+        ->assertSessionHasNoErrors();
+
+    expect(Abastecimiento::query()->where('motivo_exceso', 'Desvío por huaico')->count())->toBe(1);
+});
+
+it('voids fuel with its reason instead of deleting it, and it stops counting', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 120]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.anular', $registro), ['motivo' => ''])
+        ->assertSessionHasErrors('motivo');
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.anular', $registro), ['motivo' => 'Se registró dos veces'])
         ->assertSessionHas('toast.type', 'success');
 
-    $registro = Abastecimiento::query()->sole();
-    expect((float) $registro->precio_galon)->toBe(16.45)
-        ->and((float) $registro->importe)->toBe(1974.0);
+    $registro->refresh();
+    expect($registro->estaAnulado())->toBeTrue()
+        ->and($registro->motivo_anulacion)->toBe('Se registró dos veces');
+
+    $dotacion = app(DotacionVuelta::class)->de($vuelta->fresh('paradas.viajes'), $vuelta->abastecimientos()->with('punto')->get());
+    expect($dotacion['total_registrado'])->toBe(0.0);
+});
+
+it('registers the real dispatch from the voucher with its price and odometer', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 120, 'punto_abastecimiento_id' => $this->arequipa->id]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.despacho', $registro), [
+            'galones_despachados' => 118.5,
+            'precio_galon' => 16.4,
+            'kilometraje' => 250300,
+            'despachado_el' => now()->toDateString(),
+        ])
+        ->assertSessionHasNoErrors();
+
+    $registro->refresh();
+    expect((float) $registro->galones_despachados)->toBe(118.5)
+        ->and((float) $registro->importe)->toBe(1943.4)
+        ->and(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->value('kilometraje'))->toBe(250300);
+
+    // El odómetro no retrocede.
+    $otro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 50]);
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.despacho', $otro), [
+            'galones_despachados' => 50, 'precio_galon' => 16.4, 'kilometraje' => 249000, 'despachado_el' => now()->toDateString(),
+        ])
+        ->assertSessionHasErrors('kilometraje');
 
     actingAs(actorConRol('abastecimiento'))
         ->get(route('abastecimiento.index'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('recientes.0.importe', 1974)
-            ->where('puntos', fn ($puntos) => collect($puntos)->firstWhere('id', $this->arequipa->id)['ultimo_precio'] === 16.45));
-});
-
-it('registers without price when it is not known', function (): void {
-    ticketApto($this->tracto);
-
-    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), [
-        'vehiculo_id' => $this->tracto->id,
-        'fecha' => now()->toDateString(),
-        'galones' => 50,
-    ]);
-
-    expect(Abastecimiento::query()->sole()->importe)->toBeNull();
+            ->where('puntos', fn ($puntos) => collect($puntos)->firstWhere('id', $this->arequipa->id)['ultimo_precio'] === 16.4));
 });
 
 it('registers fuel at a point that is not on the list, for exceptional cases', function (): void {
-    $vuelta = ticketApto($this->tracto);
+    $vuelta = ticketListo($this->tracto);
 
     actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), [
-            'vehiculo_id' => $this->tracto->id,
-            'punto_libre' => '  Primax   Camaná ',
-            'fecha' => now()->toDateString(),
-            'galones' => 40,
-        ])
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['punto_libre' => '  Primax   Camaná ', 'galones' => 40]))
         ->assertSessionHasNoErrors();
 
     $registro = Abastecimiento::query()->with('punto')->sole();
@@ -216,17 +328,28 @@ it('registers fuel at a point that is not on the list, for exceptional cases', f
 });
 
 it('does not take a listed point and a written one at the same time', function (): void {
-    ticketApto($this->tracto);
+    $vuelta = ticketListo($this->tracto);
 
     actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), [
-            'vehiculo_id' => $this->tracto->id,
-            'punto_abastecimiento_id' => $this->kio->id,
-            'punto_libre' => 'Primax Camaná',
-            'fecha' => now()->toDateString(),
-            'galones' => 40,
-        ])
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['punto_abastecimiento_id' => $this->kio->id, 'punto_libre' => 'Primax Camaná']))
         ->assertSessionHasErrors('punto_libre');
+});
+
+it('confirms the card of a leg from the board', function (): void {
+    $vuelta = ticketApto($this->tracto);
+    $tarjeta = ReglaAbastecimiento::query()->where('nombre', 'Juliaca – Mina – Lima')->sole();
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.dotacion', $vuelta), ['sentido' => 'ida', 'regla_abastecimiento_id' => $tarjeta->id])
+        ->assertSessionHas('toast.type', 'success');
+
+    $dotacion = $vuelta->fresh()->dotacionDe(SentidoTramo::Ida);
+    expect($dotacion->nombre)->toBe('Juliaca – Mina – Lima')
+        ->and($dotacion->tope())->toBe(220.0);
+
+    actingAs(actorConRol('visor'))
+        ->post(route('abastecimiento.dotacion', $vuelta), ['sentido' => 'regreso', 'regla_abastecimiento_id' => $tarjeta->id])
+        ->assertForbidden();
 });
 
 it('shows for each point what was loaded this month and the last price paid', function (): void {
@@ -258,10 +381,7 @@ it('lets a card speak for the whole outbound leg, from Juliaca up empty and down
         'lugar_origen' => null, 'lugar_destino' => null,
     ]);
 
-    $dotacion = app(DotacionVuelta::class)->de($deJuliaca->load('paradas.viajes'), new Collection);
-
-    expect(collect($dotacion['tarjetas'])->pluck('nombre')->all())->toBe(['Juliaca – Mina – Lima'])
-        ->and(collect($dotacion['tramos'])->firstWhere('sentido', 'ida')['previsto'])->toBe(220.0);
+    expect(app(DotacionVuelta::class)->sugerida($deJuliaca->load('paradas.viajes'), SentidoTramo::Ida)?->nombre)->toBe('Juliaca – Mina – Lima');
 
     // La que arranca en la mina no hizo la subida desde Juliaca: no la toma.
     $deMina = vueltaConParada(Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]), [
@@ -270,27 +390,6 @@ it('lets a card speak for the whole outbound leg, from Juliaca up empty and down
     ]);
 
     expect(app(DotacionVuelta::class)->reglaDe($deMina->paradas->first(), ZonaRuta::Mina))->toBeNull();
-});
-
-it('uses the configured full tank when the gallons are left empty', function (): void {
-    ticketApto($this->tracto);
-
-    $datos = [
-        'vehiculo_id' => $this->tracto->id,
-        'punto_abastecimiento_id' => $this->kio->id,
-        'fecha' => now()->toDateString(),
-        'tanque_lleno' => true,
-    ];
-
-    actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), $datos)
-        ->assertSessionHasErrors('galones');
-
-    Ajuste::guardar(Ajuste::GALONES_TANQUE_LLENO, '150');
-
-    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), $datos);
-
-    expect((float) Abastecimiento::query()->sole()->galones)->toBe(150.0);
 });
 
 it('keeps the area to its role', function (): void {
@@ -330,6 +429,17 @@ it('edits a board card with its rows', function (): void {
         ->and((float) $lineas[1]->monto)->toBe(200.0);
 });
 
+it('asks for the gallons of every fuel row of a card', function (): void {
+    $regla = ReglaAbastecimiento::query()->where('nombre', 'Retorno Pisco · escoria')->sole();
+
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.reglas.update', $regla), [
+            'nombre' => 'Retorno Pisco · escoria', 'activa' => true,
+            'lineas' => [['tipo' => 'combustible', 'concepto' => 'Escoria', 'punto_abastecimiento_id' => $this->kio->id, 'galones' => null]],
+        ])
+        ->assertSessionHasErrors('lineas.0.galones');
+});
+
 it('deactivates a point already used instead of deleting it', function (): void {
     actingAs(actorConRol('abastecimiento'))->delete(route('abastecimiento.puntos.destroy', $this->kio));
 
@@ -346,31 +456,48 @@ it('deactivates a point already used instead of deleting it', function (): void 
 /**
  * El total de la tarjeta es el tope del tramo: cómo se reparte entre puntos
  * varía (150 en Juliaca y 70 en Arequipa), así que cualquier punto cuenta.
+ * Cada registro cuenta en el tramo que se eligió, no se reparte solo.
  */
-it('splits the allowance into one bar for the outbound leg and one for the return', function (): void {
-    $vuelta = vueltaConParada($this->tracto, [
-        'sentido' => SentidoTramo::Ida, 'zona_origen' => ZonaRuta::Mina, 'zona_destino' => ZonaRuta::Pisco, 'tipo_carga' => TipoCarga::Concentrado,
-    ]);
-    ParadaVuelta::factory()->create([
-        'vuelta_id' => $vuelta->id, 'orden' => 2, 'sentido' => SentidoTramo::Regreso,
-        'zona_origen' => ZonaRuta::Pisco, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Escoria,
-        'lugar_origen' => null, 'lugar_destino' => null,
-    ]);
+it('counts each fuel in the leg that was chosen, against the cap of its card', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    DotacionTramo::factory()->for($vuelta)->regreso()->create(['nombre' => 'Retorno Pisco · escoria', 'lineas' => [
+        ['linea_id' => null, 'tipo' => 'combustible', 'concepto' => 'Escoria', 'punto_id' => $this->kio->id, 'punto' => 'Kio', 'galones' => 130.0, 'monto' => null],
+    ]]);
     $juliaca = PuntoAbastecimiento::query()->where('nombre', 'Juliaca')->sole();
-    Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'punto_abastecimiento_id' => $juliaca->id, 'galones' => 150]);
-    Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'punto_abastecimiento_id' => $this->arequipa->id, 'galones' => 70]);
-    Abastecimiento::factory()->create(['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'punto_abastecimiento_id' => $this->kio->id, 'galones' => 30]);
-    $vuelta->load('paradas.viajes');
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['punto_abastecimiento_id' => $juliaca->id, 'galones' => 150]);
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['punto_abastecimiento_id' => $this->arequipa->id, 'galones' => 70]);
+    Abastecimiento::factory()->paraVuelta($vuelta, SentidoTramo::Regreso)->create(['punto_abastecimiento_id' => $this->kio->id, 'galones' => 30]);
+    Abastecimiento::factory()->paraVuelta($vuelta, SentidoTramo::Regreso)->anulado()->create(['galones' => 500]);
 
-    $tramos = collect(app(DotacionVuelta::class)->de($vuelta, $vuelta->abastecimientos()->with('punto')->get())['tramos'])->keyBy('sentido');
+    $tramos = collect(app(DotacionVuelta::class)->de($vuelta->fresh('paradas.viajes'), $vuelta->abastecimientos()->with('punto')->get())['tramos'])->keyBy('sentido');
 
-    // 150 en Juliaca + 70 en Arequipa completan los 220 de la ida, aunque la
-    // pizarra sugiera Mina 100 + Arequipa 120; lo que sobra va a la vuelta.
     expect($tramos['ida']['previsto'])->toBe(220.0)
         ->and($tramos['ida']['registrado'])->toBe(220.0)
         ->and($tramos['ida']['falta'])->toBe(0.0)
-        ->and(collect($tramos['ida']['puntos'])->pluck('punto')->all())->toBe(['Mina', 'Arequipa'])
+        ->and(collect($tramos['ida']['puntos'])->pluck('punto')->all())->toBe(['Juliaca', 'Arequipa'])
         ->and($tramos['regreso']['previsto'])->toBe(130.0)
         ->and($tramos['regreso']['registrado'])->toBe(30.0)
         ->and($tramos['regreso']['falta'])->toBe(100.0);
+});
+
+it('shows the month reconciliation by fuel station', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    Abastecimiento::factory()->paraVuelta($vuelta)->create([
+        'punto_abastecimiento_id' => $this->arequipa->id, 'galones' => 120,
+        'galones_despachados' => 118, 'precio_galon' => 16, 'importe' => 1888, 'despachado_el' => now()->toDateString(),
+    ]);
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['punto_abastecimiento_id' => $this->arequipa->id, 'galones' => 50]);
+    Abastecimiento::factory()->paraVuelta($vuelta)->anulado()->create(['galones' => 99]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.conciliacion'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('abastecimiento/conciliacion')
+            ->where('totales.autorizado', 170)
+            ->where('totales.despachado', 118)
+            ->where('totales.sin_voucher', 1)
+            ->where('totales.anulados', 1)
+            ->where('porGrifo.0.punto', 'Arequipa')
+            ->where('porGrifo.0.diferencia', -2)
+            ->has('sinVoucher', 1));
 });

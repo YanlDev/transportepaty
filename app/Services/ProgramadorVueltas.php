@@ -21,22 +21,12 @@ use Illuminate\Support\Facades\DB;
  */
 class ProgramadorVueltas
 {
-    public function __construct(private readonly AsignadorVueltas $asignador) {}
-
     /**
      * @param  array{tracto_id: int, carreta_id: int|null, conductor_id: int|null, inicio: string, paradas: list<array<string, mixed>>}  $datos
      */
     public function programar(array $datos): Vuelta
     {
         return DB::transaction(function () use ($datos): Vuelta {
-            // Programar la siguiente da por terminada la que estaba andando.
-            Vuelta::query()
-                ->where('tracto_id', $datos['tracto_id'])
-                ->where('estado', EstadoVuelta::EnCurso)
-                ->whereDate('inicio', '<', $datos['inicio'])
-                ->get()
-                ->each(fn (Vuelta $vuelta) => $this->asignador->cerrar($vuelta));
-
             $vuelta = Vuelta::query()->create([
                 'tracto_id' => $datos['tracto_id'],
                 'carreta_id' => $datos['carreta_id'],

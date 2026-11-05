@@ -166,12 +166,15 @@ class AvisoDeVuelta
     {
         $dotacion = $this->dotacion->de($vuelta, new ColeccionEloquent);
 
-        if ($dotacion['combustible'] === [] && $dotacion['viaticos'] === []) {
+        // Solo lo autorizado: las tarjetas confirmadas, no las sugeridas.
+        $tramos = array_values(array_filter($dotacion['tramos'], fn (array $tramo): bool => $tramo['confirmada']));
+
+        if ($tramos === [] && $dotacion['viaticos'] === []) {
             return [];
         }
 
         $galones = fn (?float $valor): string => $valor === null
-            ? 'full'
+            ? '¿? gal'
             : rtrim(rtrim(number_format($valor, 1, '.', ''), '0'), '.').' gal';
 
         // El total del tramo es el tope; los puntos, una sugerencia de dónde
@@ -180,7 +183,7 @@ class AvisoDeVuelta
             fn (array $tramo): string => ($tramo['sentido'] === SentidoTramo::Ida->value ? 'ida' : 'vuelta')
                 .' '.$galones($tramo['previsto'])
                 .' ('.implode(' · ', array_map(fn (array $punto): string => $punto['punto'].' '.$galones($punto['previsto']), $tramo['puntos'])).')',
-            $dotacion['tramos'],
+            $tramos,
         );
         $viaticos = array_map(
             fn (array $viatico): string => "{$viatico['concepto']} S/ ".number_format($viatico['monto'], 2),

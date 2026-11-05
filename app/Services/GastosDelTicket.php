@@ -10,17 +10,23 @@ use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 use Illuminate\Support\Collection;
 
 /**
- * Lo que se gastó en un ticket contra lo que dice la pizarra: el combustible
- * por tramo y por punto, los viáticos depositados (y los anulados, con sus
- * movimientos) y lo que suma en soles. Lo leen la bandeja de abastecimiento
- * y el expediente del ticket: los dos ven exactamente lo mismo.
+ * Lo que se gastó en un ticket contra lo autorizado: el combustible por
+ * tramo y por punto (autorizado y despachado), los viáticos depositados (y
+ * los anulados, con sus movimientos) y lo que suma en soles. Lo leen la
+ * bandeja de abastecimiento y el expediente del ticket: los dos ven
+ * exactamente lo mismo.
+ *
+ * @phpstan-import-type Tramo from DotacionVuelta
+ * @phpstan-import-type FilaCombustible from DotacionVuelta
  *
  * @phpstan-type GastosTicket array{
- *     tarjetas: list<array{id: int, nombre: string, color: string|null, parada_id: int}>,
- *     combustible: list<array{punto_id: int|null, punto: string, previsto: float|null, lleno: bool, registrado: float, falta: float|null}>,
+ *     tarjetas: list<array{sentido: string, id: int|null, nombre: string, color: string|null}>,
+ *     combustible: list<FilaCombustible>,
  *     total_previsto: float|null,
  *     total_registrado: float,
- *     tramos: list<array{sentido: string, previsto: float|null, registrado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null, lleno: bool}>}>,
+ *     total_despachado: float,
+ *     despachos_pendientes: int,
+ *     tramos: list<Tramo>,
  *     viaticos: list<array<string, mixed>>,
  *     viatico_pendiente: float,
  *     viatico_depositado: float,
@@ -36,7 +42,8 @@ class GastosDelTicket
 
     /**
      * Los gastos de varios tickets, por id. Las consultas van juntas: no una
-     * por ticket. Los tickets tienen que venir con `paradas.viajes`.
+     * por ticket. Los tickets tienen que venir con `paradas.viajes`; las
+     * tarjetas confirmadas se cargan acá si faltan.
      *
      * @param  Collection<int, Vuelta>  $vueltas
      * @return array<int, GastosTicket>
@@ -44,10 +51,11 @@ class GastosDelTicket
     public function de(Collection $vueltas): array
     {
         $ids = $vueltas->pluck('id');
+        (new EloquentCollection($vueltas->all()))->loadMissing('dotaciones.usuario:id,name');
 
         $registrados = Abastecimiento::query()
             ->whereIn('vuelta_id', $ids)
-            ->with(['punto:id,nombre', 'registradoPor:id,name'])
+            ->with(['punto:id,nombre', 'registradoPor:id,name', 'anuladoPor:id,name', 'despachoRegistradoPor:id,name'])
             ->orderBy('fecha')
             ->orderBy('id')
             ->get();
@@ -79,19 +87,10 @@ class GastosDelTicket
                     $viaticos->where('vuelta_id', $vuelta->id)->values(),
                     $movimientos->get($vuelta->id, collect()),
                 ),
-                'importe_registrado' => round((float) $delTicket->sum('importe'), 2),
+                'importe_registrado' => round((float) $delTicket->whereNull('anulado_at')->sum('importe'), 2),
+                'despachos_pendientes' => $delTicket->filter(fn (Abastecimiento $abastecimiento): bool => ! $abastecimiento->estaAnulado() && ! $abastecimiento->tieneDespacho())->count(),
                 'abastecimientos' => array_values($delTicket
-                    ->map(fn (Abastecimiento $abastecimiento): array => [
-                        'id' => $abastecimiento->id,
-                        'fecha' => $abastecimiento->fecha->toDateString(),
-                        'punto' => $abastecimiento->nombrePunto(),
-                        'fuera_de_lista' => $abastecimiento->punto_abastecimiento_id === null && filled($abastecimiento->punto_libre),
-                        'galones' => (float) $abastecimiento->galones,
-                        'tanque_lleno' => $abastecimiento->tanque_lleno,
-                        'precio_galon' => $abastecimiento->precio_galon === null ? null : (float) $abastecimiento->precio_galon,
-                        'importe' => $abastecimiento->importe === null ? null : (float) $abastecimiento->importe,
-                        'registrado_por' => $abastecimiento->registradoPor?->name,
-                    ])
+                    ->map(fn (Abastecimiento $abastecimiento): array => $this->registro($abastecimiento))
                     ->all()),
             ];
         }
@@ -100,10 +99,45 @@ class GastosDelTicket
     }
 
     /**
+     * Un combustible autorizado, con su despacho real si ya se registró y su
+     * anulación si se anuló.
+     *
+     * @return array<string, mixed>
+     */
+    private function registro(Abastecimiento $abastecimiento): array
+    {
+        return [
+            'id' => $abastecimiento->id,
+            'fecha' => $abastecimiento->fecha->toDateString(),
+            'sentido' => $abastecimiento->sentido?->value,
+            'punto_id' => $abastecimiento->punto_abastecimiento_id,
+            'punto' => $abastecimiento->nombrePunto(),
+            'fuera_de_lista' => $abastecimiento->punto_abastecimiento_id === null && filled($abastecimiento->punto_libre),
+            'galones' => (float) $abastecimiento->galones,
+            'motivo_exceso' => $abastecimiento->motivo_exceso,
+            'observacion' => $abastecimiento->observacion,
+            'registrado_por' => $abastecimiento->registradoPor?->name,
+            'despacho' => $abastecimiento->tieneDespacho() ? [
+                'galones' => (float) $abastecimiento->galones_despachados,
+                'precio_galon' => $abastecimiento->precio_galon === null ? null : (float) $abastecimiento->precio_galon,
+                'importe' => $abastecimiento->importe === null ? null : (float) $abastecimiento->importe,
+                'kilometraje' => $abastecimiento->kilometraje,
+                'fecha' => $abastecimiento->despachado_el?->toDateString(),
+                'por' => $abastecimiento->despachoRegistradoPor?->name,
+            ] : null,
+            'anulado' => $abastecimiento->estaAnulado() ? [
+                'motivo' => $abastecimiento->motivo_anulacion,
+                'por' => $abastecimiento->anuladoPor?->name,
+                'en' => $abastecimiento->anulado_at?->format('Y-m-d H:i'),
+            ] : null,
+        ];
+    }
+
+    /**
      * Los viáticos del ticket: cada uno de la pizarra con su depósito o
      * pendiente, los imprevistos, los anulados y los movimientos de todos.
      *
-     * @param  list<array{linea_id: int, concepto: string, tipo: string, monto: float}>  $dePizarra
+     * @param  list<array{linea_id: int|null, concepto: string, tipo: string, monto: float}>  $dePizarra
      * @param  EloquentCollection<int, Viatico>  $delTicket
      * @param  Collection<int, HistorialCambio>  $movimientos
      * @return array{viaticos: list<array<string, mixed>>, viatico_pendiente: float, viatico_depositado: float, viaticos_anulados: list<array<string, mixed>>, movimientos_viaticos: list<array<string, mixed>>}

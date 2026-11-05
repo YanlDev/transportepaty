@@ -20,7 +20,6 @@ use App\Models\Vuelta;
 use App\Services\Alertas;
 use App\Services\AvisosPorWhatsapp;
 use App\Services\ContactoWhatsapp;
-use App\Services\ReconstructorVueltas;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -98,17 +97,17 @@ it('tells supply when the workshop gives the OK and operations when it does not'
         ->and($alerta->data['url'])->toBe(route('vueltas.show', $vuelta));
 });
 
-it('tells operations when the first GR of a programmed ticket arrives, once', function (): void {
+it('tells operations when the first GR is assigned to a programmed ticket, once', function (): void {
     $operaciones = actorConRol('operaciones');
     $vuelta = Vuelta::factory()->programada()->create(['tracto_id' => $this->tracto->id, 'inicio' => now()->toDateString()]);
 
-    $guia = fn () => Viaje::factory()->create([
+    $guia = fn () => actingAs(actorConRol('admin'))->post(route('viajes.ticket.asignar', Viaje::factory()->create([
         'tracto_id' => $this->tracto->id,
         'fecha_traslado' => now()->toDateString(),
         'origen' => 'SAN RAFAEL - ANTAUTA - MELGAR - PUNO',
         'destino' => 'KM 245 - PARACAS - PISCO - ICA',
         'tipo_carga' => TipoCarga::Concentrado,
-    ]);
+    ])), ['vuelta_id' => $vuelta->id, 'sentido' => 'ida'])->assertSessionHasNoErrors();
 
     $guia();
     $guia();
@@ -117,18 +116,9 @@ it('tells operations when the first GR of a programmed ticket arrives, once', fu
         ->and(alertasDe($operaciones))->toBe(['ticket_salio']);
 });
 
-it('stays quiet while the history is rebuilt from old GR', function (): void {
-    $operaciones = actorConRol('operaciones');
-
-    Alertas::sinAvisar(fn () => Viaje::factory()->create(['tracto_id' => $this->tracto->id]));
-    app(ReconstructorVueltas::class)->reconstruir();
-
-    expect(alertasDe($operaciones))->toBe([]);
-});
-
-it('tells accounting when a ticket gets locked', function (): void {
+it('tells accounting when a ticket gets closed', function (): void {
     $contador = actorConRol('contador');
-    $vuelta = Vuelta::factory()->create(['tracto_id' => $this->tracto->id]);
+    $vuelta = Vuelta::factory()->create(['tracto_id' => $this->tracto->id, 'llegada_el' => now()->toDateString()]);
 
     actingAs(actorConRol('admin'))->post(route('vueltas.cerrar', $vuelta))->assertSessionHas('toast.type', 'success');
 

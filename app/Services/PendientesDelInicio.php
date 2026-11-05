@@ -3,14 +3,13 @@
 namespace App\Services;
 
 use App\Enums\EstadoVuelta;
-use App\Enums\OrigenVuelta;
 use App\Enums\Permiso;
 use App\Enums\ResultadoTaller;
 use App\Enums\SentidoTramo;
 use App\Models\User;
 use App\Models\Viaje;
 use App\Models\Vuelta;
-use Carbon\CarbonImmutable;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Collection;
 
 /**
@@ -52,6 +51,10 @@ class PendientesDelInicio
     public function para(User $usuario): array
     {
         $this->usuario = $usuario;
+        // Cada llamada lee la base de nuevo: la instancia puede quedar viva
+        // entre pedidos (el controlador se reutiliza).
+        $this->abiertas = null;
+        $this->gastos = null;
         $puede = fn (Permiso $permiso): bool => $usuario->checkPermissionTo($permiso);
         $pendientes = [];
 
@@ -63,11 +66,20 @@ class PendientesDelInicio
         if ($puede(Permiso::AbastecimientoRegistrar)) {
             $pendientes[] = $this->combustible(SentidoTramo::Ida);
             $pendientes[] = $this->combustible(SentidoTramo::Regreso);
+            $pendientes[] = $this->despachos();
         }
 
         // Depositar es de abastecimiento; facturación solo los corrige.
         if ($puede(Permiso::AbastecimientoViaticos) && $puede(Permiso::AbastecimientoRegistrar)) {
             $pendientes[] = $this->viaticos();
+        }
+
+        if ($puede(Permiso::ProgramacionAsignarGr)) {
+            $pendientes[] = $this->guiasPorAsignar();
+        }
+
+        if ($puede(Permiso::ProgramacionLlegada)) {
+            $pendientes[] = $this->llegadasAtrasadas();
         }
 
         if ($puede(Permiso::ProgramacionCrear)) {
@@ -160,7 +172,7 @@ class PendientesDelInicio
 
             $tramo = collect($this->gastos()[$vuelta->id]['tramos'])->firstWhere('sentido', $tramoBuscado);
 
-            return $tramo !== null && ($tramo['falta'] === null ? $tramo['registrado'] === 0.0 : $tramo['falta'] > 0);
+            return $tramo !== null && (! $tramo['confirmada'] || ($tramo['falta'] === null ? $tramo['registrado'] === 0.0 : $tramo['falta'] > 0));
         });
 
         return $this->pendiente('Abastecimiento', $ida ? 'combustible_ida' : 'combustible_vuelta',
@@ -170,9 +182,78 @@ class PendientesDelInicio
             function (Vuelta $vuelta) use ($tramoBuscado): ?string {
                 $tramo = collect($this->gastos()[$vuelta->id]['tramos'])->firstWhere('sentido', $tramoBuscado);
 
+                if ($tramo && ! $tramo['confirmada']) {
+                    return 'Confirmar la tarjeta';
+                }
+
                 return $tramo && $tramo['falta'] !== null ? 'Faltan '.round($tramo['falta'], 1).' gal' : null;
             },
             fn (Vuelta $vuelta): string => route('abastecimiento.index', ['ticket' => $vuelta->id]));
+    }
+
+    /**
+     * Combustible autorizado sin el voucher (galones reales y precio): sin
+     * eso el ticket no se liquida.
+     *
+     * @return Pendiente
+     */
+    private function despachos(): array
+    {
+        $tickets = $this->abiertas()->filter(fn (Vuelta $vuelta): bool => $this->gastos()[$vuelta->id]['despachos_pendientes'] > 0);
+
+        return $this->pendiente('Abastecimiento', 'despachos', 'Despachos por registrar', 'Combustible autorizado sin el voucher del grifo.', 'aviso',
+            route('abastecimiento.index'), $tickets,
+            fn (Vuelta $vuelta): string => $this->gastos()[$vuelta->id]['despachos_pendientes'].' sin voucher',
+            fn (Vuelta $vuelta): string => route('abastecimiento.index', ['ticket' => $vuelta->id]));
+    }
+
+    /**
+     * Las GR que todavía no están en un ticket: ninguna entra sola.
+     *
+     * @return Pendiente
+     */
+    private function guiasPorAsignar(): array
+    {
+        $guias = Viaje::query()
+            ->whereNull('parada_vuelta_id')
+            ->whereNull('sin_ticket_at')
+            ->orderBy('fecha_traslado')
+            ->get(['id', 'numero_gr', 'placa_tracto', 'fecha_traslado']);
+
+        return [
+            'area' => 'Programación',
+            'clave' => 'guias_por_asignar',
+            'titulo' => 'GR por asignar',
+            'ayuda' => 'Guías que todavía no están en ningún ticket.',
+            'cantidad' => $guias->count(),
+            'tono' => 'aviso',
+            'href' => route('vueltas.guias'),
+            'items' => array_values($guias
+                ->take(self::MOSTRADOS)
+                ->map(fn (Viaje $guia): array => [
+                    'texto' => $guia->placa_tracto.' · '.$guia->numero_gr,
+                    'detalle' => $guia->fecha_traslado->format('d/m'),
+                    'href' => route('vueltas.guias'),
+                ])
+                ->all()),
+        ];
+    }
+
+    /**
+     * Los que van de vuelta y ya pasaron el día en que deberían haber
+     * llegado: o se atrasaron o falta registrar la llegada.
+     *
+     * @return Pendiente
+     */
+    private function llegadasAtrasadas(): array
+    {
+        $hoy = RelojOperativo::fechaDeHoy();
+        $tickets = $this->abiertas()->filter(fn (Vuelta $vuelta): bool => $vuelta->etapa() === 'en_vuelta'
+            && ($vuelta->llegadaPrevista()?->lt($hoy) ?? false));
+
+        return $this->pendiente('Programación', 'llegadas', 'Llegadas por registrar', 'Ya deberían haber vuelto a la base: registra la llegada o revisa el atraso.', 'alerta',
+            route('vueltas.index'), $tickets,
+            fn (Vuelta $vuelta): ?string => ($prevista = $vuelta->llegadaPrevista()) ? 'Debía llegar el '.$prevista->format('d/m') : null);
     }
 
     /**
@@ -250,11 +331,10 @@ class PendientesDelInicio
      */
     private function porCerrar(): array
     {
-        $tickets = $this->abiertas()->filter(fn (Vuelta $vuelta): bool => $vuelta->origen === OrigenVuelta::Programacion
-            && $vuelta->estado === EstadoVuelta::EnCurso
-            && $vuelta->etapa() === 'en_base');
+        $tickets = $this->abiertas()->filter(fn (Vuelta $vuelta): bool => $vuelta->estado === EstadoVuelta::EnCurso
+            && $vuelta->llegoABase());
 
-        return $this->pendiente('Programación', 'por_cerrar', 'Por cerrar', 'Ya llegaron a la base: revisa sus gastos y ponles el candado.', 'info',
+        return $this->pendiente('Programación', 'por_cerrar', 'Por liquidar', 'Ya llegaron a la base: revisa la liquidación y ciérralos.', 'info',
             route('vueltas.index'), $tickets,
             fn (Vuelta $vuelta): ?string => ($llegada = $this->llegada($vuelta)) ? 'Llegó el '.$llegada->format('d/m') : null);
     }
@@ -326,6 +406,7 @@ class PendientesDelInicio
                 'conductor:id,nombres,apellidos',
                 'paradas.viajes:id,parada_vuelta_id,numero_gr,origen,destino,peso,unidad_peso,fecha_traslado',
                 'revision',
+                'dotaciones',
             ])
             ->orderBy('inicio')
             ->orderBy('id')
@@ -343,10 +424,11 @@ class PendientesDelInicio
         return $this->gastos ??= $this->gastosDelTicket->de($this->abiertas());
     }
 
-    private function llegada(Vuelta $vuelta): ?CarbonImmutable
+    /**
+     * Cuándo volvió a la base: la llegada que se registró (o el cierre).
+     */
+    private function llegada(Vuelta $vuelta): ?CarbonInterface
     {
-        $ultima = $vuelta->paradas->last(fn ($parada): bool => $parada->viajes->isNotEmpty());
-
-        return $ultima === null ? null : $vuelta->llegadaEstimada($ultima);
+        return $vuelta->llegada_el ?? $vuelta->fin;
     }
 }

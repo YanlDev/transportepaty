@@ -17,15 +17,16 @@ export const soles = (valor: number | null): string =>
 
 /**
  * El combustible de un ticket de un vistazo: una barra por tramo (la ida y,
- * si tiene, la vuelta) que se llena de verde con lo autorizado. Los puntos
- * de carga no se separan: van marcados dentro de la barra, con su nombre
- * debajo, para saber dónde toca cargar.
+ * si tiene, la vuelta) que se llena de verde con lo autorizado contra el
+ * tope de su tarjeta confirmada. Los puntos de carga no se separan: van
+ * marcados dentro de la barra, con su nombre debajo. Un tramo sin tarjeta
+ * confirmada no tiene barra: dice qué tarjeta se sugiere.
  */
 export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
     if (tramos.length === 0) {
         return (
             <span className="text-xs text-muted-foreground">
-                Sin tarjeta de la pizarra
+                Sin tramos programados
             </span>
         );
     }
@@ -33,8 +34,31 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
     return (
         <div className="flex flex-col gap-1.5">
             {tramos.map((tramo) => {
-                // Un tanque lleno sin galones configurados pesa como 100 gal
-                // en el dibujo: solo para darle un ancho.
+                if (!tramo.confirmada) {
+                    return (
+                        <div
+                            key={tramo.sentido}
+                            className="grid grid-cols-[3.25rem_1fr] items-center gap-x-2"
+                        >
+                            <span
+                                className={cn(
+                                    'text-[11px] font-medium',
+                                    colorDeSentido(tramo.sentido),
+                                )}
+                            >
+                                {tramo.sentido === 'ida' ? 'Ida' : 'Vuelta'}
+                            </span>
+                            <span className="truncate text-[11px] text-amber-700 dark:text-amber-400">
+                                Tarjeta por confirmar
+                                {tramo.sugerida &&
+                                    ` · sugerida: ${tramo.sugerida.nombre}`}
+                            </span>
+                        </div>
+                    );
+                }
+
+                // Una línea con galones por definir pesa como 100 gal en el
+                // dibujo: solo para darle un ancho.
                 const pesos = tramo.puntos.map(
                     (punto) => punto.previsto ?? 100,
                 );
@@ -100,7 +124,7 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                             {completo && <CircleCheck className="size-3" />}
                             {galones(tramo.registrado).replace(' gal', '')}/
                             {tramo.previsto === null
-                                ? 'full'
+                                ? '¿? gal'
                                 : galones(tramo.previsto)}
                         </span>
                         <span />
@@ -119,7 +143,7 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                                 >
                                     {punto.punto}{' '}
                                     {punto.previsto === null
-                                        ? 'full'
+                                        ? '¿?'
                                         : Number.isInteger(punto.previsto)
                                           ? punto.previsto
                                           : punto.previsto.toFixed(1)}

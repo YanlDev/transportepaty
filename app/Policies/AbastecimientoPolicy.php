@@ -29,12 +29,41 @@ class AbastecimientoPolicy
     }
 
     /**
-     * Lo de un ticket cerrado (con candado) no se quita: se reabre antes.
+     * Nada se borra: se anula con motivo. Lo de un ticket cerrado no se toca:
+     * se reabre antes.
      */
-    public function delete(User $user, Abastecimiento $abastecimiento): bool
+    public function anular(User $user, Abastecimiento $abastecimiento): bool
     {
-        return $abastecimiento->vuelta?->estado !== EstadoVuelta::Cerrada
+        return ! $abastecimiento->estaAnulado()
+            && $abastecimiento->vuelta?->estado !== EstadoVuelta::Cerrada
             && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
+    }
+
+    /**
+     * Lo que de verdad cargó, según el voucher del grifo. Se puede corregir
+     * mientras el ticket no esté cerrado.
+     */
+    public function registrarDespacho(User $user, Abastecimiento $abastecimiento): bool
+    {
+        return ! $abastecimiento->estaAnulado()
+            && $abastecimiento->vuelta?->estado !== EstadoVuelta::Cerrada
+            && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
+    }
+
+    /**
+     * Confirmar la tarjeta de la pizarra de un tramo: es lo que se autoriza.
+     */
+    public function confirmarDotacion(User $user): bool
+    {
+        return $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
+    }
+
+    /**
+     * Pasar el tope de la tarjeta es una excepción: la autoriza quien manda.
+     */
+    public function excederTope(User $user): bool
+    {
+        return $user->checkPermissionTo(Permiso::AbastecimientoExcederTope);
     }
 
     public function configurar(User $user): bool

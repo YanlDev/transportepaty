@@ -1,13 +1,13 @@
 import type { Opcion, RevisionTaller } from '@/types/vueltas';
 
-/** Galones previstos por la pizarra en un punto, contra lo autorizado. */
+/** Galones de la tarjeta confirmada en un punto, contra lo autorizado y lo despachado. */
 export type CombustiblePunto = {
     punto_id: number | null;
     punto: string;
-    /** null si es «tanque lleno» sin galones configurados. */
+    /** null si el punto no está en la tarjeta o tiene galones por definir. */
     previsto: number | null;
-    lleno: boolean;
     registrado: number;
+    despachado: number;
     falta: number | null;
 };
 
@@ -26,12 +26,12 @@ export type VueltaAbastecimiento = {
     tracto: { id: number; placa: string };
     conductor: string | null;
     recorrido: { sentido: 'ida' | 'regreso'; texto: string; carga: string }[];
-    /** Las tarjetas de la pizarra que le tocaron, una por parada. */
+    /** Las tarjetas confirmadas, una por tramo. */
     tarjetas: {
-        id: number;
+        sentido: 'ida' | 'regreso';
+        id: number | null;
         nombre: string;
         color: string | null;
-        parada_id: number;
     }[];
     combustible: CombustiblePunto[];
     /** Cada viático de la pizarra con su depósito (o pendiente), y los imprevistos. */
@@ -44,20 +44,62 @@ export type VueltaAbastecimiento = {
     movimientos_viaticos: Movimiento[];
     total_previsto: number | null;
     total_registrado: number;
-    /** Soles del combustible autorizado (solo lo que tiene precio). */
+    total_despachado: number;
+    /** Combustible autorizado que todavía no tiene su voucher. */
+    despachos_pendientes: number;
+    /** Soles del combustible despachado (el voucher trae el precio). */
     importe_registrado: number;
-    /** Una barra por tramo: la ida y, si tiene combustible, la vuelta. */
+    /** Una barra por tramo: la ida y, si tiene vuelta, la vuelta. */
     tramos: TramoCombustible[];
+    /** Cada combustible del ticket, también los anulados. */
+    abastecimientos: CombustibleDelTicket[];
 };
 
-/** El combustible de un tramo: lo previsto, lo autorizado y sus puntos. */
+/** Un combustible autorizado al ticket, con su despacho real y su anulación. */
+export type CombustibleDelTicket = {
+    id: number;
+    fecha: string;
+    sentido: 'ida' | 'regreso' | null;
+    punto_id: number | null;
+    punto: string | null;
+    fuera_de_lista: boolean;
+    galones: number;
+    motivo_exceso: string | null;
+    observacion: string | null;
+    registrado_por: string | null;
+    despacho: {
+        galones: number;
+        precio_galon: number | null;
+        importe: number | null;
+        kilometraje: number | null;
+        fecha: string | null;
+        por: string | null;
+    } | null;
+    anulado: {
+        motivo: string | null;
+        por: string | null;
+        en: string | null;
+    } | null;
+};
+
+/**
+ * El combustible de un tramo: la tarjeta confirmada (su tope), lo autorizado
+ * y lo despachado. Sin confirmar, solo la tarjeta sugerida.
+ */
 export type TramoCombustible = {
     sentido: 'ida' | 'regreso';
-    /** null si incluye un tanque lleno sin galones configurados. */
+    confirmada: boolean;
+    tarjeta: string | null;
+    color: string | null;
+    confirmada_por: string | null;
+    confirmada_at: string | null;
+    /** El tope; null sin tarjeta confirmada o con galones por definir. */
     previsto: number | null;
     registrado: number;
+    despachado: number;
     falta: number | null;
-    puntos: { punto: string; previsto: number | null; lleno: boolean }[];
+    puntos: { punto: string; previsto: number | null }[];
+    sugerida: { id: number; nombre: string } | null;
 };
 
 export type RegistroAbastecimiento = {
@@ -68,10 +110,12 @@ export type RegistroAbastecimiento = {
     /** Un grifo escrito a mano, que no está en la lista de puntos. */
     fuera_de_lista: boolean;
     vuelta: string | null;
+    sentido: 'ida' | 'regreso' | null;
     galones: number;
-    tanque_lleno: boolean;
+    galones_despachados: number | null;
     precio_galon: number | null;
     importe: number | null;
+    anulado: boolean;
     observacion: string | null;
     registrado_por: string | null;
 };
@@ -86,10 +130,27 @@ export type PuntoRegistro = {
 export type TractoAbastecimiento = {
     id: number;
     placa: string;
-    vuelta_id: number | null;
-    vuelta: string | null;
-    /** Por qué su ticket no recibe gastos (sin OK de taller, con candado); null si los recibe. */
-    bloqueo: string | null;
+    /** Sus tickets abiertos: quien registra elige uno. */
+    tickets: {
+        id: number;
+        codigo: string | null;
+        etapa: 'programada' | 'en_ida' | 'en_vuelta' | 'en_base';
+        /** Por qué no recibe gastos (sin OK de taller, cerrado); null si los recibe. */
+        bloqueo: string | null;
+        /** Los tramos con tarjeta confirmada. */
+        tramos: ('ida' | 'regreso')[];
+    }[];
+};
+
+/** Una tarjeta de la pizarra para confirmar en un tramo. */
+export type ReglaParaConfirmar = {
+    id: number;
+    nombre: string;
+    color: string | null;
+    sentido: 'ida' | 'regreso' | null;
+    /** null si tiene galones por definir. */
+    tope: number | null;
+    resumen: string;
 };
 
 export type PuntoAbastecimiento = {
@@ -111,7 +172,6 @@ export type LineaRegla = {
     punto_abastecimiento_id: number | null;
     punto?: string | null;
     galones: number | null;
-    tanque_lleno: boolean;
     monto: number | null;
 };
 

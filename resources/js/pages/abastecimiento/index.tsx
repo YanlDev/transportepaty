@@ -1,7 +1,8 @@
-import { Head, Link, router, setLayoutProps } from '@inertiajs/react';
-import { CircleCheck, Fuel, Search, Settings, Trash2 } from 'lucide-react';
+import { Head, Link, setLayoutProps } from '@inertiajs/react';
+import { CircleCheck, Fuel, Scale, Search, Settings } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoController';
+import conciliacion from '@/actions/App/Http/Controllers/ConciliacionCombustibleController';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
 import vueltasRutas from '@/actions/App/Http/Controllers/VueltaController';
 import {
@@ -9,6 +10,12 @@ import {
     galones,
     soles,
 } from '@/components/abastecimiento/barra-combustible';
+import {
+    CombustiblesDelTicket,
+    DialogoCombustible,
+    TarjetasDelTicket,
+} from '@/components/abastecimiento/combustible-ticket';
+import type { AccionCombustible } from '@/components/abastecimiento/combustible-ticket';
 import { RegistrarAbastecimientoDialog } from '@/components/abastecimiento/registrar-abastecimiento-dialog';
 import type { InicialAbastecimiento } from '@/components/abastecimiento/registrar-abastecimiento-dialog';
 import { ViaticoDialog } from '@/components/abastecimiento/viatico-dialog';
@@ -42,6 +49,7 @@ import { cn } from '@/lib/utils';
 import type {
     PuntoRegistro,
     RegistroAbastecimiento,
+    ReglaParaConfirmar,
     TractoAbastecimiento,
     VueltaAbastecimiento,
 } from '@/types/abastecimiento';
@@ -51,7 +59,8 @@ type Props = {
     recientes: RegistroAbastecimiento[];
     tractos: TractoAbastecimiento[];
     puntos: PuntoRegistro[];
-    galonesTanqueLleno: number | null;
+    reglas: ReglaParaConfirmar[];
+    puedeExcederTope: boolean;
 };
 
 /**
@@ -106,10 +115,9 @@ function BarraViaticos({ vuelta }: { vuelta: VueltaAbastecimiento }) {
 
 const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
 
-/** Lo que falta en total: null si algo depende de un tanque lleno sin galones. */
 /**
  * Lo que falta en total: el tope de cada tramo menos lo autorizado. null si
- * algún tramo depende de un tanque lleno sin galones configurados.
+ * algún tramo no tiene su tarjeta confirmada (o tiene galones por definir).
  */
 function faltaTotal(vuelta: VueltaAbastecimiento): number | null {
     if (vuelta.tramos.some((tramo) => tramo.falta === null)) {
@@ -118,6 +126,9 @@ function faltaTotal(vuelta: VueltaAbastecimiento): number | null {
 
     return vuelta.tramos.reduce((suma, tramo) => suma + (tramo.falta ?? 0), 0);
 }
+
+const porConfirmar = (vuelta: VueltaAbastecimiento) =>
+    vuelta.tramos.some((tramo) => !tramo.confirmada);
 
 /**
  * El tablero de abastecimiento como tabla: una fila por unidad con su ticket
@@ -129,7 +140,8 @@ export default function AbastecimientoIndex({
     recientes,
     tractos,
     puntos,
-    galonesTanqueLleno,
+    reglas,
+    puedeExcederTope,
 }: Props) {
     const { puede } = usePermisos();
     const puedeRegistrar = puede('abastecimiento.registrar');
@@ -149,6 +161,8 @@ export default function AbastecimientoIndex({
     );
     const [registrando, setRegistrando] =
         useState<InicialAbastecimiento | null>(null);
+    const [accionCombustible, setAccionCombustible] =
+        useState<AccionCombustible | null>(null);
 
     setLayoutProps({
         breadcrumbs: [
@@ -178,34 +192,28 @@ export default function AbastecimientoIndex({
     ).length;
     const abierta = vueltas.find((vuelta) => vuelta.id === abiertaId) ?? null;
 
-    const quitar = (registro: RegistroAbastecimiento) => {
-        if (
-            !window.confirm(
-                `¿Quitar ${galones(registro.galones)} de ${registro.placa}?`,
-            )
-        ) {
-            return;
-        }
-
-        router.delete(abastecimiento.destroy(registro.id).url, {
-            preserveScroll: true,
-        });
-    };
-
     /**
-     * El registro con la unidad y el ticket puestos, y como galones lo que le
-     * falta al tramo (el punto lo elige quien registra: el reparto varía).
+     * El registro con la unidad, el ticket y el tramo puestos, y como galones
+     * lo que le falta al tramo (el punto lo elige quien registra: el reparto
+     * varía).
      */
-    const registrarEn = (vuelta: VueltaAbastecimiento, falta?: number | null) =>
+    const registrarEn = (
+        vuelta: VueltaAbastecimiento,
+        sentido?: 'ida' | 'regreso',
+    ) => {
+        const tramo =
+            vuelta.tramos.find((opcion) => opcion.sentido === sentido) ??
+            vuelta.tramos.find(
+                (opcion) => opcion.confirmada && (opcion.falta ?? 0) > 0,
+            );
+
         setRegistrando({
             vehiculo_id: vuelta.tracto.id,
             vuelta_id: vuelta.id,
-            punto_abastecimiento_id: null,
-            galones:
-                falta ??
-                vuelta.tramos.find((tramo) => (tramo.falta ?? 0) > 0)?.falta ??
-                null,
+            sentido: tramo?.confirmada ? tramo.sentido : null,
+            galones: tramo?.falta ?? null,
         });
+    };
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -213,7 +221,7 @@ export default function AbastecimientoIndex({
 
             <EncabezadoPantalla
                 titulo="Abastecimiento"
-                descripcion="El combustible y los viáticos de cada ticket, contra lo que dice la pizarra."
+                descripcion="El combustible y los viáticos de cada ticket, contra la tarjeta confirmada de cada tramo."
                 icono={Fuel}
             />
 
@@ -257,6 +265,12 @@ export default function AbastecimientoIndex({
                             className="pl-8"
                         />
                     </div>
+                    <Button variant="outline" asChild>
+                        <Link href={conciliacion.index().url}>
+                            <Scale className="size-4" />
+                            <span className="max-sm:hidden">Conciliación</span>
+                        </Link>
+                    </Button>
                     {puede('abastecimiento.configurar') && (
                         <Button variant="outline" asChild>
                             <Link href={configuracion.index().url}>
@@ -268,7 +282,7 @@ export default function AbastecimientoIndex({
                     {puedeRegistrar && (
                         <Button onClick={() => setRegistrando({})}>
                             <Fuel className="size-4" />
-                            <span className="max-sm:hidden">Registrar</span>
+                            <span className="max-sm:hidden">Autorizar</span>
                         </Button>
                     )}
                 </div>
@@ -347,7 +361,7 @@ export default function AbastecimientoIndex({
                             <TableHead className="w-28">Unidad</TableHead>
                             <TableHead className="w-24">Ticket</TableHead>
                             <TableHead className="w-24">Etapa</TableHead>
-                            <TableHead>Tarjeta de la pizarra</TableHead>
+                            <TableHead>Tarjetas</TableHead>
                             <TableHead className="min-w-80">
                                 Combustible
                             </TableHead>
@@ -413,26 +427,23 @@ export default function AbastecimientoIndex({
                                     </TableCell>
                                     <TableCell className="max-w-64">
                                         <div className="flex flex-wrap gap-1">
-                                            {vuelta.tarjetas.length === 0 ? (
-                                                <span className="text-xs text-muted-foreground">
-                                                    Sin tarjeta
+                                            {vuelta.tarjetas.map((tarjeta) => (
+                                                <span
+                                                    key={tarjeta.sentido}
+                                                    className={cn(
+                                                        'truncate rounded px-1.5 py-0.5 text-[11px] font-medium',
+                                                        colorTarjeta(
+                                                            tarjeta.color,
+                                                        ).cabecera,
+                                                    )}
+                                                >
+                                                    {tarjeta.nombre}
                                                 </span>
-                                            ) : (
-                                                vuelta.tarjetas.map(
-                                                    (tarjeta) => (
-                                                        <span
-                                                            key={`${tarjeta.id}-${tarjeta.parada_id}`}
-                                                            className={cn(
-                                                                'truncate rounded px-1.5 py-0.5 text-[11px] font-medium',
-                                                                colorTarjeta(
-                                                                    tarjeta.color,
-                                                                ).cabecera,
-                                                            )}
-                                                        >
-                                                            {tarjeta.nombre}
-                                                        </span>
-                                                    ),
-                                                )
+                                            ))}
+                                            {porConfirmar(vuelta) && (
+                                                <span className="rounded border border-dashed border-amber-400 px-1.5 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+                                                    Por confirmar
+                                                </span>
                                             )}
                                         </div>
                                     </TableCell>
@@ -445,9 +456,9 @@ export default function AbastecimientoIndex({
                                         <BarraViaticos vuelta={vuelta} />
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        {vuelta.combustible.length === 0 ? (
-                                            <span className="text-xs text-muted-foreground">
-                                                —
+                                        {porConfirmar(vuelta) ? (
+                                            <span className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                                                Confirmar tarjeta
                                             </span>
                                         ) : falta === 0 ? (
                                             <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
@@ -457,8 +468,14 @@ export default function AbastecimientoIndex({
                                         ) : (
                                             <span className="text-xs font-medium text-amber-700 tabular-nums dark:text-amber-400">
                                                 {falta === null
-                                                    ? 'Tanque lleno'
+                                                    ? 'Galones por definir'
                                                     : galones(falta)}
+                                            </span>
+                                        )}
+                                        {vuelta.despachos_pendientes > 0 && (
+                                            <span className="block text-xs text-amber-700 tabular-nums dark:text-amber-400">
+                                                {vuelta.despachos_pendientes}{' '}
+                                                sin voucher
                                             </span>
                                         )}
                                         {vuelta.viatico_pendiente > 0 && (
@@ -492,7 +509,7 @@ export default function AbastecimientoIndex({
                                                 }
                                             >
                                                 <Fuel className="size-3.5" />
-                                                Registrar
+                                                Autorizar
                                             </Button>
                                         )}
                                     </TableCell>
@@ -512,9 +529,13 @@ export default function AbastecimientoIndex({
                                 <TableHead>Fecha</TableHead>
                                 <TableHead>Unidad</TableHead>
                                 <TableHead>Ticket</TableHead>
+                                <TableHead>Tramo</TableHead>
                                 <TableHead>Punto</TableHead>
                                 <TableHead className="text-right">
-                                    Galones
+                                    Autorizado
+                                </TableHead>
+                                <TableHead className="text-right">
+                                    Despachado
                                 </TableHead>
                                 <TableHead className="text-right">
                                     S/ gal
@@ -523,14 +544,13 @@ export default function AbastecimientoIndex({
                                     Importe
                                 </TableHead>
                                 <TableHead>Registró</TableHead>
-                                <TableHead className="w-0" />
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {recientes.length === 0 && (
                                 <TableRow className="hover:bg-transparent">
                                     <TableCell
-                                        colSpan={9}
+                                        colSpan={10}
                                         className="py-6 text-center text-sm text-muted-foreground"
                                     >
                                         Todavía no se registró combustible.
@@ -538,7 +558,16 @@ export default function AbastecimientoIndex({
                                 </TableRow>
                             )}
                             {recientes.map((registro) => (
-                                <TableRow key={registro.id}>
+                                <TableRow
+                                    key={registro.id}
+                                    className={cn(
+                                        registro.anulado &&
+                                            'text-muted-foreground line-through',
+                                    )}
+                                    title={
+                                        registro.anulado ? 'Anulado' : undefined
+                                    }
+                                >
                                     <TableCell className="whitespace-nowrap tabular-nums">
                                         {formatearFecha(registro.fecha)}
                                     </TableCell>
@@ -547,6 +576,13 @@ export default function AbastecimientoIndex({
                                     </TableCell>
                                     <TableCell className="font-mono text-xs">
                                         {registro.vuelta ?? '—'}
+                                    </TableCell>
+                                    <TableCell className="text-xs">
+                                        {registro.sentido === 'ida'
+                                            ? 'Ida'
+                                            : registro.sentido === 'regreso'
+                                              ? 'Vuelta'
+                                              : '—'}
                                     </TableCell>
                                     <TableCell>
                                         {registro.punto ?? '—'}
@@ -558,7 +594,13 @@ export default function AbastecimientoIndex({
                                     </TableCell>
                                     <TableCell className="text-right tabular-nums">
                                         {galones(registro.galones)}
-                                        {registro.tanque_lleno && ' (full)'}
+                                    </TableCell>
+                                    <TableCell className="text-right tabular-nums">
+                                        {registro.galones_despachados === null
+                                            ? 'Sin voucher'
+                                            : galones(
+                                                  registro.galones_despachados,
+                                              )}
                                     </TableCell>
                                     <TableCell className="text-right text-muted-foreground tabular-nums">
                                         {registro.precio_galon?.toFixed(3) ??
@@ -569,18 +611,6 @@ export default function AbastecimientoIndex({
                                     </TableCell>
                                     <TableCell className="text-muted-foreground">
                                         {registro.registrado_por ?? '—'}
-                                    </TableCell>
-                                    <TableCell>
-                                        {puedeRegistrar && (
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                aria-label="Quitar registro"
-                                                onClick={() => quitar(registro)}
-                                            >
-                                                <Trash2 className="size-4" />
-                                            </Button>
-                                        )}
                                     </TableCell>
                                 </TableRow>
                             ))}
@@ -649,112 +679,80 @@ export default function AbastecimientoIndex({
 
                                 <section className="flex flex-col gap-3">
                                     <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                                        Tarjeta de cada tramo
+                                    </h3>
+                                    <TarjetasDelTicket
+                                        vueltaId={abierta.id}
+                                        codigo={abierta.codigo}
+                                        tramos={abierta.tramos}
+                                        puedeConfirmar={puedeRegistrar}
+                                        onAccion={setAccionCombustible}
+                                    />
+                                </section>
+
+                                <section className="flex flex-col gap-3">
+                                    <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                                         Combustible
                                     </h3>
-                                    {abierta.tramos.length === 0 ? (
-                                        <p className="text-sm text-muted-foreground">
-                                            Ninguna tarjeta de la pizarra calza
-                                            con este ticket todavía.
-                                        </p>
-                                    ) : (
-                                        <>
-                                            <BarraCombustible
-                                                tramos={abierta.tramos}
-                                            />
-                                            <p className="text-xs text-muted-foreground">
-                                                El total de cada tramo es el
-                                                tope; los puntos son una
-                                                sugerencia. Lo que se cargue en
-                                                cualquier punto cuenta contra el
-                                                tope.
-                                            </p>
-                                            {abierta.bloqueo_gastos !==
-                                                null && (
-                                                <div className="flex flex-col items-start gap-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
-                                                    {abierta.taller
-                                                        ?.resultado !==
-                                                        'apto' && (
-                                                        <EstadoTallerBadge
-                                                            revision={
-                                                                abierta.taller
-                                                            }
-                                                        />
-                                                    )}
-                                                    {abierta.bloqueo_gastos}
-                                                </div>
+                                    <BarraCombustible tramos={abierta.tramos} />
+                                    <p className="text-xs text-muted-foreground">
+                                        El total de cada tramo es el tope de su
+                                        tarjeta; los puntos son una sugerencia.
+                                    </p>
+                                    {abierta.bloqueo_gastos !== null && (
+                                        <div className="flex flex-col items-start gap-1 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                                            {abierta.taller?.resultado !==
+                                                'apto' && (
+                                                <EstadoTallerBadge
+                                                    revision={abierta.taller}
+                                                />
                                             )}
-                                            {puedeRegistrar &&
-                                                abierta.bloqueo_gastos ===
-                                                    null &&
-                                                abierta.tramos.map(
-                                                    (tramo) =>
-                                                        tramo.falta !== 0 && (
-                                                            <Button
-                                                                key={
-                                                                    tramo.sentido
-                                                                }
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="self-start"
-                                                                onClick={() =>
-                                                                    registrarEn(
-                                                                        abierta,
-                                                                        tramo.falta,
-                                                                    )
-                                                                }
-                                                            >
-                                                                <Fuel className="size-3.5" />
-                                                                Registrar
-                                                                {tramo.falta
-                                                                    ? ` · faltan ${galones(tramo.falta)} de la ${tramo.sentido === 'ida' ? 'ida' : 'vuelta'}`
-                                                                    : ''}
-                                                            </Button>
-                                                        ),
-                                                )}
-                                        </>
-                                    )}
-                                    {abierta.combustible.some(
-                                        (fila) => fila.registrado > 0,
-                                    ) && (
-                                        <div className="flex flex-col gap-1">
-                                            <span className="flex justify-between text-xs font-medium text-muted-foreground">
-                                                Autorizado por punto
-                                                {abierta.importe_registrado >
-                                                    0 && (
-                                                    <span className="tabular-nums">
-                                                        {soles(
-                                                            abierta.importe_registrado,
-                                                        )}
-                                                    </span>
-                                                )}
-                                            </span>
-                                            <ul className="flex flex-col gap-0.5 text-sm">
-                                                {abierta.combustible
-                                                    .filter(
-                                                        (fila) =>
-                                                            fila.registrado > 0,
-                                                    )
-                                                    .map((fila) => (
-                                                        <li
-                                                            key={
-                                                                fila.punto_id ??
-                                                                fila.punto
-                                                            }
-                                                            className="flex justify-between"
-                                                        >
-                                                            <span>
-                                                                {fila.punto}
-                                                            </span>
-                                                            <span className="tabular-nums">
-                                                                {galones(
-                                                                    fila.registrado,
-                                                                )}
-                                                            </span>
-                                                        </li>
-                                                    ))}
-                                            </ul>
+                                            {abierta.bloqueo_gastos}
                                         </div>
                                     )}
+                                    {puedeRegistrar &&
+                                        abierta.bloqueo_gastos === null &&
+                                        abierta.tramos
+                                            .filter(
+                                                (tramo) =>
+                                                    tramo.confirmada &&
+                                                    tramo.falta !== 0,
+                                            )
+                                            .map((tramo) => (
+                                                <Button
+                                                    key={tramo.sentido}
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="self-start"
+                                                    onClick={() =>
+                                                        registrarEn(
+                                                            abierta,
+                                                            tramo.sentido,
+                                                        )
+                                                    }
+                                                >
+                                                    <Fuel className="size-3.5" />
+                                                    Autorizar
+                                                    {tramo.falta
+                                                        ? ` · faltan ${galones(tramo.falta)} de la ${tramo.sentido === 'ida' ? 'ida' : 'vuelta'}`
+                                                        : ''}
+                                                </Button>
+                                            ))}
+                                    <span className="flex justify-between text-xs font-medium text-muted-foreground">
+                                        Autorizado y despachado
+                                        {abierta.importe_registrado > 0 && (
+                                            <span className="tabular-nums">
+                                                {soles(
+                                                    abierta.importe_registrado,
+                                                )}
+                                            </span>
+                                        )}
+                                    </span>
+                                    <CombustiblesDelTicket
+                                        registros={abierta.abastecimientos}
+                                        puedeGestionar={puedeRegistrar}
+                                        onAccion={setAccionCombustible}
+                                    />
                                 </section>
 
                                 <ViaticosTicket
@@ -786,7 +784,18 @@ export default function AbastecimientoIndex({
                     inicial={registrando}
                     tractos={tractos}
                     puntos={puntos}
-                    galonesTanqueLleno={galonesTanqueLleno}
+                    vueltas={vueltas}
+                    puedeExcederTope={puedeExcederTope}
+                />
+            )}
+
+            {accionCombustible && (
+                <DialogoCombustible
+                    key={JSON.stringify(accionCombustible)}
+                    accion={accionCombustible}
+                    reglas={reglas}
+                    puntos={puntos}
+                    onCerrar={() => setAccionCombustible(null)}
                 />
             )}
         </div>

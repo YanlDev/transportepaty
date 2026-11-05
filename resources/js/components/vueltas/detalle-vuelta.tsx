@@ -1,5 +1,13 @@
 import { Link, router } from '@inertiajs/react';
-import { ChevronRight, FileText, Lock, LockOpen, Pencil } from 'lucide-react';
+import {
+    ChevronRight,
+    FileText,
+    House,
+    Lock,
+    LockOpen,
+    Pencil,
+} from 'lucide-react';
+import { useState } from 'react';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { Placa } from '@/components/placa';
 import { TallerVuelta } from '@/components/taller/taller-vuelta';
@@ -13,6 +21,7 @@ import {
 } from '@/components/ui/sheet';
 import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
+import { LlegadaDialog } from '@/components/vueltas/llegada-dialog';
 import {
     EstadoVueltaBadge,
     TramosVuelta,
@@ -33,6 +42,8 @@ export function DetalleVuelta({
     onCerrar: () => void;
     onEditar: (vuelta: Vuelta) => void;
 }) {
+    const [llegando, setLlegando] = useState(false);
+
     return (
         <Sheet
             open={vuelta !== null}
@@ -60,6 +71,14 @@ export function DetalleVuelta({
                                 )}
                             </SheetTitle>
                             <SheetDescription>
+                                {vuelta.atrasada && vuelta.llegada_prevista && (
+                                    <span className="block font-medium text-red-700 dark:text-red-400">
+                                        Debía llegar el{' '}
+                                        {formatearFecha(
+                                            vuelta.llegada_prevista,
+                                        )}
+                                    </span>
+                                )}
                                 {vuelta.tipo_label}
                                 {vuelta.inicio &&
                                     ` · desde ${formatearFecha(vuelta.inicio)}`}
@@ -81,27 +100,26 @@ export function DetalleVuelta({
                                         Editar
                                     </Button>
                                 )}
-                                {vuelta.cerrable && (
+                                {vuelta.registrable_llegada && (
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => {
-                                            if (
-                                                window.confirm(
-                                                    `¿Cerrar el ticket ${vuelta.codigo}? Ya no se le podrá registrar combustible ni viáticos.`,
-                                                )
-                                            ) {
-                                                router.post(
-                                                    vueltas.cerrar(vuelta.id)
-                                                        .url,
-                                                    {},
-                                                    { preserveScroll: true },
-                                                );
-                                            }
-                                        }}
+                                        onClick={() => setLlegando(true)}
                                     >
-                                        <Lock className="size-3.5" />
-                                        Cerrar ticket
+                                        <House className="size-3.5" />
+                                        {vuelta.llegada
+                                            ? 'Corregir llegada'
+                                            : 'Registrar llegada'}
+                                    </Button>
+                                )}
+                                {vuelta.cerrable && (
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link
+                                            href={vueltas.show(vuelta.id).url}
+                                        >
+                                            <Lock className="size-3.5" />
+                                            Liquidar y cerrar
+                                        </Link>
                                     </Button>
                                 )}
                                 {vuelta.reabrible && (
@@ -167,6 +185,12 @@ export function DetalleVuelta({
                             <TramosVuelta vuelta={vuelta} conGuias />
                         </div>
                     </>
+                )}
+                {vuelta && llegando && (
+                    <LlegadaDialog
+                        ticket={vuelta}
+                        onCerrar={() => setLlegando(false)}
+                    />
                 )}
             </SheetContent>
         </Sheet>

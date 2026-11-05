@@ -23,6 +23,8 @@ function Revision({ revision }: { revision: RevisionTaller }) {
             <span className="text-xs text-muted-foreground">
                 {revision.resultado_label} · {revision.por ?? '—'} ·{' '}
                 {fechaHoraTaller(revision.en)}
+                {revision.kilometraje !== null &&
+                    ` · sale con ${revision.kilometraje.toLocaleString('es-PE')} km`}
             </span>
         </div>
     );

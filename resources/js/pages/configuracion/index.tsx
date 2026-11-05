@@ -120,7 +120,7 @@ export default function Configuracion({
                           {
                               titulo: 'Pizarra de abastecimiento',
                               descripcion:
-                                  'Los galones y viáticos de cada ruta, los puntos (grifos) y el tanque lleno.',
+                                  'Los galones y viáticos de cada ruta y los puntos (grifos).',
                               href: configuracionAbastecimiento.index().url,
                               icono: Fuel,
                           },

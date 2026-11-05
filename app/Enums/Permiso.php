@@ -57,11 +57,14 @@ enum Permiso: string
     case ProgramacionAvisar = 'programacion.avisar';
     case ProgramacionConfigurar = 'programacion.configurar';
     case ProgramacionCerrar = 'programacion.cerrar';
+    case ProgramacionAsignarGr = 'programacion.asignar_gr';
+    case ProgramacionLlegada = 'programacion.llegada';
 
     case AbastecimientoVer = 'abastecimiento.ver';
     case AbastecimientoRegistrar = 'abastecimiento.registrar';
     case AbastecimientoConfigurar = 'abastecimiento.configurar';
     case AbastecimientoViaticos = 'abastecimiento.viaticos';
+    case AbastecimientoExcederTope = 'abastecimiento.exceder_tope';
 
     case AsistenciaVer = 'asistencia.ver';
     case AsistenciaMarcar = 'asistencia.marcar';
@@ -188,11 +191,14 @@ enum Permiso: string
             self::ProgramacionEliminar => 'Quitar salidas',
             self::ProgramacionAvisar => 'Avisar salidas por WhatsApp',
             self::ProgramacionConfigurar => 'Configurar opciones de tramo, destinos y zonas',
-            self::ProgramacionCerrar => 'Cerrar y reabrir tickets (candado de combustible y viáticos)',
+            self::ProgramacionCerrar => 'Liquidar, cerrar y reabrir tickets',
+            self::ProgramacionAsignarGr => 'Asignar las GR a los tickets (o marcarlas sin ticket)',
+            self::ProgramacionLlegada => 'Registrar la llegada a la base',
             self::AbastecimientoVer => 'Ver el abastecimiento',
-            self::AbastecimientoRegistrar => 'Registrar el combustible autorizado',
+            self::AbastecimientoRegistrar => 'Confirmar la tarjeta, autorizar combustible y registrar el despacho',
             self::AbastecimientoConfigurar => 'Configurar puntos y reglas de dotación',
             self::AbastecimientoViaticos => 'Depositar, corregir y anular viáticos',
+            self::AbastecimientoExcederTope => 'Autorizar combustible por encima del tope de la tarjeta',
             self::AsistenciaVer => 'Ver la asistencia',
             self::AsistenciaMarcar => 'Marcar y desmarcar días',
             self::AsistenciaAjustar => 'Ajustar días debidos y notas',

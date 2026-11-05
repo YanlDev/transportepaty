@@ -6,7 +6,6 @@ use App\Enums\EstadoCobranza;
 use App\Enums\MotivoBajaGre;
 use App\Enums\TipoCarga;
 use App\Models\Concerns\RegistraHistorial;
-use App\Services\AsignadorVueltas;
 use App\Services\AsociadorFacturas;
 use Database\Factories\ViajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -20,7 +19,6 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
-use Throwable;
 
 /**
  * Un viaje registrado a partir de la GR-transportista que Paty emite. Una fila
@@ -53,7 +51,12 @@ use Throwable;
  * @property string $conductor_nombre
  * @property string|null $conductor_dni
  * @property int|null $conductor_id
- * @property int|null $parada_vuelta_id
+ * @property int|null $parada_vuelta_id La parada del ticket: la asigna una persona, nunca el sistema.
+ * @property int|null $asignada_por
+ * @property Carbon|null $asignada_at
+ * @property Carbon|null $sin_ticket_at Se decidió que no va en ningún ticket.
+ * @property int|null $sin_ticket_por
+ * @property string|null $motivo_sin_ticket
  * @property string|null $observaciones
  * @property Carbon|null $gr_fisica_recibida_at
  * @property Carbon|null $no_facturable_at
@@ -133,17 +136,6 @@ class Viaje extends Model implements HasMedia
         // Una factura subida antes que su GR la estaba esperando: al llegar
         // la GR, se asocian solas (ver `AsociadorFacturas::alLlegarViaje()`).
         static::created(fn (Viaje $viaje) => app(AsociadorFacturas::class)->alLlegarViaje($viaje));
-
-        // Y cae en la vuelta de su unidad: en la parada programada que le
-        // corresponde, o sigue armando el historial. La GR manda: si armar la
-        // vuelta falla, se registra igual y el error queda en el log.
-        static::created(function (Viaje $viaje): void {
-            try {
-                app(AsignadorVueltas::class)->asignar($viaje);
-            } catch (Throwable $error) {
-                report($error);
-            }
-        });
     }
 
     /**
@@ -195,6 +187,26 @@ class Viaje extends Model implements HasMedia
     public function anuladaPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'anulada_por');
+    }
+
+    /**
+     * Quién la puso en su ticket.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function asignadaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'asignada_por');
+    }
+
+    /**
+     * Quién decidió que no va en ningún ticket.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function sinTicketPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sin_ticket_por');
     }
 
     /**
@@ -515,6 +527,8 @@ class Viaje extends Model implements HasMedia
             'gr_fisica_recibida_at' => 'datetime',
             'no_facturable_at' => 'datetime',
             'anulada_at' => 'datetime',
+            'asignada_at' => 'datetime',
+            'sin_ticket_at' => 'datetime',
             'baja_sunat_at' => 'datetime',
             'motivo_baja_sunat' => MotivoBajaGre::class,
             'guias_remitente' => 'array',
