@@ -123,12 +123,12 @@ it('shows programming the GR that wait for a ticket', function (): void {
         ->and($pendientes['guias_por_asignar']['items'][0]['texto'])->toContain('EG03-00099999');
 });
 
-it('shows billing only the GR without invoice', function (): void {
+it('shows billing the GR without invoice and the tickets to settle', function (): void {
     Viaje::factory()->count(2)->create(['tracto_id' => null]);
 
     $pendientes = pendientesDe('contador');
 
-    expect(array_keys($pendientes))->toBe(['sin_facturar'])
+    expect(array_keys($pendientes))->toBe(['por_cerrar', 'sin_facturar'])
         ->and($pendientes['sin_facturar']['cantidad'])->toBe(2)
         ->and($pendientes['sin_facturar']['href'])->toContain('estado=sin_facturar');
 });

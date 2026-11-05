@@ -34,6 +34,8 @@ class UserController extends Controller
                         ->orWhereLike('email', "%{$buscar}%", caseSensitive: false);
                 });
             })
+            // Los activos primero; los dados de baja quedan al final.
+            ->orderByRaw('baja_at is not null')
             ->orderBy('name')
             ->paginate(12)
             ->withQueryString();
@@ -141,23 +143,38 @@ class UserController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Dar de baja: la cuenta ya no entra y sale de las listas y las alertas,
+     * pero no se borra: su nombre sigue en el historial de lo que hizo.
      */
-    public function destroy(Request $request, User $user): RedirectResponse
+    public function darDeBaja(Request $request, User $user): RedirectResponse
     {
         $this->authorize('delete', $user);
 
-        if ($user->hasRole('admin') && User::role('admin')->count() <= 1) {
+        $datos = $request->validate(['motivo' => ['required', 'string', 'max:255']]);
+
+        if ($user->hasRole('admin') && User::role('admin')->activos()->count() <= 1) {
             return back()->with('toast', [
                 'type' => 'error',
-                'message' => 'No se puede eliminar: es el único administrador.',
+                'message' => 'No se puede dar de baja: es el único administrador.',
             ]);
         }
 
-        $user->delete();
+        $user->forceFill([
+            'baja_at' => now(),
+            'baja_por' => $request->user()?->id,
+            'motivo_baja' => $datos['motivo'],
+        ])->save();
 
-        return to_route('usuarios.index')
-            ->with('toast', ['type' => 'success', 'message' => 'Usuario eliminado correctamente.']);
+        return back()->with('toast', ['type' => 'success', 'message' => "{$user->name} quedó dado de baja."]);
+    }
+
+    public function reactivar(User $user): RedirectResponse
+    {
+        $this->authorize('update', $user);
+
+        $user->forceFill(['baja_at' => null, 'baja_por' => null, 'motivo_baja' => null])->save();
+
+        return back()->with('toast', ['type' => 'success', 'message' => "{$user->name} vuelve a estar activo. Revisa su rol."]);
     }
 
     /**

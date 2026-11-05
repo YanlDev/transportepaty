@@ -1,22 +1,24 @@
-import { Head, Link, usePage } from '@inertiajs/react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import {
     AtSign,
     Mail,
     Pencil,
     Plus,
     ShieldCheck,
-    Trash2,
+    UserMinus,
+    UserCheck,
     Users,
 } from 'lucide-react';
 import usuarios, {
     create,
     edit,
+    reactivar,
 } from '@/actions/App/Http/Controllers/UserController';
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { EmptyState } from '@/components/empty-state';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DeleteUserDialog } from '@/components/usuarios/delete-user-dialog';
+import { BajaUsuarioDialog } from '@/components/usuarios/baja-usuario-dialog';
 import { useFiltros } from '@/hooks/use-filtros';
 import { cn } from '@/lib/utils';
 import type { Paginator, UserListItem } from '@/types/fleet';
@@ -44,11 +46,6 @@ const ROLE_BADGES: Record<string, { label: string; className: string }> = {
         label: 'Contador',
         className:
             'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20 dark:bg-emerald-950 dark:text-emerald-300',
-    },
-    visor: {
-        label: 'Visor',
-        className:
-            'bg-amber-50 text-amber-700 ring-1 ring-amber-600/20 dark:bg-amber-950 dark:text-amber-300',
     },
     gerencia: {
         label: 'Gerencia',
@@ -192,7 +189,12 @@ function UsuarioCard({
         : undefined;
 
     return (
-        <article className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5">
+        <article
+            className={cn(
+                'flex flex-col gap-4 rounded-xl border border-border bg-card p-5',
+                usuario.baja_at && 'opacity-60',
+            )}
+        >
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2">
                     <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-marca-50 text-marca-800 dark:bg-marca-950 dark:text-marca-300">
@@ -219,15 +221,24 @@ function UsuarioCard({
                         )}
                     </div>
                 </div>
-                {badge && (
+                {usuario.baja_at ? (
                     <span
-                        className={cn(
-                            'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
-                            badge.className,
-                        )}
+                        className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground ring-1 ring-border"
+                        title={usuario.motivo_baja ?? undefined}
                     >
-                        {badge.label}
+                        De baja
                     </span>
+                ) : (
+                    badge && (
+                        <span
+                            className={cn(
+                                'inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium',
+                                badge.className,
+                            )}
+                        >
+                            {badge.label}
+                        </span>
+                    )
                 )}
             </div>
 
@@ -243,20 +254,37 @@ function UsuarioCard({
                         Editar
                     </Link>
                 </Button>
-                {!esActual && (
-                    <DeleteUserDialog
-                        usuario={usuario}
-                        trigger={
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="text-destructive hover:text-destructive"
-                            >
-                                <Trash2 className="size-4" />
-                            </Button>
-                        }
-                    />
-                )}
+                {!esActual &&
+                    (usuario.baja_at ? (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            title="Reactivar"
+                            onClick={() =>
+                                router.post(
+                                    reactivar(usuario.id).url,
+                                    {},
+                                    { preserveScroll: true },
+                                )
+                            }
+                        >
+                            <UserCheck className="size-4" />
+                        </Button>
+                    ) : (
+                        <BajaUsuarioDialog
+                            usuario={usuario}
+                            trigger={
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    title="Dar de baja"
+                                    className="text-destructive hover:text-destructive"
+                                >
+                                    <UserMinus className="size-4" />
+                                </Button>
+                            }
+                        />
+                    ))}
             </div>
         </article>
     );

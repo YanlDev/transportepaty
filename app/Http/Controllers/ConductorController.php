@@ -261,6 +261,7 @@ class ConductorController extends Controller
     {
         return [
             'usuarios' => User::query()
+                ->activos()
                 ->orderBy('name')
                 ->get(['id', 'name', 'email']),
         ];

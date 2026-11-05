@@ -21,7 +21,7 @@ beforeEach(function (): void {
 
 function usuarioCon(string $rol): User
 {
-    return User::factory()->create()->assignRole($rol);
+    return actorConRol($rol);
 }
 
 function datosVehiculo(array $overrides = []): array

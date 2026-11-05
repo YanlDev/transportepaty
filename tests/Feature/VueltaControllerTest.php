@@ -30,11 +30,11 @@ it('redirects guests to login', function (): void {
 });
 
 it('is read by whoever reads the programación', function (): void {
-    actingAs(actorConRol('contador'))
+    actingAs(actorConRol('rrhh'))
         ->get(route('vueltas.index'))
         ->assertForbidden();
 
-    actingAs(actorConRol('contador')->givePermissionTo('programacion.ver'))
+    actingAs(actorConRol('rrhh')->givePermissionTo('programacion.ver'))
         ->get(route('vueltas.index'))
         ->assertSuccessful();
 });

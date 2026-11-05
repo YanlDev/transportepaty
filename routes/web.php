@@ -310,7 +310,10 @@ Route::middleware('auth')->group(function () {
     Route::prefix('settings')->group(function () {
         Route::resource('usuarios', UserController::class)
             ->parameters(['usuarios' => 'user'])
-            ->except(['show']);
+            ->except(['show', 'destroy']);
+        // Nadie se borra: se da de baja y se puede reactivar.
+        Route::post('usuarios/{user}/baja', [UserController::class, 'darDeBaja'])->name('usuarios.baja');
+        Route::post('usuarios/{user}/reactivar', [UserController::class, 'reactivar'])->name('usuarios.reactivar');
         Route::put('usuarios/{user}/password', [UserController::class, 'updatePassword'])
             ->name('usuarios.password.update');
 

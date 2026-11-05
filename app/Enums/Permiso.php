@@ -222,64 +222,19 @@ enum Permiso: string
     }
 
     /**
-     * A qué roles base se les da el permiso la primera vez que aparece.
-     *
-     * Solo se aplica al crearlo: si después alguien lo quita desde el panel,
-     * volver a sincronizar no lo repone. El admin no figura porque siempre
-     * tiene todo.
+     * A qué roles base se les da el permiso la primera vez que aparece: los
+     * que lo tienen en `RolBase`. Solo se aplica al crearlo: si después
+     * alguien lo quita desde el panel, volver a sincronizar no lo repone. El
+     * admin no figura porque siempre tiene todo.
      *
      * @return list<string>
      */
     public function rolesPorDefecto(): array
     {
-        $roles = match ($this) {
-            self::TableroVer,
-            self::VehiculosVer,
-            self::ViajesVer => ['visor', 'contador'],
-            self::ConductoresVer,
-            self::ProgramacionVer,
-            self::ClientesVer,
-            self::CotizacionesVer => ['visor'],
-            self::CobranzaVer,
-            self::CobranzaGestionar,
-            self::CuentasVer,
-            self::CuentasGestionar => ['contador'],
-            self::AbastecimientoVer,
-            self::AbastecimientoRegistrar,
-            self::AbastecimientoConfigurar => ['abastecimiento'],
-            // Los viáticos los deposita abastecimiento y los corrige
-            // facturación.
-            self::AbastecimientoViaticos => ['abastecimiento', 'contador'],
-            self::TallerVer,
-            self::TallerRevisar,
-            self::MantenimientoVer => ['taller'],
-            default => [],
-        };
-
-        // Abastecimiento prepara cada salida: ve el tablero, las unidades y
-        // la programación, sin tocarlas.
-        if (in_array($this, [self::TableroVer, self::VehiculosVer, self::ProgramacionVer], true)) {
-            $roles[] = 'abastecimiento';
-            $roles[] = 'taller';
-        }
-
-        // Abastecimiento ve qué unidad tiene el OK de taller.
-        if ($this === self::TallerVer) {
-            $roles[] = 'abastecimiento';
-        }
-
-        // Gerencia ve todo y no toca nada: recibe cada «ver», también los de
-        // los módulos que se agreguen después.
-        if (str_ends_with($this->value, '.ver')) {
-            $roles[] = 'gerencia';
-        }
-
-        // El tablero también: es la pantalla a la que se llega al entrar.
-        if (in_array($this->modulo(), ['tablero', 'conductores', 'asistencia'], true)) {
-            $roles[] = 'rrhh';
-        }
-
-        return $roles;
+        return array_values(array_map(
+            fn (RolBase $rol): string => $rol->value,
+            array_filter(RolBase::cases(), fn (RolBase $rol): bool => $rol !== RolBase::Admin && $rol->tiene($this)),
+        ));
     }
 
     /**

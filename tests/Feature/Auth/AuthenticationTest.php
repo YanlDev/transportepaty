@@ -133,7 +133,7 @@ class AuthenticationTest extends TestCase
     public function test_an_account_without_a_verified_email_can_use_the_app()
     {
         $user = User::factory()->sinCorreo()->create(['email_verified_at' => null]);
-        $user->assignRole('visor');
+        $user->assignRole('contador');
 
         $this->actingAs($user)
             ->get(route('dashboard'))

@@ -9,8 +9,7 @@ const NOMBRES_ROL: Record<string, string> = {
     abastecimiento: 'Abastecimiento',
     taller: 'Taller',
     rrhh: 'RRHH',
-    contador: 'Contador',
-    visor: 'Visor',
+    contador: 'Contabilidad',
 };
 
 export function nombreRol(rol: string): string {
@@ -20,14 +19,16 @@ export function nombreRol(rol: string): string {
 /** Qué hace cada rol base, en una frase. */
 const DESCRIPCIONES_ROL: Record<string, string> = {
     admin: 'Tiene todo y reparte los permisos. Es el único que maneja usuarios y roles.',
-    gerencia: 'Ve todo el sistema y no modifica nada.',
-    operaciones: 'Programa los tickets, define las vueltas y sube las GR.',
+    gerencia:
+        'Ve todo el sistema y aprueba las excepciones (combustible por encima del tope).',
+    operaciones:
+        'Programa los tickets, sube y asigna las GR, registra la llegada y avisa.',
     abastecimiento:
-        'Registra el combustible y los viáticos de cada ticket y mantiene la pizarra.',
-    taller: 'Da el apto o no apto de salida a cada ticket.',
+        'Autoriza el combustible, registra los vouchers, deposita viáticos y liquida los tickets.',
+    taller: 'Da el OK de salida y lleva el mantenimiento de la flota.',
     rrhh: 'Maneja el padrón de conductores y la asistencia.',
-    contador: 'Factura, registra cobros y corrige viáticos.',
-    visor: 'Solo mira: no cambia nada.',
+    contador:
+        'Factura, registra cobros, corrige viáticos y liquida los tickets.',
 };
 
 export function descripcionRol(rol: string): string | null {

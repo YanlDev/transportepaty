@@ -53,6 +53,9 @@ export type UserListItem = {
     email: string | null;
     email_verified_at: string | null;
     roles: { id: number; name: string }[];
+    /** Dado de baja: no entra, pero sigue en el historial. */
+    baja_at: string | null;
+    motivo_baja: string | null;
 };
 
 /** Situación de un documento obligatorio concreto. */

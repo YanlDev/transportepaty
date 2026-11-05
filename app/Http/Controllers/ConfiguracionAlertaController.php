@@ -59,6 +59,7 @@ class ConfiguracionAlertaController extends Controller
                 ->all(),
             'roles' => Role::query()->orderBy('name')->pluck('name')->all(),
             'usuarios' => User::query()
+                ->activos()
                 ->orderBy('name')
                 ->get(['id', 'name', 'celular'])
                 ->map(fn (User $usuario): array => [

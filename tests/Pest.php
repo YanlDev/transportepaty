@@ -6,6 +6,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Vite;
+use Spatie\Permission\Models\Role;
 use Tests\TestCase;
 
 /*
@@ -84,6 +85,15 @@ expect()->extend('toBeOne', function () {
 
 function actorConRol(string $rol): User
 {
+    // «visor» ya no es un rol de la empresa; en las pruebas sigue siendo el
+    // de alguien que solo mira la operación, con lo que tenía.
+    if ($rol === 'visor') {
+        Role::findOrCreate('visor', 'web')->syncPermissions([
+            'tablero.ver', 'vehiculos.ver', 'conductores.ver', 'viajes.ver',
+            'programacion.ver', 'clientes.ver', 'cotizaciones.ver',
+        ]);
+    }
+
     return User::factory()->create()->assignRole($rol);
 }
 

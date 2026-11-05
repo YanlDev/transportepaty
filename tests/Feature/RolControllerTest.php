@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\Permiso;
+use App\Enums\RolBase;
 use App\Models\User;
 use App\Models\Viaje;
 use App\Services\SincronizadorPermisos;
@@ -10,29 +11,42 @@ use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 
-it('keeps what each base role could do before permissions existed', function (): void {
+it('leaves every base role exactly as the catalog of roles says', function (): void {
     $permisosDe = fn (string $rol): array => Role::findByName($rol)->permissions->pluck('name')->sort()->values()->all();
 
-    expect($permisosDe('admin'))->toEqualCanonicalizing(Permiso::valores())
-        ->and($permisosDe('visor'))->toEqualCanonicalizing([
-            'tablero.ver', 'vehiculos.ver', 'conductores.ver', 'viajes.ver',
-            'programacion.ver', 'clientes.ver', 'cotizaciones.ver',
-        ])
-        ->and($permisosDe('contador'))->toEqualCanonicalizing([
-            'tablero.ver', 'vehiculos.ver', 'viajes.ver',
-            'cobranza.ver', 'cobranza.gestionar', 'cuentas.ver', 'cuentas.gestionar',
-            // Facturación corrige los viáticos depositados.
-            'abastecimiento.viaticos',
-        ]);
+    foreach (RolBase::cases() as $rol) {
+        expect($permisosDe($rol->value))->toEqualCanonicalizing(array_map(fn (Permiso $permiso): string => $permiso->value, $rol->permisos()));
+    }
+
+    // Ya no hay rol de espera.
+    expect(Role::query()->where('name', 'visor')->exists())->toBeFalse();
+});
+
+it('leaves deleting to the admin and settling tickets to fuel and accounting', function (): void {
+    $eliminar = array_filter(Permiso::cases(), fn (Permiso $permiso): bool => str_ends_with($permiso->value, '.eliminar') && $permiso !== Permiso::ProgramacionEliminar);
+
+    foreach (RolBase::cases() as $rol) {
+        if ($rol === RolBase::Admin) {
+            continue;
+        }
+
+        foreach ($eliminar as $permiso) {
+            expect($rol->tiene($permiso))->toBeFalse("{$rol->value} no debería tener {$permiso->value}");
+        }
+    }
+
+    expect(Permiso::ProgramacionCerrar->rolesPorDefecto())->toEqualCanonicalizing(['abastecimiento', 'contador'])
+        ->and(Permiso::AbastecimientoExcederTope->rolesPorDefecto())->toBe(['gerencia'])
+        ->and(Permiso::ProgramacionAsignarGr->rolesPorDefecto())->toBe(['operaciones']);
 });
 
 it('does not restore a permission removed by hand when syncing again', function (): void {
-    Role::findByName('visor')->revokePermissionTo('viajes.ver');
+    Role::findByName('contador')->revokePermissionTo('viajes.ver');
     Permission::create(['name' => 'obsoleto.ver', 'guard_name' => 'web']);
 
     app(SincronizadorPermisos::class)->sincronizar();
 
-    expect(Role::findByName('visor')->hasPermissionTo('viajes.ver'))->toBeFalse()
+    expect(Role::findByName('contador')->hasPermissionTo('viajes.ver'))->toBeFalse()
         ->and(Permission::where('name', 'obsoleto.ver')->exists())->toBeFalse();
 });
 
@@ -59,18 +73,18 @@ it('shows the roles with their permissions and the catalog grouped by module', f
 });
 
 /**
- * Gerencia ve todo y no toca nada; RRHH maneja conductores y asistencia, y
- * entra por el tablero como todos.
+ * Gerencia ve todo y solo aprueba las excepciones; RRHH maneja conductores y
+ * asistencia, y entra por el tablero como todos.
  */
 it('creates the gerencia and rrhh roles by area', function (): void {
     $permisosDe = fn (string $rol): array => Role::findByName($rol, 'web')->permissions->pluck('name')->sort()->values()->all();
 
-    $todosLosVer = collect(Permiso::valores())->filter(fn (string $permiso): bool => str_ends_with($permiso, '.ver'))->sort()->values()->all();
+    $todosLosVer = collect(Permiso::valores())->filter(fn (string $permiso): bool => str_ends_with($permiso, '.ver'))->push('abastecimiento.exceder_tope')->sort()->values()->all();
 
     expect($permisosDe('gerencia'))->toBe($todosLosVer)
         ->and($permisosDe('rrhh'))->toBe(collect([
             'tablero.ver',
-            'conductores.ver', 'conductores.crear', 'conductores.editar', 'conductores.eliminar',
+            'conductores.ver', 'conductores.crear', 'conductores.editar',
             'asistencia.ver', 'asistencia.marcar', 'asistencia.ajustar',
         ])->sort()->values()->all());
 });
@@ -90,19 +104,19 @@ it('creates a role copying the permissions of another', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('roles.store'), [
             'name' => '  Despachador ',
-            'copiar_de' => Role::findByName('visor')->id,
+            'copiar_de' => Role::findByName('taller')->id,
         ])
         ->assertRedirect();
 
     $rol = Role::findByName('despachador');
 
     expect($rol->permissions->pluck('name')->all())
-        ->toEqualCanonicalizing(Role::findByName('visor')->permissions->pluck('name')->all());
+        ->toEqualCanonicalizing(Role::findByName('taller')->permissions->pluck('name')->all());
 });
 
 it('rejects a duplicated role name or an unknown permission', function (): void {
     actingAs(actorConRol('admin'))
-        ->post(route('roles.store'), ['name' => 'visor'])
+        ->post(route('roles.store'), ['name' => 'taller'])
         ->assertSessionHasErrors('name');
 
     actingAs(actorConRol('admin'))
@@ -139,10 +153,10 @@ it('does not delete a role that still has users', function (): void {
 
     expect(Role::where('name', 'contador')->exists())->toBeFalse();
 
-    actorConRol('visor');
-    actingAs(actorConRol('admin'))->delete(route('roles.destroy', Role::findByName('visor')));
+    actorConRol('taller');
+    actingAs(actorConRol('admin'))->delete(route('roles.destroy', Role::findByName('taller')));
 
-    expect(Role::where('name', 'visor')->exists())->toBeTrue();
+    expect(Role::where('name', 'taller')->exists())->toBeTrue();
 });
 
 it('lets a custom role do exactly what was checked for it', function (): void {

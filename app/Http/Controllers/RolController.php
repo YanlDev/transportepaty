@@ -24,7 +24,7 @@ class RolController extends Controller
     {
         Gate::authorize('administrar-roles');
 
-        $usuarios = User::query()->orderBy('name')->with('roles:id')->get(['id', 'name', 'username']);
+        $usuarios = User::query()->activos()->orderBy('name')->with('roles:id')->get(['id', 'name', 'username']);
 
         $roles = Role::query()
             ->where('guard_name', 'web')

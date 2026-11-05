@@ -91,7 +91,9 @@ it('has no current step once it is locked', function (): void {
 });
 
 it('is read by whoever reads the programación', function (): void {
-    actingAs(actorConRol('contador'))->get(route('vueltas.show', $this->vuelta))->assertForbidden();
+    actingAs(actorConRol('rrhh'))->get(route('vueltas.show', $this->vuelta))->assertForbidden();
+    // Contabilidad lo ve: liquida los tickets.
+    actingAs(actorConRol('contador'))->get(route('vueltas.show', $this->vuelta))->assertSuccessful();
 });
 
 it('tells the board what each ticket needs next', function (): void {

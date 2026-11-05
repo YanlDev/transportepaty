@@ -114,6 +114,7 @@ class Alertas
         }
 
         return User::query()
+            ->activos()
             ->where(function ($query) use ($roles, $sueltos): void {
                 $query->whereIn('id', $sueltos)
                     ->when($roles !== [], fn ($query) => $query->orWhereHas('roles', fn ($query) => $query->whereIn('name', $roles)));

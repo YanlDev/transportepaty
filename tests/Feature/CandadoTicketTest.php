@@ -212,11 +212,14 @@ it('does not touch what a closed ticket already has', function (): void {
     actingAs(actorConRol('abastecimiento'))->post(route('viaticos.anular', $viatico), ['motivo' => 'error'])->assertForbidden();
 });
 
-it('only lets whoever has the permission close, and reopens only the latest ticket', function (): void {
+it('only lets fuel and accounting settle, and reopens only the latest ticket', function (): void {
     $vuelta = ticketConRansa($this->tracto, now()->subDays(5)->toDateString());
     llegar($vuelta, now()->toDateString());
 
-    actingAs(actorConRol('abastecimiento'))->post(route('vueltas.cerrar', $vuelta))->assertForbidden();
+    actingAs(actorConRol('operaciones'))->post(route('vueltas.cerrar', $vuelta))->assertForbidden();
+    actingAs(actorConRol('taller'))->post(route('vueltas.cerrar', $vuelta))->assertForbidden();
+    actingAs(actorConRol('contador'))->post(route('vueltas.cerrar', $vuelta))->assertSessionHas('toast.type', 'success');
+    expect($vuelta->fresh()->estado)->toBe(EstadoVuelta::Cerrada);
 
     $vuelta->update(['estado' => EstadoVuelta::Cerrada]);
     Vuelta::factory()->programada()->create(['tracto_id' => $this->tracto->id, 'inicio' => now()->toDateString()]);
