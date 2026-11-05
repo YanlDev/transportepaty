@@ -32,11 +32,7 @@ const CAMPOS: Record<string, string> = {
 };
 
 /** Los campos técnicos no aportan al leer el historial de un vistazo. */
-const OCULTOS = new Set([
-    'anulado_por',
-    'user_id',
-    'linea_ruta_id',
-]);
+const OCULTOS = new Set(['anulado_por', 'user_id', 'linea_ruta_id']);
 
 export const ACCIONES: Record<string, { texto: string; clase: string }> = {
     creado: {
