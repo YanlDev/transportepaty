@@ -172,7 +172,9 @@ class PendientesDelInicio
 
             $tramo = collect($this->gastos()[$vuelta->id]['tramos'])->firstWhere('sentido', $tramoBuscado);
 
-            return $tramo !== null && (! $tramo['confirmada'] || ($tramo['falta'] === null ? $tramo['registrado'] === 0.0 : $tramo['falta'] > 0));
+            $faltaElFull = $tramo !== null && $tramo['tanque_lleno']['puntos'] !== [] && ! $tramo['tanque_lleno']['usado'];
+
+            return $tramo !== null && (! $tramo['confirmada'] || $faltaElFull || ($tramo['falta'] === null ? $tramo['registrado'] === 0.0 : $tramo['falta'] > 0));
         });
 
         return $this->pendiente('Abastecimiento', $ida ? 'combustible_ida' : 'combustible_vuelta',
@@ -184,6 +186,10 @@ class PendientesDelInicio
 
                 if ($tramo && ! $tramo['confirmada']) {
                     return $tramo['pendiente'] ?? 'Sin tope';
+                }
+
+                if ($tramo && $tramo['falta'] === 0.0 && $tramo['tanque_lleno']['puntos'] !== [] && ! $tramo['tanque_lleno']['usado']) {
+                    return 'Falta el tanque full';
                 }
 
                 return $tramo && $tramo['falta'] !== null ? 'Faltan '.round($tramo['falta'], 1).' gal' : null;

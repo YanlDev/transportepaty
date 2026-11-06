@@ -4,6 +4,7 @@ import { useState } from 'react';
 import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoController';
 import { galones, soles } from '@/components/abastecimiento/barra-combustible';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -198,8 +199,10 @@ export function CombustiblesDelTicket({
                                 )}
                             >
                                 <Fuel className="mr-1 inline size-3.5" />
-                                {galones(registro.galones)} ·{' '}
-                                {registro.punto ?? 'Sin punto'}
+                                {registro.tanque_lleno
+                                    ? 'Tanque full'
+                                    : galones(registro.galones)}{' '}
+                                · {registro.punto ?? 'Sin punto'}
                             </span>
                             <span className="text-[11px] text-muted-foreground">
                                 {formatearFecha(registro.fecha)}
@@ -310,11 +313,27 @@ export function CombustiblesDelTicket({
                             {soles(registro.despacho.importe)}
                             {registro.despacho.kilometraje !== null &&
                                 ` · ${registro.despacho.kilometraje.toLocaleString('es-PE')} km`}
+                            {registro.foto_voucher && (
+                                <>
+                                    {' · '}
+                                    <a
+                                        href={registro.foto_voucher}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="underline underline-offset-2"
+                                    >
+                                        foto
+                                    </a>
+                                </>
+                            )}
                         </span>
                     ) : (
                         <span className="text-[11px] text-amber-700 tabular-nums dark:text-amber-400">
-                            Falta el voucher
-                            {registro.precio_autorizado !== null &&
+                            {registro.tanque_lleno
+                                ? 'Falta regularizar: galones, kilometraje y foto del voucher'
+                                : 'Falta el voucher'}
+                            {!registro.tanque_lleno &&
+                                registro.precio_autorizado !== null &&
                                 registro.costo !== null &&
                                 ` · estimado ${galones(registro.galones)} × ${registro.precio_autorizado.toFixed(3)} = ${soles(registro.costo)}`}
                         </span>
@@ -483,10 +502,19 @@ function FormDespacho({
     const ultimoPrecio = puntos.find(
         (punto) => punto.id === registro.punto_id,
     )?.ultimo_precio;
-    const { data, setData, put, processing, errors } = useForm({
-        galones_despachados: String(
-            registro.despacho?.galones ?? registro.galones,
-        ),
+    const { data, setData, post, transform, processing, errors } = useForm<{
+        galones_despachados: string;
+        precio_galon: string;
+        kilometraje: string;
+        despachado_el: string;
+        foto_voucher: File | null;
+        confirmar_capacidad: boolean;
+    }>({
+        galones_despachados: registro.tanque_lleno
+            ? registro.despacho
+                ? String(registro.despacho.galones)
+                : ''
+            : String(registro.despacho?.galones ?? registro.galones),
         precio_galon: String(
             registro.despacho?.precio_galon ??
                 registro.precio_autorizado ??
@@ -497,20 +525,27 @@ function FormDespacho({
             ? String(registro.despacho.kilometraje)
             : '',
         despachado_el: registro.despacho?.fecha ?? hoy(),
+        foto_voucher: null,
+        confirmar_capacidad: false,
     });
+    // El servidor avisa si no cabe en el tanque de la marca: se confirma.
+    const noCabe = (errors.galones_despachados ?? '').startsWith('No cabe');
     const importe =
         data.galones_despachados !== '' && data.precio_galon !== ''
             ? Number(data.galones_despachados) * Number(data.precio_galon)
             : null;
     const diferencia =
-        data.galones_despachados !== ''
+        !registro.tanque_lleno && data.galones_despachados !== ''
             ? Number(data.galones_despachados) - registro.galones
             : 0;
 
+    // Con la foto va como formulario con archivo: PUT por POST.
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
-        put(abastecimiento.despacho(registro.id).url, {
+        transform((datos) => ({ ...datos, _method: 'put' }));
+        post(abastecimiento.despacho(registro.id).url, {
             preserveScroll: true,
+            forceFormData: true,
             onSuccess: onCerrar,
         });
     };
@@ -522,8 +557,9 @@ function FormDespacho({
                     Voucher · {registro.punto ?? 'Sin punto'}
                 </DialogTitle>
                 <DialogDescription>
-                    Se autorizaron {galones(registro.galones)}. Anota lo que
-                    dice el voucher del grifo.
+                    {registro.tanque_lleno
+                        ? 'Tanque full: anota lo que entró según el voucher, con el kilometraje y la foto.'
+                        : `Se autorizaron ${galones(registro.galones)}. Anota lo que dice el voucher del grifo.`}
                 </DialogDescription>
             </DialogHeader>
 
@@ -589,6 +625,7 @@ function FormDespacho({
                     <Field
                         label="Kilometraje"
                         error={errors.kilometraje}
+                        required={registro.tanque_lleno}
                         ayuda="El odómetro al cargar: sirve para el rendimiento y el mantenimiento."
                     >
                         {(id) => (
@@ -625,6 +662,52 @@ function FormDespacho({
                         )}
                     </Field>
                 </div>
+                <Field
+                    label="Foto del voucher"
+                    error={errors.foto_voucher}
+                    required={!registro.foto_voucher}
+                    ayuda={
+                        registro.foto_voucher
+                            ? 'Ya tiene una foto: sube otra solo si la quieres reemplazar.'
+                            : 'Toma la foto con el celular: queda con el combustible.'
+                    }
+                >
+                    {(id) => (
+                        <Input
+                            id={id}
+                            type="file"
+                            accept="image/*"
+                            capture="environment"
+                            onChange={(evento) =>
+                                setData(
+                                    'foto_voucher',
+                                    evento.target.files?.[0] ?? null,
+                                )
+                            }
+                        />
+                    )}
+                </Field>
+                {registro.foto_voucher && (
+                    <a
+                        href={registro.foto_voucher}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary underline-offset-2 hover:underline"
+                    >
+                        Ver la foto actual
+                    </a>
+                )}
+                {noCabe && (
+                    <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
+                        <Checkbox
+                            checked={data.confirmar_capacidad}
+                            onCheckedChange={(marcado) =>
+                                setData('confirmar_capacidad', marcado === true)
+                            }
+                        />
+                        Revisé el voucher: los galones están bien.
+                    </label>
+                )}
             </form>
 
             <DialogFooter>

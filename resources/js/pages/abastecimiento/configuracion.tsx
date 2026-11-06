@@ -30,7 +30,98 @@ import type { Opcion } from '@/types/vueltas';
 type Props = {
     puntos: PuntoAbastecimiento[];
     zonas: Opcion[];
+    /** Las marcas de los tractos activos, con su capacidad si se cargó. */
+    capacidades: CapacidadTanque[];
 };
+
+type CapacidadTanque = {
+    marca: string;
+    unidades: number;
+    galones: number | null;
+};
+
+/**
+ * Cuántos galones caben en el tanque de cada marca: un voucher que no cabe
+ * pide confirmarlo (un 2500 por 250). Vacío, esa marca no se revisa.
+ */
+function CapacidadesTanque({
+    capacidades,
+}: {
+    capacidades: CapacidadTanque[];
+}) {
+    const { data, setData, put, processing, isDirty } = useForm({
+        capacidades: capacidades.map((fila) => ({
+            marca: fila.marca,
+            galones: fila.galones === null ? '' : String(fila.galones),
+        })),
+    });
+
+    if (capacidades.length === 0) {
+        return null;
+    }
+
+    return (
+        <section className="flex flex-col gap-3 rounded-xl border p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+                <div>
+                    <h2 className="text-sm font-semibold">
+                        Capacidad del tanque por marca
+                    </h2>
+                    <p className="text-xs text-muted-foreground">
+                        Un voucher con más galones de los que caben pide
+                        confirmarlo. Vacío: esa marca no se revisa.
+                    </p>
+                </div>
+                <Button
+                    size="sm"
+                    disabled={processing || !isDirty}
+                    onClick={() =>
+                        put(configuracion.guardarCapacidades().url, {
+                            preserveScroll: true,
+                        })
+                    }
+                >
+                    Guardar
+                </Button>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                {capacidades.map((fila, indice) => (
+                    <Field
+                        key={fila.marca}
+                        label={fila.marca}
+                        ayuda={`${fila.unidades} ${fila.unidades === 1 ? 'tracto' : 'tractos'} · galones`}
+                    >
+                        {(id) => (
+                            <Input
+                                id={id}
+                                type="number"
+                                inputMode="decimal"
+                                min="0"
+                                step="1"
+                                placeholder="Sin revisar"
+                                value={data.capacidades[indice].galones}
+                                onChange={(evento) =>
+                                    setData(
+                                        'capacidades',
+                                        data.capacidades.map((otra, cual) =>
+                                            cual === indice
+                                                ? {
+                                                      ...otra,
+                                                      galones:
+                                                          evento.target.value,
+                                                  }
+                                                : otra,
+                                        ),
+                                    )
+                                }
+                            />
+                        )}
+                    </Field>
+                ))}
+            </div>
+        </section>
+    );
+}
 
 const SIN_ZONA = '__sin_zona';
 
@@ -182,7 +273,11 @@ function BotonEditar({
  * Los puntos donde se carga combustible, con el último precio y lo cargado
  * en el mes. La dotación de cada ruta está en el catálogo de rutas.
  */
-export default function AbastecimientoConfiguracion({ puntos, zonas }: Props) {
+export default function AbastecimientoConfiguracion({
+    puntos,
+    zonas,
+    capacidades,
+}: Props) {
     const [punto, setPunto] = useState<PuntoAbastecimiento | null | false>(
         false,
     );
@@ -339,6 +434,8 @@ export default function AbastecimientoConfiguracion({ puntos, zonas }: Props) {
                     </tbody>
                 </table>
             </section>
+
+            <CapacidadesTanque capacidades={capacidades} />
 
             {punto !== false && (
                 <PuntoDialog

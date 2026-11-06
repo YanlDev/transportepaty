@@ -11,6 +11,8 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
+use Spatie\MediaLibrary\HasMedia;
+use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
  * Combustible que abastecimiento autorizó para una unidad (por el QR del
@@ -25,7 +27,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $punto_libre Un grifo fuera de la lista, escrito a mano.
  * @property int|null $conductor_id
  * @property Carbon $fecha
- * @property string $galones Los autorizados.
+ * @property string $galones Los autorizados (0 en el tanque full: lo dice el voucher).
+ * @property bool $tanque_lleno Se llenó el tanque (Kio): no suma al tope del tramo y se regulariza con el voucher.
  * @property string|null $precio_autorizado Soles por galón con que se autorizó: el costo estimado hasta el voucher.
  * @property string|null $precio_galon Soles por galón en ese grifo, según el voucher.
  * @property string|null $importe Galones despachados × precio, en soles.
@@ -49,11 +52,11 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'vehiculo_id', 'vuelta_id', 'sentido', 'punto_abastecimiento_id', 'punto_libre', 'conductor_id', 'fecha',
-    'galones', 'precio_autorizado', 'precio_galon', 'importe', 'observacion', 'user_id',
+    'galones', 'tanque_lleno', 'precio_autorizado', 'precio_galon', 'importe', 'observacion', 'user_id',
     'anulado_at', 'anulado_por', 'motivo_anulacion', 'motivo_exceso',
     'galones_despachados', 'kilometraje', 'despachado_el', 'despacho_por',
 ])]
-class Abastecimiento extends Model
+class Abastecimiento extends Model implements HasMedia
 {
     /**
      * `galonesQueCuentan()` en SQL, para sumar sin traer los registros.
@@ -61,7 +64,7 @@ class Abastecimiento extends Model
     public const GALONES_QUE_CUENTAN = 'coalesce(galones_despachados, galones)';
 
     /** @use HasFactory<AbastecimientoFactory> */
-    use HasFactory, RegistraHistorial;
+    use HasFactory, InteractsWithMedia, RegistraHistorial;
 
     public function etiquetaHistorial(): ?string
     {
@@ -96,6 +99,16 @@ class Abastecimiento extends Model
      * el voucher; mientras no llegue, lo autorizado. Si autorizaron 150 y
      * cargó 100, al tramo le quedan esos 50.
      */
+    /**
+     * La foto del voucher del grifo: una por combustible, la última vale.
+     */
+    public function registerMediaCollections(): void
+    {
+        $this->addMediaCollection('voucher')
+            ->singleFile()
+            ->acceptsMimeTypes(['image/jpeg', 'image/png', 'image/webp', 'image/heic']);
+    }
+
     public function galonesQueCuentan(): float
     {
         return (float) ($this->galones_despachados ?? $this->galones);
@@ -188,6 +201,7 @@ class Abastecimiento extends Model
             'fecha' => 'date',
             'sentido' => SentidoTramo::class,
             'galones' => 'decimal:2',
+            'tanque_lleno' => 'boolean',
             'anulado_at' => 'datetime',
             'galones_despachados' => 'decimal:2',
             'kilometraje' => 'integer',

@@ -5,6 +5,7 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
+use App\Models\Abastecimiento;
 use App\Models\DestinoParticular;
 use App\Models\LineaRuta;
 use App\Models\PalabraZona;
@@ -74,11 +75,14 @@ it('turns the Ransa cards into weight variants of one route', function (): void 
         ->and($ransa->varianteParaPeso(30)->nombre)->toBe('más de 25 t');
 });
 
-it('keeps every board card: the old full tank is still to be set', function (): void {
-    $cusco = rutaDelCatalogo('Particular a Cusco')->load('lineas.punto');
+it('keeps every board card: the full tank at Kio goes apart from the cap', function (): void {
+    $cusco = rutaDelCatalogo('Particular a Cusco')->load(['lineas.punto', 'variantes']);
+    $kio = $cusco->lineas->first(fn (LineaRuta $linea): bool => $linea->punto?->nombre === 'Kio');
 
-    expect($cusco->lineas->first(fn (LineaRuta $linea): bool => $linea->punto?->nombre === 'Kio')->galones)->toBeNull()
-        ->and($cusco->topePara(null))->toBeNull()
+    // Sin galones fijos: lo dice el voucher. El tope es lo de Nazca.
+    expect($kio->galones)->toBeNull()
+        ->and($kio->tanque_lleno)->toBeTrue()
+        ->and($cusco->topePara(null))->toBe(200.0)
         ->and(rutaDelCatalogo('Camaná (arroz)')->es_complemento)->toBeTrue();
 });
 
@@ -333,4 +337,56 @@ it('does not continue the GR of another unit', function (): void {
     ]))->assertSessionHasErrors('paradas.0.viaje_continuado_id');
 
     expect(Vuelta::query()->count())->toBe(0);
+});
+
+it('adds a far destination complement to a leg that already has fuel, without changing what it had', function (): void {
+    $ida = [
+        ['sentido' => 'ida', 'zona_origen' => 'juliaca', 'zona_destino' => 'mina', 'tipo_carga' => 'vacio'],
+        ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+    ];
+    $concentrado = ['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Concentrado a Pisco')->id, 'variante_ruta_id' => null];
+    $huaral = ['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Ida y vuelta Huaral')->id, 'variante_ruta_id' => null];
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), programar($this->tracto, [$concentrado], $ida))->assertSessionHasNoErrors();
+    $ticket = Vuelta::query()->sole();
+    Abastecimiento::factory()->paraVuelta($ticket)->create(['galones' => 150]);
+
+    // Se supo después que va a Huaral: el complemento suma 20.
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $ticket), programar($this->tracto, [$concentrado, $huaral], $ida))
+        ->assertSessionHasNoErrors();
+    expect($ticket->fresh()->topeDe(SentidoTramo::Ida))->toBe(240.0);
+
+    // Lo que ya tenía no se quita ni se cambia.
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $ticket), programar($this->tracto, [$concentrado], $ida))
+        ->assertSessionHasErrors('rutas');
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $ticket), programar($this->tracto, [
+        ['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Vacía a Lima')->id, 'variante_ruta_id' => null], $huaral,
+    ], $ida))->assertSessionHasErrors('rutas');
+
+    expect($ticket->fresh()->topeDe(SentidoTramo::Ida))->toBe(240.0);
+});
+
+it('marks a fuel line as full tank from the route editor', function (): void {
+    $kio = PuntoAbastecimiento::query()->where('nombre', 'Kio')->sole();
+    $datos = fn (bool $lleno, ?float $galones): array => [
+        'nombre' => 'Particular a Puno',
+        'sentido' => 'regreso',
+        'es_complemento' => false,
+        'activa' => true,
+        'paradas' => [['zona_origen' => 'lima', 'zona_destino' => 'juliaca', 'tipo_carga' => 'particular']],
+        'variantes' => [],
+        'lineas' => [
+            ['id' => null, 'variante' => null, 'tipo' => 'combustible', 'concepto' => 'Kio', 'punto_abastecimiento_id' => $kio->id, 'galones' => $galones, 'tanque_lleno' => $lleno],
+            ['id' => null, 'variante' => null, 'tipo' => 'combustible', 'concepto' => 'Arequipa', 'galones' => 150],
+        ],
+    ];
+
+    actingAs(actorConRol('admin'))->post(route('rutas.store'), $datos(true, 80))->assertSessionHasNoErrors();
+    $ruta = rutaDelCatalogo('Particular a Puno')->load(['lineas.punto', 'variantes']);
+    $full = $ruta->lineas->firstWhere('concepto', 'Kio');
+
+    // El full no lleva galones y no suma: el tope es lo de Arequipa.
+    expect($full->tanque_lleno)->toBeTrue()
+        ->and($full->galones)->toBeNull()
+        ->and($ruta->topePara(null))->toBe(150.0);
 });

@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
  * elegirla: su dotación es lo autorizado. Si el catálogo cambia después,
  * esto no. Un tramo tiene su ruta principal y, si hace falta, complementos.
  *
- * @phpstan-type LineaCopiada array{linea_id: int|null, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, monto: float|null}
+ * @phpstan-type LineaCopiada array{linea_id: int|null, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno?: bool, monto: float|null}
  *
  * @property int $id
  * @property int $vuelta_id
@@ -85,7 +85,20 @@ class RutaVuelta extends Model
     {
         return array_values(array_filter(
             $this->lineas,
-            fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value,
+            fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value && ! ($linea['tanque_lleno'] ?? false),
+        ));
+    }
+
+    /**
+     * Dónde se llena el tanque (Kio): sin galones fijos, va aparte del tope.
+     *
+     * @return list<LineaCopiada>
+     */
+    public function lineasDeTanqueLleno(): array
+    {
+        return array_values(array_filter(
+            $this->lineas,
+            fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value && ($linea['tanque_lleno'] ?? false),
         ));
     }
 

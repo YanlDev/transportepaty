@@ -92,7 +92,7 @@ class Ruta extends Model
      * Las líneas que tocan con esa variante (o sin ninguna): las comunes más
      * las propias de la variante. Necesita `lineas.punto` cargado.
      *
-     * @return list<array{linea_id: int, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, monto: float|null}>
+     * @return list<array{linea_id: int, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno: bool, monto: float|null}>
      */
     public function lineasPara(?VarianteRuta $variante): array
     {
@@ -112,9 +112,10 @@ class Ruta extends Model
             return null;
         }
 
+        // El tanque full no tiene galones fijos: no suma al tope.
         $galones = array_column(array_filter(
             $this->lineasPara($variante),
-            fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value,
+            fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value && ! $linea['tanque_lleno'],
         ), 'galones');
 
         return in_array(null, $galones, true) ? null : (float) array_sum($galones);

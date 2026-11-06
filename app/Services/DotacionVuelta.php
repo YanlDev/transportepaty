@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Collection;
  * El combustible cuenta en el tramo que se eligió al registrarlo, nunca se
  * reparte solo.
  *
- * @phpstan-type Tramo array{sentido: string, confirmada: bool, rutas: list<array{id: int, nombre: string, variante: string|null, color: string|null, es_complemento: bool, variante_pendiente: bool, tope: float|null, variantes: list<array{id: int, nombre: string}>, sugerida: int|null}>, tarjeta: string|null, color: string|null, previsto: float|null, registrado: float, despachado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null}>, pendiente: string|null}
+ * @phpstan-type Tramo array{sentido: string, confirmada: bool, rutas: list<array{id: int, nombre: string, variante: string|null, color: string|null, es_complemento: bool, variante_pendiente: bool, tope: float|null, variantes: list<array{id: int, nombre: string}>, sugerida: int|null}>, tarjeta: string|null, color: string|null, previsto: float|null, registrado: float, despachado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null}>, tanque_lleno: array{puntos: list<array{punto_id: int|null, punto: string}>, usado: bool, galones: float}, pendiente: string|null}
  * @phpstan-type FilaCombustible array{punto_id: int|null, punto: string, previsto: float|null, registrado: float, despachado: float, falta: float|null}
  */
 class DotacionVuelta
@@ -74,14 +74,18 @@ class DotacionVuelta
             $tramos[] = $this->tramo($vuelta, $sentido, $rutas, $delTramo);
         }
 
-        $combustible = $this->combustible($lineasDeCombustible, $vigentes);
+        // El tanque full va aparte: no tiene previsto ni suma al tope.
+        $combustible = $this->combustible($lineasDeCombustible, $vigentes->reject(fn (Abastecimiento $abastecimiento): bool => $abastecimiento->tanque_lleno));
         $previstos = array_column($combustible, 'previsto');
 
         return [
             'tarjetas' => $tarjetas,
             'combustible' => $combustible,
             'total_previsto' => in_array(null, $previstos, true) ? null : (float) array_sum($previstos),
-            'total_registrado' => (float) $vigentes->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones),
+            // En el tanque full lo autorizado es lo que entró, según el voucher.
+            'total_registrado' => (float) $vigentes->sum(fn (Abastecimiento $abastecimiento): float => $abastecimiento->tanque_lleno
+                ? (float) $abastecimiento->galones_despachados
+                : (float) $abastecimiento->galones),
             'total_despachado' => (float) $vigentes->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados),
             'tramos' => $tramos,
             'viaticos' => $viaticos,
@@ -165,6 +169,10 @@ class DotacionVuelta
      */
     private function tramo(Vuelta $vuelta, SentidoTramo $sentido, Collection $rutas, Collection $delTramo): array
     {
+        // El tanque full no tiene galones fijos: no cuenta contra el tope.
+        $llenos = $delTramo->filter(fn (Abastecimiento $abastecimiento): bool => $abastecimiento->tanque_lleno);
+        $delTramo = $delTramo->reject(fn (Abastecimiento $abastecimiento): bool => $abastecimiento->tanque_lleno);
+
         // Redondeado: sumar decimales (118.53 + 101.47…) deja restos que
         // harían que un tramo completo diga «faltan 0 gal».
         $registrado = round((float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => $abastecimiento->galonesQueCuentan()), 2);
@@ -207,6 +215,14 @@ class DotacionVuelta
             'despachado' => (float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados),
             'falta' => $previsto === null ? null : max(0.0, round($previsto - $registrado, 2)),
             'puntos' => array_values($puntos),
+            'tanque_lleno' => [
+                'puntos' => array_values(array_map(
+                    fn (array $linea): array => ['punto_id' => $linea['punto_id'], 'punto' => $linea['punto'] ?? $linea['concepto']],
+                    $rutas->flatMap(fn (RutaVuelta $ruta): array => $ruta->lineasDeTanqueLleno())->all(),
+                )),
+                'usado' => $llenos->isNotEmpty(),
+                'galones' => round((float) $llenos->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados), 2),
+            ],
             'pendiente' => $this->pendiente($rutas),
         ];
     }

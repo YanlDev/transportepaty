@@ -582,7 +582,9 @@ export function RutaDialog({
                             Dotación
                             <span className="block text-xs font-normal text-muted-foreground">
                                 Combustible sin galones = «por definir»: el
-                                tramo no tiene tope hasta completarlo.
+                                tramo no tiene tope hasta completarlo. «Tanque
+                                full» (Kio): sin galones, va aparte del tope y
+                                lo dice el voucher.
                             </span>
                         </span>
                         {data.lineas.map((linea, indice) => {
@@ -663,47 +665,83 @@ export function RutaDialog({
                                     ) : (
                                         <span />
                                     )}
-                                    <Input
-                                        type="number"
-                                        min="0"
-                                        step="0.01"
-                                        placeholder={
-                                            combustible ? 'gal (¿?)' : 'S/'
-                                        }
-                                        aria-invalid={
-                                            Boolean(
-                                                errores[
-                                                    `lineas.${indice}.monto`
-                                                ] ??
-                                                errores[
-                                                    `lineas.${indice}.galones`
-                                                ],
-                                            ) || undefined
-                                        }
-                                        value={
-                                            (combustible
-                                                ? linea.galones
-                                                : linea.monto) ?? ''
-                                        }
-                                        onChange={(evento) =>
-                                            cambiarLinea(
-                                                indice,
+                                    <div className="flex flex-col gap-1">
+                                        <Input
+                                            type="number"
+                                            disabled={
+                                                combustible &&
+                                                linea.tanque_lleno
+                                            }
+                                            min="0"
+                                            step="0.01"
+                                            placeholder={
                                                 combustible
-                                                    ? {
-                                                          galones: numeroONulo(
-                                                              evento.target
-                                                                  .value,
-                                                          ),
-                                                      }
-                                                    : {
-                                                          monto: numeroONulo(
-                                                              evento.target
-                                                                  .value,
-                                                          ),
-                                                      },
-                                            )
-                                        }
-                                    />
+                                                    ? linea.tanque_lleno
+                                                        ? 'full'
+                                                        : 'gal (¿?)'
+                                                    : 'S/'
+                                            }
+                                            aria-invalid={
+                                                Boolean(
+                                                    errores[
+                                                        `lineas.${indice}.monto`
+                                                    ] ??
+                                                    errores[
+                                                        `lineas.${indice}.galones`
+                                                    ],
+                                                ) || undefined
+                                            }
+                                            value={
+                                                (combustible
+                                                    ? linea.galones
+                                                    : linea.monto) ?? ''
+                                            }
+                                            onChange={(evento) =>
+                                                cambiarLinea(
+                                                    indice,
+                                                    combustible
+                                                        ? {
+                                                              galones:
+                                                                  numeroONulo(
+                                                                      evento
+                                                                          .target
+                                                                          .value,
+                                                                  ),
+                                                          }
+                                                        : {
+                                                              monto: numeroONulo(
+                                                                  evento.target
+                                                                      .value,
+                                                              ),
+                                                          },
+                                                )
+                                            }
+                                        />
+                                        {combustible && (
+                                            <label
+                                                className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                                title="Se llena el tanque: sin galones fijos, lo dice el voucher; no suma al tope"
+                                            >
+                                                <Checkbox
+                                                    checked={linea.tanque_lleno}
+                                                    onCheckedChange={(
+                                                        marcado,
+                                                    ) =>
+                                                        cambiarLinea(indice, {
+                                                            tanque_lleno:
+                                                                marcado ===
+                                                                true,
+                                                            galones:
+                                                                marcado === true
+                                                                    ? null
+                                                                    : linea.galones,
+                                                        })
+                                                    }
+                                                />
+                                                Tanque full
+                                            </label>
+                                        )}
+                                    </div>
                                     <Button
                                         type="button"
                                         variant="ghost"
@@ -757,6 +795,7 @@ export function RutaDialog({
                                                 concepto: etiqueta,
                                                 punto_abastecimiento_id: null,
                                                 galones: null,
+                                                tanque_lleno: false,
                                                 monto: null,
                                             },
                                         ])

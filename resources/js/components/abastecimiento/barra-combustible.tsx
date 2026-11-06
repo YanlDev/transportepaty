@@ -73,7 +73,11 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                         : tramo.registrado > 0
                           ? 100
                           : 0;
-                const completo = tramo.falta === 0 && tramo.previsto !== null;
+                const conFull = tramo.tanque_lleno.puntos.length > 0;
+                const completo =
+                    tramo.falta === 0 &&
+                    tramo.previsto !== null &&
+                    (!conFull || tramo.tanque_lleno.usado);
                 let acumulado = 0;
 
                 return (
@@ -152,6 +156,31 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                             ))}
                         </div>
                         <span />
+                        {conFull && (
+                            <>
+                                <span />
+                                <span
+                                    className={cn(
+                                        'text-[10px]',
+                                        tramo.tanque_lleno.usado
+                                            ? 'text-emerald-700 dark:text-emerald-400'
+                                            : 'text-amber-700 dark:text-amber-400',
+                                    )}
+                                    title="Va aparte del tope: los galones los dice el voucher"
+                                >
+                                    + tanque full en{' '}
+                                    {tramo.tanque_lleno.puntos
+                                        .map((punto) => punto.punto)
+                                        .join(' o ')}
+                                    {tramo.tanque_lleno.usado
+                                        ? tramo.tanque_lleno.galones > 0
+                                            ? ` · ${galones(tramo.tanque_lleno.galones)}`
+                                            : ' · falta el voucher'
+                                        : ' · pendiente'}
+                                </span>
+                                <span />
+                            </>
+                        )}
                     </div>
                 );
             })}

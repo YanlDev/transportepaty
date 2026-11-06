@@ -4,7 +4,9 @@ use App\Models\Ruta;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\Request;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Vite;
 use Spatie\Permission\Models\Role;
 use Tests\TestCase;
@@ -100,6 +102,17 @@ function actorConRol(string $rol): User
 /**
  * Una ruta del catálogo que cargan las migraciones (la de la oficina).
  */
+/**
+ * La foto del voucher del grifo, obligatoria al registrar un despacho. Las
+ * pruebas que la suben falsean el disco público.
+ */
+function fotoVoucher(): UploadedFile
+{
+    Storage::fake('public');
+
+    return UploadedFile::fake()->image('voucher.jpg', 600, 800);
+}
+
 function rutaDelCatalogo(string $nombre): Ruta
 {
     return Ruta::query()->where('nombre', $nombre)->sole();
