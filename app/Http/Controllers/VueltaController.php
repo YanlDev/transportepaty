@@ -496,6 +496,7 @@ class VueltaController extends Controller
                     'label' => $ruta->nombre,
                     'descripcion' => $ruta->descripcion ?? '',
                     'es_complemento' => $ruta->es_complemento,
+                    'sube_con' => $ruta->sube_con?->value,
                     'pide_destino' => $ruta->pide_destino,
                     'paradas' => $ruta->paradas,
                     'tope' => $ruta->topePara(null),
@@ -553,7 +554,7 @@ class VueltaController extends Controller
             ->whereNotNull('tracto_id')
             ->orderByDesc('fecha_traslado')
             ->orderByDesc('id')
-            ->get(['id', 'tracto_id', 'carreta_id', 'conductor_id', 'destino', 'numero_gr', 'fecha_traslado', 'placa_carreta', 'conductor_nombre'])
+            ->get(['id', 'tracto_id', 'carreta_id', 'conductor_id', 'destino', 'numero_gr', 'fecha_traslado', 'placa_carreta', 'conductor_nombre', 'tipo_carga', 'parada_vuelta_id'])
             ->unique('tracto_id')
             ->keyBy('tracto_id');
 
@@ -572,6 +573,7 @@ class VueltaController extends Controller
                     'carreta_id' => $ultima?->carreta_id,
                     'conductor_id' => $ultima?->conductor_id,
                     'zona_actual' => $ultima ? $this->dondeQuedo($ultima->destino)?->value : null,
+                    'trae' => $ultima ? $this->cargaQueTrae($ultima) : null,
                     'llego_a' => $ultima ? app(AsignadorVueltas::class)->lugar($ultima->destino) : null,
                     // Lo que dice el papel, aunque no calce con el padrón:
                     // así se ve de dónde salió lo que se dejó puesto.
@@ -585,6 +587,29 @@ class VueltaController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * La carga con la que la unidad sube de Juliaca a la mina en el ticket
+     * siguiente: la de su última GR, si iba a la mina cargada (escoria,
+     * materiales, sacos). El combustible de esa GR alcanzó hasta Juliaca; la
+     * subida va en la ida que se programa ahora, sin GR nueva.
+     *
+     * @return array{viaje_id: int, numero_gr: string|null, tipo_carga: string, tipo_carga_label: string, ticket: string|null}|null
+     */
+    private function cargaQueTrae(Viaje $ultima): ?array
+    {
+        if (ZonaRuta::desdeDireccion($ultima->destino) !== ZonaRuta::Mina || in_array($ultima->tipo_carga, [TipoCarga::Vacio, TipoCarga::Concentrado], true)) {
+            return null;
+        }
+
+        return [
+            'viaje_id' => $ultima->id,
+            'numero_gr' => $ultima->numero_gr,
+            'tipo_carga' => $ultima->tipo_carga->value,
+            'tipo_carga_label' => $ultima->tipo_carga->label(),
+            'ticket' => $ultima->parada_vuelta_id ? Vuelta::query()->whereHas('paradas', fn ($query) => $query->whereKey($ultima->parada_vuelta_id))->value('codigo') : null,
+        ];
     }
 
     /**
@@ -646,6 +671,8 @@ class VueltaController extends Controller
             'revisiones.usuario:id,name',
             'rutas',
             'llegadaRegistradaPor:id,name',
+            'paradas.viajeContinuado:id,numero_gr,parada_vuelta_id',
+            'paradas.viajeContinuado.parada.vuelta:id,codigo',
             'paradas.viajes' => fn ($query) => $query
                 ->select(['id', 'parada_vuelta_id', 'numero_gr', 'fecha_traslado', 'peso', 'unidad_peso', 'cliente', 'origen', 'destino', 'tipo_carga', 'asignada_por', 'asignada_at'])
                 ->with('asignadaPor:id,name')
@@ -738,8 +765,14 @@ class VueltaController extends Controller
             'fecha' => $parada->fecha?->toDateString(),
             // Lo planeado que todavía no tiene GR, y lo que llegó sin estar
             // en el plan: las dos diferencias entre lo programado y lo real.
-            'pendiente' => $deVueltaProgramada && ! $parada->esVacio() && $parada->viajes->isEmpty(),
+            // La carga que sigue de una GR del ticket anterior no espera otra.
+            'pendiente' => $deVueltaProgramada && ! $parada->esVacio() && ! $parada->esContinuacion() && $parada->viajes->isEmpty(),
             'fuera_de_programa' => $parada->fuera_de_programa,
+            'viaje_continuado_id' => $parada->viaje_continuado_id,
+            'continua' => $parada->viajeContinuado ? [
+                'numero_gr' => $parada->viajeContinuado->numero_gr,
+                'ticket' => $parada->viajeContinuado->parada?->vuelta?->codigo,
+            ] : null,
             'guias' => $parada->viajes
                 ->map(fn (Viaje $viaje): array => [
                     'id' => $viaje->id,

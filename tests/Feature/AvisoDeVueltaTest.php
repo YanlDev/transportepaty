@@ -75,7 +75,7 @@ it('tells the areas only what was confirmed from the board for the trip', functi
     $mensaje = app(AvisoDeVuelta::class)->mensajeParaArea($this->vuelta->fresh(['tracto', 'carreta', 'conductor', 'paradas.viajes']));
 
     expect($mensaje)
-        ->toContain('Combustible: ida 220 gal (Mina 100 gal · Arequipa 120 gal) · vuelta 130 gal (Total del tramo 130 gal)')
+        ->toContain('Combustible: ida 220 gal (Total del tramo 220 gal) · vuelta 130 gal (Total del tramo 130 gal)')
         ->toContain('Viático mina S/ 143.00');
 });
 

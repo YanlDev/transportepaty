@@ -10,8 +10,8 @@ use App\Services\PalabrasDeZona;
  * leer el circuito: dónde carga y descarga la unidad, no la dirección exacta.
  *
  * El lado (sierra o costa) es lo que parte el ticket en dos: la ida sale de
- * Juliaca o de la mina y termina en la costa, y la vuelta (el regreso)
- * termina de nuevo en la sierra. Las regiones del sur (Arequipa, Moquegua,
+ * Juliaca y termina en la costa, y la vuelta (el regreso) termina de nuevo
+ * en Juliaca. Las regiones del sur (Arequipa, Moquegua,
  * Tacna) y Cusco cuentan como sierra porque se llega a ellas subiendo y desde
  * ahí la unidad sigue a la base.
  */
@@ -79,13 +79,14 @@ enum ZonaRuta: string
     }
 
     /**
-     * Donde empieza y termina la vuelta: Juliaca y la mina. El sur y Cusco
-     * son destinos de paso de la carga particular: de ahí la unidad sigue a
-     * Juliaca.
+     * Donde empieza y termina la vuelta: solo Juliaca. Ahí se reinicia el
+     * combustible: todo carro pasa por Juliaca antes de subir a la mina, y
+     * lo que trae de la costa (escoria, materiales) le alcanza hasta ahí.
+     * La mina, el sur y Cusco son de paso: de ahí la unidad sigue a Juliaca.
      */
     public function esBase(): bool
     {
-        return in_array($this, [self::Mina, self::Juliaca], true);
+        return $this === self::Juliaca;
     }
 
     /**

@@ -23,8 +23,10 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
- * El ticket del viaje: una vuelta de la unidad, con su ida (sale de Juliaca
- * o de la mina y baja a la costa) y su regreso (vuelve a subir). Cada tramo
+ * El ticket del viaje: una vuelta de la unidad, de Juliaca a Juliaca, con
+ * su ida (sale de Juliaca, sube a la mina si va por concentrado y baja a la
+ * costa) y su regreso (vuelve a subir hasta Juliaca). En Juliaca se reinicia
+ * el combustible: por eso ahí termina un ticket y empieza el siguiente. Cada tramo
  * tiene una o más paradas, y las GR cuelgan de la parada en la que se hizo
  * la carga.
  *

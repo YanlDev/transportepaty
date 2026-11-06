@@ -170,6 +170,7 @@ class ProgramadorVueltas
                 'tipo_carga' => $parada['tipo_carga'],
                 'cliente_id' => $clienteId,
                 'cliente' => $clienteId ? Cliente::query()->whereKey($clienteId)->value('alias') : null,
+                'viaje_continuado_id' => $parada['viaje_continuado_id'] ?? null,
             ];
 
             if ($existente !== null) {

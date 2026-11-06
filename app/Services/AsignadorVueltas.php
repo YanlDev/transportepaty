@@ -73,7 +73,9 @@ class AsignadorVueltas
         }
 
         $delTrayecto = $vuelta->paradas
+            // La subida con la carga del ticket anterior ya tiene su GR.
             ->filter(fn (ParadaVuelta $parada): bool => ! $parada->esVacio()
+                && ! $parada->esContinuacion()
                 && $parada->zona_origen === $origen
                 && $parada->zona_destino === $destino);
 

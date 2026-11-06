@@ -1,6 +1,7 @@
 <?php
 
 use App\Enums\SentidoTramo;
+use App\Enums\TipoCarga;
 use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
@@ -11,6 +12,7 @@ use App\Models\PuntoAbastecimiento;
 use App\Models\Ruta;
 use App\Models\RutaVuelta;
 use App\Models\Vehiculo;
+use App\Models\Viaje;
 use App\Models\Vuelta;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
@@ -274,4 +276,61 @@ it('teaches a new place to the zones', function (): void {
     actingAs(actorConRol('admin'))
         ->post(route('programacion.palabras.store'), ['zona' => 'lima', 'palabra' => 'CARAVELI'])
         ->assertSessionHasErrors('palabra');
+});
+
+it('loads the mine circuit from Juliaca: 220 split as the driver likes, 230 going up with slag', function (): void {
+    $concentrado = rutaDelCatalogo('Concentrado a Pisco')->load('lineas.punto');
+    $combustible = $concentrado->lineas->where('tipo', TipoLineaAbastecimiento::Combustible);
+    $escoria = Ruta::query()->with('lineas.punto')->where('sube_con', TipoCarga::Escoria)->sole();
+
+    expect($combustible)->toHaveCount(1)
+        ->and($combustible->first()->punto_abastecimiento_id)->toBeNull()
+        ->and($concentrado->topePara(null))->toBe(220.0)
+        ->and($escoria->es_complemento)->toBeTrue()
+        ->and($escoria->sentido)->toBe(SentidoTramo::Ida)
+        ->and($escoria->topePara(null))->toBe(10.0)
+        ->and(rutaDelCatalogo('Escoria a mina')->nota)->toContain('hasta Juliaca');
+});
+
+it('goes up to the mine with the slag of the previous ticket: same GR and 230 gallons', function (): void {
+    $guiaDeEscoria = Viaje::factory()->create([
+        'tracto_id' => $this->tracto->id,
+        'tipo_carga' => TipoCarga::Escoria,
+        'destino' => 'SAN RAFAEL - ANTAUTA - MELGAR - PUNO',
+    ]);
+    $ida = [
+        ['sentido' => 'ida', 'zona_origen' => 'juliaca', 'zona_destino' => 'mina', 'tipo_carga' => 'escoria', 'viaje_continuado_id' => $guiaDeEscoria->id],
+        ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+    ];
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), programar($this->tracto, [
+        ['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Concentrado a Pisco')->id, 'variante_ruta_id' => null],
+        ['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Sube con escoria')->id, 'variante_ruta_id' => null],
+    ], $ida))->assertSessionHasNoErrors();
+
+    $ticket = Vuelta::query()->sole();
+    $subida = $ticket->paradasDe(SentidoTramo::Ida)->first();
+
+    expect($ticket->topeDe(SentidoTramo::Ida))->toBe(230.0)
+        ->and($subida->viaje_continuado_id)->toBe($guiaDeEscoria->id);
+
+    // No espera una GR propia: muestra la que sigue.
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.show', $ticket))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('ticket.ida.0.continua.numero_gr', $guiaDeEscoria->numero_gr)
+            ->where('ticket.ida.0.pendiente', false));
+});
+
+it('does not continue the GR of another unit', function (): void {
+    $deOtra = Viaje::factory()->create(['tipo_carga' => TipoCarga::Escoria]);
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), programar($this->tracto, [
+        ['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Concentrado a Pisco')->id, 'variante_ruta_id' => null],
+    ], [
+        ['sentido' => 'ida', 'zona_origen' => 'juliaca', 'zona_destino' => 'mina', 'tipo_carga' => 'escoria', 'viaje_continuado_id' => $deOtra->id],
+        ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+    ]))->assertSessionHasErrors('paradas.0.viaje_continuado_id');
+
+    expect(Vuelta::query()->count())->toBe(0);
 });

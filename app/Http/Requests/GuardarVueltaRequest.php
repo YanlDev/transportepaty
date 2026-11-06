@@ -50,6 +50,7 @@ class GuardarVueltaRequest extends FormRequest
             'paradas.*.zona_destino' => ['required', Rule::enum(ZonaRuta::class)],
             'paradas.*.tipo_carga' => ['required', Rule::enum(TipoCarga::class)->except([TipoCarga::Sacos])],
             'paradas.*.cliente_id' => ['nullable', Rule::exists('clientes', 'id')],
+            'paradas.*.viaje_continuado_id' => ['nullable', Rule::exists('viajes', 'id')],
             // El lugar exacto cuando la zona no alcanza: «Tacna», «Ilo».
             'paradas.*.lugar_origen' => ['nullable', 'string', 'max:100'],
             'paradas.*.lugar_destino' => ['nullable', 'string', 'max:100'],
@@ -111,6 +112,16 @@ class GuardarVueltaRequest extends FormRequest
 
                     if ($mismaZona && ($lugarOrigen === '' || $lugarDestino === '' || $lugarOrigen === $lugarDestino)) {
                         $validator->errors()->add("paradas.{$indice}.zona_destino", 'El destino tiene que ser distinto del origen.');
+                    }
+
+                    // La carga que sigue tiene que ser de esta unidad: la GR
+                    // de otra placa no sube en este carro.
+                    $continuada = filled($parada['viaje_continuado_id'] ?? null)
+                        ? Viaje::query()->find((int) $parada['viaje_continuado_id'], ['id', 'tracto_id', 'numero_gr'])
+                        : null;
+
+                    if ($continuada !== null && $continuada->tracto_id !== $this->integer('tracto_id')) {
+                        $validator->errors()->add("paradas.{$indice}.viaje_continuado_id", "La GR {$continuada->numero_gr} es de otra unidad: no sigue en este ticket.");
                     }
                 }
 
