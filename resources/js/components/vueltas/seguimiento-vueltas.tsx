@@ -410,10 +410,18 @@ function Fila({
 }
 
 /**
+ * La fecha con que se ordena: la de la última GR si ya va en ruta; si no,
+ * el día en que sale.
+ */
+const fechaDe = (vuelta: TarjetaVuelta): string =>
+    vuelta.actual?.fecha ?? vuelta.inicio ?? '';
+
+/**
  * El seguimiento de la programación: una fila por unidad, como rastrear un
  * paquete. Se ve la ruta del ticket con el camión donde va y lo que le
  * falta. Se lee igual en la computadora y en el celular. Ordenado por etapa
- * y, dentro de cada una, por placa.
+ * y, dentro de cada una, por fecha (lo que sale antes, arriba); a igual
+ * fecha, por ticket.
  */
 export function SeguimientoVueltas({
     vueltas,
@@ -425,7 +433,10 @@ export function SeguimientoVueltas({
     const orden = (vuelta: TarjetaVuelta) =>
         ETAPAS.findIndex((etapa) => etapa.etapa === vuelta.etapa);
     const ordenadas = [...vueltas].sort(
-        (a, b) => orden(a) - orden(b) || a.placa.localeCompare(b.placa, 'es'),
+        (a, b) =>
+            orden(a) - orden(b) ||
+            fechaDe(a).localeCompare(fechaDe(b)) ||
+            (a.codigo ?? '').localeCompare(b.codigo ?? '', 'es'),
     );
 
     if (ordenadas.length === 0) {

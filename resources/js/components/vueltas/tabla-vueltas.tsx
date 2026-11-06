@@ -85,8 +85,9 @@ export function TablaVueltas({
     /** Sin agrupar: una sola tabla (las salidas de un día). */
     agrupar?: boolean;
 }) {
+    // Por fecha, como el seguimiento: lo que sale antes, arriba.
     const [orden, setOrden] = useState<{ columna: Columna; asc: boolean }>({
-        columna: 'placa',
+        columna: 'fecha',
         asc: true,
     });
 
