@@ -314,9 +314,17 @@ class AbastecimientoController extends Controller
             ->map(fn (PuntoAbastecimiento $punto): array => [
                 'id' => $punto->id,
                 'nombre' => $punto->nombre,
-                'ultimo_precio' => ($precio = $precios->get($punto->id)?->precio_galon ?? $precios->get($punto->id)?->precio_autorizado) === null ? null : (float) $precio,
+                'ultimo_precio' => ($precio = $this->ultimoPrecio($precios->get($punto->id))) === null ? null : (float) $precio,
             ])
             ->all());
+    }
+
+    /**
+     * El precio del voucher si llegó; si no, con el que se autorizó.
+     */
+    private function ultimoPrecio(?Abastecimiento $registro): ?string
+    {
+        return $registro === null ? null : ($registro->precio_galon ?? $registro->precio_autorizado);
     }
 
     /**
