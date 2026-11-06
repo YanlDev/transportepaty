@@ -30,7 +30,7 @@ export const ETAPAS: Etapa[] = [
     {
         etapa: 'en_ida',
         titulo: 'En ida',
-        ayuda: 'De Juliaca o la mina hacia Pisco o Lima',
+        ayuda: 'De Juliaca, por la mina, hacia Pisco o Lima',
         punto: 'bg-amber-500',
         texto: 'text-amber-700 dark:text-amber-400',
         suave: 'border-amber-300 bg-amber-50 text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200',
@@ -46,7 +46,7 @@ export const ETAPAS: Etapa[] = [
     {
         etapa: 'en_base',
         titulo: 'En base',
-        ayuda: 'En Juliaca o la mina, disponibles para programar',
+        ayuda: 'En Juliaca, disponibles para programar',
         punto: 'bg-emerald-500',
         texto: 'text-emerald-700 dark:text-emerald-400',
         suave: 'border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200',

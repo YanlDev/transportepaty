@@ -105,6 +105,39 @@ it('tells the board what each ticket needs next', function (): void {
             ->where('tablero.0.siguiente.detalle', 'Esperando la revisión'));
 });
 
+it('does not count programming the return leg as progress', function (): void {
+    // Se programó con la vuelta ya sabida (escoria): todavía no sale.
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $this->vuelta->id, 'sentido' => SentidoTramo::Regreso, 'orden' => 2,
+        'zona_origen' => ZonaRuta::Pisco, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Escoria,
+        'lugar_origen' => null, 'lugar_destino' => null,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('tablero.0.siguiente.clave', 'taller')
+            ->where('tablero.0.saltados', []));
+});
+
+it('does not list the outbound steps as skipped when the ticket has no outbound leg', function (): void {
+    // La unidad ya estaba en la costa cuando empezaron los tickets: el
+    // ticket arranca en Lima con la vuelta (particular a Arequipa).
+    $this->ida->update([
+        'sentido' => SentidoTramo::Regreso, 'zona_origen' => ZonaRuta::Lima, 'zona_destino' => ZonaRuta::Arequipa, 'tipo_carga' => TipoCarga::Particular,
+    ]);
+    RevisionTaller::factory()->create(['vuelta_id' => $this->vuelta->id]);
+
+    expect(pasosDe($this->vuelta))->not->toHaveKeys(['abastecimiento_ida', 'en_ida'])
+        ->toHaveKeys(['taller', 'regreso', 'abastecimiento_vuelta', 'en_vuelta']);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('tablero.0.siguiente.clave', 'abastecimiento_vuelta')
+            ->where('tablero.0.saltados', []));
+});
+
 it('follows on from where the unit is, and lists what was skipped', function (): void {
     // Ya va en ida, salió sin el OK de taller ni combustible registrado.
     Viaje::factory()->create(['tracto_id' => null, 'fecha_traslado' => now()->subDay()->toDateString()])
