@@ -2,7 +2,7 @@
 
 use App\Models\Ajuste;
 use App\Models\AreaAviso;
-use App\Services\AvisoDeSalida;
+use App\Services\ContactoWhatsapp;
 use App\Services\WhatsappServicio;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Request;
@@ -144,7 +144,7 @@ it('keeps everyone but the admin from managing the areas or the oficina phone', 
     actingAs(actorConRol($rol))->put(route('whatsapp.oficina'), ['telefono_oficina' => '1'])->assertForbidden();
 })->with(['visor', 'contador']);
 
-it('saves the oficina phone that goes into the advertencia', function (): void {
+it('saves the oficina phone', function (): void {
     Http::fake();
 
     actingAs(actorConRol('admin'))
@@ -152,7 +152,7 @@ it('saves the oficina phone that goes into the advertencia', function (): void {
         ->assertSessionHasNoErrors();
 
     expect(Ajuste::valor(Ajuste::TELEFONO_OFICINA))->toBe('923-275-353')
-        ->and(app(AvisoDeSalida::class)->advertencia())->toContain('Oficina: 923-275-353');
+        ->and(app(ContactoWhatsapp::class)->telefonoOficina())->toBe('923-275-353');
 });
 
 it('remembers for a few seconds whether the number is linked, instead of asking on every page load', function (): void {

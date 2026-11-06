@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\Permiso;
+use App\Enums\RolBase;
 use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\PermissionRegistrar;
@@ -47,6 +48,12 @@ class SincronizadorPermisos
 
         app(PermissionRegistrar::class)->forgetCachedPermissions();
 
+        // Los roles base existen en todos los ambientes, aunque nadie los
+        // haya creado a mano.
+        foreach (RolBase::valores() as $nombre) {
+            Role::findOrCreate($nombre, self::GUARD);
+        }
+
         Role::findOrCreate(self::ROL_ADMIN, self::GUARD)
             ->load('permissions')
             ->syncPermissions(Permiso::valores());
@@ -65,5 +72,23 @@ class SincronizadorPermisos
             ->whereIn('name', array_keys($porRol))
             ->get()
             ->each(fn (Role $rol) => $rol->givePermissionTo($porRol[$rol->name]));
+    }
+
+    /**
+     * Deja cada rol base exactamente como lo define `RolBase`: lo que le
+     * falta se agrega y lo que sobra se quita. No corre en cada deploy (pisaría
+     * lo que se ajustó desde el panel): solo cuando se reordenan los roles,
+     * desde una migración.
+     */
+    public function aplicarRolesBase(): void
+    {
+        $this->sincronizar();
+
+        foreach (RolBase::cases() as $rol) {
+            Role::findOrCreate($rol->value, self::GUARD)
+                ->syncPermissions(array_map(fn (Permiso $permiso): string => $permiso->value, $rol->permisos()));
+        }
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
     }
 }

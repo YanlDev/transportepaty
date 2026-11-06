@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\LecturaKilometrajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -22,14 +23,15 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property Carbon $leido_en
  * @property int|null $user_id
  * @property string|null $observacion
+ * @property string|null $origen El paso del ticket que la anotó; null si se anotó a mano.
  * @property-read Vehiculo $vehiculo
  * @property-read User|null $user
  */
-#[Fillable(['vehiculo_id', 'kilometraje', 'leido_en', 'user_id', 'observacion'])]
+#[Fillable(['vehiculo_id', 'kilometraje', 'leido_en', 'user_id', 'observacion', 'origen'])]
 class LecturaKilometraje extends Model implements HasMedia
 {
     /** @use HasFactory<LecturaKilometrajeFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     use InteractsWithMedia;
 

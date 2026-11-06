@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Enums\Permiso;
 use App\Models\User;
+use App\Services\PalabrasDeZona;
 use App\Services\SincronizadorPermisos;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
@@ -20,7 +21,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Una lectura de las palabras de cada zona por petición (o por job).
+        $this->app->scoped(PalabrasDeZona::class);
     }
 
     /**
@@ -52,6 +54,9 @@ class AppServiceProvider extends ServiceProvider
         // Vincular el número de la empresa y probarlo: solo admin, porque ese
         // número habla en nombre de Transportes Paty.
         Gate::define('administrar-whatsapp', fn (User $user): bool => $user->checkPermissionTo(Permiso::WhatsappAdministrar));
+
+        // Qué alertas salen, por dónde y a quién.
+        Gate::define('configurar-alertas', fn (User $user): bool => $user->checkPermissionTo(Permiso::AlertasConfigurar));
 
         // Quién puede qué no se delega: quien pudiera repartir permisos podría
         // darse cualquiera a sí mismo. Queda en el admin, igual que los usuarios.

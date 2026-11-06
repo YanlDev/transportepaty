@@ -43,6 +43,14 @@ export type Permiso =
     | 'programacion.editar'
     | 'programacion.eliminar'
     | 'programacion.avisar'
+    | 'programacion.configurar'
+    | 'programacion.cerrar'
+    | 'taller.ver'
+    | 'taller.revisar'
+    | 'abastecimiento.ver'
+    | 'abastecimiento.registrar'
+    | 'abastecimiento.configurar'
+    | 'abastecimiento.viaticos'
     | 'asistencia.ver'
     | 'asistencia.marcar'
     | 'asistencia.ajustar'
@@ -59,7 +67,9 @@ export type Permiso =
     | 'cobranza.gestionar'
     | 'cuentas.ver'
     | 'cuentas.gestionar'
-    | 'whatsapp.administrar';
+    | 'whatsapp.administrar'
+    | 'alertas.configurar'
+    | 'historial.ver';
 
 /** Un bloque de la matriz de permisos: un módulo con sus acciones. */
 export type ModuloPermisos = {

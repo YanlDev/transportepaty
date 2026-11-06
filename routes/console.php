@@ -14,6 +14,12 @@ Schedule::command('transpaty:recordatorio-sin-gr')
     ->everyMinute()
     ->withoutOverlapping();
 
+// Los resúmenes diarios de alertas, cada uno a su hora (ver
+// `ConfiguracionAlerta`): el comando decide solo si toca mandar.
+Schedule::command('transpaty:alertas-diarias')
+    ->everyMinute()
+    ->withoutOverlapping();
+
 // El respaldo diario, a las 9 p. m. de Lima (el servidor está en hora de Berlín).
 Schedule::command('transpaty:respaldar')
     ->dailyAt('21:00')

@@ -2,9 +2,11 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -19,6 +21,7 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string $name
  * @property string $username
  * @property string|null $email
+ * @property string|null $celular Para mandarle sus alertas por WhatsApp.
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $two_factor_secret
@@ -27,8 +30,11 @@ use Spatie\Permission\Traits\HasRoles;
  * @property string|null $remember_token
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property Carbon|null $baja_at Dejó la empresa: no entra, pero sigue en el historial.
+ * @property int|null $baja_por
+ * @property string|null $motivo_baja
  */
-#[Fillable(['name', 'username', 'email', 'password'])]
+#[Fillable(['name', 'username', 'email', 'celular', 'password'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 /**
  * Sin `MustVerifyEmail`: el correo no es la credencial de entrada —lo es el
@@ -40,7 +46,28 @@ use Spatie\Permission\Traits\HasRoles;
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, HasRoles, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasFactory, HasRoles, Notifiable, PasskeyAuthenticatable, RegistraHistorial, TwoFactorAuthenticatable;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return $this->username;
+    }
+
+    public function estaDeBaja(): bool
+    {
+        return $this->baja_at !== null;
+    }
+
+    /**
+     * Los que siguen en la empresa: a los dados de baja no se les manda
+     * nada ni se los ofrece en las listas.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeActivos(Builder $query): void
+    {
+        $query->whereNull($query->qualifyColumn('baja_at'));
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -53,6 +80,7 @@ class User extends Authenticatable implements PasskeyUser
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'baja_at' => 'datetime',
         ];
     }
 }

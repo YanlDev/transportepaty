@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\PlanMantenimientoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
@@ -24,7 +25,7 @@ use Illuminate\Support\Str;
 class PlanMantenimiento extends Model
 {
     /** @use HasFactory<PlanMantenimientoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     protected $table = 'planes_mantenimiento';
 

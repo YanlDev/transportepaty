@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\EstadoCobranza;
 use App\Enums\MotivoBajaGre;
 use App\Enums\TipoCarga;
+use App\Models\Concerns\RegistraHistorial;
 use App\Services\AsociadorFacturas;
 use Database\Factories\ViajeFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -50,6 +51,12 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $conductor_nombre
  * @property string|null $conductor_dni
  * @property int|null $conductor_id
+ * @property int|null $parada_vuelta_id La parada del ticket: la asigna una persona, nunca el sistema.
+ * @property int|null $asignada_por
+ * @property Carbon|null $asignada_at
+ * @property Carbon|null $sin_ticket_at Se decidió que no va en ningún ticket.
+ * @property int|null $sin_ticket_por
+ * @property string|null $motivo_sin_ticket
  * @property string|null $observaciones
  * @property Carbon|null $gr_fisica_recibida_at
  * @property Carbon|null $no_facturable_at
@@ -63,6 +70,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property-read Vehiculo|null $tracto
  * @property-read Vehiculo|null $carreta
  * @property-read Conductor|null $conductor
+ * @property-read ParadaVuelta|null $parada
  * @property-read Cliente|null $clienteDelPadron
  * @property-read User|null $anuladaPor
  */
@@ -98,7 +106,12 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class Viaje extends Model implements HasMedia
 {
     /** @use HasFactory<ViajeFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return 'GR '.$this->numero_gr;
+    }
 
     use InteractsWithMedia;
 
@@ -177,6 +190,26 @@ class Viaje extends Model implements HasMedia
     }
 
     /**
+     * Quién la puso en su ticket.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function asignadaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'asignada_por');
+    }
+
+    /**
+     * Quién decidió que no va en ningún ticket.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function sinTicketPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'sin_ticket_por');
+    }
+
+    /**
      * Incluye tractos y carretas dados de baja (soft delete): el historial de
      * viajes debe seguir mostrando con qué fierro se hizo aunque ya no exista
      * en la flota.
@@ -194,6 +227,16 @@ class Viaje extends Model implements HasMedia
     public function carreta(): BelongsTo
     {
         return $this->belongsTo(Vehiculo::class, 'carreta_id')->withTrashed();
+    }
+
+    /**
+     * La parada de la vuelta en la que se hizo esta carga.
+     *
+     * @return BelongsTo<ParadaVuelta, $this>
+     */
+    public function parada(): BelongsTo
+    {
+        return $this->belongsTo(ParadaVuelta::class, 'parada_vuelta_id');
     }
 
     /**
@@ -502,6 +545,8 @@ class Viaje extends Model implements HasMedia
             'gr_fisica_recibida_at' => 'datetime',
             'no_facturable_at' => 'datetime',
             'anulada_at' => 'datetime',
+            'asignada_at' => 'datetime',
+            'sin_ticket_at' => 'datetime',
             'baja_sunat_at' => 'datetime',
             'motivo_baja_sunat' => MotivoBajaGre::class,
             'guias_remitente' => 'array',

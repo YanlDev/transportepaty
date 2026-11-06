@@ -1,11 +1,17 @@
 <?php
 
+use App\Http\Controllers\AbastecimientoController;
+use App\Http\Controllers\AlertaController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
-use App\Http\Controllers\AvisoSalidaController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\ConciliacionCombustibleController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
+use App\Http\Controllers\ConfiguracionAbastecimientoController;
+use App\Http\Controllers\ConfiguracionAlertaController;
+use App\Http\Controllers\ConfiguracionController;
+use App\Http\Controllers\ConfiguracionProgramacionController;
 use App\Http\Controllers\ContabilidadController;
 use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\CuentaBancariaController;
@@ -13,6 +19,8 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmisionGreController;
 use App\Http\Controllers\EquipamientoCarretaController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\GuiaPorAsignarController;
+use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\LecturaKilometrajeController;
 use App\Http\Controllers\LlantaController;
 use App\Http\Controllers\MantenimientoController;
@@ -20,13 +28,16 @@ use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\OrdenTrabajoController;
 use App\Http\Controllers\ParametroCostoController;
 use App\Http\Controllers\PlanMantenimientoController;
-use App\Http\Controllers\ProgramacionController;
 use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\RolController;
+use App\Http\Controllers\RutaController;
+use App\Http\Controllers\TallerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
 use App\Http\Controllers\ViajeController;
+use App\Http\Controllers\ViaticoController;
+use App\Http\Controllers\VueltaController;
 use App\Http\Controllers\WhatsappController;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Support\Facades\Route;
@@ -43,6 +54,10 @@ Route::post('whatsapp/recibos', ReciboWhatsappController::class)
 
 Route::middleware('auth')->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // La puerta única de la configuración: cada ajuste sigue en su
+    // pantalla, acá se juntan.
+    Route::get('configuracion', [ConfiguracionController::class, 'index'])->name('configuracion.index');
 
     Route::resource('conductores', ConductorController::class)
         ->parameters(['conductores' => 'conductor']);
@@ -149,26 +164,81 @@ Route::middleware('auth')->group(function () {
 
     // Qué unidades salen con carga particular cada día. Se carga antes de
     // que exista la GR, así que no se deduce de `viajes`.
-    Route::get('programacion', [ProgramacionController::class, 'index'])->name('programacion.index');
-    Route::post('programacion', [ProgramacionController::class, 'store'])->name('programacion.store');
-    Route::put('programacion/{programacion}', [ProgramacionController::class, 'update'])
-        ->name('programacion.update');
-    // Corregir los números a los que se avisa, desde la misma fila.
-    Route::patch('programacion/{programacion}/numeros', [ProgramacionController::class, 'actualizarNumeros'])
-        ->name('programacion.numeros');
-    // El preaviso al conductor: queda registrado que se mandó.
-    Route::post('programacion/{programacion}/aviso', [ProgramacionController::class, 'registrarAviso'])
-        ->name('programacion.aviso');
-    Route::delete('programacion/{programacion}', [ProgramacionController::class, 'destroy'])
-        ->name('programacion.destroy');
-    Route::get('programacion/{programacion}/aviso/{tipo}', [AvisoSalidaController::class, 'imagen'])
-        ->name('programacion.aviso.imagen');
-    Route::post('programacion/{programacion}/aviso/{tipo}', [AvisoSalidaController::class, 'enviar'])
-        ->name('programacion.aviso.enviar');
-    Route::get('programacion/{programacion}/aviso-area/{area}', [AvisoSalidaController::class, 'imagenArea'])
-        ->name('programacion.avisoArea.imagen');
-    Route::post('programacion/{programacion}/aviso-area/{area}', [AvisoSalidaController::class, 'enviarArea'])
-        ->name('programacion.avisoArea.enviar');
+    // Taller: la bandeja de tickets por revisar y el apto o no apto de salida.
+    Route::get('taller', [TallerController::class, 'index'])->name('taller.index');
+    Route::post('vueltas/{vuelta}/revision-taller', [TallerController::class, 'store'])->name('taller.store');
+
+    // Abastecimiento: el tablero con lo autorizado a cada ticket (la
+    // tarjeta confirmada de cada tramo), el combustible autorizado, que se
+    // anula y nunca se borra, y el despacho real del voucher; aparte, la
+    // pizarra de dotaciones y la conciliación del mes.
+    Route::get('abastecimiento', [AbastecimientoController::class, 'index'])->name('abastecimiento.index');
+    Route::get('abastecimiento/conciliacion', [ConciliacionCombustibleController::class, 'index'])->name('abastecimiento.conciliacion');
+    Route::post('abastecimiento', [AbastecimientoController::class, 'store'])->name('abastecimiento.store');
+    Route::post('abastecimiento/{abastecimiento}/anular', [AbastecimientoController::class, 'anular'])->name('abastecimiento.anular');
+    Route::put('abastecimiento/{abastecimiento}/despacho', [AbastecimientoController::class, 'despacho'])->name('abastecimiento.despacho');
+    Route::post('rutas-vuelta/{rutaVuelta}/variante', [AbastecimientoController::class, 'elegirVariante'])->name('abastecimiento.variante');
+
+    // El catálogo de rutas: el recorrido y la dotación de cada tramo
+    // estándar. Lo que se elige al programar y lo que abastecimiento ejecuta.
+    Route::get('rutas', [RutaController::class, 'index'])->name('rutas.index');
+    Route::post('rutas', [RutaController::class, 'store'])->name('rutas.store');
+    Route::put('rutas/{ruta}', [RutaController::class, 'update'])->name('rutas.update');
+    Route::delete('rutas/{ruta}', [RutaController::class, 'destroy'])->name('rutas.destroy');
+    // Los viáticos de cada ticket: se depositan, se corrigen y se anulan;
+    // nunca se borran.
+    Route::post('abastecimiento/viaticos', [ViaticoController::class, 'store'])->name('viaticos.store');
+    Route::put('abastecimiento/viaticos/{viatico}', [ViaticoController::class, 'update'])->name('viaticos.update');
+    Route::post('abastecimiento/viaticos/{viatico}/anular', [ViaticoController::class, 'anular'])->name('viaticos.anular');
+    Route::get('abastecimiento/configuracion', [ConfiguracionAbastecimientoController::class, 'index'])
+        ->name('abastecimiento.configuracion');
+    Route::post('abastecimiento/puntos', [ConfiguracionAbastecimientoController::class, 'storePunto'])
+        ->name('abastecimiento.puntos.store');
+    Route::put('abastecimiento/puntos/{punto}', [ConfiguracionAbastecimientoController::class, 'updatePunto'])
+        ->name('abastecimiento.puntos.update');
+    Route::delete('abastecimiento/puntos/{punto}', [ConfiguracionAbastecimientoController::class, 'destroyPunto'])
+        ->name('abastecimiento.puntos.destroy');
+
+    // La configuración de la programación: destinos de la carga particular
+    // y palabras de cada zona. Antes que las rutas con
+    // {vuelta} para que «configuracion» no se lea como una vuelta.
+    Route::get('vueltas/configuracion', [ConfiguracionProgramacionController::class, 'index'])
+        ->name('programacion.configuracion');
+    Route::post('vueltas/configuracion/destinos', [ConfiguracionProgramacionController::class, 'storeDestino'])
+        ->name('programacion.destinos.store');
+    Route::put('vueltas/configuracion/destinos/{destino}', [ConfiguracionProgramacionController::class, 'updateDestino'])
+        ->name('programacion.destinos.update');
+    Route::delete('vueltas/configuracion/destinos/{destino}', [ConfiguracionProgramacionController::class, 'destroyDestino'])
+        ->name('programacion.destinos.destroy');
+    Route::post('vueltas/configuracion/palabras', [ConfiguracionProgramacionController::class, 'storePalabra'])
+        ->name('programacion.palabras.store');
+    Route::delete('vueltas/configuracion/palabras/{palabra}', [ConfiguracionProgramacionController::class, 'destroyPalabra'])
+        ->name('programacion.palabras.destroy');
+
+    // Las GR por asignar: ninguna cae sola en un ticket. Quien programa la
+    // asigna (o la marca sin ticket, con motivo) y la puede volver a sacar.
+    Route::get('vueltas/guias', [GuiaPorAsignarController::class, 'index'])->name('vueltas.guias');
+    Route::post('viajes/{viaje}/ticket', [GuiaPorAsignarController::class, 'asignar'])->name('viajes.ticket.asignar');
+    Route::delete('viajes/{viaje}/ticket', [GuiaPorAsignarController::class, 'quitar'])->name('viajes.ticket.quitar');
+    Route::post('viajes/{viaje}/sin-ticket', [GuiaPorAsignarController::class, 'sinTicket'])->name('viajes.sinTicket');
+    Route::delete('viajes/{viaje}/sin-ticket', [GuiaPorAsignarController::class, 'devolver'])->name('viajes.sinTicket.devolver');
+
+    // El ticket de cada unidad: ida y vuelta, programado por una persona.
+    Route::get('vueltas', [VueltaController::class, 'index'])->name('vueltas.index');
+    Route::get('vueltas/unidades/{vehiculo}', [VueltaController::class, 'unidad'])->name('vueltas.unidad');
+    Route::get('vueltas/{vuelta}', [VueltaController::class, 'show'])->whereNumber('vuelta')->name('vueltas.show');
+    Route::post('vueltas', [VueltaController::class, 'store'])->name('vueltas.store');
+    Route::put('vueltas/{vuelta}', [VueltaController::class, 'update'])->name('vueltas.update');
+    Route::delete('vueltas/{vuelta}', [VueltaController::class, 'destroy'])->name('vueltas.destroy');
+    Route::post('vueltas/{vuelta}/llegada', [VueltaController::class, 'registrarLlegada'])->name('vueltas.llegada');
+    Route::post('vueltas/{vuelta}/cerrar', [VueltaController::class, 'cerrar'])->name('vueltas.cerrar');
+    Route::post('vueltas/{vuelta}/reabrir', [VueltaController::class, 'reabrir'])->name('vueltas.reabrir');
+    Route::post('vueltas/{vuelta}/aviso', [VueltaController::class, 'avisarConductor'])->name('vueltas.aviso');
+    Route::post('vueltas/{vuelta}/aviso-area/{area}', [VueltaController::class, 'avisarArea'])->name('vueltas.avisoArea');
+
+    // La pantalla de salidas de antes: quien la tenga en favoritos llega a
+    // los tickets.
+    Route::redirect('programacion', '/vueltas');
 
     // Mantenimiento: el semáforo de la flota, el km que se anota al llegar a
     // base y las órdenes de taller. `ordenes/crear` va antes que
@@ -240,7 +310,10 @@ Route::middleware('auth')->group(function () {
     Route::prefix('settings')->group(function () {
         Route::resource('usuarios', UserController::class)
             ->parameters(['usuarios' => 'user'])
-            ->except(['show']);
+            ->except(['show', 'destroy']);
+        // Nadie se borra: se da de baja y se puede reactivar.
+        Route::post('usuarios/{user}/baja', [UserController::class, 'darDeBaja'])->name('usuarios.baja');
+        Route::post('usuarios/{user}/reactivar', [UserController::class, 'reactivar'])->name('usuarios.reactivar');
         Route::put('usuarios/{user}/password', [UserController::class, 'updatePassword'])
             ->name('usuarios.password.update');
 
@@ -249,6 +322,7 @@ Route::middleware('auth')->group(function () {
         Route::put('roles/{rol}', [RolController::class, 'update'])->name('roles.update');
         Route::delete('roles/{rol}', [RolController::class, 'destroy'])->name('roles.destroy');
 
+        Route::get('historial', [HistorialController::class, 'index'])->name('historial.index');
         Route::get('whatsapp', [WhatsappController::class, 'index'])->name('whatsapp.index');
         Route::post('whatsapp/vincular', [WhatsappController::class, 'vincular'])->name('whatsapp.vincular');
         Route::post('whatsapp/probar', [WhatsappController::class, 'probar'])->name('whatsapp.probar');
@@ -258,7 +332,16 @@ Route::middleware('auth')->group(function () {
         Route::post('whatsapp/areas', [AreaAvisoController::class, 'store'])->name('whatsapp.areas.store');
         Route::put('whatsapp/areas/{area}', [AreaAvisoController::class, 'update'])->name('whatsapp.areas.update');
         Route::delete('whatsapp/areas/{area}', [AreaAvisoController::class, 'destroy'])->name('whatsapp.areas.destroy');
+
+        Route::get('alertas', [ConfiguracionAlertaController::class, 'index'])->name('alertas.configuracion');
+        Route::put('alertas/{tipo}', [ConfiguracionAlertaController::class, 'update'])->name('alertas.configuracion.update');
+        Route::post('alertas/{tipo}/probar', [ConfiguracionAlertaController::class, 'probar'])->name('alertas.configuracion.probar');
     });
+
+    // La bandeja de alertas de cada quien: sin permiso, cada uno ve las suyas.
+    Route::get('alertas', [AlertaController::class, 'index'])->name('alertas.index');
+    Route::post('alertas/leidas', [AlertaController::class, 'leerTodas'])->name('alertas.leidas');
+    Route::post('alertas/{alerta}/abrir', [AlertaController::class, 'abrir'])->name('alertas.abrir');
 
     Route::redirect('usuarios', '/settings/usuarios');
     Route::redirect('roles', '/settings/roles');

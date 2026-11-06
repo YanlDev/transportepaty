@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePoll } from '@inertiajs/react';
 import {
     AlertTriangle,
     Container,
@@ -17,6 +17,8 @@ import {
     DocumentosPanel,
     UnidadesPanel,
 } from '@/components/dashboard/paneles-flota';
+import { PendientesPanel } from '@/components/dashboard/pendientes-panel';
+import type { Pendiente } from '@/components/dashboard/pendientes-panel';
 import { TopLista } from '@/components/dashboard/top-lista';
 import { UltimosViajes } from '@/components/dashboard/ultimos-viajes';
 import { Indicador } from '@/components/ui/indicador';
@@ -68,6 +70,8 @@ type Props = {
     viajesPorTipoCliente: ViajesPorTipoCliente;
     topCargas: { tipo: string; label: string; valor: number }[];
     ultimosViajes: ConductorViajeItem[];
+    /** Lo que le toca hoy a quien entró, según sus permisos. */
+    pendientes: Pendiente[];
 };
 
 export default function Dashboard({
@@ -81,7 +85,12 @@ export default function Dashboard({
     viajesPorTipoCliente,
     topCargas,
     ultimosViajes,
+    pendientes,
 }: Props) {
+    // Los pendientes cambian solos (llega una GR, taller da el apto): se
+    // refrescan cada minuto sin tocar el resto.
+    usePoll(60_000, { only: ['pendientes'] });
+
     // Todo el tablero se lee por mes: el en curso o uno que ya cerró.
     const mesEnCurso = rango.meses[0]?.valor;
     const verMes = (mes: string) => {
@@ -94,15 +103,17 @@ export default function Dashboard({
 
     return (
         <div className="mx-auto flex h-full w-full max-w-[1600px] flex-1 flex-col gap-4 p-4 md:p-6">
-            <Head title="Dashboard" />
+            <Head title="Inicio" />
+
+            <PendientesPanel pendientes={pendientes} />
 
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold tracking-tight">
-                        Operaciones
-                    </h1>
+                    <h2 className="text-lg font-semibold tracking-tight">
+                        Resumen del mes
+                    </h2>
                     <p className="text-sm text-muted-foreground">
-                        Resumen general de la flota, viajes y carga.
+                        La flota, los viajes y la carga.
                     </p>
                 </div>
 

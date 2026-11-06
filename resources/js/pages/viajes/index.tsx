@@ -1,10 +1,18 @@
 import { Head, Link } from '@inertiajs/react';
-import { FilePenLine, Route as RouteIcon, Send } from 'lucide-react';
+import {
+    FilePenLine,
+    FileStack,
+    Route,
+    Route as RouteIcon,
+    Send,
+} from 'lucide-react';
 import { useState } from 'react';
 import emisionGre from '@/actions/App/Http/Controllers/EmisionGreController';
+import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import viajes, { create } from '@/actions/App/Http/Controllers/ViajeController';
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { EmptyState } from '@/components/empty-state';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { FiltroSelect } from '@/components/filtro-select';
 import { FiltrosBarra } from '@/components/filtros-barra';
 import { ListadoResponsivo } from '@/components/listado-responsivo';
@@ -57,7 +65,21 @@ export default function ViajesIndex({
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
-            <Head title="Viajes" />
+            <Head title="Guías de remisión" />
+
+            <EncabezadoPantalla
+                titulo="Guías de remisión"
+                descripcion="Al subir una GR, queda en «GR por asignar» hasta que alguien la pone en el ticket de su unidad."
+                icono={Route}
+                acciones={
+                    <Button asChild variant="outline">
+                        <Link href={guiasRutas.index().url}>
+                            <FileStack className="size-4" />
+                            GR por asignar
+                        </Link>
+                    </Button>
+                }
+            />
 
             {/* Arrastrar el PDF desde la carpeta de la GR y soltarlo en la
                 pantalla. Solo para quien puede importar: al visor no le sirve
@@ -208,5 +230,5 @@ export default function ViajesIndex({
  */
 
 ViajesIndex.layout = {
-    breadcrumbs: [{ title: 'Viajes', href: viajes.index().url }],
+    breadcrumbs: [{ title: 'Guías de remisión', href: viajes.index().url }],
 };

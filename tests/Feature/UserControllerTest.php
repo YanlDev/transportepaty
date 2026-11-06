@@ -1,6 +1,9 @@
 <?php
 
+use App\Enums\RolBase;
+use App\Models\ConfiguracionAlerta;
 use App\Models\User;
+use App\Services\Alertas;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -78,8 +81,9 @@ it('only offers the roles that exist', function (): void {
         ->assertSuccessful()
         ->assertInertia(fn (Assert $page) => $page
             ->component('usuarios/create')
-            ->where('roles', fn ($roles): bool => collect($roles)->pluck('name')->all() === ['admin', 'contador', 'gerencia', 'rrhh', 'visor'])
-            ->where('roles.4.permisos', fn ($permisos): bool => collect($permisos)->contains('viajes.ver'))
+            // Los roles base, más el de prueba de solo lectura.
+            ->where('roles', fn ($roles): bool => collect($roles)->pluck('name')->sort()->values()->all() === collect([...RolBase::valores(), 'visor'])->sort()->values()->all())
+            ->where('roles', fn ($roles): bool => collect(collect($roles)->firstWhere('name', 'contador')['permisos'])->contains('viajes.ver'))
         );
 });
 
@@ -200,35 +204,61 @@ it('lets an admin reset a user password', function (): void {
     expect(Hash::check('nueva-contrasena', $user->fresh()->password))->toBeTrue();
 });
 
-it('lets an admin delete a user', function (): void {
-    $user = User::factory()->create();
-    $user->assignRole('visor');
+it('gives a user a leave instead of deleting them, and they cannot log in anymore', function (): void {
+    $user = User::factory()->create(['username' => 'dejo', 'password' => 'secreta-123']);
+    $user->assignRole('contador');
 
     actingAs(actorConRol('admin'))
-        ->delete(route('usuarios.destroy', $user))
-        ->assertRedirect(route('usuarios.index'));
+        ->post(route('usuarios.baja', $user), ['motivo' => ''])
+        ->assertSessionHasErrors('motivo');
+    actingAs(actorConRol('admin'))
+        ->post(route('usuarios.baja', $user), ['motivo' => 'Dejó la empresa'])
+        ->assertSessionHas('toast.type', 'success');
 
-    $this->assertDatabaseMissing('users', ['id' => $user->id]);
+    $user->refresh();
+    expect($user->estaDeBaja())->toBeTrue()
+        ->and($user->motivo_baja)->toBe('Dejó la empresa');
+
+    auth()->logout();
+    $this->post(route('login.store'), ['username' => 'dejo', 'password' => 'secreta-123'])
+        ->assertSessionHasErrors('username');
+    $this->assertGuest();
 });
 
-it('prevents an admin from deleting their own account', function (): void {
+it('logs out a user that was given a leave while their session was open', function (): void {
+    $user = actorConRol('contador');
+    $user->forceFill(['baja_at' => now()])->save();
+
+    actingAs($user)->get(route('dashboard'))->assertRedirect(route('login'));
+    $this->assertGuest();
+});
+
+it('brings a user back from a leave', function (): void {
+    $user = User::factory()->create(['baja_at' => now(), 'motivo_baja' => 'Vacaciones largas']);
+
+    actingAs(actorConRol('admin'))->post(route('usuarios.reactivar', $user))->assertSessionHas('toast.type', 'success');
+
+    expect($user->fresh()->estaDeBaja())->toBeFalse();
+});
+
+it('does not give a leave to oneself or by a non-admin', function (): void {
     $admin = actorConRol('admin');
+    $otro = User::factory()->create();
 
-    actingAs($admin)
-        ->delete(route('usuarios.destroy', $admin))
-        ->assertForbidden();
+    actingAs($admin)->post(route('usuarios.baja', $admin), ['motivo' => 'x'])->assertForbidden();
+    actingAs(actorConRol('visor'))->post(route('usuarios.baja', $otro), ['motivo' => 'x'])->assertForbidden();
 
-    $this->assertDatabaseHas('users', ['id' => $admin->id]);
+    expect($admin->fresh()->estaDeBaja())->toBeFalse()
+        ->and($otro->fresh()->estaDeBaja())->toBeFalse();
 });
 
-it('forbids non-admins from deleting users', function (): void {
-    $user = User::factory()->create();
+it('does not send alerts to users on leave', function (): void {
+    actorConRol('contador')->forceFill(['baja_at' => now()])->save();
+    $activo = actorConRol('contador');
 
-    actingAs(actorConRol('visor'))
-        ->delete(route('usuarios.destroy', $user))
-        ->assertForbidden();
+    $destinatarios = app(Alertas::class)->destinatarios(ConfiguracionAlerta::factory()->make(['roles' => ['contador'], 'usuarios' => []]));
 
-    $this->assertDatabaseHas('users', ['id' => $user->id]);
+    expect($destinatarios->pluck('id')->all())->toBe([$activo->id]);
 });
 
 it('has public registration disabled', function (): void {

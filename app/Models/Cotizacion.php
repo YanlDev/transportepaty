@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\EstadoCotizacion;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\CotizacionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -89,7 +90,12 @@ use Illuminate\Support\Carbon;
 class Cotizacion extends Model
 {
     /** @use HasFactory<CotizacionFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
+
+    public function etiquetaHistorial(): ?string
+    {
+        return 'Cotización '.$this->numero;
+    }
 
     /**
      * La serie con la que Paty numera sus proformas. Se mantiene la que ya

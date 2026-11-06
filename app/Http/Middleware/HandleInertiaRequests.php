@@ -2,7 +2,10 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\AlertaController;
+use App\Services\PendientesDelInicio;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -40,6 +43,9 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            // trpatytest.aveja.cloud corre con los datos copiados de prod: sin
+            // la franja de aviso, alguien podría cargar ahí algo real.
+            'esAmbientePrueba' => app()->environment('staging'),
             'auth' => [
                 'user' => $user,
                 'roles' => $user ? $user->getRoleNames()->all() : [],
@@ -48,6 +54,15 @@ class HandleInertiaRequests extends Middleware
                 'permisos' => $user ? $user->getAllPermissions()->pluck('name')->values()->all() : [],
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            // El número junto a Taller, Abastecimiento y Programación. Se
+            // calcula a lo más una vez por minuto por usuario: va en todas
+            // las páginas.
+            // La campanita: cuántas alertas faltan leer y las últimas. Se
+            // pide de nuevo cada minuto desde la página abierta.
+            'alertas' => fn (): ?array => $user ? AlertaController::campanita($request) : null,
+            'pendientesMenu' => fn (): array => $user
+                ? Cache::remember("pendientes-menu:{$user->id}", 60, fn (): array => app(PendientesDelInicio::class)->porEntradaDelMenu($user))
+                : [],
         ];
     }
 }

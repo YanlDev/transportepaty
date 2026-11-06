@@ -11,6 +11,7 @@ import {
     Resaltado,
 } from '@/components/confirmar-borrado-dialog';
 import { MatrizPermisos } from '@/components/roles/matriz-permisos';
+import { ResumenRol } from '@/components/roles/resumen-rol';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -39,6 +40,8 @@ type Rol = {
     id: number;
     name: string;
     usuarios: number;
+    /** Quiénes tienen el rol. */
+    miembros: { id: number; nombre: string; usuario: string | null }[];
     permisos: Permiso[];
     bloqueado: boolean;
 };
@@ -236,6 +239,13 @@ function EditorRol({
                     </div>
                 )}
             </section>
+
+            <ResumenRol
+                nombre={rol.name}
+                permisos={data.permisos}
+                miembros={rol.miembros}
+                todo={rol.bloqueado}
+            />
 
             {errors.permisos && (
                 <p className="text-sm text-destructive">{errors.permisos}</p>

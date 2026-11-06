@@ -37,6 +37,9 @@ enum Permiso: string
     case MantenimientoLlantas = 'mantenimiento.llantas';
     case MantenimientoEquipamiento = 'mantenimiento.equipamiento';
 
+    case TallerVer = 'taller.ver';
+    case TallerRevisar = 'taller.revisar';
+
     case NovedadesRegistrar = 'novedades.registrar';
     case NovedadesLevantar = 'novedades.levantar';
 
@@ -52,6 +55,16 @@ enum Permiso: string
     case ProgramacionEditar = 'programacion.editar';
     case ProgramacionEliminar = 'programacion.eliminar';
     case ProgramacionAvisar = 'programacion.avisar';
+    case ProgramacionConfigurar = 'programacion.configurar';
+    case ProgramacionCerrar = 'programacion.cerrar';
+    case ProgramacionAsignarGr = 'programacion.asignar_gr';
+    case ProgramacionLlegada = 'programacion.llegada';
+
+    case AbastecimientoVer = 'abastecimiento.ver';
+    case AbastecimientoRegistrar = 'abastecimiento.registrar';
+    case AbastecimientoConfigurar = 'abastecimiento.configurar';
+    case AbastecimientoViaticos = 'abastecimiento.viaticos';
+    case AbastecimientoExcederTope = 'abastecimiento.exceder_tope';
 
     case AsistenciaVer = 'asistencia.ver';
     case AsistenciaMarcar = 'asistencia.marcar';
@@ -77,43 +90,52 @@ enum Permiso: string
 
     case WhatsappAdministrar = 'whatsapp.administrar';
 
+    case AlertasConfigurar = 'alertas.configurar';
+
+    case HistorialVer = 'historial.ver';
+
     /**
      * Los módulos en el orden en que los muestra el panel, con su nombre.
      *
      * @var array<string, string>
      */
     public const MODULOS = [
-        'tablero' => 'Tablero',
-        'vehiculos' => 'Vehículos',
+        'tablero' => 'Inicio',
+        'programacion' => 'Programación (tickets)',
+        'taller' => 'Taller (OK de salida)',
+        'abastecimiento' => 'Abastecimiento',
+        'viajes' => 'Guías de remisión',
+        'vehiculos' => 'Unidades',
         'mantenimiento' => 'Mantenimiento',
         'novedades' => 'Novedades de unidades',
         'conductores' => 'Conductores',
         'asistencia' => 'Asistencia',
-        'programacion' => 'Programación',
-        'viajes' => 'Viajes',
         'cotizaciones' => 'Cotizaciones',
         'clientes' => 'Clientes',
         'costos' => 'Parámetros de costo',
         'cobranza' => 'Cobranza',
         'cuentas' => 'Cuentas bancarias',
         'whatsapp' => 'WhatsApp',
+        'alertas' => 'Alertas',
+        'historial' => 'Historial de movimientos',
     ];
 
     /**
-     * Las áreas de la empresa y sus módulos. Es la misma división que el menú
-     * y que los roles: cada área tiene su rol (Flota la ve Gerencia y la
-     * maneja el admin), y el panel de permisos se agrupa así para que se vea
-     * de un vistazo qué área toca cada rol.
+     * Las áreas de la empresa y sus módulos. Es la misma división que el menú:
+     * Operación es todo lo que le pasa a un ticket (programarlo, el OK de
+     * taller, el combustible, sus GR); Flota, las unidades y quienes las
+     * manejan. El panel de permisos se agrupa así para que se vea de un
+     * vistazo qué toca cada rol.
      *
      * @var array<string, array{nombre: string, modulos: list<string>}>
      */
     public const AREAS = [
         'general' => ['nombre' => 'General', 'modulos' => ['tablero']],
-        'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades']],
-        'rrhh' => ['nombre' => 'RRHH', 'modulos' => ['conductores', 'asistencia']],
-        'programacion' => ['nombre' => 'Programación', 'modulos' => ['programacion', 'viajes', 'cotizaciones', 'clientes', 'costos']],
-        'contabilidad' => ['nombre' => 'Contabilidad', 'modulos' => ['cobranza', 'cuentas']],
-        'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp']],
+        'operacion' => ['nombre' => 'Operación', 'modulos' => ['programacion', 'taller', 'abastecimiento', 'viajes']],
+        'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades', 'conductores', 'asistencia']],
+        'comercial' => ['nombre' => 'Comercial', 'modulos' => ['cotizaciones', 'clientes', 'costos']],
+        'finanzas' => ['nombre' => 'Finanzas', 'modulos' => ['cobranza', 'cuentas']],
+        'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp', 'alertas', 'historial']],
     ];
 
     /**
@@ -153,6 +175,8 @@ enum Permiso: string
             self::MantenimientoConfigurar => 'Configurar el plan de cada marca',
             self::MantenimientoLlantas => 'Registrar instalaciones, mediciones y cambios de llantas',
             self::MantenimientoEquipamiento => 'Contar el equipamiento de las carretas',
+            self::TallerVer => 'Ver los tickets por revisar',
+            self::TallerRevisar => 'Dar el apto o no apto de salida',
             self::NovedadesRegistrar => 'Registrar novedades',
             self::NovedadesLevantar => 'Levantar novedades',
             self::ViajesVer => 'Ver viajes',
@@ -166,6 +190,15 @@ enum Permiso: string
             self::ProgramacionEditar => 'Editar salidas',
             self::ProgramacionEliminar => 'Quitar salidas',
             self::ProgramacionAvisar => 'Avisar salidas por WhatsApp',
+            self::ProgramacionConfigurar => 'Configurar opciones de tramo, destinos y zonas',
+            self::ProgramacionCerrar => 'Liquidar, cerrar y reabrir tickets',
+            self::ProgramacionAsignarGr => 'Asignar las GR a los tickets (o marcarlas sin ticket)',
+            self::ProgramacionLlegada => 'Registrar la llegada a la base',
+            self::AbastecimientoVer => 'Ver el abastecimiento',
+            self::AbastecimientoRegistrar => 'Confirmar la tarjeta, autorizar combustible y registrar el despacho',
+            self::AbastecimientoConfigurar => 'Configurar puntos y reglas de dotación',
+            self::AbastecimientoViaticos => 'Depositar, corregir y anular viáticos',
+            self::AbastecimientoExcederTope => 'Autorizar combustible por encima del tope de la tarjeta',
             self::AsistenciaVer => 'Ver la asistencia',
             self::AsistenciaMarcar => 'Marcar y desmarcar días',
             self::AsistenciaAjustar => 'Ajustar días debidos y notas',
@@ -183,47 +216,25 @@ enum Permiso: string
             self::CuentasVer => 'Ver las cuentas',
             self::CuentasGestionar => 'Administrar las cuentas',
             self::WhatsappAdministrar => 'Vincular el número y las áreas de aviso',
+            self::AlertasConfigurar => 'Configurar qué alertas salen, por dónde y a quién',
+            self::HistorialVer => 'Ver el historial de movimientos del sistema',
         };
     }
 
     /**
-     * A qué roles base se les da el permiso la primera vez que aparece.
-     *
-     * Solo se aplica al crearlo: si después alguien lo quita desde el panel,
-     * volver a sincronizar no lo repone. El admin no figura porque siempre
-     * tiene todo.
+     * A qué roles base se les da el permiso la primera vez que aparece: los
+     * que lo tienen en `RolBase`. Solo se aplica al crearlo: si después
+     * alguien lo quita desde el panel, volver a sincronizar no lo repone. El
+     * admin no figura porque siempre tiene todo.
      *
      * @return list<string>
      */
     public function rolesPorDefecto(): array
     {
-        $roles = match ($this) {
-            self::TableroVer,
-            self::VehiculosVer,
-            self::ViajesVer => ['visor', 'contador'],
-            self::ConductoresVer,
-            self::ProgramacionVer,
-            self::ClientesVer,
-            self::CotizacionesVer => ['visor'],
-            self::CobranzaVer,
-            self::CobranzaGestionar,
-            self::CuentasVer,
-            self::CuentasGestionar => ['contador'],
-            default => [],
-        };
-
-        // Gerencia ve todo y no toca nada: recibe cada «ver», también los de
-        // los módulos que se agreguen después.
-        if (str_ends_with($this->value, '.ver')) {
-            $roles[] = 'gerencia';
-        }
-
-        // El tablero también: es la pantalla a la que se llega al entrar.
-        if (in_array($this->modulo(), ['tablero', 'conductores', 'asistencia'], true)) {
-            $roles[] = 'rrhh';
-        }
-
-        return $roles;
+        return array_values(array_map(
+            fn (RolBase $rol): string => $rol->value,
+            array_filter(RolBase::cases(), fn (RolBase $rol): bool => $rol !== RolBase::Admin && $rol->tiene($this)),
+        ));
     }
 
     /**

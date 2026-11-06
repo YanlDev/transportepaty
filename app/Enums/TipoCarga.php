@@ -99,14 +99,30 @@ enum TipoCarga: string
     ];
 
     /**
+     * Series de Minsur que no dicen qué se lleva: EG07 es la guía
+     * electrónica que Minsur usa para todo lo que no es mineral. Lo que va a
+     * la mina (desde Lima, Pisco o Juliaca) son materiales; lo que sale de
+     * ella o va a otro lado se deja sin clasificar.
+     *
+     * @var list<string>
+     */
+    private const SERIES_MINSUR_GENERALES = ['EG07'];
+
+    /**
      * Deriva el tipo de carga a partir de la serie de una guía remitente de
      * Minsur (ej. «T007 - 9609» → Concentrado). Devuelve null si la serie no
      * es una de las reconocidas — quien llame decide qué hacer con eso (no
      * clasificar, dejar en Particular, etc.), esto no asume un default.
+     * Las series generales (EG07) solo se clasifican si la carga va a la
+     * mina: entonces son materiales.
      */
-    public static function desdeGuiaRemitenteMinsur(string $numeroGuiaRemitente): ?self
+    public static function desdeGuiaRemitenteMinsur(string $numeroGuiaRemitente, bool $vaALaMina = false): ?self
     {
         $serie = strtoupper(trim(explode('-', $numeroGuiaRemitente)[0]));
+
+        if (in_array($serie, self::SERIES_MINSUR_GENERALES, true)) {
+            return $vaALaMina ? self::Materiales : null;
+        }
 
         return self::SERIES_MINSUR[$serie] ?? null;
     }

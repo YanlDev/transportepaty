@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TipoCarga;
+use App\Enums\ZonaRuta;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\Vehiculo;
@@ -105,7 +106,7 @@ class ImportadorViaje
         ];
 
         if (! $yaExiste) {
-            $tipoCarga = $this->clasificarCarga($campos['guias_remitente']);
+            $tipoCarga = $this->clasificarCarga($campos['guias_remitente'], $campos['destino']);
 
             if ($tipoCarga !== null) {
                 $atributos['tipo_carga'] = $tipoCarga->value;
@@ -240,9 +241,12 @@ class ImportadorViaje
      * (`transpaty:clasificar-carga-minsur`), que corrige viajes que ya
      * existían antes de que esta regla se agregara.
      *
+     * El destino hace falta para las series generales de Minsur (EG07): lo
+     * que va a la mina son materiales.
+     *
      * @param  list<array{numero: string, ruc: string}>  $guiasRemitente
      */
-    public function clasificarCarga(array $guiasRemitente): ?TipoCarga
+    public function clasificarCarga(array $guiasRemitente, ?string $destino = null): ?TipoCarga
     {
         $primera = $guiasRemitente[0] ?? null;
 
@@ -250,7 +254,10 @@ class ImportadorViaje
             return null;
         }
 
-        return TipoCarga::desdeGuiaRemitenteMinsur($primera['numero']);
+        return TipoCarga::desdeGuiaRemitenteMinsur(
+            $primera['numero'],
+            $destino !== null && ZonaRuta::desdeDireccion($destino) === ZonaRuta::Mina,
+        );
     }
 
     private function buscarVehiculo(?string $placa): ?Vehiculo

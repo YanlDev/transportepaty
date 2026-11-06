@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\TipoOrdenTrabajo;
+use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\OrdenTrabajoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -55,7 +56,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 class OrdenTrabajo extends Model implements HasMedia
 {
     /** @use HasFactory<OrdenTrabajoFactory> */
-    use HasFactory;
+    use HasFactory, RegistraHistorial;
 
     use InteractsWithMedia;
 

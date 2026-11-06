@@ -14,11 +14,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Un aviso mandado por el número de la empresa y hasta dónde llegó.
  *
  * @property int $id
- * @property int|null $programacion_id
+ * @property int|null $programacion_id De la pantalla de salidas de antes; ya no se llena.
+ * @property int|null $vuelta_id
  * @property int|null $area_aviso_id
+ * @property int|null $user_id A quién iba la alerta, si fue a un usuario y no a un área.
  * @property string $tipo
+ * @property string|null $alerta El `TipoAlerta`, si el envío es una alerta.
  * @property string $destino
  * @property string $numero
+ * @property string|null $texto El mensaje de una alerta, ya armado.
  * @property EstadoEnvio $estado
  * @property string|null $mensaje_id
  * @property string|null $error
@@ -27,15 +31,18 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property CarbonImmutable|null $entregado_at
  * @property CarbonImmutable|null $leido_at
  * @property CarbonImmutable $created_at
- * @property-read Programacion|null $programacion
+ * @property-read Vuelta|null $vuelta
  * @property-read AreaAviso|null $area
  */
 #[Fillable([
-    'programacion_id',
+    'vuelta_id',
     'area_aviso_id',
+    'user_id',
     'tipo',
+    'alerta',
     'destino',
     'numero',
+    'texto',
     'estado',
     'mensaje_id',
     'error',
@@ -51,21 +58,22 @@ class EnvioWhatsapp extends Model
 
     public const TIPO_CONDUCTOR = 'conductor';
 
-    public const TIPO_ADVERTENCIA = 'advertencia';
-
     public const TIPO_AREA = 'area';
 
     /** Las unidades de hoy que siguen sin GR, a un área (sin salida propia). */
     public const TIPO_RECORDATORIO = 'recordatorio';
 
+    /** Una alerta del sistema (ver `TipoAlerta`), con su texto ya armado. */
+    public const TIPO_ALERTA = 'alerta';
+
     protected $table = 'envios_whatsapp';
 
     /**
-     * @return BelongsTo<Programacion, $this>
+     * @return BelongsTo<Vuelta, $this>
      */
-    public function programacion(): BelongsTo
+    public function vuelta(): BelongsTo
     {
-        return $this->belongsTo(Programacion::class);
+        return $this->belongsTo(Vuelta::class);
     }
 
     /**

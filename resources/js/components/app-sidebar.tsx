@@ -1,26 +1,32 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     Building2,
     Calculator,
     CalendarCheck,
-    Container,
+    CalendarDays,
+    ClipboardCheck,
+    Fuel,
     IdCard,
     LayoutGrid,
     Receipt,
     Route,
+    Settings,
     Truck,
     Wrench,
 } from 'lucide-react';
+import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoController';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
+import configuracion from '@/actions/App/Http/Controllers/ConfiguracionController';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
-import programacion from '@/actions/App/Http/Controllers/ProgramacionController';
+import taller from '@/actions/App/Http/Controllers/TallerController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
+import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import AppLogo from '@/components/app-logo';
 import { NavMain } from '@/components/nav-main';
 import { NavUser } from '@/components/nav-user';
@@ -39,43 +45,42 @@ import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
 /**
- * El menú va por áreas —Flota, RRHH, Programación, Contabilidad— y no
- * como una lista corrida: con doce destinos, los títulos son lo que permite
- * saltar al bloque que se busca sin leerlos todos. Cada entrada sigue siendo
- * de un clic; agrupar es para leer, no para esconder.
+ * El menú va por áreas de trabajo y no por tablas: Operación es todo lo que
+ * le pasa a un ticket (programarlo, el OK de taller, el combustible, sus
+ * GR); Flota, las unidades y quienes las manejan; Comercial y Finanzas, lo
+ * que se cobra. La configuración entera está en una sola entrada, abajo.
  *
  * Una sección cuyas entradas no le corresponden al rol no se dibuja, ni su
  * título: `NavMain` devuelve null con la lista vacía.
  */
 const dashboardNavItem: NavItem = {
-    title: 'Dashboard',
+    title: 'Inicio',
     href: dashboard(),
     icon: LayoutGrid,
 };
 
 /**
- * Las unidades y quienes las manejan. Tractos y carretas van separados —con
- * su propio ícono— para encontrar cada uno directo, en vez de filtrar por tipo
- * dentro de un listado combinado.
+ * Tractos y carretas en una sola entrada: la pantalla tiene una pestaña para
+ * cada uno.
  */
-const flotaNavItems: NavItem[] = [
-    {
-        title: 'Tractos',
-        href: vehiculos.tractos(),
-        icon: Truck,
-    },
-    {
-        title: 'Carretas',
-        href: vehiculos.carretas(),
-        icon: Container,
-    },
-];
+const unidadesNavItem: NavItem = {
+    title: 'Unidades',
+    href: vehiculos.tractos(),
+    icon: Truck,
+};
 
 /** El semáforo de taller: qué unidad necesita servicio y cuál viene. */
 const mantenimientoNavItem: NavItem = {
     title: 'Mantenimiento',
     href: mantenimiento.index(),
     icon: Wrench,
+};
+
+/** El OK de salida de cada ticket: la bandeja de taller. */
+const tallerNavItem: NavItem = {
+    title: 'Taller',
+    href: taller.index(),
+    icon: ClipboardCheck,
 };
 
 /** Requiere admin o visor: el contador no ve el padrón de choferes. */
@@ -85,28 +90,39 @@ const conductoresNavItem: NavItem = {
     icon: IdCard,
 };
 
-/** Los viajes: los lee también el contador, que factura contra ellos. */
+/** Las guías de remisión: las lee también el contador, que factura contra ellas. */
 const viajesNavItem: NavItem = {
-    title: 'Viajes',
+    title: 'Guías (GR)',
     href: viajes.index(),
     icon: Route,
 };
 
-/**
- * Qué unidades salen con carga particular cada día. La lee abastecimiento
- * para preparar la carga, así que entra con el mismo permiso de operación.
- */
+/** Los tickets: cada viaje nace acá. */
 const programacionNavItem: NavItem = {
     title: 'Programación',
-    href: programacion.index(),
+    href: vueltas.index(),
     icon: CalendarCheck,
+};
+
+/** Lo que le toca a cada unidad y el combustible que se le autoriza. */
+const abastecimientoNavItem: NavItem = {
+    title: 'Abastecimiento',
+    href: abastecimiento.index(),
+    icon: Fuel,
 };
 
 /** El control del personal. */
 const asistenciaNavItem: NavItem = {
     title: 'Asistencia',
     href: asistencia.index(),
-    icon: CalendarCheck,
+    icon: CalendarDays,
+};
+
+/** Todos los ajustes en una sola puerta; cada quien ve los suyos. */
+const configuracionNavItem: NavItem = {
+    title: 'Configuración',
+    href: configuracion.index(),
+    icon: Settings,
 };
 
 /** Cada uno aparece con su permiso de lectura. */
@@ -133,6 +149,7 @@ const contabilidadNavItem: NavItem = {
 export function AppSidebar() {
     const { puede } = usePermisos();
     const { isCurrentUrl } = useCurrentUrl();
+    const { pendientesMenu } = usePage().props;
 
     // Cotizaciones es un solo módulo con pestañas (cotizador, emitidas,
     // tarifario). Quien puede cotizar entra por el cotizador, que es para lo
@@ -161,35 +178,60 @@ export function AppSidebar() {
                 : item,
         );
 
-    // Las secciones son las áreas de la empresa —las mismas de los roles y
-    // del panel de permisos (`Permiso::AREAS`)—, así cada rol ve justo su
-    // bloque del menú.
-    const flota = [
-        ...(puede('vehiculos.ver') ? flotaNavItems : []),
-        ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
+    // Las secciones son las áreas de la empresa —las mismas del panel de
+    // permisos (`Permiso::AREAS`)—, así cada rol ve justo su bloque.
+    // El número de pendientes de hoy junto a cada entrada: se ve desde
+    // cualquier pantalla, no solo desde el Inicio.
+    const operacion = [
+        ...(puede('programacion.ver')
+            ? [{ ...programacionNavItem, badge: pendientesMenu.programacion }]
+            : []),
+        ...(puede('taller.ver')
+            ? [{ ...tallerNavItem, badge: pendientesMenu.taller }]
+            : []),
+        // Facturación entra solo a los viáticos: también ve el área.
+        ...(puede('abastecimiento.ver') || puede('abastecimiento.viaticos')
+            ? [
+                  {
+                      ...abastecimientoNavItem,
+                      badge: pendientesMenu.abastecimiento,
+                  },
+              ]
+            : []),
+        ...(puede('viajes.ver') ? [viajesNavItem] : []),
     ];
 
-    const rrhh = [
+    const flota = [
+        // Tractos y carretas son una sola entrada, con pestañas; se marca
+        // en cualquiera de las dos y en la ficha de una unidad.
+        ...(puede('vehiculos.ver')
+            ? [
+                  {
+                      ...unidadesNavItem,
+                      isActive:
+                          isCurrentUrl(vehiculos.tractos()) ||
+                          isCurrentUrl(vehiculos.carretas()) ||
+                          isCurrentUrl('/vehiculos', undefined, true),
+                  },
+              ]
+            : []),
+        ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
         ...(puede('conductores.ver') ? [conductoresNavItem] : []),
         ...(puede('asistencia.ver') ? [asistenciaNavItem] : []),
     ];
 
-    const programacionArea = [
-        ...(puede('programacion.ver') ? [programacionNavItem] : []),
-        ...(puede('viajes.ver') ? [viajesNavItem] : []),
-        // Cotizaciones antes que Clientes: es lo que se usa a diario.
-        ...[...gestion].reverse(),
-    ];
+    // Cotizaciones antes que Clientes: es lo que se usa a diario.
+    const comercial = [...gestion].reverse();
 
-    const contabilidadArea = puede('cobranza.ver') ? [contabilidadNavItem] : [];
+    const finanzas = puede('cobranza.ver') ? [contabilidadNavItem] : [];
 
     // Con roles armados a mano una sección puede quedar vacía: no se pinta
     // el título solo.
     const secciones = [
+        { label: 'Operación', items: operacion },
         { label: 'Flota', items: flota },
-        { label: 'RRHH', items: rrhh },
-        { label: 'Programación', items: programacionArea },
-        { label: 'Contabilidad', items: contabilidadArea },
+        { label: 'Comercial', items: comercial },
+        { label: 'Finanzas', items: finanzas },
     ];
 
     return (
@@ -218,6 +260,27 @@ export function AppSidebar() {
                             <NavMain key={label} items={items} label={label} />
                         ),
                 )}
+                {/* Todo el que entra tiene al menos su cuenta: siempre se ve. */}
+                <div className="mt-auto pt-4">
+                    <NavMain
+                        items={[
+                            {
+                                ...configuracionNavItem,
+                                isActive:
+                                    isCurrentUrl(configuracion.index()) ||
+                                    isCurrentUrl(
+                                        '/settings',
+                                        undefined,
+                                        true,
+                                    ) ||
+                                    isCurrentUrl('/vueltas/configuracion') ||
+                                    isCurrentUrl(
+                                        '/abastecimiento/configuracion',
+                                    ),
+                            },
+                        ]}
+                    />
+                </div>
             </SidebarContent>
 
             <SidebarFooter>

@@ -4,11 +4,14 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Laravel\Fortify\Fortify;
 
@@ -39,6 +42,22 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+
+        // Una cuenta dada de baja no entra. Se avisa recién con la contraseña
+        // correcta, para no revelar qué cuentas existen.
+        Fortify::authenticateUsing(function (Request $request): ?User {
+            $usuario = User::query()->where(Fortify::username(), $request->string(Fortify::username())->toString())->first();
+
+            if ($usuario === null || ! Hash::check($request->string('password')->toString(), $usuario->password)) {
+                return null;
+            }
+
+            if ($usuario->estaDeBaja()) {
+                throw ValidationException::withMessages([Fortify::username() => 'Esta cuenta está dada de baja.']);
+            }
+
+            return $usuario;
+        });
     }
 
     /**

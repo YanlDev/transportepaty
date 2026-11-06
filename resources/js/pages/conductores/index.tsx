@@ -1,5 +1,5 @@
 import { Head, Link, usePage } from '@inertiajs/react';
-import { Pencil, Plus, Trash2, User } from 'lucide-react';
+import { IdCard, Pencil, Plus, Trash2, User } from 'lucide-react';
 import conductores, {
     create,
     edit,
@@ -9,6 +9,7 @@ import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { ConductorTarjetaMovil } from '@/components/conductores/conductor-tarjeta-movil';
 import { DeleteConductorDialog } from '@/components/conductores/delete-conductor-dialog';
 import { EmptyState } from '@/components/empty-state';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -47,6 +48,12 @@ export default function ConductoresIndex({
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Conductores" />
+
+            <EncabezadoPantalla
+                titulo="Conductores"
+                descripcion="El padrón de conductores, con sus licencias y documentos."
+                icono={IdCard}
+            />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>

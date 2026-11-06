@@ -1,0 +1,198 @@
+import { Link, router } from '@inertiajs/react';
+import {
+    ChevronRight,
+    FileText,
+    House,
+    Lock,
+    LockOpen,
+    Pencil,
+} from 'lucide-react';
+import { useState } from 'react';
+import vueltas from '@/actions/App/Http/Controllers/VueltaController';
+import { Placa } from '@/components/placa';
+import { TallerVuelta } from '@/components/taller/taller-vuelta';
+import { Button } from '@/components/ui/button';
+import {
+    Sheet,
+    SheetContent,
+    SheetDescription,
+    SheetHeader,
+    SheetTitle,
+} from '@/components/ui/sheet';
+import { EtapaBadge } from '@/components/vueltas/etapa-badge';
+import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
+import { LlegadaDialog } from '@/components/vueltas/llegada-dialog';
+import {
+    EstadoVueltaBadge,
+    TramosVuelta,
+} from '@/components/vueltas/tramos-vuelta';
+import { formatearFecha, formatearPlaca } from '@/lib/format';
+import type { TarjetaVuelta, Vuelta } from '@/types/vueltas';
+
+/**
+ * El itinerario completo de una vuelta, a un costado: ida y regreso con sus
+ * GR, el OK de taller y el acceso a editarla.
+ */
+export function DetalleVuelta({
+    vuelta,
+    onCerrar,
+    onEditar,
+}: {
+    vuelta: TarjetaVuelta | null;
+    onCerrar: () => void;
+    onEditar: (vuelta: Vuelta) => void;
+}) {
+    const [llegando, setLlegando] = useState(false);
+
+    return (
+        <Sheet
+            open={vuelta !== null}
+            onOpenChange={(abierto) => !abierto && onCerrar()}
+        >
+            <SheetContent className="w-full gap-0 overflow-y-auto sm:max-w-xl">
+                {vuelta && (
+                    <>
+                        <SheetHeader className="border-b">
+                            <SheetTitle className="flex items-center gap-2">
+                                <Placa placa={vuelta.placa} />
+                                <span className="font-mono text-sm text-muted-foreground">
+                                    {vuelta.codigo}
+                                </span>
+                                {vuelta.estado === 'en_curso' ? (
+                                    <EtapaBadge etapa={vuelta.etapa} />
+                                ) : (
+                                    <EstadoVueltaBadge vuelta={vuelta} />
+                                )}
+                                {vuelta.estado === 'cerrada' && (
+                                    <Lock
+                                        className="size-4 text-muted-foreground"
+                                        aria-label="Con candado"
+                                    />
+                                )}
+                            </SheetTitle>
+                            <SheetDescription>
+                                {vuelta.atrasada && vuelta.llegada_prevista && (
+                                    <span className="block font-medium text-red-700 dark:text-red-400">
+                                        Debía llegar el{' '}
+                                        {formatearFecha(
+                                            vuelta.llegada_prevista,
+                                        )}
+                                    </span>
+                                )}
+                                {vuelta.tipo_label}
+                                {vuelta.inicio &&
+                                    ` · desde ${formatearFecha(vuelta.inicio)}`}
+                                {vuelta.fin &&
+                                    ` hasta ${formatearFecha(vuelta.fin)}`}
+                                {' · '}
+                                {vuelta.conductor ?? 'Sin conductor'}
+                                {vuelta.carreta &&
+                                    ` · carreta ${formatearPlaca(vuelta.carreta)}`}
+                            </SheetDescription>
+                            <div className="flex gap-2 pt-1">
+                                {vuelta.editable && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => onEditar(vuelta)}
+                                    >
+                                        <Pencil className="size-3.5" />
+                                        Editar
+                                    </Button>
+                                )}
+                                {vuelta.registrable_llegada && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setLlegando(true)}
+                                    >
+                                        <House className="size-3.5" />
+                                        {vuelta.llegada
+                                            ? 'Corregir llegada'
+                                            : 'Registrar llegada'}
+                                    </Button>
+                                )}
+                                {vuelta.cerrable && (
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link
+                                            href={vueltas.show(vuelta.id).url}
+                                        >
+                                            <Lock className="size-3.5" />
+                                            Liquidar y cerrar
+                                        </Link>
+                                    </Button>
+                                )}
+                                {vuelta.reabrible && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            router.post(
+                                                vueltas.reabrir(vuelta.id).url,
+                                                {},
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        <LockOpen className="size-3.5" />
+                                        Reabrir
+                                    </Button>
+                                )}
+                                <Button size="sm" asChild>
+                                    <Link href={vueltas.show(vuelta.id).url}>
+                                        <FileText className="size-3.5" />
+                                        Ver expediente
+                                    </Link>
+                                </Button>
+                                <Button variant="ghost" size="sm" asChild>
+                                    <Link
+                                        href={
+                                            vueltas.unidad(vuelta.tracto_id).url
+                                        }
+                                    >
+                                        Historia de la unidad
+                                        <ChevronRight className="size-3.5" />
+                                    </Link>
+                                </Button>
+                            </div>
+                        </SheetHeader>
+
+                        <div className="flex flex-col gap-5 p-4">
+                            <div className="rounded-xl bg-muted/40 p-4">
+                                <ItinerarioVuelta
+                                    paradas={[
+                                        ...vuelta.ida,
+                                        ...vuelta.regreso,
+                                    ].map((parada) => ({
+                                        sentido: parada.sentido,
+                                        desde: parada.origen ?? '¿?',
+                                        hasta: parada.destino ?? '¿?',
+                                        carga:
+                                            parada.tipo_carga === 'vacio'
+                                                ? 'vacía'
+                                                : parada.tipo_carga_label,
+                                        vacio: parada.tipo_carga === 'vacio',
+                                        hecha: parada.guias.length > 0,
+                                    }))}
+                                />
+                                {vuelta.regreso.length === 0 && (
+                                    <p className="mt-3 text-xs text-muted-foreground">
+                                        Vuelta por definir.
+                                    </p>
+                                )}
+                            </div>
+                            <TallerVuelta ticket={vuelta} />
+                            <TramosVuelta vuelta={vuelta} conGuias />
+                        </div>
+                    </>
+                )}
+                {vuelta && llegando && (
+                    <LlegadaDialog
+                        ticket={vuelta}
+                        onCerrar={() => setLlegando(false)}
+                    />
+                )}
+            </SheetContent>
+        </Sheet>
+    );
+}

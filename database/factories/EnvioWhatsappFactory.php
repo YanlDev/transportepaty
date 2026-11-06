@@ -4,7 +4,7 @@ namespace Database\Factories;
 
 use App\Enums\EstadoEnvio;
 use App\Models\EnvioWhatsapp;
-use App\Models\Programacion;
+use App\Models\Vuelta;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,7 +18,7 @@ class EnvioWhatsappFactory extends Factory
     public function definition(): array
     {
         return [
-            'programacion_id' => Programacion::factory(),
+            'vuelta_id' => Vuelta::factory(),
             'tipo' => EnvioWhatsapp::TIPO_CONDUCTOR,
             'destino' => 'Conductor',
             'numero' => '519'.fake()->numerify('########'),

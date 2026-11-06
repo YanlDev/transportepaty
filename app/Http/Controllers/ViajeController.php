@@ -76,7 +76,7 @@ class ViajeController extends Controller
                         // «apellidos nombres», pero se busca en cualquier
                         // orden: basta con que estén todas las palabras.
                         ->orWhere(function ($query) use ($buscar): void {
-                            foreach (preg_split('/\s+/', $buscar) as $palabra) {
+                            foreach (preg_split('/\s+/', $buscar, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $palabra) {
                                 $query->whereLike('conductor_nombre', "%{$palabra}%", caseSensitive: false);
                             }
                         });

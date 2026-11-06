@@ -1,5 +1,8 @@
 import { Link } from '@inertiajs/react';
+import { ChevronLeft } from 'lucide-react';
 import type { PropsWithChildren } from 'react';
+import configuracion from '@/actions/App/Http/Controllers/ConfiguracionController';
+import historial from '@/actions/App/Http/Controllers/HistorialController';
 import roles from '@/actions/App/Http/Controllers/RolController';
 import usuarios from '@/actions/App/Http/Controllers/UserController';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
@@ -22,8 +25,8 @@ const cuentaNavItems: NavItem[] = [
 ];
 
 /**
- * Configuración del sistema entero, no de la cuenta propia. Vive acá y no en
- * el menú lateral porque no es trabajo del día: se toca de vez en cuando.
+ * Configuración del sistema entero, no de la cuenta propia. Se llega desde
+ * la entrada Configuración del menú, junto con los demás ajustes.
  */
 const usuariosNavItem: NavItem = {
     title: 'Usuarios',
@@ -43,6 +46,12 @@ const whatsappNavItem: NavItem = {
     icon: null,
 };
 
+const historialNavItem: NavItem = {
+    title: 'Historial',
+    href: historial.index(),
+    icon: null,
+};
+
 export default function SettingsLayout({ children }: PropsWithChildren) {
     const { isCurrentOrParentUrl } = useCurrentUrl();
     const { puede, esAdmin } = usePermisos();
@@ -50,6 +59,7 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
     const sistemaNavItems = [
         ...(esAdmin ? [usuariosNavItem, rolesNavItem] : []),
         ...(puede('whatsapp.administrar') ? [whatsappNavItem] : []),
+        ...(puede('historial.ver') ? [historialNavItem] : []),
     ];
 
     const grupos = [
@@ -76,6 +86,13 @@ export default function SettingsLayout({ children }: PropsWithChildren) {
                         className="flex flex-col gap-5"
                         aria-label="Configuración"
                     >
+                        <Link
+                            href={configuracion.index()}
+                            className="flex items-center gap-1 px-3 text-xs text-muted-foreground hover:text-foreground"
+                        >
+                            <ChevronLeft className="size-3.5" />
+                            Toda la configuración
+                        </Link>
                         {grupos.map((grupo) => (
                             <div
                                 key={grupo.titulo}

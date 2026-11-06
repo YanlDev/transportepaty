@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\Permiso;
 use App\Http\Requests\GuardarRolRequest;
+use App\Models\User;
 use App\Services\SincronizadorPermisos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Gate;
@@ -23,6 +24,8 @@ class RolController extends Controller
     {
         Gate::authorize('administrar-roles');
 
+        $usuarios = User::query()->activos()->orderBy('name')->with('roles:id')->get(['id', 'name', 'username']);
+
         $roles = Role::query()
             ->where('guard_name', 'web')
             ->with('permissions:id,name')
@@ -34,6 +37,11 @@ class RolController extends Controller
                 'id' => $rol->id,
                 'name' => $rol->name,
                 'usuarios' => $rol->users_count,
+                // Quiénes lo tienen: se ve sin ir a Usuarios.
+                'miembros' => array_values($usuarios
+                    ->filter(fn (User $usuario): bool => $usuario->roles->contains('id', $rol->id))
+                    ->map(fn (User $usuario): array => ['id' => $usuario->id, 'nombre' => $usuario->name, 'usuario' => $usuario->username])
+                    ->all()),
                 'permisos' => $rol->permissions->pluck('name')->values(),
                 'bloqueado' => $rol->name === SincronizadorPermisos::ROL_ADMIN,
             ]);

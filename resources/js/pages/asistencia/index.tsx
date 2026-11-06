@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { ChevronLeft, ChevronRight, User } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, User } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import asistencia, {
     destroy,
@@ -8,6 +8,7 @@ import asistencia, {
 import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
 import { EstadoAsistenciaOpciones } from '@/components/asistencia/estado-asistencia-opciones';
 import { EmptyState } from '@/components/empty-state';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -76,11 +77,11 @@ export default function AsistenciaIndex({ inicioCiclo, dias, filas }: Props) {
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Asistencia" />
 
-            <p className="text-sm text-muted-foreground">
-                Rooster del ciclo de planilla (del 28 al 27 del mes siguiente):
-                quién trabajó, faltó, o está de vacaciones o descanso. Toca un
-                día para marcarlo.
-            </p>
+            <EncabezadoPantalla
+                titulo="Asistencia"
+                descripcion="El ciclo de planilla (del 28 al 27): quién trabajó, faltó o descansa. Toca un día para marcarlo."
+                icono={CalendarDays}
+            />
 
             {/*
              * En el celular esta barra queda pegada arriba: el ciclo y el

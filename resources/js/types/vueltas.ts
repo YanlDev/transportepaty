@@ -1,0 +1,268 @@
+import type { ResumenEnvio } from '@/types/whatsapp';
+
+export type GuiaParada = {
+    id: number;
+    numero_gr: string;
+    fecha_traslado: string;
+};
+
+export type Sentido = 'ida' | 'regreso';
+
+/** Un trayecto de la ida o del regreso; un vacío no tiene GR. */
+export type ParadaVuelta = {
+    id: number;
+    sentido: Sentido;
+    /** El lugar real (distrito de la GR) o, si todavía no hay GR, la zona. */
+    origen: string | null;
+    destino: string | null;
+    zona_origen: string | null;
+    zona_destino: string | null;
+    /** Lo guardado tal cual (null si solo se sabe la zona). */
+    lugar_origen: string | null;
+    lugar_destino: string | null;
+    tipo_carga: string;
+    tipo_carga_label: string;
+    /** Lo que suele tardar el tramo (Mina → Pisco: 3 días). */
+    dias_viaje: number;
+    cliente_id: number | null;
+    cliente: string | null;
+    fecha: string | null;
+    /** Programada y todavía sin GR. */
+    pendiente: boolean;
+    /** Llegó una GR que no estaba en lo programado. */
+    fuera_de_programa: boolean;
+    guias: GuiaParada[];
+};
+
+export type EstadoVuelta = 'programada' | 'en_curso' | 'cerrada' | 'anulada';
+
+/** El ticket del viaje: la ida (baja desde la mina o Juliaca) y el regreso (sube) de una unidad. */
+export type Vuelta = {
+    id: number;
+    codigo: string | null;
+    tipo: 'mina' | 'particular';
+    tipo_label: string;
+    estado: EstadoVuelta;
+    estado_label: string;
+    origen: 'historial' | 'programacion';
+    inicio: string | null;
+    fin: string | null;
+    dias: number | null;
+    tracto_id: number;
+    placa: string;
+    carreta_id: number | null;
+    conductor_id: number | null;
+    carreta: string | null;
+    conductor: string | null;
+    editable: boolean;
+    quitable: boolean;
+    ida: ParadaVuelta[];
+    regreso: ParadaVuelta[];
+    /** Las rutas elegidas para cada tramo: la principal y sus complementos. */
+    rutas: RutaDelTicket[];
+};
+
+/** Una ruta elegida para un tramo del ticket (su copia). */
+export type RutaDelTicket = {
+    id: number;
+    sentido: Sentido;
+    ruta_id: number | null;
+    variante_ruta_id: number | null;
+    nombre: string;
+    variante: string | null;
+    es_complemento: boolean;
+    variante_pendiente: boolean;
+};
+
+export type Opcion = { value: string; label: string };
+
+/** Una ruta del catálogo, para elegirla al programar un tramo. */
+export type OpcionTramo = {
+    value: string;
+    label: string;
+    descripcion: string;
+    /** Se suma a la ruta principal del tramo en vez de definirlo. */
+    es_complemento: boolean;
+    /** La carga particular a otro destino: hay que elegir a dónde va. */
+    pide_destino: boolean;
+    paradas: {
+        zona_origen: string;
+        zona_destino: string | null;
+        tipo_carga: string;
+        lugar_origen?: string | null;
+        lugar_destino?: string | null;
+    }[];
+    /** Galones de la dotación; null con variantes o galones por definir. */
+    tope: number | null;
+    /** La dotación en una línea, para decidir al elegir. */
+    dotacion: string;
+    variantes: { id: number; nombre: string; tope: number | null }[];
+};
+
+/** Lo que necesita el formulario de programar una vuelta. */
+export type OpcionesVuelta = {
+    tramos: {
+        ida: OpcionTramo[];
+        regreso: OpcionTramo[];
+        /** A dónde va la carga particular de regreso; de ahí sigue a Juliaca. */
+        destinos: { lugar: string; zona: string }[];
+    };
+    zonas: Opcion[];
+    cargas: Opcion[];
+    tractos: {
+        id: number;
+        placa: string;
+        carreta_id: number | null;
+        conductor_id: number | null;
+        /** Dónde quedó: la zona de su última GR (del Sur o Cusco, Juliaca). */
+        zona_actual: string | null;
+        /** El distrito al que fue su última GR, para explicarlo. */
+        llego_a: string | null;
+        /** Lo que dice esa GR, aunque no calce con el padrón. */
+        ultima_gr: {
+            numero: string;
+            fecha: string;
+            placa_carreta: string | null;
+            conductor: string;
+        } | null;
+    }[];
+    carretas: { id: number; placa: string }[];
+    conductores: {
+        id: number;
+        nombre: string;
+        /** La unidad y la carreta de su última GR. */
+        tracto_id: number | null;
+        carreta_id: number | null;
+    }[];
+    clientes: { id: number; alias: string; ruc: string | null }[];
+};
+
+/** Los avisos de una vuelta ya armados y hasta dónde llegó cada uno. */
+export type AvisoVuelta = {
+    /** El texto para el conductor; lo arma el servidor para que sea uno solo. */
+    mensaje: string;
+    destinatarios: { etiqueta: string; numero: string }[];
+    areas: { id: number; area: string; numero: string; mensaje: string }[];
+    envios: {
+        conductor: ResumenEnvio | null;
+        /** Por id del área. */
+        areas: Record<number, ResumenEnvio>;
+    };
+};
+
+export type EtapaVuelta = 'programada' | 'en_ida' | 'en_vuelta' | 'en_base';
+
+/** Una revisión de taller del ticket: apto o no apto, con cuándo estará lista. */
+export type RevisionTaller = {
+    resultado: 'apto' | 'no_apto';
+    resultado_label: string;
+    /** `Y-m-d H:i`: cuándo estará lista, si no es apta. */
+    disponible_estimado: string | null;
+    motivo: string | null;
+    trabajos: string | null;
+    /** El km con que sale la unidad. */
+    kilometraje: number | null;
+    por: string | null;
+    en: string;
+};
+
+/** Una fila de la tabla de programación. */
+export type TarjetaVuelta = Vuelta & {
+    etapa: EtapaVuelta;
+    /** La última parada con GR o, si todavía no salió, la primera del plan. */
+    actual: {
+        texto: string;
+        carga: string;
+        fecha: string | null;
+        hecha: boolean;
+    } | null;
+    dias_en_ruta: number | null;
+    /** Cuántos días lleva en la base esperando la siguiente vuelta. */
+    dias_en_base: number | null;
+    /** La última revisión de taller (la que vale); null si no la revisó. */
+    taller: RevisionTaller | null;
+    taller_anteriores: RevisionTaller[];
+    /** Si el usuario puede dar el apto o no apto. */
+    revisable: boolean;
+    /** La llegada a la base, como la registró una persona. */
+    llegada: { fecha: string; km: number | null; por: string | null } | null;
+    /** Cuándo debería llegar (solo en vuelta): referencia para el atraso. */
+    llegada_prevista: string | null;
+    /** Ya pasó el día en que debía llegar y nadie registró la llegada. */
+    atrasada: boolean;
+    /** Puede registrar (o corregir) la llegada a la base. */
+    registrable_llegada: boolean;
+    /** Puede liquidarlo y cerrarlo: ya llegó a la base. */
+    cerrable: boolean;
+    /** Puede quitarle el candado (solo el último ticket de la unidad). */
+    reabrible: boolean;
+    /** Lo próximo que le falta (el primer paso sin terminar); null si está cerrado. */
+    siguiente?: PasoTicket | null;
+    /** Pasos que quedaron atrás sin hacer (salió sin el OK de taller). */
+    saltados?: string[];
+};
+
+export type DiaDeSemana = { fecha: string; programadas: number };
+
+/** Un paso del circuito del ticket, como lo arma `PasosDelTicket`. */
+export type PasoTicket = {
+    clave:
+        | 'programado'
+        | 'taller'
+        | 'abastecimiento_ida'
+        | 'en_ida'
+        | 'regreso'
+        | 'abastecimiento_vuelta'
+        | 'en_vuelta'
+        | 'llego'
+        | 'cerrado';
+    titulo: string;
+    estado: 'hecho' | 'parcial' | 'pendiente' | 'alerta';
+    detalle: string | null;
+    /** `Y-m-d` o `Y-m-d H:i`. */
+    fecha: string | null;
+    por: string | null;
+};
+
+/** Una GR del ticket, con el tramo en que cayó. */
+export type GuiaTicket = {
+    id: number;
+    numero_gr: string;
+    fecha_traslado: string;
+    sentido: Sentido;
+    tramo: string;
+    tipo_carga_label: string;
+    cliente: string;
+    peso: number;
+    unidad_peso: string;
+    /** Entró como parada que no estaba programada. */
+    no_programada: boolean;
+    asignada_por: string | null;
+    asignada_at: string | null;
+    /** Se puede sacar del ticket (vuelve a la bandeja). */
+    quitable: boolean;
+};
+
+/** La liquidación del ticket: lo autorizado contra lo real, y qué falta para cerrarlo. */
+export type LiquidacionTicket = {
+    /** Lo que impide cerrarlo. */
+    pendientes: string[];
+    /** Lo que no impide cerrarlo, pero conviene revisar. */
+    avisos: string[];
+    puede_cerrar: boolean;
+    combustible: {
+        autorizado: number;
+        despachado: number;
+        diferencia: number;
+        importe: number;
+    };
+    viaticos: { depositado: number; pendiente: number };
+    km: {
+        salida: number | null;
+        llegada: number | null;
+        recorridos: number | null;
+    };
+    /** Km por galón despachado; null sin los dos kilometrajes. */
+    rendimiento: number | null;
+    total: number;
+};

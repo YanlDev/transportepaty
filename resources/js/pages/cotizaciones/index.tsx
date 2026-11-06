@@ -5,6 +5,7 @@ import cotizaciones, {
 } from '@/actions/App/Http/Controllers/CotizacionController';
 import { CotizacionesTabs } from '@/components/cotizaciones/cotizaciones-tabs';
 import { EmptyState } from '@/components/empty-state';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -51,13 +52,16 @@ export default function CotizacionesIndex({
         <div className="mx-auto flex h-full w-full max-w-[1400px] flex-1 flex-col gap-4 p-4 md:p-6">
             <Head title="Cotizaciones" />
 
+            <EncabezadoPantalla
+                titulo="Cotizaciones"
+                descripcion="Lo que se cotizó a cada cliente, con los costos de la flota."
+                icono={Calculator}
+            />
+
             <CotizacionesTabs actual="emitidas" />
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                    <h1 className="text-xl font-semibold tracking-tight">
-                        Cotizaciones
-                    </h1>
                     <p className="text-sm text-muted-foreground">
                         {paginador.total}{' '}
                         {paginador.total === 1

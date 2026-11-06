@@ -6,6 +6,7 @@ use App\Concerns\ProfileValidationRules;
 use App\Concerns\UsernameCanonicalizado;
 use App\Enums\Permiso;
 use App\Models\User;
+use App\Rules\CelularWhatsapp;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -38,6 +39,8 @@ class UpdateUserRequest extends FormRequest
             'username' => $this->usernameRules($usuarioId),
             // Dato de contacto, nada más: nadie entra al sistema con el correo.
             'email' => $this->emailRules($usuarioId, requerido: false),
+            // Para mandarle sus alertas por WhatsApp.
+            'celular' => ['nullable', 'string', 'max:20', new CelularWhatsapp],
             'role' => ['required', Rule::in(Role::pluck('name'))],
             // Sueltos, además de los del rol: para darle a una persona algo
             // puntual sin inventar un rol entero para ella.

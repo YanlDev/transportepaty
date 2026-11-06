@@ -17,6 +17,7 @@ export default function VehiculoCreate({ tipoInicial, ...props }: Props) {
 
     setLayoutProps({
         breadcrumbs: [
+            { title: 'Unidades', href: vehiculos.tractos().url },
             {
                 title: esCarreta ? 'Carretas' : 'Tractos',
                 href: (esCarreta ? vehiculos.carretas() : vehiculos.tractos())

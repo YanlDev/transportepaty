@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Viaje;
+use App\Services\PendientesDelInicio;
 use App\Services\RelojOperativo;
 use App\Services\ResumenTablero;
 use Carbon\CarbonImmutable;
@@ -12,7 +13,10 @@ use Inertia\Response;
 
 class DashboardController extends Controller
 {
-    public function __construct(private readonly ResumenTablero $resumen) {}
+    public function __construct(
+        private readonly ResumenTablero $resumen,
+        private readonly PendientesDelInicio $pendientes,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -24,6 +28,8 @@ class DashboardController extends Controller
             'rango' => $rango,
             ...$this->resumen->paraElRango($rango['desde'], $rango['hasta']),
             'metaConcentrado' => $this->resumen->metaConcentrado($rango['mes']),
+            // Lo que le toca a cada quien hoy, según sus permisos.
+            'pendientes' => fn (): array => $request->user() ? $this->pendientes->para($request->user()) : [],
         ]);
     }
 

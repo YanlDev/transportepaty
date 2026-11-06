@@ -19,6 +19,7 @@ export default function VehiculoEdit({ vehiculo, ...props }: Props) {
 
     setLayoutProps({
         breadcrumbs: [
+            { title: 'Unidades', href: vehiculos.tractos().url },
             {
                 title: esCarreta ? 'Carretas' : 'Tractos',
                 href: (esCarreta ? vehiculos.carretas() : vehiculos.tractos())

@@ -21,7 +21,7 @@ beforeEach(function (): void {
 
 function usuarioCon(string $rol): User
 {
-    return User::factory()->create()->assignRole($rol);
+    return actorConRol($rol);
 }
 
 function datosVehiculo(array $overrides = []): array
@@ -89,6 +89,18 @@ it('lets authenticated users see the carretas list', function (): void {
             ->component('vehiculos/index')
             ->where('seccion', 'carreta')
             ->has('vehiculos.data', 2)
+        );
+});
+
+it('counts tractos and carretas for the tabs of the units screen', function (): void {
+    Vehiculo::factory()->count(2)->create();
+    Vehiculo::factory()->carreta()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->get(route('carretas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('seccion', 'carreta')
+            ->where('conteos', ['tracto' => 2, 'carreta' => 1])
         );
 });
 

@@ -16,6 +16,7 @@ import llantas from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import { create as crearOrden } from '@/actions/App/Http/Controllers/OrdenTrabajoController';
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import {
     colorEstado,
     TarjetaMarca,
@@ -68,6 +69,12 @@ export default function MantenimientoIndex({
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Mantenimiento" />
+
+            <EncabezadoPantalla
+                titulo="Mantenimiento"
+                descripcion="El preventivo por kilometraje, las llantas y el equipamiento de cada unidad."
+                icono={Wrench}
+            />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-muted-foreground">

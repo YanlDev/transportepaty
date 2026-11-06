@@ -7,6 +7,7 @@ import vehiculos, {
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { Copiable } from '@/components/copiable';
 import { EmptyState } from '@/components/empty-state';
+import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import {
     filaSemaforo,
     LeyendaSemaforo,
@@ -28,6 +29,7 @@ import { VehiculoTarjetaMovil } from '@/components/vehiculos/vehiculo-tarjeta-mo
 import { usePermisos } from '@/hooks/use-permisos';
 import type { FiltrosVehiculo } from '@/hooks/use-vehiculo-filtros';
 import { formatearPlaca } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { EnumOption, Paginator, VehiculoListItem } from '@/types/fleet';
 
 type Seccion = 'tracto' | 'carreta';
@@ -36,6 +38,8 @@ type Props = {
     vehiculos: Paginator<VehiculoListItem>;
     filtros: FiltrosVehiculo;
     seccion: Seccion;
+    /** Cuántos hay de cada uno, para las pestañas. */
+    conteos: Record<Seccion, number>;
     estados: EnumOption[];
     marcas: EnumOption[];
     cajas: EnumOption[];
@@ -71,6 +75,7 @@ export default function VehiculosIndex({
     vehiculos: paginador,
     filtros,
     seccion,
+    conteos,
     estados,
     marcas,
     cajas,
@@ -84,15 +89,59 @@ export default function VehiculosIndex({
     const IconoVacio = textos.icono;
 
     setLayoutProps({
-        breadcrumbs: [{ title: textos.titulo, href: url }],
+        breadcrumbs: [
+            { title: 'Unidades', href: vehiculos.tractos().url },
+            { title: textos.titulo, href: url },
+        ],
     });
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title={textos.titulo} />
 
+            <EncabezadoPantalla
+                titulo="Unidades"
+                descripcion="Tractos y carretas, con su documentación al día."
+                icono={Truck}
+            />
+
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                <div>
+                <div className="flex flex-wrap items-center gap-3">
+                    {/* Tractos y carretas son una sola pantalla: la pestaña
+                        cambia cuál se lista y conserva lo demás. */}
+                    <nav
+                        aria-label="Tipo de unidad"
+                        className="inline-flex rounded-lg border p-0.5"
+                    >
+                        {(['tracto', 'carreta'] as const).map((tipo) => {
+                            const Icono = TEXTOS[tipo].icono;
+                            const activa = tipo === seccion;
+
+                            return (
+                                <Link
+                                    key={tipo}
+                                    href={
+                                        tipo === 'tracto'
+                                            ? vehiculos.tractos()
+                                            : vehiculos.carretas()
+                                    }
+                                    aria-current={activa ? 'page' : undefined}
+                                    className={cn(
+                                        'flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition',
+                                        activa
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    <Icono className="size-4" />
+                                    {TEXTOS[tipo].titulo}
+                                    <span className="tabular-nums opacity-70">
+                                        {conteos[tipo]}
+                                    </span>
+                                </Link>
+                            );
+                        })}
+                    </nav>
                     <p className="text-sm text-muted-foreground">
                         {paginador.total}{' '}
                         {paginador.total === 1
