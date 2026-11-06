@@ -6,6 +6,7 @@ use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
+use App\Models\Conductor;
 use App\Models\LecturaKilometraje;
 use App\Models\ParadaVuelta;
 use App\Models\PuntoAbastecimiento;
@@ -313,6 +314,35 @@ it('shows for each point what was loaded this month and the last price paid', fu
         }));
 });
 
+it('counts what the voucher says was loaded against the leg cap', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 150, 'sentido' => SentidoTramo::Ida]);
+    $tramoIda = fn (): array => collect(app(DotacionVuelta::class)->de($vuelta->fresh(['paradas.viajes', 'rutas']), $vuelta->abastecimientos()->vigentes()->with('punto')->get())['tramos'])
+        ->firstWhere('sentido', 'ida');
+
+    // Sin voucher cuenta lo autorizado: de 220 faltan 70.
+    expect($tramoIda()['registrado'])->toBe(150.0)->and($tramoIda()['falta'])->toBe(70.0);
+
+    // El voucher dice que cargó 100: ahora faltan 120.
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.despacho', $registro), [
+            'galones_despachados' => 100, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(),
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect($tramoIda()['registrado'])->toBe(100.0)->and($tramoIda()['falta'])->toBe(120.0);
+
+    // Y esos 120 se pueden autorizar sin pasar el tope; uno más ya lo pasa.
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['galones' => 121]))
+        ->assertSessionHasErrors('galones');
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['galones' => 120]))
+        ->assertSessionHasNoErrors();
+
+    expect($tramoIda()['falta'])->toBe(0.0);
+});
+
 it('lets supply fix only the voucher price, recalculating the amount', function (): void {
     $vuelta = ticketListo($this->tracto);
     $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 100]);
@@ -378,6 +408,52 @@ it('lets only the admin correct what was authorized', function (): void {
         ->put(route('abastecimiento.update', $registro), [...$correccion, 'galones' => 230, 'motivo_exceso' => 'Desvío por huaico'])
         ->assertSessionHasNoErrors();
     expect((float) $registro->fresh()->galones)->toBe(230.0);
+});
+
+it('checks the cap with the voucher when correcting a record that already has one', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create([
+        'galones' => 150, 'sentido' => SentidoTramo::Ida, 'galones_despachados' => 100, 'precio_galon' => 16, 'importe' => 1600, 'despachado_el' => now(),
+    ]);
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 120, 'sentido' => SentidoTramo::Ida]);
+
+    // El tramo está en 100 (voucher) + 120 = 220: corregir lo autorizado
+    // de un registro con voucher no mueve esa cuenta.
+    actingAs(actorConRol('admin'))
+        ->put(route('abastecimiento.update', $registro), [
+            'sentido' => 'ida', 'punto_abastecimiento_id' => $this->arequipa->id, 'fecha' => now()->toDateString(), 'galones' => 140, 'precio_galon' => 16,
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect((float) $registro->fresh()->galones)->toBe(140.0);
+});
+
+it('does not leave a full leg saying it lacks 0 gallons from decimal sums', function (): void {
+    $vuelta = ticketListo($this->tracto);
+
+    foreach ([76.24, 82.35, 61.41] as $cargado) {
+        Abastecimiento::factory()->paraVuelta($vuelta)->create([
+            'galones' => 80, 'sentido' => SentidoTramo::Ida, 'galones_despachados' => $cargado, 'precio_galon' => 16, 'importe' => round($cargado * 16, 2), 'despachado_el' => now(),
+        ]);
+    }
+
+    $ida = collect(app(DotacionVuelta::class)->de($vuelta->fresh(['paradas.viajes', 'rutas']), $vuelta->abastecimientos()->vigentes()->with('punto')->get())['tramos'])
+        ->firstWhere('sentido', 'ida');
+
+    expect($ida['registrado'])->toBe(220.0)->and($ida['falta'])->toBe(0.0);
+});
+
+it('shows the driver of each ticket and of each recent load', function (): void {
+    $conductor = Conductor::factory()->create(['nombres' => 'Rene', 'apellidos' => 'Quispe Mamani']);
+    $vuelta = ticketListo($this->tracto);
+    $vuelta->update(['conductor_id' => $conductor->id]);
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['conductor_id' => $conductor->id]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vueltas.0.conductor', 'Rene Quispe Mamani')
+            ->where('recientes.0.conductor', 'Rene Quispe Mamani'));
 });
 
 it('lists the points alphabetically', function (): void {

@@ -80,7 +80,7 @@ class AbastecimientoController extends Controller
                 ])
                 ->all(),
             'recientes' => Abastecimiento::query()
-                ->with(['vehiculo:id,placa', 'punto:id,nombre', 'vuelta:id,codigo', 'registradoPor:id,name'])
+                ->with(['vehiculo:id,placa', 'conductor:id,nombres,apellidos', 'punto:id,nombre', 'vuelta:id,codigo', 'registradoPor:id,name'])
                 ->latest('fecha')
                 ->latest('id')
                 ->limit(self::RECIENTES)
@@ -89,6 +89,7 @@ class AbastecimientoController extends Controller
                     'id' => $abastecimiento->id,
                     'fecha' => $abastecimiento->fecha->toDateString(),
                     'placa' => $abastecimiento->vehiculo->placa,
+                    'conductor' => $abastecimiento->conductor?->nombre_completo,
                     'punto' => $abastecimiento->nombrePunto(),
                     'fuera_de_lista' => $abastecimiento->punto_abastecimiento_id === null && filled($abastecimiento->punto_libre),
                     'vuelta' => $abastecimiento->vuelta?->codigo,

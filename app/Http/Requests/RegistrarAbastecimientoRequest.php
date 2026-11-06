@@ -10,6 +10,7 @@ use App\Models\Vuelta;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -119,9 +120,9 @@ class RegistrarAbastecimientoRequest extends FormRequest
             ->where('vuelta_id', $vuelta->id)
             ->where('sentido', $sentido)
             ->when($this->registroQueSeCorrige(), fn ($query, int $id) => $query->whereKeyNot($id))
-            ->sum('galones');
+            ->sum(DB::raw(Abastecimiento::GALONES_QUE_CUENTAN));
 
-        if ($autorizado + $this->float('galones') <= $tope + 0.001) {
+        if ($autorizado + $this->galonesQueSeSuman() <= $tope + 0.001) {
             return null;
         }
 
@@ -152,6 +153,14 @@ class RegistrarAbastecimientoRequest extends FormRequest
             'motivo_exceso' => $this->filled('motivo_exceso') ? $this->string('motivo_exceso')->squish()->toString() : null,
             'observacion' => $this->string('observacion')->toString() ?: null,
         ];
+    }
+
+    /**
+     * Lo que este registro suma al tramo: al registrarlo, lo que se autoriza.
+     */
+    protected function galonesQueSeSuman(): float
+    {
+        return $this->float('galones');
     }
 
     /**

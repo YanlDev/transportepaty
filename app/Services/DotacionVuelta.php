@@ -165,7 +165,9 @@ class DotacionVuelta
      */
     private function tramo(Vuelta $vuelta, SentidoTramo $sentido, Collection $rutas, Collection $delTramo): array
     {
-        $registrado = (float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones);
+        // Redondeado: sumar decimales (118.53 + 101.47…) deja restos que
+        // harían que un tramo completo diga «faltan 0 gal».
+        $registrado = round((float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => $abastecimiento->galonesQueCuentan()), 2);
         $previsto = $vuelta->topeDe($sentido);
         $puntos = [];
 
@@ -203,7 +205,7 @@ class DotacionVuelta
             'previsto' => $previsto,
             'registrado' => $registrado,
             'despachado' => (float) $delTramo->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados),
-            'falta' => $previsto === null ? null : max(0.0, $previsto - $registrado),
+            'falta' => $previsto === null ? null : max(0.0, round($previsto - $registrado, 2)),
             'puntos' => array_values($puntos),
             'pendiente' => $this->pendiente($rutas),
         ];
@@ -264,13 +266,13 @@ class DotacionVuelta
 
         foreach ($porPunto as $clave => $fila) {
             $delPunto = $vigentes->filter(fn (Abastecimiento $abastecimiento): bool => $this->claveDePunto($abastecimiento) === $clave);
-            $registrado = (float) $delPunto->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones);
+            $registrado = round((float) $delPunto->sum(fn (Abastecimiento $abastecimiento): float => $abastecimiento->galonesQueCuentan()), 2);
 
             $filas[] = [
                 ...$fila,
                 'registrado' => $registrado,
                 'despachado' => (float) $delPunto->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados),
-                'falta' => $fila['previsto'] === null ? null : max(0.0, $fila['previsto'] - $registrado),
+                'falta' => $fila['previsto'] === null ? null : max(0.0, round($fila['previsto'] - $registrado, 2)),
             ];
         }
 

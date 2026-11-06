@@ -30,6 +30,17 @@ class CorregirAbastecimientoRequest extends RegistrarAbastecimientoRequest
         return $this->abastecimiento()->id;
     }
 
+    /**
+     * Con voucher, el registro cuenta lo que de verdad cargó: corregir lo
+     * autorizado no cambia lo que suma al tramo.
+     */
+    protected function galonesQueSeSuman(): float
+    {
+        return $this->abastecimiento()->tieneDespacho()
+            ? $this->abastecimiento()->galonesQueCuentan()
+            : parent::galonesQueSeSuman();
+    }
+
     private function abastecimiento(): Abastecimiento
     {
         /** @var Abastecimiento $abastecimiento */

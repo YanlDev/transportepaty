@@ -55,6 +55,11 @@ use Illuminate\Support\Carbon;
 ])]
 class Abastecimiento extends Model
 {
+    /**
+     * `galonesQueCuentan()` en SQL, para sumar sin traer los registros.
+     */
+    public const GALONES_QUE_CUENTAN = 'coalesce(galones_despachados, galones)';
+
     /** @use HasFactory<AbastecimientoFactory> */
     use HasFactory, RegistraHistorial;
 
@@ -84,6 +89,16 @@ class Abastecimiento extends Model
     public function tieneDespacho(): bool
     {
         return $this->galones_despachados !== null;
+    }
+
+    /**
+     * Lo que cuenta contra el tope del tramo: lo que de verdad cargó según
+     * el voucher; mientras no llegue, lo autorizado. Si autorizaron 150 y
+     * cargó 100, al tramo le quedan esos 50.
+     */
+    public function galonesQueCuentan(): float
+    {
+        return (float) ($this->galones_despachados ?? $this->galones);
     }
 
     /**

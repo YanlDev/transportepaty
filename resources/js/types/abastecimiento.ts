@@ -127,6 +127,7 @@ export type RegistroAbastecimiento = {
     id: number;
     fecha: string;
     placa: string;
+    conductor: string | null;
     punto: string | null;
     /** Un grifo escrito a mano, que no está en la lista de puntos. */
     fuera_de_lista: boolean;
