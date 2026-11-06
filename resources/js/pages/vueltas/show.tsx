@@ -653,8 +653,13 @@ export default function ExpedienteTicket({
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                             <Tarjeta
                                 titulo="Combustible"
-                                valor={soles(liquidacion.combustible.importe)}
-                                detalle={`${galones(liquidacion.combustible.autorizado)} autorizados · ${galones(liquidacion.combustible.despachado)} despachados`}
+                                valor={soles(liquidacion.combustible.estimado)}
+                                detalle={
+                                    liquidacion.combustible.estimado !==
+                                    liquidacion.combustible.importe
+                                        ? `${soles(liquidacion.combustible.importe)} con voucher; el resto, estimado por el precio autorizado`
+                                        : `${galones(liquidacion.combustible.autorizado)} autorizados · ${galones(liquidacion.combustible.despachado)} despachados`
+                                }
                             />
                             <Tarjeta
                                 titulo="Viáticos depositados"
@@ -681,7 +686,11 @@ export default function ExpedienteTicket({
                             <Tarjeta
                                 titulo="Gasto del ticket"
                                 valor={soles(liquidacion.total)}
-                                detalle="Combustible + viáticos"
+                                detalle={
+                                    liquidacion.total_es_estimado
+                                        ? 'Combustible + viáticos · estimado hasta tener todos los vouchers'
+                                        : 'Combustible + viáticos'
+                                }
                             />
                         </div>
 

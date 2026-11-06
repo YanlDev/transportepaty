@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $conductor_id
  * @property Carbon $fecha
  * @property string $galones Los autorizados.
+ * @property string|null $precio_autorizado Soles por galón con que se autorizó: el costo estimado hasta el voucher.
  * @property string|null $precio_galon Soles por galón en ese grifo, según el voucher.
  * @property string|null $importe Galones despachados × precio, en soles.
  * @property string|null $motivo_exceso Por qué se autorizó más que el tope de la tarjeta.
@@ -48,7 +49,7 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'vehiculo_id', 'vuelta_id', 'sentido', 'punto_abastecimiento_id', 'punto_libre', 'conductor_id', 'fecha',
-    'galones', 'precio_galon', 'importe', 'observacion', 'user_id',
+    'galones', 'precio_autorizado', 'precio_galon', 'importe', 'observacion', 'user_id',
     'anulado_at', 'anulado_por', 'motivo_anulacion', 'motivo_exceso',
     'galones_despachados', 'kilometraje', 'despachado_el', 'despacho_por',
 ])]
@@ -83,6 +84,19 @@ class Abastecimiento extends Model
     public function tieneDespacho(): bool
     {
         return $this->galones_despachados !== null;
+    }
+
+    /**
+     * Lo que cuesta: el importe del voucher si ya llegó; si no, lo
+     * autorizado por su precio. Null si no hay ni lo uno ni lo otro.
+     */
+    public function costo(): ?float
+    {
+        if ($this->tieneDespacho() && $this->importe !== null) {
+            return (float) $this->importe;
+        }
+
+        return $this->precio_autorizado === null ? null : round((float) $this->galones * (float) $this->precio_autorizado, 2);
     }
 
     /**
@@ -164,6 +178,7 @@ class Abastecimiento extends Model
             'kilometraje' => 'integer',
             'despachado_el' => 'date',
             'precio_galon' => 'decimal:3',
+            'precio_autorizado' => 'decimal:3',
             'importe' => 'decimal:2',
         ];
     }

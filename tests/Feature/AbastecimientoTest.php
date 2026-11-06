@@ -15,6 +15,7 @@ use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
 use App\Services\DotacionVuelta;
+use App\Services\GastosDelTicket;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
 
@@ -71,6 +72,7 @@ function autorizacion(Vuelta $vuelta, array $datos = []): array
         'sentido' => 'ida',
         'fecha' => now()->toDateString(),
         'galones' => 50,
+        'precio_galon' => 16.4,
         ...$datos,
     ];
 }
@@ -192,10 +194,14 @@ it('voids fuel with its reason instead of deleting it, and it stops counting', f
     $vuelta = ticketListo($this->tracto);
     $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 120]);
 
+    // Anular es del admin: quien registra no deshace lo suyo.
     actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.anular', $registro), ['motivo' => 'Se registró dos veces'])
+        ->assertForbidden();
+    actingAs(actorConRol('admin'))
         ->post(route('abastecimiento.anular', $registro), ['motivo' => ''])
         ->assertSessionHasErrors('motivo');
-    actingAs(actorConRol('abastecimiento'))
+    actingAs(actorConRol('admin'))
         ->post(route('abastecimiento.anular', $registro), ['motivo' => 'Se registró dos veces'])
         ->assertSessionHas('toast.type', 'success');
 
@@ -307,6 +313,73 @@ it('shows for each point what was loaded this month and the last price paid', fu
         }));
 });
 
+it('lets supply fix only the voucher price, recalculating the amount', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 100]);
+
+    // Sin voucher no hay precio que corregir.
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.precio', $registro), ['precio_galon' => 16.5])
+        ->assertForbidden();
+
+    $registro->update(['galones_despachados' => 98, 'precio_galon' => 61.5, 'importe' => 6027, 'despachado_el' => now()]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.precio', $registro), ['precio_galon' => ''])
+        ->assertSessionHasErrors('precio_galon');
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.precio', $registro), ['precio_galon' => 16.15])
+        ->assertSessionHasNoErrors();
+
+    $registro->refresh();
+    expect((float) $registro->precio_galon)->toBe(16.15)
+        ->and((float) $registro->importe)->toBe(1582.7)
+        ->and((float) $registro->galones_despachados)->toBe(98.0);
+
+    actingAs(actorConRol('admin'))
+        ->put(route('abastecimiento.precio', $registro), ['precio_galon' => 16.2])
+        ->assertSessionHasNoErrors();
+    expect((float) $registro->fresh()->importe)->toBe(1587.6);
+});
+
+it('lets only the admin correct what was authorized', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create([
+        'galones' => 150, 'sentido' => SentidoTramo::Ida, 'punto_abastecimiento_id' => $this->kio->id,
+    ]);
+    $correccion = [
+        'sentido' => 'ida',
+        'punto_abastecimiento_id' => $this->arequipa->id,
+        'fecha' => now()->toDateString(),
+        'galones' => 120,
+        'precio_galon' => 16.4,
+    ];
+
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.update', $registro), $correccion)
+        ->assertForbidden();
+
+    // Sus propios galones no cuentan contra el tope (220): 150 → 200 entra.
+    actingAs(actorConRol('admin'))
+        ->put(route('abastecimiento.update', $registro), [...$correccion, 'galones' => 200])
+        ->assertSessionHasNoErrors();
+
+    $registro->refresh();
+    expect($registro->punto_abastecimiento_id)->toBe($this->arequipa->id)
+        ->and((float) $registro->galones)->toBe(200.0)
+        ->and($registro->vuelta_id)->toBe($vuelta->id)
+        ->and($registro->vehiculo_id)->toBe($this->tracto->id);
+
+    // Lo que pasa el tope pide motivo, igual que al registrar.
+    actingAs(actorConRol('admin'))
+        ->put(route('abastecimiento.update', $registro), [...$correccion, 'galones' => 230])
+        ->assertSessionHasErrors('motivo_exceso');
+    actingAs(actorConRol('admin'))
+        ->put(route('abastecimiento.update', $registro), [...$correccion, 'galones' => 230, 'motivo_exceso' => 'Desvío por huaico'])
+        ->assertSessionHasNoErrors();
+    expect((float) $registro->fresh()->galones)->toBe(230.0);
+});
+
 it('lists the points alphabetically', function (): void {
     PuntoAbastecimiento::query()->create(['nombre' => 'Aplao', 'zona' => $this->kio->zona, 'orden' => 99]);
 
@@ -403,14 +476,18 @@ it('corrects a mistyped dispatch odometer instead of keeping the wrong reading',
         ->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 2503000])
         ->assertSessionHasNoErrors();
 
+    // Corregir el voucher ya cargado es del admin.
     actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 250300])
+        ->assertForbidden();
+    actingAs(actorConRol('admin'))
         ->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 250300])
         ->assertSessionHasNoErrors();
 
     expect(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->pluck('kilometraje')->all())->toBe([250300]);
 
     // Si se borra el km, se va también la lectura.
-    actingAs(actorConRol('abastecimiento'))
+    actingAs(actorConRol('admin'))
         ->put(route('abastecimiento.despacho', $registro), $voucher)
         ->assertSessionHasNoErrors();
 
@@ -435,4 +512,43 @@ it('does not change the chosen variant once the leg has fuel', function (): void
         ->assertSessionHasErrors('variante_ruta_id');
 
     expect($copia->fresh()->variante_ruta_id)->toBe($segunda->id);
+});
+
+it('asks the price per gallon when authorizing, and the ticket costs from then on', function (): void {
+    $vuelta = ticketListo($this->tracto);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['precio_galon' => '']))
+        ->assertSessionHasErrors('precio_galon');
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['punto_abastecimiento_id' => $this->arequipa->id, 'galones' => 120, 'precio_galon' => 16.4]))
+        ->assertSessionHasNoErrors();
+
+    $registro = Abastecimiento::query()->sole();
+    expect((float) $registro->precio_autorizado)->toBe(16.4)
+        ->and($registro->precio_galon)->toBeNull()
+        ->and($registro->costo())->toBe(1968.0);
+
+    // Mientras no llega el voucher, el ticket ya tiene costo (estimado).
+    $gastos = app(GastosDelTicket::class)->de(collect([$vuelta->load('paradas.viajes')]))[$vuelta->id];
+    expect($gastos['importe_estimado'])->toBe(1968.0)
+        ->and($gastos['importe_registrado'])->toBe(0.0);
+
+    // El voucher manda: galones reales por su precio.
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.despacho', $registro), [
+            'galones_despachados' => 118, 'precio_galon' => 16.5, 'despachado_el' => now()->toDateString(),
+        ])
+        ->assertSessionHasNoErrors();
+
+    $gastos = app(GastosDelTicket::class)->de(collect([$vuelta->fresh()->load('paradas.viajes')]))[$vuelta->id];
+    expect($gastos['importe_estimado'])->toBe(1947.0)
+        ->and($gastos['importe_registrado'])->toBe(1947.0);
+
+    // El precio con que se autorizó se propone la próxima vez en ese punto.
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('puntos', fn ($puntos) => collect($puntos)->firstWhere('id', $this->arequipa->id)['ultimo_precio'] === 16.5));
 });

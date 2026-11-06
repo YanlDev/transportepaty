@@ -125,7 +125,7 @@ it('still lets fuel be registered at Kio after the Ransa GR', function (): void 
         ->assertInertia(fn (Assert $page) => $page->where('vueltas.0.id', $vuelta->id)->where('vueltas.0.etapa', 'en_vuelta'));
 
     actingAs(actorConRol('abastecimiento'))
-        ->post(route('abastecimiento.store'), ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'sentido' => 'regreso', 'fecha' => now()->toDateString(), 'galones' => 80])
+        ->post(route('abastecimiento.store'), ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'sentido' => 'regreso', 'fecha' => now()->toDateString(), 'galones' => 80, 'precio_galon' => 16.4])
         ->assertSessionHasNoErrors();
 });
 
@@ -180,7 +180,7 @@ it('closes only with the settlement complete: arrival and every voucher', functi
 it('locks a closed ticket: no more fuel nor allowances until it is reopened', function (): void {
     $vuelta = ticketConRansa($this->tracto, now()->toDateString());
     $vuelta->update(['estado' => EstadoVuelta::Cerrada]);
-    $datos = ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'sentido' => 'regreso', 'fecha' => now()->toDateString(), 'galones' => 80];
+    $datos = ['vehiculo_id' => $this->tracto->id, 'vuelta_id' => $vuelta->id, 'sentido' => 'regreso', 'fecha' => now()->toDateString(), 'galones' => 80, 'precio_galon' => 16.4];
 
     actingAs(actorConRol('abastecimiento'))
         ->post(route('abastecimiento.store'), $datos)
@@ -205,8 +205,11 @@ it('does not touch what a closed or voided ticket already has', function (Estado
     $viatico = Viatico::factory()->create(['vuelta_id' => $vuelta->id, 'vehiculo_id' => $this->tracto->id]);
     $vuelta->update(['estado' => $estado]);
 
-    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.anular', $abastecimiento), ['motivo' => 'error'])->assertForbidden();
-    actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.despacho', $abastecimiento), [
+    actingAs(actorConRol('admin'))->post(route('abastecimiento.anular', $abastecimiento), ['motivo' => 'error'])->assertForbidden();
+    actingAs(actorConRol('admin'))->put(route('abastecimiento.update', $abastecimiento), [
+        'sentido' => 'ida', 'fecha' => now()->toDateString(), 'galones' => 50, 'precio_galon' => 16.4,
+    ])->assertForbidden();
+    actingAs(actorConRol('admin'))->put(route('abastecimiento.despacho', $abastecimiento), [
         'galones_despachados' => 50, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(),
     ])->assertForbidden();
     actingAs(actorConRol('abastecimiento'))->post(route('viaticos.anular', $viatico), ['motivo' => 'error'])->assertForbidden();

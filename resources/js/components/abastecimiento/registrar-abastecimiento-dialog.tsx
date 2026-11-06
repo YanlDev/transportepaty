@@ -1,7 +1,7 @@
 import { useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/AbastecimientoController';
-import { galones } from '@/components/abastecimiento/barra-combustible';
+import { galones, soles } from '@/components/abastecimiento/barra-combustible';
 import { CampoSelector, PanelBuscador } from '@/components/selector-en-dialogo';
 import type { OpcionBuscable } from '@/components/selector-en-dialogo';
 import { Button } from '@/components/ui/button';
@@ -40,6 +40,8 @@ type FormData = {
     punto_libre: string;
     fecha: string;
     galones: string;
+    /** Soles por galón con que se autoriza: el costo del ticket desde ya. */
+    precio_galon: string;
     motivo_exceso: string;
     observacion: string;
 };
@@ -70,7 +72,8 @@ const nombreTramo = (sentido: Sentido) =>
  * Autorizar combustible (el QR de Repsol, o Kio). Nada se deduce: quien
  * registra elige el ticket de la unidad y el tramo, y solo se puede en un
  * tramo con su tarjeta confirmada. Lo que pase del tope pide motivo (y solo
- * lo autoriza quien tiene permiso). El precio llega después, con el voucher.
+ * lo autoriza quien tiene permiso). El precio se pone al autorizar (se
+ * propone el último del grifo) y el voucher después lo confirma.
  */
 export function RegistrarAbastecimientoDialog({
     open,
@@ -116,6 +119,7 @@ export function RegistrarAbastecimientoDialog({
         punto_libre: '',
         fecha: hoy(),
         galones: inicial.galones ? String(inicial.galones) : '',
+        precio_galon: '',
         motivo_exceso: '',
         observacion: '',
     });
@@ -142,6 +146,10 @@ export function RegistrarAbastecimientoDialog({
     const queda =
         tramo?.previsto != null
             ? Math.max(0, tramo.previsto - tramo.registrado)
+            : null;
+    const importeEstimado =
+        data.galones !== '' && data.precio_galon !== ''
+            ? Number(data.galones) * Number(data.precio_galon)
             : null;
     const excede =
         queda !== null && data.galones !== '' && Number(data.galones) > queda;
@@ -190,8 +198,8 @@ export function RegistrarAbastecimientoDialog({
                         <DialogHeader>
                             <DialogTitle>Autorizar combustible</DialogTitle>
                             <DialogDescription>
-                                Lo que se autoriza por el QR de Repsol o en Kio.
-                                Los galones reales y el precio se registran
+                                Lo que se autoriza por el QR de Repsol o en Kio,
+                                con su precio. Los galones reales llegan
                                 después, con el voucher.
                             </DialogDescription>
                         </DialogHeader>
@@ -348,6 +356,14 @@ export function RegistrarAbastecimientoDialog({
                                                 const otro =
                                                     valor === OTRO_PUNTO;
 
+                                                const ultimoPrecio = otro
+                                                    ? null
+                                                    : (puntos.find(
+                                                          (punto) =>
+                                                              punto.id ===
+                                                              Number(valor),
+                                                      )?.ultimo_precio ?? null);
+
                                                 setFueraDeLista(otro);
                                                 setData((anterior) => ({
                                                     ...anterior,
@@ -358,6 +374,15 @@ export function RegistrarAbastecimientoDialog({
                                                     punto_libre: otro
                                                         ? anterior.punto_libre
                                                         : '',
+                                                    // El último precio de ese
+                                                    // grifo; si cambió, se
+                                                    // corrige.
+                                                    precio_galon:
+                                                        ultimoPrecio !== null
+                                                            ? String(
+                                                                  ultimoPrecio,
+                                                              )
+                                                            : anterior.precio_galon,
                                                 }));
                                             }}
                                         >
@@ -456,6 +481,35 @@ export function RegistrarAbastecimientoDialog({
                                 )}
                             </Field>
 
+                            <Field
+                                label="Precio por galón (S/)"
+                                error={errors.precio_galon}
+                                required
+                                ayuda={
+                                    importeEstimado !== null
+                                        ? `Costo estimado: ${soles(importeEstimado)}. El voucher lo confirma.`
+                                        : 'Se propone el último precio pagado en ese grifo.'
+                                }
+                            >
+                                {(id) => (
+                                    <Input
+                                        id={id}
+                                        type="number"
+                                        inputMode="decimal"
+                                        min="0"
+                                        step="0.001"
+                                        placeholder="Ej.: 16.40"
+                                        value={data.precio_galon}
+                                        onChange={(evento) =>
+                                            setData(
+                                                'precio_galon',
+                                                evento.target.value,
+                                            )
+                                        }
+                                    />
+                                )}
+                            </Field>
+
                             {(excede || errors.motivo_exceso) && (
                                 <Field
                                     label="¿Por qué pasa el tope?"
@@ -513,6 +567,7 @@ export function RegistrarAbastecimientoDialog({
                                     processing ||
                                     data.vuelta_id === null ||
                                     data.sentido === '' ||
+                                    data.precio_galon === '' ||
                                     Boolean(ticket?.bloqueo) ||
                                     (excede && !puedeExcederTope) ||
                                     (fueraDeLista &&

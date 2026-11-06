@@ -68,7 +68,7 @@ type Props = {
  */
 function BarraViaticos({ vuelta }: { vuelta: VueltaAbastecimiento }) {
     const total = vuelta.viatico_depositado + vuelta.viatico_pendiente;
-    const gastado = vuelta.importe_registrado + vuelta.viatico_depositado;
+    const gastado = vuelta.importe_estimado + vuelta.viatico_depositado;
 
     if (total === 0) {
         return (
@@ -742,10 +742,10 @@ export default function AbastecimientoIndex({
                                             ))}
                                     <span className="flex justify-between text-xs font-medium text-muted-foreground">
                                         Autorizado y despachado
-                                        {abierta.importe_registrado > 0 && (
+                                        {abierta.importe_estimado > 0 && (
                                             <span className="tabular-nums">
                                                 {soles(
-                                                    abierta.importe_registrado,
+                                                    abierta.importe_estimado,
                                                 )}
                                             </span>
                                         )}
@@ -753,6 +753,9 @@ export default function AbastecimientoIndex({
                                     <CombustiblesDelTicket
                                         registros={abierta.abastecimientos}
                                         puedeGestionar={puedeRegistrar}
+                                        puedeCorregir={puede(
+                                            'abastecimiento.corregir',
+                                        )}
                                         onAccion={setAccionCombustible}
                                     />
                                 </section>

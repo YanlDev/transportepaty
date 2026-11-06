@@ -9,6 +9,7 @@ use App\Models\RutaVuelta;
 use App\Models\Vuelta;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
@@ -39,6 +40,8 @@ class RegistrarAbastecimientoRequest extends FormRequest
             'punto_libre' => ['nullable', 'string', 'max:80', 'prohibits:punto_abastecimiento_id'],
             'fecha' => ['required', 'date'],
             'galones' => ['required', 'numeric', 'min:0.1', 'max:999'],
+            // Con qué precio se autoriza: el costo del ticket se ve desde ya.
+            'precio_galon' => ['required', 'numeric', 'min:0.01', 'max:99'],
             'motivo_exceso' => ['nullable', 'string', 'max:500'],
             'observacion' => ['nullable', 'string', 'max:500'],
         ];
@@ -115,6 +118,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
             ->vigentes()
             ->where('vuelta_id', $vuelta->id)
             ->where('sentido', $sentido)
+            ->when($this->registroQueSeCorrige(), fn ($query, int $id) => $query->whereKeyNot($id))
             ->sum('galones');
 
         if ($autorizado + $this->float('galones') <= $tope + 0.001) {
@@ -129,6 +133,34 @@ class RegistrarAbastecimientoRequest extends FormRequest
         }
 
         return blank($this->input('motivo_exceso')) ? ['motivo_exceso', "{$resumen}: escribe por qué."] : null;
+    }
+
+    /**
+     * Lo que se graba del combustible, igual al registrarlo que al corregirlo.
+     *
+     * @return array{sentido: SentidoTramo, punto_abastecimiento_id: int|null, punto_libre: string|null, fecha: Carbon, galones: float, precio_autorizado: float, motivo_exceso: string|null, observacion: string|null}
+     */
+    public function datosDelCombustible(): array
+    {
+        return [
+            'sentido' => $this->enum('sentido', SentidoTramo::class),
+            'punto_abastecimiento_id' => $this->filled('punto_abastecimiento_id') ? $this->integer('punto_abastecimiento_id') : null,
+            'punto_libre' => $this->filled('punto_libre') ? $this->string('punto_libre')->squish()->toString() : null,
+            'fecha' => $this->date('fecha'),
+            'galones' => $this->float('galones'),
+            'precio_autorizado' => $this->float('precio_galon'),
+            'motivo_exceso' => $this->filled('motivo_exceso') ? $this->string('motivo_exceso')->squish()->toString() : null,
+            'observacion' => $this->string('observacion')->toString() ?: null,
+        ];
+    }
+
+    /**
+     * El registro que se está corrigiendo, para que no cuente contra su
+     * propio tope. Al registrar uno nuevo no hay ninguno.
+     */
+    protected function registroQueSeCorrige(): ?int
+    {
+        return null;
     }
 
     public function vuelta(): Vuelta
@@ -152,6 +184,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
             'sentido' => 'tramo',
             'punto_abastecimiento_id' => 'punto',
             'punto_libre' => 'punto fuera de la lista',
+            'precio_galon' => 'precio por galón',
             'motivo_exceso' => 'motivo',
         ];
     }

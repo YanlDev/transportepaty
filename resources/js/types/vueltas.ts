@@ -254,7 +254,10 @@ export type LiquidacionTicket = {
         autorizado: number;
         despachado: number;
         diferencia: number;
+        /** Lo de los vouchers. */
         importe: number;
+        /** Los vouchers más lo autorizado sin voucher, por su precio. */
+        estimado: number;
     };
     viaticos: { depositado: number; pendiente: number };
     km: {
@@ -264,5 +267,7 @@ export type LiquidacionTicket = {
     };
     /** Km por galón despachado; null sin los dos kilometrajes. */
     rendimiento: number | null;
+    /** Combustible (estimado hasta tener todos los vouchers) + viáticos. */
     total: number;
+    total_es_estimado: boolean;
 };

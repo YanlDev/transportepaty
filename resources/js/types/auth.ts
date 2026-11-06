@@ -51,6 +51,8 @@ export type Permiso =
     | 'abastecimiento.registrar'
     | 'abastecimiento.configurar'
     | 'abastecimiento.viaticos'
+    | 'abastecimiento.exceder_tope'
+    | 'abastecimiento.corregir'
     | 'asistencia.ver'
     | 'asistencia.marcar'
     | 'asistencia.ajustar'

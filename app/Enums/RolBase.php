@@ -66,7 +66,8 @@ enum RolBase: string
             ],
 
             // Autoriza el combustible, registra los vouchers, deposita los
-            // viáticos y liquida los tickets.
+            // viáticos y liquida los tickets. Lo ya registrado lo corrige el
+            // admin; abastecimiento solo corrige el precio del voucher.
             self::Abastecimiento => [
                 Permiso::TableroVer, Permiso::ProgramacionVer, Permiso::ProgramacionCerrar,
                 Permiso::TallerVer, Permiso::VehiculosVer,
