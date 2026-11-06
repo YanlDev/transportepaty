@@ -159,7 +159,7 @@ it('closes only with the settlement complete: arrival and every voucher', functi
     expect($vuelta->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
 
     actingAs(actorConRol('admin'))->put(route('abastecimiento.despacho', $combustible), [
-        'galones_despachados' => 120, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(),
+        'galones_despachados' => 120, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(), 'foto_voucher' => fotoVoucher(),
     ]);
 
     actingAs(actorConRol('admin'))
@@ -210,7 +210,7 @@ it('does not touch what a closed or voided ticket already has', function (Estado
         'sentido' => 'ida', 'fecha' => now()->toDateString(), 'galones' => 50, 'precio_galon' => 16.4,
     ])->assertForbidden();
     actingAs(actorConRol('admin'))->put(route('abastecimiento.despacho', $abastecimiento), [
-        'galones_despachados' => 50, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(),
+        'galones_despachados' => 50, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(), 'foto_voucher' => fotoVoucher(),
     ])->assertForbidden();
     actingAs(actorConRol('abastecimiento'))->post(route('viaticos.anular', $viatico), ['motivo' => 'error'])->assertForbidden();
 })->with([

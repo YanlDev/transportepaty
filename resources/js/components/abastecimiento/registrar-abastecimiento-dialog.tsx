@@ -5,6 +5,7 @@ import { galones, soles } from '@/components/abastecimiento/barra-combustible';
 import { CampoSelector, PanelBuscador } from '@/components/selector-en-dialogo';
 import type { OpcionBuscable } from '@/components/selector-en-dialogo';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -40,6 +41,8 @@ type FormData = {
     punto_libre: string;
     fecha: string;
     galones: string;
+    /** Se llena el tanque (Kio): sin galones, los dice el voucher. */
+    tanque_lleno: boolean;
     /** Soles por galón con que se autoriza: el costo del ticket desde ya. */
     precio_galon: string;
     motivo_exceso: string;
@@ -111,18 +114,20 @@ export function RegistrarAbastecimientoDialog({
 
     const vueltaInicial =
         inicial.vuelta_id ?? unicoTicket(inicial.vehiculo_id ?? null);
-    const { data, setData, post, processing, errors } = useForm<FormData>({
-        vehiculo_id: inicial.vehiculo_id ?? null,
-        vuelta_id: vueltaInicial,
-        sentido: inicial.sentido ?? unicoTramo(vueltaInicial),
-        punto_abastecimiento_id: null,
-        punto_libre: '',
-        fecha: hoy(),
-        galones: inicial.galones ? String(inicial.galones) : '',
-        precio_galon: '',
-        motivo_exceso: '',
-        observacion: '',
-    });
+    const { data, setData, post, transform, processing, errors } =
+        useForm<FormData>({
+            vehiculo_id: inicial.vehiculo_id ?? null,
+            vuelta_id: vueltaInicial,
+            sentido: inicial.sentido ?? unicoTramo(vueltaInicial),
+            punto_abastecimiento_id: null,
+            punto_libre: '',
+            fecha: hoy(),
+            galones: inicial.galones ? String(inicial.galones) : '',
+            tanque_lleno: false,
+            precio_galon: '',
+            motivo_exceso: '',
+            observacion: '',
+        });
     const [eligiendo, setEligiendo] = useState(false);
     // En un caso excepcional se carga en un grifo que no está en la lista:
     // se elige «Otro punto» y se escribe cuál.
@@ -151,11 +156,23 @@ export function RegistrarAbastecimientoDialog({
         data.galones !== '' && data.precio_galon !== ''
             ? Number(data.galones) * Number(data.precio_galon)
             : null;
+    // El tanque full de la ruta (Kio), si todavía no se cargó: va aparte
+    // del tope y sin galones.
+    const tanqueLlenoDisponible =
+        tramo !== undefined &&
+        tramo.tanque_lleno.puntos.length > 0 &&
+        !tramo.tanque_lleno.usado;
+    const llenando = tanqueLlenoDisponible && data.tanque_lleno;
     const excede =
-        queda !== null && data.galones !== '' && Number(data.galones) > queda;
+        !llenando &&
+        queda !== null &&
+        data.galones !== '' &&
+        Number(data.galones) > queda;
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
+        // Si se cambió de tramo después de marcarlo, ya no es tanque full.
+        transform((datos) => ({ ...datos, tanque_lleno: llenando }));
         post(store().url, {
             preserveScroll: true,
             onSuccess: () => onOpenChange(false),
@@ -453,33 +470,78 @@ export function RegistrarAbastecimientoDialog({
                                 </Field>
                             )}
 
-                            <Field
-                                label="Galones autorizados"
-                                error={errors.galones}
-                                required
-                                ayuda={
-                                    queda !== null
-                                        ? `Quedan ${galones(queda)} del tope de la tarjeta (${galones(tramo?.previsto ?? null)}).`
-                                        : undefined
-                                }
-                            >
-                                {(id) => (
-                                    <Input
-                                        id={id}
-                                        type="number"
-                                        inputMode="decimal"
-                                        min="0"
-                                        step="0.1"
-                                        value={data.galones}
-                                        onChange={(evento) =>
-                                            setData(
-                                                'galones',
-                                                evento.target.value,
-                                            )
-                                        }
+                            {tanqueLlenoDisponible && (
+                                <label className="flex items-start gap-2 rounded-lg border border-sky-300 bg-sky-50 p-3 text-sm dark:border-sky-900 dark:bg-sky-950">
+                                    <Checkbox
+                                        checked={data.tanque_lleno}
+                                        onCheckedChange={(marcado) => {
+                                            const punto =
+                                                tramo?.tanque_lleno.puntos[0];
+
+                                            setFueraDeLista(false);
+                                            setData((anterior) => ({
+                                                ...anterior,
+                                                tanque_lleno: marcado === true,
+                                                galones: '',
+                                                punto_abastecimiento_id:
+                                                    marcado === true
+                                                        ? (punto?.punto_id ??
+                                                          anterior.punto_abastecimiento_id)
+                                                        : anterior.punto_abastecimiento_id,
+                                                punto_libre: '',
+                                            }));
+                                        }}
                                     />
-                                )}
-                            </Field>
+                                    <span className="flex flex-col">
+                                        <span className="font-medium">
+                                            Tanque full en{' '}
+                                            {tramo?.tanque_lleno.puntos
+                                                .map((punto) => punto.punto)
+                                                .join(' o ')}
+                                        </span>
+                                        <span className="text-xs text-muted-foreground">
+                                            No suma al tope. Los galones los
+                                            dice el voucher: se regulariza con
+                                            su foto y el kilometraje.
+                                        </span>
+                                    </span>
+                                </label>
+                            )}
+                            {errors.tanque_lleno && (
+                                <p className="text-sm text-destructive">
+                                    {errors.tanque_lleno}
+                                </p>
+                            )}
+
+                            {!llenando && (
+                                <Field
+                                    label="Galones autorizados"
+                                    error={errors.galones}
+                                    required
+                                    ayuda={
+                                        queda !== null
+                                            ? `Quedan ${galones(queda)} del tope de la tarjeta (${galones(tramo?.previsto ?? null)}).`
+                                            : undefined
+                                    }
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            type="number"
+                                            inputMode="decimal"
+                                            min="0"
+                                            step="0.1"
+                                            value={data.galones}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'galones',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    )}
+                                </Field>
+                            )}
 
                             <Field
                                 label="Precio por galón (S/)"

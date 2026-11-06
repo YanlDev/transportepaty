@@ -21,7 +21,7 @@ const CLASE_ICONO = 'size-3.5';
  * una variable y hacer `<Icono />`) porque esto último dispara la regla
  * `react-hooks/static-components` del linter.
  */
-function IconoTipoCarga({ valor }: { valor: string }) {
+export function IconoTipoCarga({ valor }: { valor: string }) {
     switch (valor) {
         case 'concentrado':
             return <Mountain className={CLASE_ICONO} />;

@@ -176,7 +176,7 @@ Route::middleware('auth')->group(function () {
     Route::get('abastecimiento/conciliacion', [ConciliacionCombustibleController::class, 'index'])->name('abastecimiento.conciliacion');
     Route::post('abastecimiento', [AbastecimientoController::class, 'store'])->name('abastecimiento.store');
     Route::post('abastecimiento/{abastecimiento}/anular', [AbastecimientoController::class, 'anular'])->name('abastecimiento.anular');
-    Route::put('abastecimiento/{abastecimiento}', [AbastecimientoController::class, 'update'])->name('abastecimiento.update');
+    Route::put('abastecimiento/{abastecimiento}', [AbastecimientoController::class, 'update'])->whereNumber('abastecimiento')->name('abastecimiento.update');
     Route::put('abastecimiento/{abastecimiento}/precio', [AbastecimientoController::class, 'precio'])->name('abastecimiento.precio');
     Route::put('abastecimiento/{abastecimiento}/despacho', [AbastecimientoController::class, 'despacho'])->name('abastecimiento.despacho');
     Route::post('rutas-vuelta/{rutaVuelta}/variante', [AbastecimientoController::class, 'elegirVariante'])->name('abastecimiento.variante');
@@ -194,6 +194,8 @@ Route::middleware('auth')->group(function () {
     Route::post('abastecimiento/viaticos/{viatico}/anular', [ViaticoController::class, 'anular'])->name('viaticos.anular');
     Route::get('abastecimiento/configuracion', [ConfiguracionAbastecimientoController::class, 'index'])
         ->name('abastecimiento.configuracion');
+    Route::put('abastecimiento/capacidades', [ConfiguracionAbastecimientoController::class, 'guardarCapacidades'])
+        ->name('abastecimiento.capacidades');
     Route::post('abastecimiento/puntos', [ConfiguracionAbastecimientoController::class, 'storePunto'])
         ->name('abastecimiento.puntos.store');
     Route::put('abastecimiento/puntos/{punto}', [ConfiguracionAbastecimientoController::class, 'updatePunto'])

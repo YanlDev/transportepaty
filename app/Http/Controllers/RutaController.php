@@ -158,7 +158,8 @@ class RutaController extends Controller
                 'tipo' => $datos['tipo'],
                 'concepto' => trim($datos['concepto']),
                 'punto_abastecimiento_id' => $esCombustible ? ($datos['punto_abastecimiento_id'] ?? null) : null,
-                'galones' => $esCombustible ? ($datos['galones'] ?? null) : null,
+                'galones' => $esCombustible && ! ($datos['tanque_lleno'] ?? false) ? ($datos['galones'] ?? null) : null,
+                'tanque_lleno' => $esCombustible && (bool) ($datos['tanque_lleno'] ?? false),
                 'monto' => $esCombustible ? null : ($datos['monto'] ?? null),
                 'orden' => $orden + 1,
             ])->save();
@@ -205,6 +206,7 @@ class RutaController extends Controller
                 'punto_abastecimiento_id' => $linea->punto_abastecimiento_id,
                 'punto' => $linea->punto?->nombre,
                 'galones' => $linea->galones === null ? null : (float) $linea->galones,
+                'tanque_lleno' => $linea->tanque_lleno,
                 'monto' => $linea->monto === null ? null : (float) $linea->monto,
             ])->all(),
             'tope' => $ruta->tieneVariantes() ? null : $ruta->topePara(null),

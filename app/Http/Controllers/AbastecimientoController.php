@@ -228,6 +228,10 @@ class AbastecimientoController extends Controller
             'despacho_por' => $request->user()?->id,
         ]);
 
+        if ($request->hasFile('foto_voucher')) {
+            $abastecimiento->addMediaFromRequest('foto_voucher')->toMediaCollection('voucher');
+        }
+
         if ($kmNuevo) {
             $odometro->anotar(
                 $abastecimiento->vehiculo_id,

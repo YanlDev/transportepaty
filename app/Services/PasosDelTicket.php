@@ -27,7 +27,7 @@ class PasosDelTicket
      * El ticket tiene que venir con `paradas.viajes` (con fecha y número) y
      * `revisiones.usuario`.
      *
-     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null, tanque_lleno?: array{puntos: list<array{punto_id: int|null, punto: string}>, usado: bool, galones: float}}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return array{pasos: list<Paso>, actual: string|null}
      */
     public function de(Vuelta $vuelta, array $gastos): array
@@ -44,7 +44,7 @@ class PasosDelTicket
      * ya va en ida sin el OK de taller). No busca quién lo programó: en el
      * tablero sería una consulta por ticket.
      *
-     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null, tanque_lleno?: array{puntos: list<array{punto_id: int|null, punto: string}>, usado: bool, galones: float}}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return array{siguiente: Paso|null, saltados: list<string>}
      */
     public function seguimiento(Vuelta $vuelta, array $gastos): array
@@ -81,10 +81,13 @@ class PasosDelTicket
             return null;
         }
 
+        // Programar no es avanzar: tener la vuelta definida desde el inicio
+        // no deja atrás el taller ni el combustible de la ida. Solo cuenta
+        // lo que pasó (el OK, el combustible, la GR, la llegada).
         $ultimoHecho = 0;
 
         foreach ($pasos as $indice => $paso) {
-            if ($paso['estado'] === 'hecho') {
+            if ($paso['estado'] === 'hecho' && ! in_array($paso['clave'], ['programado', 'regreso'], true)) {
                 $ultimoHecho = $indice;
             }
         }
@@ -106,22 +109,28 @@ class PasosDelTicket
     }
 
     /**
-     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null, tanque_lleno?: array{puntos: list<array{punto_id: int|null, punto: string}>, usado: bool, galones: float}}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return list<Paso>
      */
     private function pasos(Vuelta $vuelta, array $gastos, bool $conAutor): array
     {
-        return [
+        // Un ticket que arranca en la costa no tiene ida (la unidad ya había
+        // bajado cuando empezaron los tickets): sus pasos no aplican, no
+        // quedaron sin hacer, y los viáticos van con la vuelta.
+        $sinIda = $vuelta->paradasDe(SentidoTramo::Ida)->isEmpty()
+            && $vuelta->paradasDe(SentidoTramo::Regreso)->isNotEmpty();
+
+        return array_values(array_filter([
             $conAutor ? $this->programado($vuelta) : $this->paso('programado', 'Programado', 'hecho'),
             $this->taller($vuelta),
-            $this->abastecimiento($gastos, SentidoTramo::Ida, conViaticos: true),
-            $this->enRuta($vuelta, SentidoTramo::Ida),
+            $sinIda ? null : $this->abastecimiento($gastos, SentidoTramo::Ida, conViaticos: true),
+            $sinIda ? null : $this->enRuta($vuelta, SentidoTramo::Ida),
             $this->regreso($vuelta),
-            $this->abastecimiento($gastos, SentidoTramo::Regreso, conViaticos: false),
+            $this->abastecimiento($gastos, SentidoTramo::Regreso, conViaticos: $sinIda),
             $this->enRuta($vuelta, SentidoTramo::Regreso),
             $this->llego($vuelta),
             $this->cerrado($vuelta),
-        ];
+        ]));
     }
 
     /**
@@ -174,7 +183,7 @@ class PasosDelTicket
      * El combustible de un tramo contra el tope de sus rutas; el de ida
      * suma los viáticos, que se depositan antes de salir.
      *
-     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
+     * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null, tanque_lleno?: array{puntos: list<array{punto_id: int|null, punto: string}>, usado: bool, galones: float}}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
      * @return Paso
      */
     private function abastecimiento(array $gastos, SentidoTramo $sentido, bool $conViaticos): array
@@ -198,6 +207,13 @@ class PasosDelTicket
             $partes[] = 'Combustible '.$this->galones($tramo['registrado']).'/'.($tramo['previsto'] === null ? '¿?' : $this->galones($tramo['previsto'])).' gal';
             $completo = $tramo['falta'] === 0.0;
             $algo = $tramo['registrado'] > 0;
+
+            // El tanque full de la ruta (Kio) también se tiene que cargar.
+            if (($tramo['tanque_lleno']['puntos'] ?? []) !== []) {
+                $partes[] = $tramo['tanque_lleno']['usado'] ? 'tanque full hecho' : 'falta el tanque full';
+                $completo = $completo && $tramo['tanque_lleno']['usado'];
+                $algo = $algo || $tramo['tanque_lleno']['usado'];
+            }
         }
 
         if ($conViaticos) {

@@ -229,7 +229,9 @@ class GuardarVueltaRequest extends FormRequest
     /**
      * Un tramo al que ya se le autorizó combustible o se le depositó un
      * viático no cambia de rutas: lo autorizado se midió contra ellas. Solo
-     * se puede completar la variante que faltaba.
+     * se puede completar la variante que faltaba y agregar complementos (el
+     * destino lejano que se supo después, como Huaral: suma, no cambia lo
+     * que ya se autorizó).
      */
     private function validarRutasCongeladas(Validator $validator, Vuelta $vuelta): void
     {
@@ -245,18 +247,34 @@ class GuardarVueltaRequest extends FormRequest
             }
 
             $tenia = $vuelta->rutas()->where('sentido', $sentido)->get();
-            $nuevas = $elegidas->where('sentido', $sentido->value);
+            $nuevas = $elegidas->where('sentido', $sentido->value)->values();
+            $usadas = [];
 
-            $igual = $tenia->count() === $nuevas->count()
-                && $nuevas->every(fn (array $elegida): bool => $tenia->contains(
-                    fn (RutaVuelta $ruta): bool => $ruta->ruta_id === (int) $elegida['ruta_id']
-                        && (blank($elegida['variante_ruta_id'] ?? null)
-                            || $ruta->variante_ruta_id === null
-                            || $ruta->variante_ruta_id === (int) $elegida['variante_ruta_id']),
-                ));
+            // Cada ruta que tenía sigue, con la misma variante (o la que
+            // faltaba elegir).
+            $conserva = $tenia->every(function (RutaVuelta $ruta) use ($nuevas, &$usadas): bool {
+                $indice = $nuevas->search(fn (array $elegida, int $indice): bool => ! in_array($indice, $usadas, true)
+                    && $ruta->ruta_id === (int) $elegida['ruta_id']
+                    && (blank($elegida['variante_ruta_id'] ?? null)
+                        || $ruta->variante_ruta_id === null
+                        || $ruta->variante_ruta_id === (int) $elegida['variante_ruta_id']));
 
-            if (! $igual) {
-                $validator->errors()->add('rutas', "La {$sentido->label()} ya tiene combustible o viáticos autorizados con sus rutas: no se cambian. Anula esos gastos antes de cambiarlas.");
+                if ($indice === false) {
+                    return false;
+                }
+
+                $usadas[] = $indice;
+
+                return true;
+            });
+
+            // Lo que se suma solo pueden ser complementos.
+            $agregadas = $nuevas->reject(fn (array $elegida, int $indice): bool => in_array($indice, $usadas, true));
+            $soloComplementos = $agregadas->isEmpty()
+                || Ruta::query()->whereKey($agregadas->pluck('ruta_id')->map(fn ($id): int => (int) $id)->all())->where('es_complemento', false)->doesntExist();
+
+            if (! $conserva || ! $soloComplementos) {
+                $validator->errors()->add('rutas', "La {$sentido->label()} ya tiene combustible o viáticos autorizados con sus rutas: no se cambian ni se quitan, solo se pueden sumar complementos. Anula esos gastos antes de cambiarlas.");
             }
         }
     }

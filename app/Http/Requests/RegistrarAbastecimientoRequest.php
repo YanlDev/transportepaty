@@ -40,7 +40,9 @@ class RegistrarAbastecimientoRequest extends FormRequest
             // Un grifo fuera de la lista, en un caso excepcional: o uno o el otro.
             'punto_libre' => ['nullable', 'string', 'max:80', 'prohibits:punto_abastecimiento_id'],
             'fecha' => ['required', 'date'],
-            'galones' => ['required', 'numeric', 'min:0.1', 'max:999'],
+            // El tanque full no lleva galones: los dice el voucher.
+            'tanque_lleno' => ['boolean'],
+            'galones' => ['exclude_if:tanque_lleno,true', 'required', 'numeric', 'min:0.1', 'max:999'],
             // Con qué precio se autoriza: el costo del ticket se ve desde ya.
             'precio_galon' => ['required', 'numeric', 'min:0.01', 'max:99'],
             'motivo_exceso' => ['nullable', 'string', 'max:500'],
@@ -82,6 +84,12 @@ class RegistrarAbastecimientoRequest extends FormRequest
                     return;
                 }
 
+                if ($this->boolean('tanque_lleno')) {
+                    $this->validarTanqueLleno($validator, $vuelta, $sentido);
+
+                    return;
+                }
+
                 if ($vuelta->topeDe($sentido) === null) {
                     $sinVariante = $rutas->first(fn (RutaVuelta $ruta): bool => $ruta->variante_pendiente);
                     $validator->errors()->add('sentido', $sinVariante !== null
@@ -108,6 +116,10 @@ class RegistrarAbastecimientoRequest extends FormRequest
      */
     public function errorDeTope(Vuelta $vuelta): ?array
     {
+        if ($this->boolean('tanque_lleno')) {
+            return null;
+        }
+
         $sentido = SentidoTramo::from($this->string('sentido')->toString());
         $tope = $vuelta->topeDe($sentido);
 
@@ -119,6 +131,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
             ->vigentes()
             ->where('vuelta_id', $vuelta->id)
             ->where('sentido', $sentido)
+            ->where('tanque_lleno', false)
             ->when($this->registroQueSeCorrige(), fn ($query, int $id) => $query->whereKeyNot($id))
             ->sum(DB::raw(Abastecimiento::GALONES_QUE_CUENTAN));
 
@@ -148,7 +161,8 @@ class RegistrarAbastecimientoRequest extends FormRequest
             'punto_abastecimiento_id' => $this->filled('punto_abastecimiento_id') ? $this->integer('punto_abastecimiento_id') : null,
             'punto_libre' => $this->filled('punto_libre') ? $this->string('punto_libre')->squish()->toString() : null,
             'fecha' => $this->date('fecha'),
-            'galones' => $this->float('galones'),
+            'galones' => $this->boolean('tanque_lleno') ? 0 : $this->float('galones'),
+            'tanque_lleno' => $this->boolean('tanque_lleno'),
             'precio_autorizado' => $this->float('precio_galon'),
             'motivo_exceso' => $this->filled('motivo_exceso') ? $this->string('motivo_exceso')->squish()->toString() : null,
             'observacion' => $this->string('observacion')->toString() ?: null,
@@ -160,7 +174,34 @@ class RegistrarAbastecimientoRequest extends FormRequest
      */
     protected function galonesQueSeSuman(): float
     {
-        return $this->float('galones');
+        return $this->boolean('tanque_lleno') ? 0.0 : $this->float('galones');
+    }
+
+    /**
+     * El tanque full solo va si la ruta del tramo lo tiene (Kio), y una vez
+     * por línea: el siguiente llenado ya es otro viaje.
+     */
+    private function validarTanqueLleno(Validator $validator, Vuelta $vuelta, SentidoTramo $sentido): void
+    {
+        $lineas = $vuelta->rutasDe($sentido)->sum(fn (RutaVuelta $ruta): int => count($ruta->lineasDeTanqueLleno()));
+
+        if ($lineas === 0) {
+            $validator->errors()->add('tanque_lleno', "La {$sentido->label()} del ticket {$vuelta->codigo} no tiene tanque full en sus rutas.");
+
+            return;
+        }
+
+        $usados = Abastecimiento::query()
+            ->vigentes()
+            ->where('vuelta_id', $vuelta->id)
+            ->where('sentido', $sentido)
+            ->where('tanque_lleno', true)
+            ->when($this->registroQueSeCorrige(), fn ($query, int $id) => $query->whereKeyNot($id))
+            ->count();
+
+        if ($usados >= $lineas) {
+            $validator->errors()->add('tanque_lleno', "El tanque full de la {$sentido->label()} ya se registró.");
+        }
     }
 
     /**

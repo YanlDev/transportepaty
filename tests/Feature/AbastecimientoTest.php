@@ -6,6 +6,7 @@ use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
+use App\Models\CapacidadTanque;
 use App\Models\Conductor;
 use App\Models\LecturaKilometraje;
 use App\Models\ParadaVuelta;
@@ -223,7 +224,7 @@ it('registers the real dispatch from the voucher with its price and odometer', f
             'galones_despachados' => 118.5,
             'precio_galon' => 16.4,
             'kilometraje' => 250300,
-            'despachado_el' => now()->toDateString(),
+            'despachado_el' => now()->toDateString(), 'foto_voucher' => fotoVoucher(),
         ])
         ->assertSessionHasNoErrors();
 
@@ -236,7 +237,7 @@ it('registers the real dispatch from the voucher with its price and odometer', f
     $otro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 50]);
     actingAs(actorConRol('abastecimiento'))
         ->put(route('abastecimiento.despacho', $otro), [
-            'galones_despachados' => 50, 'precio_galon' => 16.4, 'kilometraje' => 249000, 'despachado_el' => now()->toDateString(),
+            'galones_despachados' => 50, 'precio_galon' => 16.4, 'kilometraje' => 249000, 'despachado_el' => now()->toDateString(), 'foto_voucher' => fotoVoucher(),
         ])
         ->assertSessionHasErrors('kilometraje');
 
@@ -326,7 +327,7 @@ it('counts what the voucher says was loaded against the leg cap', function (): v
     // El voucher dice que cargó 100: ahora faltan 120.
     actingAs(actorConRol('abastecimiento'))
         ->put(route('abastecimiento.despacho', $registro), [
-            'galones_despachados' => 100, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(),
+            'galones_despachados' => 100, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(), 'foto_voucher' => fotoVoucher(),
         ])
         ->assertSessionHasNoErrors();
 
@@ -549,10 +550,11 @@ it('corrects a mistyped dispatch odometer instead of keeping the wrong reading',
     $voucher = ['galones_despachados' => 50, 'precio_galon' => 16, 'despachado_el' => now()->toDateString()];
 
     actingAs(actorConRol('abastecimiento'))
-        ->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 2503000])
+        ->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 2503000, 'foto_voucher' => fotoVoucher()])
         ->assertSessionHasNoErrors();
 
-    // Corregir el voucher ya cargado es del admin.
+    // Corregir el voucher ya cargado es del admin; la foto que tiene se
+    // conserva si no se sube otra.
     actingAs(actorConRol('abastecimiento'))
         ->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 250300])
         ->assertForbidden();
@@ -614,7 +616,7 @@ it('asks the price per gallon when authorizing, and the ticket costs from then o
     // El voucher manda: galones reales por su precio.
     actingAs(actorConRol('abastecimiento'))
         ->put(route('abastecimiento.despacho', $registro), [
-            'galones_despachados' => 118, 'precio_galon' => 16.5, 'despachado_el' => now()->toDateString(),
+            'galones_despachados' => 118, 'precio_galon' => 16.5, 'despachado_el' => now()->toDateString(), 'foto_voucher' => fotoVoucher(),
         ])
         ->assertSessionHasNoErrors();
 
@@ -627,4 +629,94 @@ it('asks the price per gallon when authorizing, and the ticket costs from then o
         ->get(route('abastecimiento.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('puntos', fn ($puntos) => collect($puntos)->firstWhere('id', $this->arequipa->id)['ultimo_precio'] === 16.5));
+});
+
+/**
+ * Un ticket con la vuelta «Particular a Juliaca»: 190 en Arequipa y el
+ * tanque full en Kio.
+ */
+function ticketConTanqueFull(Vehiculo $tracto): Vuelta
+{
+    $vuelta = ticketApto($tracto);
+    $ruta = rutaDelCatalogo('Particular a Juliaca')->load(['lineas.punto', 'variantes']);
+    $vuelta->rutas()->create([...RutaVuelta::copiaDe($ruta, null), 'sentido' => SentidoTramo::Regreso, 'orden' => 1]);
+
+    return $vuelta;
+}
+
+it('fills the tank at Kio apart from the cap, once, and settles it with the voucher', function (): void {
+    $vuelta = ticketConTanqueFull($this->tracto);
+    $full = ['sentido' => 'regreso', 'tanque_lleno' => true, 'punto_abastecimiento_id' => $this->kio->id, 'galones' => null];
+
+    expect($vuelta->fresh()->topeDe(SentidoTramo::Regreso))->toBe(190.0);
+
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, $full))->assertSessionHasNoErrors();
+    $registro = Abastecimiento::query()->where('tanque_lleno', true)->sole();
+    expect((float) $registro->galones)->toBe(0.0);
+
+    // Una vez por ruta: el siguiente llenado es otro viaje.
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, $full))->assertSessionHasErrors('tanque_lleno');
+
+    // No consume el tope: los 190 de Arequipa siguen enteros.
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, ['sentido' => 'regreso', 'galones' => 190]))->assertSessionHasNoErrors();
+
+    // El voucher del full exige el kilometraje y la foto.
+    $voucher = ['galones_despachados' => 85.5, 'precio_galon' => 16.2, 'despachado_el' => now()->toDateString()];
+    actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.despacho', $registro), $voucher)
+        ->assertSessionHasErrors(['kilometraje', 'foto_voucher']);
+    actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 250300, 'foto_voucher' => fotoVoucher()])
+        ->assertSessionHasNoErrors();
+
+    $registro->refresh();
+    expect($registro->getFirstMedia('voucher'))->not->toBeNull()
+        ->and((float) $registro->galones_despachados)->toBe(85.5);
+
+    $tramo = collect(app(DotacionVuelta::class)->de($vuelta->fresh(['paradas.viajes', 'rutas']), $vuelta->abastecimientos()->vigentes()->with('punto')->get())['tramos'])
+        ->firstWhere('sentido', 'regreso');
+    expect($tramo['registrado'])->toBe(190.0)
+        ->and($tramo['falta'])->toBe(0.0)
+        ->and($tramo['tanque_lleno']['usado'])->toBeTrue()
+        ->and($tramo['tanque_lleno']['galones'])->toBe(85.5);
+});
+
+it('does not fill the tank on a route without it', function (): void {
+    $vuelta = ticketListo($this->tracto);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.store'), autorizacion($vuelta, ['tanque_lleno' => true, 'galones' => null]))
+        ->assertSessionHasErrors('tanque_lleno');
+});
+
+it('requires the voucher photo and warns when it does not fit in the tank of the brand', function (): void {
+    $this->tracto->update(['marca' => 'Scania']);
+    CapacidadTanque::query()->create(['marca' => 'SCANIA', 'galones' => 200]);
+    $registro = Abastecimiento::factory()->paraVuelta(ticketListo($this->tracto))->create(['galones' => 150]);
+    $voucher = ['precio_galon' => 16, 'despachado_el' => now()->toDateString()];
+
+    actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.despacho', $registro), [...$voucher, 'galones_despachados' => 150])
+        ->assertSessionHasErrors('foto_voucher');
+
+    // 2500 por 250: no cabe en una Scania; se revisa o se confirma.
+    actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.despacho', $registro), [...$voucher, 'galones_despachados' => 250, 'foto_voucher' => fotoVoucher()])
+        ->assertSessionHasErrors('galones_despachados');
+    actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.despacho', $registro), [...$voucher, 'galones_despachados' => 250, 'confirmar_capacidad' => true, 'foto_voucher' => fotoVoucher()])
+        ->assertSessionHasNoErrors();
+});
+
+it('keeps the tank capacity of each brand of the active tractors', function (): void {
+    $this->tracto->update(['marca' => 'Volvo']);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.capacidades'), ['capacidades' => [['marca' => 'volvo', 'galones' => 180]]])
+        ->assertSessionHasNoErrors();
+
+    expect(CapacidadTanque::de('Volvo'))->toBe(180.0);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.configuracion'))
+        ->assertInertia(fn (Assert $page) => $page->where('capacidades', fn ($capacidades) => (float) collect($capacidades)->firstWhere('marca', 'VOLVO')['galones'] === 180.0));
+
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.capacidades'), ['capacidades' => [['marca' => 'VOLVO', 'galones' => null]]]);
+    expect(CapacidadTanque::de('Volvo'))->toBeNull();
 });

@@ -63,6 +63,7 @@ class GuardarRutaRequest extends FormRequest
             // Sin galones: «por definir», y el tramo no tiene tope hasta
             // que alguien los ponga.
             'lineas.*.galones' => ['nullable', 'numeric', 'min:0', 'max:999'],
+            'lineas.*.tanque_lleno' => ['boolean'],
             'lineas.*.monto' => ['nullable', 'required_unless:lineas.*.tipo,'.$combustible, 'numeric', 'min:0', 'max:99999'],
         ];
     }

@@ -19,9 +19,11 @@ class CorregirAbastecimientoRequest extends RegistrarAbastecimientoRequest
 
     protected function prepareForValidation(): void
     {
+        // El ticket, la unidad y si es tanque full son los del registro.
         $this->merge([
             'vehiculo_id' => $this->abastecimiento()->vehiculo_id,
             'vuelta_id' => $this->abastecimiento()->vuelta_id,
+            'tanque_lleno' => $this->abastecimiento()->tanque_lleno,
         ]);
     }
 

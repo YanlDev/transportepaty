@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\EstadoVehiculo;
+use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Http\Requests\GuardarPuntoAbastecimientoRequest;
 use App\Models\Abastecimiento;
+use App\Models\CapacidadTanque;
 use App\Models\LineaRuta;
 use App\Models\PuntoAbastecimiento;
+use App\Models\Vehiculo;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -57,7 +62,63 @@ class ConfiguracionAbastecimientoController extends Controller
                 ])
                 ->all(),
             'zonas' => ZonaRuta::options(),
+            'capacidades' => $this->capacidades(),
         ]);
+    }
+
+    /**
+     * Cuántos galones caben en el tanque de cada marca: avisa de un voucher
+     * que no cabe. Vacío, esa marca no se revisa.
+     */
+    public function guardarCapacidades(Request $request): RedirectResponse
+    {
+        $this->authorize('configurar', Abastecimiento::class);
+
+        $datos = $request->validate([
+            'capacidades' => ['array'],
+            'capacidades.*.marca' => ['required', 'string', 'max:60'],
+            'capacidades.*.galones' => ['nullable', 'numeric', 'min:10', 'max:2000'],
+        ]);
+
+        foreach ($datos['capacidades'] ?? [] as $fila) {
+            $marca = mb_strtoupper(trim($fila['marca']));
+
+            if (blank($fila['galones'] ?? null)) {
+                CapacidadTanque::query()->where('marca', $marca)->delete();
+
+                continue;
+            }
+
+            CapacidadTanque::query()->updateOrCreate(['marca' => $marca], ['galones' => $fila['galones']]);
+        }
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Capacidades guardadas.']);
+    }
+
+    /**
+     * Las marcas de los tractos activos, con su capacidad si se cargó.
+     *
+     * @return list<array{marca: string, unidades: int, galones: float|null}>
+     */
+    private function capacidades(): array
+    {
+        $cargadas = CapacidadTanque::query()->pluck('galones', 'marca');
+
+        $marcas = Vehiculo::query()
+            ->where('tipo', TipoVehiculo::Tracto)
+            ->where('estado', EstadoVehiculo::Activo)
+            ->whereNotNull('marca')
+            ->selectRaw('upper(trim(marca)) as marca, count(*) as unidades')
+            ->groupByRaw('upper(trim(marca))')
+            ->orderBy('marca')
+            ->get()
+            ->map(fn (Vehiculo $fila): array => [
+                'marca' => (string) $fila->marca,
+                'unidades' => (int) $fila->getAttribute('unidades'),
+                'galones' => isset($cargadas[$fila->marca]) ? (float) $cargadas[$fila->marca] : null,
+            ]);
+
+        return array_values($marcas->all());
     }
 
     public function storePunto(GuardarPuntoAbastecimientoRequest $request): RedirectResponse

@@ -56,7 +56,7 @@ class GastosDelTicket
 
         $registrados = Abastecimiento::query()
             ->whereIn('vuelta_id', $ids)
-            ->with(['punto:id,nombre', 'registradoPor:id,name', 'anuladoPor:id,name', 'despachoRegistradoPor:id,name'])
+            ->with(['punto:id,nombre', 'registradoPor:id,name', 'anuladoPor:id,name', 'despachoRegistradoPor:id,name', 'media'])
             ->orderBy('fecha')
             ->orderBy('id')
             ->get();
@@ -118,6 +118,8 @@ class GastosDelTicket
             'punto' => $abastecimiento->nombrePunto(),
             'fuera_de_lista' => $abastecimiento->punto_abastecimiento_id === null && filled($abastecimiento->punto_libre),
             'galones' => (float) $abastecimiento->galones,
+            'tanque_lleno' => $abastecimiento->tanque_lleno,
+            'foto_voucher' => $abastecimiento->getFirstMediaUrl('voucher') ?: null,
             'precio_autorizado' => $abastecimiento->precio_autorizado === null ? null : (float) $abastecimiento->precio_autorizado,
             'costo' => $abastecimiento->costo(),
             'motivo_exceso' => $abastecimiento->motivo_exceso,

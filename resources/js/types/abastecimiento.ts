@@ -66,6 +66,10 @@ export type CombustibleDelTicket = {
     punto: string | null;
     fuera_de_lista: boolean;
     galones: number;
+    /** Se llenó el tanque (Kio): los galones los dice el voucher. */
+    tanque_lleno: boolean;
+    /** La foto del voucher del grifo. */
+    foto_voucher: string | null;
     /** Con qué precio se autorizó (null en los registros viejos). */
     precio_autorizado: number | null;
     /** El voucher si ya llegó; si no, lo autorizado por su precio. */
@@ -120,6 +124,13 @@ export type TramoCombustible = {
     despachado: number;
     falta: number | null;
     puntos: { punto: string; previsto: number | null }[];
+    /** El tanque full de sus rutas (Kio): va aparte del tope. */
+    tanque_lleno: {
+        puntos: { punto_id: number | null; punto: string }[];
+        usado: boolean;
+        /** Lo que entró según los vouchers. */
+        galones: number;
+    };
     pendiente: string | null;
 };
 
@@ -187,8 +198,10 @@ export type LineaRuta = {
     concepto: string;
     punto_abastecimiento_id: number | null;
     punto?: string | null;
-    /** null: galones por definir. */
+    /** null: galones por definir (o tanque full). */
     galones: number | null;
+    /** Se llena el tanque (Kio): sin galones, va aparte del tope. */
+    tanque_lleno: boolean;
     monto: number | null;
 };
 

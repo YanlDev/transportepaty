@@ -4,7 +4,9 @@ import { Fragment } from 'react';
 import vueltasRutas from '@/actions/App/Http/Controllers/VueltaController';
 import { Placa } from '@/components/placa';
 import { IconoTaller } from '@/components/taller/estado-taller';
+import { IconoTipoCarga } from '@/components/viajes/tipo-carga-badge';
 import { EtapaBadge } from '@/components/vueltas/etapa-badge';
+import { claseDe, claseDeCarga, clasesDeTicket } from '@/lib/clase-carga';
 import { ETAPAS } from '@/lib/etapas';
 import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -18,6 +20,9 @@ type Punto = {
     /** El tramo hacia el punto siguiente; null en el último. */
     tramo: {
         sentido: 'ida' | 'regreso';
+        /** El primer tramo de su sentido: ahí se rotula «Ida» o «Vuelta». */
+        abre: boolean;
+        tipo: string;
         carga: string;
         vacio: boolean;
         /** Ya tiene GR: se dibuja lleno; si no, punteado. */
@@ -61,8 +66,15 @@ function rutaDe(vuelta: TarjetaVuelta): {
             puntos.push({ lugar: desde, tramo: null });
         }
 
+        const sentidoAnterior = puntos
+            .map((punto) => punto.tramo?.sentido)
+            .filter(Boolean)
+            .at(-1);
+
         puntos[puntos.length - 1].tramo = {
             sentido: parada.sentido,
+            abre: sentidoAnterior !== parada.sentido,
+            tipo: parada.tipo_carga,
             carga:
                 parada.tipo_carga === 'vacio'
                     ? 'vacía'
@@ -108,14 +120,50 @@ function posicionDe(
 }
 
 const COLOR_TRAMO = {
-    ida: { linea: 'bg-amber-500', borde: 'border-amber-500' },
-    regreso: { linea: 'bg-violet-500', borde: 'border-violet-500' },
+    ida: {
+        linea: 'bg-amber-500',
+        borde: 'border-amber-500',
+        rotulo: 'text-amber-700 dark:text-amber-400',
+        titulo: 'Ida',
+    },
+    regreso: {
+        linea: 'bg-violet-500',
+        borde: 'border-violet-500',
+        rotulo: 'text-violet-700 dark:text-violet-400',
+        titulo: 'Vuelta',
+    },
 } as const;
+
+/** La carga del tramo: chip del color de su clase (mina o particular). */
+function CargaDelTramo({ tipo, carga }: { tipo: string; carga: string }) {
+    const clase = claseDeCarga(tipo);
+
+    if (clase === null) {
+        return (
+            <span className="text-[10px] text-muted-foreground italic">
+                {carga}
+            </span>
+        );
+    }
+
+    return (
+        <span
+            className={cn(
+                'inline-flex items-center gap-1 rounded-full border px-1.5 py-px text-[10px] font-medium whitespace-nowrap [&_svg]:size-3',
+                claseDe(clase).suave,
+            )}
+        >
+            <IconoTipoCarga valor={tipo} />
+            {carga}
+        </span>
+    );
+}
 
 /**
  * La ruta como una línea de metro: los lugares en fila, los tramos con su
- * color (ida ámbar, vuelta violeta), llenos si ya tienen GR y punteados si
- * todavía no, y el camión donde va.
+ * color (ida ámbar, vuelta violeta) y rotulados donde empieza cada uno,
+ * llenos si ya tienen GR y punteados si todavía no, la carga con el color
+ * de su clase (mina o particular) y el camión donde va.
  */
 function Ruta({ vuelta }: { vuelta: TarjetaVuelta }) {
     const { puntos, tramoDeParada } = rutaDe(vuelta);
@@ -129,7 +177,7 @@ function Ruta({ vuelta }: { vuelta: TarjetaVuelta }) {
 
     return (
         <div className="-mx-1 overflow-x-auto px-1 pb-1">
-            <ol className="flex min-w-max items-start">
+            <ol className="flex min-w-max items-start pt-4">
                 {puntos.map((punto, indice) => {
                     const camionAqui =
                         'punto' in posicion && posicion.punto === indice;
@@ -160,22 +208,42 @@ function Ruta({ vuelta }: { vuelta: TarjetaVuelta }) {
                                 </span>
                             </li>
                             {punto.tramo && (
-                                <li className="flex min-w-16 flex-1 flex-col items-center gap-1 pt-[11px] sm:min-w-24">
+                                <li className="relative flex min-w-16 flex-1 flex-col items-center gap-1 pt-[10px] sm:min-w-24">
+                                    {punto.tramo.abre && (
+                                        <span
+                                            className={cn(
+                                                'absolute -top-3.5 left-0 text-[10px] leading-none font-semibold tracking-wide uppercase',
+                                                COLOR_TRAMO[punto.tramo.sentido]
+                                                    .rotulo,
+                                            )}
+                                        >
+                                            {
+                                                COLOR_TRAMO[punto.tramo.sentido]
+                                                    .titulo
+                                            }
+                                        </span>
+                                    )}
                                     <span className="relative flex w-full items-center">
                                         <span
                                             className={cn(
-                                                'h-0.5 w-full',
+                                                'w-full',
                                                 punto.tramo.hecho &&
                                                     !punto.tramo.vacio
-                                                    ? COLOR_TRAMO[
-                                                          punto.tramo.sentido
-                                                      ].linea
+                                                    ? cn(
+                                                          'h-1 rounded-full',
+                                                          COLOR_TRAMO[
+                                                              punto.tramo
+                                                                  .sentido
+                                                          ].linea,
+                                                      )
                                                     : cn(
-                                                          'border-t-2 border-dashed',
+                                                          'border-t-[3px] border-dashed',
                                                           COLOR_TRAMO[
                                                               punto.tramo
                                                                   .sentido
                                                           ].borde,
+                                                          punto.tramo.vacio &&
+                                                              'opacity-50',
                                                       ),
                                             )}
                                         />
@@ -185,8 +253,11 @@ function Ruta({ vuelta }: { vuelta: TarjetaVuelta }) {
                                             </span>
                                         )}
                                     </span>
-                                    <span className="pt-1 text-[10px] text-muted-foreground">
-                                        {punto.tramo.carga}
+                                    <span className="pt-1">
+                                        <CargaDelTramo
+                                            tipo={punto.tramo.tipo}
+                                            carga={punto.tramo.carga}
+                                        />
                                     </span>
                                 </li>
                             )}
@@ -250,6 +321,19 @@ function Fila({
                     {vuelta.codigo}
                 </span>
                 <EtapaBadge etapa={vuelta.etapa} />
+                {clasesDeTicket([...vuelta.ida, ...vuelta.regreso]).map(
+                    (clase) => (
+                        <span
+                            key={clase}
+                            className={cn(
+                                'rounded-full border px-2 py-0.5 text-[11px] font-medium',
+                                claseDe(clase).suave,
+                            )}
+                        >
+                            {claseDe(clase).titulo}
+                        </span>
+                    ),
+                )}
                 <IconoTaller revision={vuelta.taller} />
                 {tiempo(vuelta) && (
                     <span className="text-xs text-muted-foreground">

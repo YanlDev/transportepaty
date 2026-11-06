@@ -19,6 +19,8 @@ import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dia
 import { SeguimientoVueltas } from '@/components/vueltas/seguimiento-vueltas';
 import { TablaVueltas } from '@/components/vueltas/tabla-vueltas';
 import { usePermisos } from '@/hooks/use-permisos';
+import { CLASES, clasesDeTicket } from '@/lib/clase-carga';
+import type { ClaseCarga } from '@/lib/clase-carga';
 import { ETAPAS } from '@/lib/etapas';
 import { cn } from '@/lib/utils';
 import type {
@@ -73,6 +75,7 @@ export default function Programacion({
     const { puede } = usePermisos();
     const [vista, setVista] = useState<Vista>('seguimiento');
     const [etapa, setEtapa] = useState<EtapaVuelta | null>(null);
+    const [clase, setClase] = useState<ClaseCarga | null>(null);
     const [buscar, setBuscar] = useState('');
     const [dialogo, setDialogo] = useState<Dialogo>(null);
     const [abiertaId, setAbiertaId] = useState<number | null>(null);
@@ -89,9 +92,13 @@ export default function Programacion({
         () => filtrar(tablero, buscar),
         [buscar, tablero],
     );
-    const visibles = etapa
-        ? filtradas.filter((vuelta) => vuelta.etapa === etapa)
-        : filtradas;
+    const deClase = (vuelta: TarjetaVuelta, buscada: ClaseCarga) =>
+        clasesDeTicket([...vuelta.ida, ...vuelta.regreso]).includes(buscada);
+    const visibles = filtradas.filter(
+        (vuelta) =>
+            (etapa === null || vuelta.etapa === etapa) &&
+            (clase === null || deClase(vuelta, clase)),
+    );
 
     // Se busca por id en lo último que llegó: si el ticket cambia con el
     // panel abierto (llega una GR), se ve al día.
@@ -170,6 +177,45 @@ export default function Programacion({
                                                 (vuelta) =>
                                                     vuelta.etapa ===
                                                     opcion.etapa,
+                                            ).length
+                                        }
+                                    </span>
+                                </button>
+                            );
+                        })}
+                        {/* Mina o particular: un ticket con las dos cuenta en
+                            las dos. Se combina con la etapa. */}
+                        <span className="mx-1 w-px self-stretch bg-border" />
+                        {CLASES.map((opcion) => {
+                            const activa = clase === opcion.clase;
+
+                            return (
+                                <button
+                                    key={opcion.clase}
+                                    type="button"
+                                    onClick={() =>
+                                        setClase(activa ? null : opcion.clase)
+                                    }
+                                    aria-pressed={activa}
+                                    data-filtro-clase={opcion.clase}
+                                    className={cn(
+                                        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition',
+                                        activa
+                                            ? opcion.suave
+                                            : 'text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    <span
+                                        className={cn(
+                                            'size-2 rounded-full',
+                                            opcion.punto,
+                                        )}
+                                    />
+                                    {opcion.titulo}
+                                    <span className="font-medium text-foreground tabular-nums">
+                                        {
+                                            tablero.filter((vuelta) =>
+                                                deClase(vuelta, opcion.clase),
                                             ).length
                                         }
                                     </span>
