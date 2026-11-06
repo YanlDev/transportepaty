@@ -10,6 +10,7 @@ use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
 use App\Models\Conductor;
 use App\Models\ParadaVuelta;
+use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
@@ -428,4 +429,45 @@ it('does not remove a trip that already got fuel', function (): void {
         ->assertSessionHas('toast.type', 'error');
 
     expect($vuelta->fresh())->not->toBeNull();
+});
+
+it('does not move a ticket to another unit once it went through the workshop', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    $otro = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), vueltaDelFormulario($tracto->id))->assertSessionHasNoErrors();
+    $vuelta = Vuelta::query()->sole();
+
+    // Sin taller ni gastos, la placa todavía se corrige.
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $vuelta), vueltaDelFormulario($otro->id))->assertSessionHasNoErrors();
+    expect($vuelta->fresh()->tracto_id)->toBe($otro->id);
+
+    // El OK de taller es de la unidad que se revisó.
+    RevisionTaller::factory()->create(['vuelta_id' => $vuelta->id]);
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id))->assertSessionHasErrors('tracto_id');
+
+    expect($vuelta->fresh()->tracto_id)->toBe($otro->id)
+        ->and($vuelta->fresh()->tieneOkDeTaller())->toBeTrue();
+});
+
+it('freezes the routes of a leg that already has fuel', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), vueltaDelFormulario($tracto->id))->assertSessionHasNoErrors();
+    $vuelta = Vuelta::query()->sole();
+    Abastecimiento::factory()->paraVuelta($vuelta, SentidoTramo::Ida)->create(['galones' => 100]);
+
+    // Quitar la ida (y su ruta) no se puede: ya tiene combustible.
+    $soloRegreso = vueltaDelFormulario($tracto->id, ['paradas' => [
+        ['sentido' => 'regreso', 'zona_origen' => 'pisco', 'zona_destino' => 'mina', 'tipo_carga' => 'escoria'],
+    ]]);
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $vuelta), $soloRegreso)->assertSessionHasErrors('rutas');
+    expect($vuelta->fresh()->rutasDe(SentidoTramo::Ida))->toHaveCount(1);
+
+    // Lo que no toca las rutas de la ida sí se edita.
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $vuelta), vueltaDelFormulario($tracto->id, ['inicio' => '2026-10-27']))->assertSessionHasNoErrors();
+    expect($vuelta->fresh()->inicio->toDateString())->toBe('2026-10-27');
+
+    // Anulado el combustible, la ruta vuelve a poder cambiarse.
+    Abastecimiento::query()->update(['anulado_at' => now()]);
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $vuelta), $soloRegreso)->assertSessionHasNoErrors();
+    expect($vuelta->fresh()->rutasDe(SentidoTramo::Ida))->toHaveCount(0);
 });

@@ -16,3 +16,8 @@ it('deriva el tipo de carga desde la serie de una guía remitente de Minsur', fu
 it('devuelve null para una serie que no reconoce, sin asumir un default', function (): void {
     expect(TipoCarga::desdeGuiaRemitenteMinsur('T104 - 2132'))->toBeNull();
 });
+
+it('clasifica la serie general EG07 como materiales solo si va a la mina', function (): void {
+    expect(TipoCarga::desdeGuiaRemitenteMinsur('EG07 - 3228', vaALaMina: true))->toBe(TipoCarga::Materiales)
+        ->and(TipoCarga::desdeGuiaRemitenteMinsur('EG07 - 2896'))->toBeNull();
+});

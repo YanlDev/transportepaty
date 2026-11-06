@@ -94,10 +94,19 @@ const ZONAS_DE_PASO = ['juliaca', 'cusco', 'arequipa', 'moquegua', 'tacna'];
 type Subida = 'vacia' | 'cargada' | 'ninguna';
 
 const SUBIDAS: { value: Subida; label: string }[] = [
-    { value: 'vacia', label: 'Juliaca → mina vacía' },
-    { value: 'cargada', label: 'Juliaca → mina con carga' },
+    { value: 'vacia', label: 'Sube vacía desde Juliaca' },
+    { value: 'cargada', label: 'Sube con carga desde Juliaca (Minsur u otro)' },
     { value: 'ninguna', label: 'Ya está en la mina' },
 ];
+
+/** El recorrido de una ruta que arranca en la mina, con la subida delante. */
+function conSubida(descripcion: string, subida: Subida): string {
+    if (subida === 'ninguna') {
+        return descripcion;
+    }
+
+    return `Juliaca → Mina (${subida === 'vacia' ? 'vacía' : 'con carga'}) → ${descripcion.replace(/^Mina\s*→\s*/, '')}`;
+}
 
 /** Si la unidad quedó en Juliaca (o de paso hacia ahí), sube vacía. */
 function subidaPorZona(zona: string | null | undefined): Subida {
@@ -268,6 +277,7 @@ function TarjetaOpcion({
     dotacion = null,
     bloqueo = null,
     onElegir,
+    children = null,
 }: {
     icono: ReactNode;
     titulo: string;
@@ -279,7 +289,27 @@ function TarjetaOpcion({
     /** Por qué no se puede elegir: no arranca donde está la unidad. */
     bloqueo?: string | null;
     onElegir: () => void;
+    /** Lo que se pregunta de esta ruta una vez elegida, debajo de la tarjeta. */
+    children?: ReactNode;
 }) {
+    if (elegida && children) {
+        return (
+            <div className="flex flex-col gap-2 rounded-xl border border-amber-500 bg-amber-500/5 p-1 ring-1 ring-amber-500">
+                <TarjetaOpcion
+                    icono={icono}
+                    titulo={titulo}
+                    descripcion={descripcion}
+                    elegida={elegida}
+                    sentido={sentido}
+                    dotacion={dotacion}
+                    bloqueo={bloqueo}
+                    onElegir={onElegir}
+                />
+                <div className="px-2 pb-2">{children}</div>
+            </div>
+        );
+    }
+
     return (
         <button
             type="button"
@@ -895,6 +925,44 @@ export function ProgramarVueltaDialog({
                 ? `Se agrega cuando la ida llegue a ${etiquetaZona(arranca)}`
                 : null;
         };
+        // Una ida que arranca en la mina, sin GR todavía: se pregunta cómo
+        // llega la unidad hasta ahí (casi siempre sube desde Juliaca).
+        const arrancaEnMina = (opcion: { value: string }) =>
+            !subiendo &&
+            fijas.length === 0 &&
+            'paradas' in opcion &&
+            (opcion as OpcionTramo).paradas[0]?.zona_origen === 'mina';
+        const selectorSubida = (
+            <div className="flex flex-col gap-2">
+                <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
+                    <MapPin className="size-3.5" />
+                    ¿Cómo llega a la mina?
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                    {SUBIDAS.map((candidata) => (
+                        <button
+                            key={candidata.value}
+                            type="button"
+                            onClick={() => elegirSubida(candidata.value)}
+                            className={cn(
+                                'rounded-full border px-3 py-1 text-xs transition',
+                                subida === candidata.value
+                                    ? 'border-amber-500 bg-amber-500 text-white'
+                                    : 'bg-background hover:bg-accent',
+                            )}
+                        >
+                            {candidata.label}
+                        </button>
+                    ))}
+                </div>
+                {subida === 'cargada' && (
+                    <span className="text-[11px] text-muted-foreground">
+                        La GR de esa carga (Juliaca → San Rafael) se asigna a
+                        esta subida desde «GR por asignar».
+                    </span>
+                )}
+            </div>
+        );
         const conParticular = data.paradas.some(
             (parada) =>
                 parada.sentido === sentido &&
@@ -944,7 +1012,11 @@ export function ProgramarVueltaDialog({
                                 )
                             }
                             titulo={opcion.label}
-                            descripcion={opcion.descripcion}
+                            descripcion={
+                                arrancaEnMina(opcion)
+                                    ? conSubida(opcion.descripcion, subida)
+                                    : opcion.descripcion
+                            }
                             dotacion={
                                 'dotacion' in opcion ? opcion.dotacion : null
                             }
@@ -954,7 +1026,9 @@ export function ProgramarVueltaDialog({
                                 'paradas' in opcion ? opcion.paradas : [],
                             )}
                             onElegir={() => elegirOpcion(sentido, opcion.value)}
-                        />
+                        >
+                            {arrancaEnMina(opcion) && selectorSubida}
+                        </TarjetaOpcion>
                     ))}
                 </div>
 
@@ -1052,40 +1126,6 @@ export function ProgramarVueltaDialog({
                         </div>
                     );
                 })}
-
-                {!subiendo &&
-                    fijas.length === 0 &&
-                    data.paradas.some(
-                        (parada) =>
-                            parada.sentido === 'ida' &&
-                            parada.zona_origen === 'mina',
-                    ) && (
-                        <div className="flex flex-col gap-2">
-                            <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
-                                <MapPin className="size-3.5" />
-                                ¿Cómo llega a la mina?
-                            </span>
-                            <div className="flex flex-wrap gap-1.5">
-                                {SUBIDAS.map((candidata) => (
-                                    <button
-                                        key={candidata.value}
-                                        type="button"
-                                        onClick={() =>
-                                            elegirSubida(candidata.value)
-                                        }
-                                        className={cn(
-                                            'rounded-full border px-3 py-1 text-xs transition',
-                                            subida === candidata.value
-                                                ? 'border-amber-500 bg-amber-500 text-white'
-                                                : 'hover:bg-accent',
-                                        )}
-                                    >
-                                        {candidata.label}
-                                    </button>
-                                ))}
-                            </div>
-                        </div>
-                    )}
 
                 {subiendo &&
                     opciones.tramos.regreso.find(

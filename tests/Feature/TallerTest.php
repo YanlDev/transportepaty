@@ -127,8 +127,19 @@ it('takes the odometer when it gives the OK, for the trip and for maintenance', 
     expect($this->vuelta->revision()->first()->kilometraje)->toBe(250000)
         ->and(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->value('kilometraje'))->toBe(250000);
 
+    // Una nueva revisión del mismo ticket corrige el km de salida mal
+    // tipeado: no suma otra lectura.
     actingAs(actorConRol('admin'))
         ->post(route('taller.store', $this->vuelta), ['resultado' => 'apto', 'kilometraje' => 240000])
+        ->assertSessionHasNoErrors();
+
+    expect(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->pluck('kilometraje')->all())->toBe([240000]);
+
+    // Contra las demás lecturas de la unidad, el odómetro sigue sin retroceder.
+    LecturaKilometraje::factory()->create(['vehiculo_id' => $this->tracto->id, 'kilometraje' => 245000]);
+
+    actingAs(actorConRol('admin'))
+        ->post(route('taller.store', $this->vuelta), ['resultado' => 'apto', 'kilometraje' => 241000])
         ->assertSessionHasErrors('kilometraje');
 });
 

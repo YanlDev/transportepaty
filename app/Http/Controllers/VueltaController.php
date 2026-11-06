@@ -170,7 +170,7 @@ class VueltaController extends Controller
         $this->authorize('registrarLlegada', $vuelta);
 
         $kilometraje = $request->filled('km_llegada') ? $request->integer('km_llegada') : null;
-        $kmNuevo = $kilometraje !== null && $kilometraje !== $vuelta->km_llegada;
+        $kmNuevo = $kilometraje !== $vuelta->km_llegada;
 
         $vuelta->update([
             'llegada_el' => $request->date('llegada_el'),
@@ -179,7 +179,7 @@ class VueltaController extends Controller
         ]);
 
         if ($kmNuevo) {
-            $odometro->anotar($vuelta->tracto_id, $kilometraje, $request->user(), "Llegada a la base ({$vuelta->codigo})");
+            $odometro->anotar($vuelta->tracto_id, $kilometraje, $request->user(), "Llegada a la base ({$vuelta->codigo})", OdometroDeUnidad::deLlegada($vuelta->id));
         }
 
         return back()->with('toast', ['type' => 'success', 'message' => "Llegada del ticket {$vuelta->codigo} registrada."]);

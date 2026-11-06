@@ -78,9 +78,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
                     return;
                 }
 
-                $tope = $vuelta->topeDe($sentido);
-
-                if ($tope === null) {
+                if ($vuelta->topeDe($sentido) === null) {
                     $sinVariante = $rutas->first(fn (RutaVuelta $ruta): bool => $ruta->variante_pendiente);
                     $validator->errors()->add('sentido', $sinVariante !== null
                         ? "Falta elegir la variante de «{$sinVariante->nombre}» (según el peso) para saber el tope."
@@ -89,25 +87,48 @@ class RegistrarAbastecimientoRequest extends FormRequest
                     return;
                 }
 
-                $autorizado = (float) Abastecimiento::query()
-                    ->vigentes()
-                    ->where('vuelta_id', $vuelta->id)
-                    ->where('sentido', $sentido)
-                    ->sum('galones');
-
-                if ($autorizado + $this->float('galones') <= $tope + 0.001) {
-                    return;
-                }
-
-                $disponible = max(0.0, $tope - $autorizado);
-
-                if (! $this->user()?->can('excederTope', Abastecimiento::class)) {
-                    $validator->errors()->add('galones', 'Pasa el tope de las rutas ('.$this->galones($tope).' gal; quedan '.$this->galones($disponible).'): solo quien tiene permiso puede autorizar más.');
-                } elseif (blank($this->input('motivo_exceso'))) {
-                    $validator->errors()->add('motivo_exceso', 'Pasa el tope de las rutas ('.$this->galones($tope).' gal; quedan '.$this->galones($disponible).'): escribe por qué.');
+                if (($error = $this->errorDeTope($vuelta)) !== null) {
+                    $validator->errors()->add(...$error);
                 }
             },
         ];
+    }
+
+    /**
+     * Si lo que se pide pasa el tope del tramo sin el permiso o sin el
+     * motivo: el campo y el mensaje, o null si está bien. Se vuelve a mirar
+     * al grabar, con el ticket bloqueado, para que dos registros a la vez no
+     * pasen el tope entre los dos.
+     *
+     * @return array{0: string, 1: string}|null
+     */
+    public function errorDeTope(Vuelta $vuelta): ?array
+    {
+        $sentido = SentidoTramo::from($this->string('sentido')->toString());
+        $tope = $vuelta->topeDe($sentido);
+
+        if ($tope === null) {
+            return null;
+        }
+
+        $autorizado = (float) Abastecimiento::query()
+            ->vigentes()
+            ->where('vuelta_id', $vuelta->id)
+            ->where('sentido', $sentido)
+            ->sum('galones');
+
+        if ($autorizado + $this->float('galones') <= $tope + 0.001) {
+            return null;
+        }
+
+        $disponible = max(0.0, $tope - $autorizado);
+        $resumen = 'Pasa el tope de las rutas ('.$this->galones($tope).' gal; quedan '.$this->galones($disponible).')';
+
+        if (! $this->user()?->can('excederTope', Abastecimiento::class)) {
+            return ['galones', "{$resumen}: solo quien tiene permiso puede autorizar más."];
+        }
+
+        return blank($this->input('motivo_exceso')) ? ['motivo_exceso', "{$resumen}: escribe por qué."] : null;
     }
 
     public function vuelta(): Vuelta

@@ -66,7 +66,7 @@ class TallerController extends Controller
         ]);
 
         if ($revision->kilometraje !== null) {
-            $odometro->anotar($vuelta->tracto_id, $revision->kilometraje, $request->user(), "OK de salida de taller ({$vuelta->codigo})");
+            $odometro->anotar($vuelta->tracto_id, $revision->kilometraje, $request->user(), "OK de salida de taller ({$vuelta->codigo})", OdometroDeUnidad::deSalida($vuelta->id));
         }
 
         $alertas->revisado($vuelta, $revision, $request->user());

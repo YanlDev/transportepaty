@@ -20,7 +20,9 @@ use App\Services\GastosDelTicket;
 use App\Services\OdometroDeUnidad;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -111,6 +113,26 @@ class AbastecimientoController extends Controller
 
         $vuelta = $request->vuelta();
 
+        DB::transaction(function () use ($request, $vuelta): void {
+            // Con el ticket bloqueado se vuelve a mirar el tope: dos registros
+            // a la vez no lo pasan entre los dos.
+            Vuelta::query()->whereKey($vuelta->id)->lockForUpdate()->first();
+
+            if (($error = $request->errorDeTope($vuelta)) !== null) {
+                throw ValidationException::withMessages([$error[0] => $error[1]]);
+            }
+
+            $this->registrar($request, $vuelta);
+        });
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => "Combustible autorizado en el ticket {$vuelta->codigo}.",
+        ]);
+    }
+
+    private function registrar(RegistrarAbastecimientoRequest $request, Vuelta $vuelta): void
+    {
         Abastecimiento::query()->create([
             'vehiculo_id' => $vuelta->tracto_id,
             'vuelta_id' => $vuelta->id,
@@ -123,11 +145,6 @@ class AbastecimientoController extends Controller
             'motivo_exceso' => $request->filled('motivo_exceso') ? $request->string('motivo_exceso')->squish()->toString() : null,
             'observacion' => $request->string('observacion')->toString() ?: null,
             'user_id' => $request->user()?->id,
-        ]);
-
-        return back()->with('toast', [
-            'type' => 'success',
-            'message' => "Combustible autorizado en el ticket {$vuelta->codigo}.",
         ]);
     }
 
@@ -160,7 +177,7 @@ class AbastecimientoController extends Controller
         $galones = $request->float('galones_despachados');
         $precio = $request->float('precio_galon');
         $kilometraje = $request->filled('kilometraje') ? $request->integer('kilometraje') : null;
-        $kmNuevo = $kilometraje !== null && $kilometraje !== $abastecimiento->kilometraje;
+        $kmNuevo = $kilometraje !== $abastecimiento->kilometraje;
 
         $abastecimiento->update([
             'galones_despachados' => $galones,
@@ -172,7 +189,13 @@ class AbastecimientoController extends Controller
         ]);
 
         if ($kmNuevo) {
-            $odometro->anotar($abastecimiento->vehiculo_id, $kilometraje, $request->user(), 'Al cargar combustible ('.($abastecimiento->vuelta->codigo ?? 'sin ticket').')');
+            $odometro->anotar(
+                $abastecimiento->vehiculo_id,
+                $kilometraje,
+                $request->user(),
+                'Al cargar combustible ('.($abastecimiento->vuelta->codigo ?? 'sin ticket').')',
+                OdometroDeUnidad::deDespacho($abastecimiento->id),
+            );
         }
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Despacho registrado.']);
@@ -192,6 +215,17 @@ class AbastecimientoController extends Controller
         ]);
 
         $variante = VarianteRuta::query()->findOrFail($request->integer('variante_ruta_id'));
+
+        // La variante que faltaba se completa siempre; cambiar una ya elegida
+        // movería el tope de lo que ya se autorizó contra ella.
+        if ($rutaVuelta->variante_ruta_id !== null
+            && $rutaVuelta->variante_ruta_id !== $variante->id
+            && $rutaVuelta->vuelta->tramoConGastos($rutaVuelta->sentido)) {
+            throw ValidationException::withMessages([
+                'variante_ruta_id' => "«{$rutaVuelta->nombre}» ya tiene combustible o viáticos autorizados con la variante {$rutaVuelta->variante}: anula esos gastos antes de cambiarla.",
+            ]);
+        }
+
         $dotacion->elegirVariante($rutaVuelta, $variante, $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => "«{$rutaVuelta->nombre}»: {$variante->nombre}."]);

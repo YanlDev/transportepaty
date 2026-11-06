@@ -66,3 +66,17 @@ it('deja Particular cuando la serie de la guía remitente no se reconoce', funct
 
     expect($viaje->refresh()->tipo_carga)->toBe(TipoCarga::Particular);
 });
+
+it('reclasifica como materiales la carga de Minsur con guía EG07 que sube a la mina, y no la que baja', function (): void {
+    $subida = Viaje::create([...viajeMinsurParaClasificar('EG03-00000005', 'particular', [
+        ['numero' => 'EG07 - 3228', 'ruc' => TipoCarga::RUC_MINSUR],
+    ]), 'origen' => 'CAR. TAPARACHI NRO. 2.5 - JULIACA - SAN ROMAN - PUNO', 'destino' => 'ASIENTO MINERO SAN RAFAEL - ANTAUTA - MELGAR - PUNO']);
+    $bajada = Viaje::create([...viajeMinsurParaClasificar('EG03-00000006', 'particular', [
+        ['numero' => 'EG07 - 2905', 'ruc' => TipoCarga::RUC_MINSUR],
+    ]), 'origen' => 'ASIENTO MINERO SAN RAFAEL - ANTAUTA - MELGAR - PUNO', 'destino' => 'AV. ARGENTINA 123 - CALLAO - CALLAO']);
+
+    $this->artisan('transpaty:clasificar-carga-minsur')->assertSuccessful();
+
+    expect($subida->refresh()->tipo_carga)->toBe(TipoCarga::Materiales)
+        ->and($bajada->refresh()->tipo_carga)->toBe(TipoCarga::Particular);
+});

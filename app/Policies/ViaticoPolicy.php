@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Enums\EstadoVuelta;
 use App\Enums\Permiso;
 use App\Models\User;
 use App\Models\Viatico;
@@ -10,7 +9,7 @@ use App\Models\Viatico;
 /**
  * Los viáticos los deposita abastecimiento y los corrige facturación: los
  * dos con el mismo permiso. Un viático anulado ya no se toca, ni los de un
- * ticket cerrado (con candado): se reabre para corregirlos.
+ * ticket cerrado (con candado) o anulado: se reabre para corregirlos.
  */
 class ViaticoPolicy
 {
@@ -22,7 +21,7 @@ class ViaticoPolicy
     public function update(User $user, Viatico $viatico): bool
     {
         return ! $viatico->estaAnulado()
-            && $viatico->vuelta->estado !== EstadoVuelta::Cerrada
+            && $viatico->vuelta->estaAbierta()
             && $user->checkPermissionTo(Permiso::AbastecimientoViaticos);
     }
 

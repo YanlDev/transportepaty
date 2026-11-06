@@ -2,7 +2,6 @@
 
 namespace App\Policies;
 
-use App\Enums\EstadoVuelta;
 use App\Enums\Permiso;
 use App\Models\Abastecimiento;
 use App\Models\User;
@@ -29,24 +28,24 @@ class AbastecimientoPolicy
     }
 
     /**
-     * Nada se borra: se anula con motivo. Lo de un ticket cerrado no se toca:
-     * se reabre antes.
+     * Nada se borra: se anula con motivo. Lo de un ticket cerrado (o anulado) no
+     * se toca: el cerrado se reabre antes.
      */
     public function anular(User $user, Abastecimiento $abastecimiento): bool
     {
         return ! $abastecimiento->estaAnulado()
-            && $abastecimiento->vuelta?->estado !== EstadoVuelta::Cerrada
+            && ($abastecimiento->vuelta?->estaAbierta() ?? true)
             && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
     }
 
     /**
      * Lo que de verdad cargó, según el voucher del grifo. Se puede corregir
-     * mientras el ticket no esté cerrado.
+     * mientras el ticket siga abierto.
      */
     public function registrarDespacho(User $user, Abastecimiento $abastecimiento): bool
     {
         return ! $abastecimiento->estaAnulado()
-            && $abastecimiento->vuelta?->estado !== EstadoVuelta::Cerrada
+            && ($abastecimiento->vuelta?->estaAbierta() ?? true)
             && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
     }
 

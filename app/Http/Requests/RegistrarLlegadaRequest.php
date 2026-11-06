@@ -55,7 +55,7 @@ class RegistrarLlegadaRequest extends FormRequest
                 }
 
                 if ($this->filled('km_llegada') && $this->integer('km_llegada') !== $vuelta->km_llegada) {
-                    $error = app(OdometroDeUnidad::class)->error($vuelta->tracto, $this->integer('km_llegada'));
+                    $error = app(OdometroDeUnidad::class)->error($vuelta->tracto, $this->integer('km_llegada'), OdometroDeUnidad::deLlegada($vuelta->id));
 
                     if ($error !== null) {
                         $validator->errors()->add('km_llegada', $error);

@@ -36,11 +36,13 @@ class PuntoAbastecimiento extends Model
     protected $table = 'puntos_abastecimiento';
 
     /**
+     * Alfabético por nombre, en la configuración y en los selectores.
+     *
      * @param  Builder<self>  $query
      */
     public function scopeEnOrden(Builder $query): void
     {
-        $query->orderBy('orden')->orderBy('nombre');
+        $query->orderBy('nombre');
     }
 
     /**

@@ -10,6 +10,7 @@ use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Conductor;
 use App\Models\Ruta;
+use App\Models\RutaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
@@ -115,7 +116,17 @@ class GuardarVueltaRequest extends FormRequest
 
                 $vuelta = $this->vueltaEditada();
 
+                // El OK de taller y los gastos son de la unidad que se
+                // revisó: cambiarle la placa los dejaría en la equivocada.
+                if ($vuelta !== null && $vuelta->tracto_id !== $this->integer('tracto_id') && $vuelta->tieneRevisionOGastos()) {
+                    $validator->errors()->add('tracto_id', "El ticket {$vuelta->codigo} ya pasó por taller o tiene gastos de {$vuelta->tracto->placa}: no se le cambia la unidad. Si se programó con la placa equivocada y no tiene gastos, quítalo y prográmalo de nuevo.");
+                }
+
                 $this->validarRutas($validator, $vuelta);
+
+                if ($vuelta !== null) {
+                    $this->validarRutasCongeladas($validator, $vuelta);
+                }
 
                 // Dos tickets por salir de la misma unidad: las GR caerían
                 // en uno solo y el otro quedaría colgado para siempre.
@@ -200,6 +211,41 @@ class GuardarVueltaRequest extends FormRequest
                 $validator->errors()->add('rutas', "Elige la ruta de la {$sentido->label()}: de ahí sale lo que se le autoriza.");
             } elseif ($principales > 1) {
                 $validator->errors()->add('rutas', "La {$sentido->label()} tiene más de una ruta principal: deja una y agrega lo demás como complemento.");
+            }
+        }
+    }
+
+    /**
+     * Un tramo al que ya se le autorizó combustible o se le depositó un
+     * viático no cambia de rutas: lo autorizado se midió contra ellas. Solo
+     * se puede completar la variante que faltaba.
+     */
+    private function validarRutasCongeladas(Validator $validator, Vuelta $vuelta): void
+    {
+        if ($validator->errors()->hasAny(['rutas', 'rutas.*'])) {
+            return;
+        }
+
+        $elegidas = collect((array) $this->input('rutas', []));
+
+        foreach (SentidoTramo::cases() as $sentido) {
+            if (! $vuelta->tramoConGastos($sentido)) {
+                continue;
+            }
+
+            $tenia = $vuelta->rutas()->where('sentido', $sentido)->get();
+            $nuevas = $elegidas->where('sentido', $sentido->value);
+
+            $igual = $tenia->count() === $nuevas->count()
+                && $nuevas->every(fn (array $elegida): bool => $tenia->contains(
+                    fn (RutaVuelta $ruta): bool => $ruta->ruta_id === (int) $elegida['ruta_id']
+                        && (blank($elegida['variante_ruta_id'] ?? null)
+                            || $ruta->variante_ruta_id === null
+                            || $ruta->variante_ruta_id === (int) $elegida['variante_ruta_id']),
+                ));
+
+            if (! $igual) {
+                $validator->errors()->add('rutas', "La {$sentido->label()} ya tiene combustible o viáticos autorizados con sus rutas: no se cambian. Anula esos gastos antes de cambiarlas.");
             }
         }
     }

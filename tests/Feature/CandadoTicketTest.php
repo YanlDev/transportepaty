@@ -199,17 +199,29 @@ it('locks a closed ticket: no more fuel nor allowances until it is reopened', fu
         ->assertSessionHasNoErrors();
 });
 
-it('does not touch what a closed ticket already has', function (): void {
+it('does not touch what a closed or voided ticket already has', function (EstadoVuelta $estado): void {
     $vuelta = ticketConRansa($this->tracto, now()->toDateString());
     $abastecimiento = Abastecimiento::factory()->paraVuelta($vuelta)->create();
     $viatico = Viatico::factory()->create(['vuelta_id' => $vuelta->id, 'vehiculo_id' => $this->tracto->id]);
-    $vuelta->update(['estado' => EstadoVuelta::Cerrada]);
+    $vuelta->update(['estado' => $estado]);
 
     actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.anular', $abastecimiento), ['motivo' => 'error'])->assertForbidden();
     actingAs(actorConRol('abastecimiento'))->put(route('abastecimiento.despacho', $abastecimiento), [
         'galones_despachados' => 50, 'precio_galon' => 16, 'despachado_el' => now()->toDateString(),
     ])->assertForbidden();
     actingAs(actorConRol('abastecimiento'))->post(route('viaticos.anular', $viatico), ['motivo' => 'error'])->assertForbidden();
+})->with([
+    'cerrado' => EstadoVuelta::Cerrada,
+    'anulado' => EstadoVuelta::Anulada,
+]);
+
+it('corrects a mistyped arrival odometer instead of keeping the wrong reading', function (): void {
+    $vuelta = ticketConRansa($this->tracto, now()->toDateString());
+
+    llegar($vuelta, now()->toDateString(), 2518000);
+    llegar($vuelta->fresh(), now()->toDateString(), 251800);
+
+    expect(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->pluck('kilometraje')->all())->toBe([251800]);
 });
 
 it('only lets fuel and accounting settle, and reopens only the latest ticket', function (): void {

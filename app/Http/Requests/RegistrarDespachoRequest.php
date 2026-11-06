@@ -52,7 +52,7 @@ class RegistrarDespachoRequest extends FormRequest
                     return;
                 }
 
-                $error = app(OdometroDeUnidad::class)->error($abastecimiento->vehiculo, $this->integer('kilometraje'));
+                $error = app(OdometroDeUnidad::class)->error($abastecimiento->vehiculo, $this->integer('kilometraje'), OdometroDeUnidad::deDespacho($abastecimiento->id));
 
                 if ($error !== null) {
                     $validator->errors()->add('kilometraje', $error);

@@ -52,7 +52,7 @@ class RevisarSalidaRequest extends FormRequest
 
                 /** @var Vuelta $vuelta */
                 $vuelta = $this->route('vuelta');
-                $error = app(OdometroDeUnidad::class)->error($vuelta->tracto, $this->integer('kilometraje'));
+                $error = app(OdometroDeUnidad::class)->error($vuelta->tracto, $this->integer('kilometraje'), OdometroDeUnidad::deSalida($vuelta->id));
 
                 if ($error !== null) {
                     $validator->errors()->add('kilometraje', $error);

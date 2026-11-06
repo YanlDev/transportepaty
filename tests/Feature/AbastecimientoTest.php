@@ -307,6 +307,20 @@ it('shows for each point what was loaded this month and the last price paid', fu
         }));
 });
 
+it('lists the points alphabetically', function (): void {
+    PuntoAbastecimiento::query()->create(['nombre' => 'Aplao', 'zona' => $this->kio->zona, 'orden' => 99]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.configuracion'))
+        ->assertInertia(fn (Assert $page) => $page->where('puntos', function ($puntos): bool {
+            $nombres = collect($puntos)->pluck('nombre')->all();
+            $ordenados = $nombres;
+            sort($ordenados, SORT_STRING | SORT_FLAG_CASE);
+
+            return $nombres[0] === 'Aplao' && $nombres === $ordenados;
+        }));
+});
+
 it('keeps the area to its role', function (): void {
     // Facturación entra por los viáticos, pero no toca la pizarra.
     actingAs(actorConRol('contador'))->get(route('abastecimiento.index'))->assertOk();
@@ -378,4 +392,47 @@ it('shows the month reconciliation by fuel station', function (): void {
             ->where('porGrifo.0.punto', 'Arequipa')
             ->where('porGrifo.0.diferencia', -2)
             ->has('sinVoucher', 1));
+});
+
+it('corrects a mistyped dispatch odometer instead of keeping the wrong reading', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $registro = Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 50]);
+    $voucher = ['galones_despachados' => 50, 'precio_galon' => 16, 'despachado_el' => now()->toDateString()];
+
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 2503000])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.despacho', $registro), [...$voucher, 'kilometraje' => 250300])
+        ->assertSessionHasNoErrors();
+
+    expect(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->pluck('kilometraje')->all())->toBe([250300]);
+
+    // Si se borra el km, se va también la lectura.
+    actingAs(actorConRol('abastecimiento'))
+        ->put(route('abastecimiento.despacho', $registro), $voucher)
+        ->assertSessionHasNoErrors();
+
+    expect(LecturaKilometraje::query()->where('vehiculo_id', $this->tracto->id)->exists())->toBeFalse();
+});
+
+it('does not change the chosen variant once the leg has fuel', function (): void {
+    $vuelta = ticketApto($this->tracto);
+    $ransa = rutaDelCatalogo('Materiales a mina (Ransa)')->load(['lineas.punto', 'variantes']);
+    [$primera, $segunda] = $ransa->variantes->take(2)->all();
+    $copia = $vuelta->rutas()->create([...RutaVuelta::copiaDe($ransa, $primera), 'sentido' => SentidoTramo::Regreso, 'orden' => 1]);
+
+    // Sin combustible, la variante todavía se puede cambiar.
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.variante', $copia), ['variante_ruta_id' => $segunda->id])
+        ->assertSessionHasNoErrors();
+
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 50, 'sentido' => SentidoTramo::Regreso]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->post(route('abastecimiento.variante', $copia->fresh()), ['variante_ruta_id' => $primera->id])
+        ->assertSessionHasErrors('variante_ruta_id');
+
+    expect($copia->fresh()->variante_ruta_id)->toBe($segunda->id);
 });

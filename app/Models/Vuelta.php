@@ -168,6 +168,37 @@ class Vuelta extends Model
     }
 
     /**
+     * Si al tramo ya se le autorizó combustible o se le depositó un viático
+     * de sus rutas (sin contar lo anulado): desde ahí sus rutas quedan
+     * congeladas, porque lo autorizado se midió contra ellas.
+     */
+    public function tramoConGastos(SentidoTramo $sentido): bool
+    {
+        if ($this->abastecimientos()->vigentes()->where('sentido', $sentido)->exists()) {
+            return true;
+        }
+
+        $rutas = $this->rutas()->where('sentido', $sentido)->pluck('ruta_id');
+
+        return $this->viaticos()
+            ->whereNull('anulado_at')
+            ->whereHas('linea', fn (Builder $query) => $query->whereIn('ruta_id', $rutas))
+            ->exists();
+    }
+
+    /**
+     * Si el ticket ya pasó por taller o tiene gastos (aunque estén anulados):
+     * el OK de taller y lo gastado son de esa unidad, así que ya no se le
+     * cambia la placa.
+     */
+    public function tieneRevisionOGastos(): bool
+    {
+        return $this->revisiones()->exists()
+            || $this->abastecimientos()->exists()
+            || $this->viaticos()->exists();
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function llegadaRegistradaPor(): BelongsTo
