@@ -354,6 +354,25 @@ it('places a unit back in Juliaca when its last GR went up to the mine', functio
         }));
 });
 
+it('does not offer to continue a load that already leaves from Juliaca', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    Viaje::factory()->create([
+        'tracto_id' => $tracto->id,
+        'fecha_traslado' => '2026-11-06',
+        'origen' => 'CAR. TAPARACHI NRO. 2.5 Z.I. PARQUE INDUSTRIAL - JULIACA - SAN ROMAN - PUNO',
+        'destino' => 'SAN RAFAEL - ANTAUTA - MELGAR - PUNO',
+        'tipo_carga' => TipoCarga::Materiales,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('tractos', function ($tractos) use ($tracto): bool {
+            // Minsur carga en Juliaca: es la subida con carga nueva de este
+            // ticket, con su propia GR, no la carga del anterior.
+            return collect($tractos)->firstWhere('id', $tracto->id)['trae'] === null;
+        }));
+});
+
 it('rejects a stop that starts and ends in the same zone', function (): void {
     $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
 

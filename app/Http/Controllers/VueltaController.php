@@ -554,7 +554,7 @@ class VueltaController extends Controller
             ->whereNotNull('tracto_id')
             ->orderByDesc('fecha_traslado')
             ->orderByDesc('id')
-            ->get(['id', 'tracto_id', 'carreta_id', 'conductor_id', 'destino', 'numero_gr', 'fecha_traslado', 'placa_carreta', 'conductor_nombre', 'tipo_carga', 'parada_vuelta_id'])
+            ->get(['id', 'tracto_id', 'carreta_id', 'conductor_id', 'origen', 'destino', 'numero_gr', 'fecha_traslado', 'placa_carreta', 'conductor_nombre', 'tipo_carga', 'parada_vuelta_id'])
             ->unique('tracto_id')
             ->keyBy('tracto_id');
 
@@ -591,15 +591,22 @@ class VueltaController extends Controller
 
     /**
      * La carga con la que la unidad sube de Juliaca a la mina en el ticket
-     * siguiente: la de su última GR, si iba a la mina cargada (escoria,
-     * materiales, sacos). El combustible de esa GR alcanzó hasta Juliaca; la
-     * subida va en la ida que se programa ahora, sin GR nueva.
+     * siguiente: la de su última GR, si venía de la costa a la mina cargada
+     * (escoria, materiales, sacos). El combustible de esa GR alcanzó hasta
+     * Juliaca; la subida va en la ida que se programa ahora, sin GR nueva.
+     * Una GR que ya sale de Juliaca (Minsur carga en Taparachi) no sigue:
+     * es la subida con carga nueva, con su propia GR.
      *
      * @return array{viaje_id: int, numero_gr: string|null, tipo_carga: string, tipo_carga_label: string, ticket: string|null}|null
      */
     private function cargaQueTrae(Viaje $ultima): ?array
     {
-        if (ZonaRuta::desdeDireccion($ultima->destino) !== ZonaRuta::Mina || in_array($ultima->tipo_carga, [TipoCarga::Vacio, TipoCarga::Concentrado], true)) {
+        $origen = ZonaRuta::desdeDireccion($ultima->origen);
+
+        if ($origen === null
+            || $origen->esSierra()
+            || ZonaRuta::desdeDireccion($ultima->destino) !== ZonaRuta::Mina
+            || in_array($ultima->tipo_carga, [TipoCarga::Vacio, TipoCarga::Concentrado], true)) {
             return null;
         }
 
