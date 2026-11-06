@@ -29,7 +29,7 @@ class ConfiguracionAbastecimientoController extends Controller
         $galonesDelMes = Abastecimiento::query()
             ->whereNotNull('punto_abastecimiento_id')
             ->whereDate('fecha', '>=', $mes)
-            ->selectRaw('punto_abastecimiento_id, sum(galones) as galones')
+            ->selectRaw('punto_abastecimiento_id, sum('.Abastecimiento::GALONES_QUE_CUENTAN.') as galones')
             ->groupBy('punto_abastecimiento_id')
             ->pluck('galones', 'punto_abastecimiento_id');
         $ultimosPrecios = Abastecimiento::query()

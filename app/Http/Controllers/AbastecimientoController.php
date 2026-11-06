@@ -6,6 +6,7 @@ use App\Enums\EstadoVehiculo;
 use App\Enums\EstadoVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoVehiculo;
+use App\Http\Requests\CorregirAbastecimientoRequest;
 use App\Http\Requests\RegistrarAbastecimientoRequest;
 use App\Http\Requests\RegistrarDespachoRequest;
 use App\Models\Abastecimiento;
@@ -79,7 +80,7 @@ class AbastecimientoController extends Controller
                 ])
                 ->all(),
             'recientes' => Abastecimiento::query()
-                ->with(['vehiculo:id,placa', 'punto:id,nombre', 'vuelta:id,codigo', 'registradoPor:id,name'])
+                ->with(['vehiculo:id,placa', 'conductor:id,nombres,apellidos', 'punto:id,nombre', 'vuelta:id,codigo', 'registradoPor:id,name'])
                 ->latest('fecha')
                 ->latest('id')
                 ->limit(self::RECIENTES)
@@ -88,6 +89,7 @@ class AbastecimientoController extends Controller
                     'id' => $abastecimiento->id,
                     'fecha' => $abastecimiento->fecha->toDateString(),
                     'placa' => $abastecimiento->vehiculo->placa,
+                    'conductor' => $abastecimiento->conductor?->nombre_completo,
                     'punto' => $abastecimiento->nombrePunto(),
                     'fuera_de_lista' => $abastecimiento->punto_abastecimiento_id === null && filled($abastecimiento->punto_libre),
                     'vuelta' => $abastecimiento->vuelta?->codigo,
@@ -134,18 +136,56 @@ class AbastecimientoController extends Controller
     private function registrar(RegistrarAbastecimientoRequest $request, Vuelta $vuelta): void
     {
         Abastecimiento::query()->create([
+            ...$request->datosDelCombustible(),
             'vehiculo_id' => $vuelta->tracto_id,
             'vuelta_id' => $vuelta->id,
-            'sentido' => $request->enum('sentido', SentidoTramo::class),
-            'punto_abastecimiento_id' => $request->filled('punto_abastecimiento_id') ? $request->integer('punto_abastecimiento_id') : null,
-            'punto_libre' => $request->filled('punto_libre') ? $request->string('punto_libre')->squish()->toString() : null,
             'conductor_id' => $vuelta->conductor_id,
-            'fecha' => $request->date('fecha'),
-            'galones' => $request->float('galones'),
-            'motivo_exceso' => $request->filled('motivo_exceso') ? $request->string('motivo_exceso')->squish()->toString() : null,
-            'observacion' => $request->string('observacion')->toString() ?: null,
             'user_id' => $request->user()?->id,
         ]);
+    }
+
+    /**
+     * Corregir lo autorizado cuando se registró mal (otro punto, otros
+     * galones, otro tramo). El ticket y la unidad no cambian: si era de otro
+     * ticket, se anula y se registra en el correcto.
+     */
+    public function update(CorregirAbastecimientoRequest $request, Abastecimiento $abastecimiento): RedirectResponse
+    {
+        $this->authorize('update', $abastecimiento);
+
+        $vuelta = $request->vuelta();
+
+        DB::transaction(function () use ($request, $vuelta, $abastecimiento): void {
+            Vuelta::query()->whereKey($vuelta->id)->lockForUpdate()->first();
+
+            if (($error = $request->errorDeTope($vuelta)) !== null) {
+                throw ValidationException::withMessages([$error[0] => $error[1]]);
+            }
+
+            $abastecimiento->update($request->datosDelCombustible());
+        });
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Combustible corregido.']);
+    }
+
+    /**
+     * Solo el precio del voucher: el importe se recalcula con los galones
+     * que ya tiene.
+     */
+    public function precio(Request $request, Abastecimiento $abastecimiento): RedirectResponse
+    {
+        $this->authorize('corregirPrecio', $abastecimiento);
+
+        $precio = (float) $request->validate([
+            'precio_galon' => ['required', 'numeric', 'min:0.01', 'max:99'],
+        ])['precio_galon'];
+
+        $abastecimiento->update([
+            'precio_galon' => $precio,
+            'importe' => round((float) $abastecimiento->galones_despachados * $precio, 2),
+        ]);
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Precio corregido.']);
     }
 
     /**
@@ -260,12 +300,14 @@ class AbastecimientoController extends Controller
             ->enOrden()
             ->get(['id', 'nombre']);
 
+        // El último precio conocido en cada punto: el del voucher si ya
+        // llegó; si no, con el que se autorizó.
         $precios = Abastecimiento::query()
             ->whereIn('punto_abastecimiento_id', $puntos->pluck('id'))
-            ->whereNotNull('precio_galon')
+            ->where(fn ($query) => $query->whereNotNull('precio_galon')->orWhereNotNull('precio_autorizado'))
             ->orderByDesc('fecha')
             ->orderByDesc('id')
-            ->get(['punto_abastecimiento_id', 'precio_galon'])
+            ->get(['punto_abastecimiento_id', 'precio_galon', 'precio_autorizado'])
             ->unique('punto_abastecimiento_id')
             ->keyBy('punto_abastecimiento_id');
 
@@ -273,9 +315,17 @@ class AbastecimientoController extends Controller
             ->map(fn (PuntoAbastecimiento $punto): array => [
                 'id' => $punto->id,
                 'nombre' => $punto->nombre,
-                'ultimo_precio' => ($precio = $precios->get($punto->id)?->precio_galon) === null ? null : (float) $precio,
+                'ultimo_precio' => ($precio = $this->ultimoPrecio($precios->get($punto->id))) === null ? null : (float) $precio,
             ])
             ->all());
+    }
+
+    /**
+     * El precio del voucher si llegó; si no, con el que se autorizó.
+     */
+    private function ultimoPrecio(?Abastecimiento $registro): ?string
+    {
+        return $registro === null ? null : ($registro->precio_galon ?? $registro->precio_autorizado);
     }
 
     /**

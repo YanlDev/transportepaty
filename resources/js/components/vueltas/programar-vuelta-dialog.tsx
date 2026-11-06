@@ -63,6 +63,8 @@ type ParadaForm = {
     lugar_destino: string | null;
     tipo_carga: string;
     cliente_id: number | null;
+    /** La GR del ticket anterior cuya carga sigue en esta parada. */
+    viaje_continuado_id: number | null;
     /** Con GR: es lo que pasó, se muestra pero no se toca. */
     bloqueada: boolean;
     /** Un vacío que el formulario agregó solo para unir dos paradas. */
@@ -85,19 +87,21 @@ type Eligiendo =
 /** El regreso todavía sin decidir: se programa cuando se sabe. */
 const POR_DEFINIR = 'por_definir';
 
-const ZONAS_DE_PASO = ['juliaca', 'cusco', 'arequipa', 'moquegua', 'tacna'];
-
 /**
- * Cómo llega la unidad a la mina antes de cargar: casi siempre sube vacía
- * desde Juliaca, a veces sube cargada (con su GR) y a veces ya está ahí.
+ * Cómo sube la unidad de Juliaca a la mina antes de cargar: vacía, con la
+ * carga que trae de la costa (la GR del ticket anterior, como la escoria) o
+ * con carga nueva de Juliaca (con su propia GR). «Ninguna» queda solo para
+ * tickets viejos que arrancaban en la mina: Juliaca es la única base.
  */
-type Subida = 'vacia' | 'cargada' | 'ninguna';
+type Subida = 'vacia' | 'continua' | 'cargada' | 'ninguna';
 
-const SUBIDAS: { value: Subida; label: string }[] = [
-    { value: 'vacia', label: 'Sube vacía desde Juliaca' },
-    { value: 'cargada', label: 'Sube con carga desde Juliaca (Minsur u otro)' },
-    { value: 'ninguna', label: 'Ya está en la mina' },
-];
+/** La carga que la unidad trae hacia la mina: la de su última GR. */
+type Trae = NonNullable<OpcionesVuelta['tractos'][number]['trae']>;
+
+/** Si trae carga hacia la mina, sigue con ella; si no, sube vacía. */
+function subidaInicial(trae: Trae | null): Subida {
+    return trae ? 'continua' : 'vacia';
+}
 
 /** El recorrido de una ruta que arranca en la mina, con la subida delante. */
 function conSubida(descripcion: string, subida: Subida): string {
@@ -106,11 +110,6 @@ function conSubida(descripcion: string, subida: Subida): string {
     }
 
     return `Juliaca → Mina (${subida === 'vacia' ? 'vacía' : 'con carga'}) → ${descripcion.replace(/^Mina\s*→\s*/, '')}`;
-}
-
-/** Si la unidad quedó en Juliaca (o de paso hacia ahí), sube vacía. */
-function subidaPorZona(zona: string | null | undefined): Subida {
-    return zona && ZONAS_DE_PASO.includes(zona) ? 'vacia' : 'ninguna';
 }
 
 function esSubida(parada: ParadaForm): boolean {
@@ -144,6 +143,7 @@ function desdeParada(parada: ParadaVuelta): ParadaForm {
         lugar_destino: parada.lugar_destino,
         tipo_carga: parada.tipo_carga,
         cliente_id: parada.cliente_id,
+        viaje_continuado_id: parada.viaje_continuado_id,
         bloqueada: parada.guias.length > 0,
     };
 }
@@ -161,6 +161,7 @@ function nuevaParada(
         lugar_destino: null,
         tipo_carga: 'particular',
         cliente_id: null,
+        viaje_continuado_id: null,
         bloqueada: false,
         ...datos,
     };
@@ -176,11 +177,15 @@ function hoy(): string {
 
 /**
  * Une lo elegido en un recorrido continuo: si la ida arranca en la mina,
- * antepone la subida desde Juliaca (vacía o con carga, según se eligió); si
- * la ida termina donde no arranca el regreso, une los dos con un vacío. Lo
- * que agregó antes se rehace cada vez.
+ * antepone la subida desde Juliaca (vacía, con la carga que trae o con
+ * carga nueva, según se eligió); si la ida termina donde no arranca el
+ * regreso, une los dos con un vacío. Lo que agregó antes se rehace cada vez.
  */
-function normalizar(paradas: ParadaForm[], subida: Subida): ParadaForm[] {
+function normalizar(
+    paradas: ParadaForm[],
+    subida: Subida,
+    trae: Trae | null,
+): ParadaForm[] {
     // La subida que puso el formulario se rehace con lo elegido, conservando
     // su id; una que se cargó a mano se respeta.
     const subidaAnterior = paradas.find(
@@ -192,23 +197,30 @@ function normalizar(paradas: ParadaForm[], subida: Subida): ParadaForm[] {
     const conGuias = propias.some((parada) => parada.bloqueada);
 
     if (!conGuias && subida !== 'ninguna' && ida[0]?.zona_origen === 'mina') {
+        // Sigue con la carga de la GR del ticket anterior: la misma carga,
+        // sin cliente ni GR propia.
+        const sigue = subida === 'continua' && trae !== null;
+
         ida.unshift(
             nuevaParada('ida', {
                 id: subidaAnterior?.id ?? null,
                 zona_origen: 'juliaca',
                 zona_destino: 'mina',
-                // Con carga se respeta la que ya traía; si no, materiales.
-                tipo_carga:
-                    subida === 'vacia'
-                        ? 'vacio'
-                        : subidaAnterior &&
-                            subidaAnterior.tipo_carga !== 'vacio'
+                // Con carga nueva se respeta la que ya traía; si no, materiales.
+                tipo_carga: sigue
+                    ? trae.tipo_carga
+                    : subida === 'cargada'
+                      ? subidaAnterior &&
+                        subidaAnterior.tipo_carga !== 'vacio' &&
+                        subidaAnterior.viaje_continuado_id === null
                           ? subidaAnterior.tipo_carga
-                          : 'materiales',
+                          : 'materiales'
+                      : 'vacio',
                 cliente_id:
-                    subida === 'vacia'
-                        ? null
-                        : (subidaAnterior?.cliente_id ?? null),
+                    subida === 'cargada'
+                        ? (subidaAnterior?.cliente_id ?? null)
+                        : null,
+                viaje_continuado_id: sigue ? trae.viaje_id : null,
                 auto: true,
             }),
         );
@@ -450,19 +462,41 @@ export function ProgramarVueltaDialog({
         ),
     );
     const [destino, setDestino] = useState<string | null>(null);
+    const primeraGuardada = vuelta?.ida[0];
+    // La carga que ya sigue en este ticket: aunque la unidad tenga después
+    // otra GR, la subida guardada no se pierde al editar.
+    const traeGuardada: Trae | null =
+        primeraGuardada?.viaje_continuado_id && vuelta
+            ? {
+                  viaje_id: primeraGuardada.viaje_continuado_id,
+                  numero_gr: primeraGuardada.continua?.numero_gr ?? null,
+                  tipo_carga: primeraGuardada.tipo_carga,
+                  tipo_carga_label: primeraGuardada.tipo_carga_label,
+                  ticket: primeraGuardada.continua?.ticket ?? null,
+              }
+            : null;
+    /** La carga con la que sube a la mina la unidad elegida. */
+    const traeDe = (tractoId: number | null): Trae | null =>
+        (vuelta && tractoId === vuelta.tracto_id ? traeGuardada : null) ??
+        opciones.tractos.find((opcion) => opcion.id === tractoId)?.trae ??
+        null;
     const [subida, setSubida] = useState<Subida>(() => {
-        const primera = vuelta?.ida[0];
-
         if (!vuelta) {
-            return subidaPorZona(unidadInicial?.zona_actual);
+            return subidaInicial(unidadInicial?.trae ?? null);
         }
 
-        return primera?.zona_origen === 'juliaca' &&
-            primera.zona_destino === 'mina'
-            ? primera.tipo_carga === 'vacio'
-                ? 'vacia'
-                : 'cargada'
-            : 'ninguna';
+        if (
+            primeraGuardada?.zona_origen !== 'juliaca' ||
+            primeraGuardada.zona_destino !== 'mina'
+        ) {
+            return 'ninguna';
+        }
+
+        if (primeraGuardada.viaje_continuado_id) {
+            return 'continua';
+        }
+
+        return primeraGuardada.tipo_carga === 'vacio' ? 'vacia' : 'cargada';
     });
     const [aMano, setAMano] = useState(false);
     const [confirmandoQuitar, setConfirmandoQuitar] = useState(false);
@@ -505,11 +539,64 @@ export function ProgramarVueltaDialog({
 
     /** Cambia las paradas y vuelve a unir el recorrido. */
     const fijarParadas = (paradas: ParadaForm[], comoSube = subida) =>
-        setData('paradas', normalizar(paradas, comoSube));
+        setData(
+            'paradas',
+            normalizar(paradas, comoSube, traeDe(data.tracto_id)),
+        );
+
+    /**
+     * Los complementos de la ida, con los que se suman solos según con qué
+     * sube a la mina (con escoria, +10 gal): entran si la ruta de ida sube a
+     * la mina con esa carga y salen si no. Sin ruta principal en la ida no
+     * hay complementos.
+     */
+    const complementosDeLaIda = (
+        actuales: string[],
+        rutaIda: string | null,
+        comoSube: Subida,
+        trae: Trae | null,
+    ): string[] => {
+        const subeALaMina =
+            opciones.tramos.ida.find((opcion) => opcion.value === rutaIda)
+                ?.paradas[0]?.zona_origen === 'mina';
+        const carga =
+            comoSube === 'continua' && subeALaMina
+                ? (trae?.tipo_carga ?? null)
+                : null;
+        const automaticos = opciones.tramos.ida.filter(
+            (opcion) => opcion.es_complemento && opcion.sube_con !== null,
+        );
+        const quitar = automaticos
+            .filter((opcion) => opcion.sube_con !== carga)
+            .map((opcion) => opcion.value);
+        const poner = automaticos
+            .filter((opcion) => opcion.sube_con === carga)
+            .map((opcion) => opcion.value);
+
+        return [
+            ...actuales.filter((valor) => !quitar.includes(valor)),
+            ...poner.filter((valor) => !actuales.includes(valor)),
+        ];
+    };
+
+    const ajustarComplementosDeSubida = (
+        comoSube: Subida,
+        trae: Trae | null,
+    ) => {
+        if (!elegida.ida || elegida.ida === POR_DEFINIR) {
+            return;
+        }
+
+        setComplementos((anterior) => ({
+            ...anterior,
+            ida: complementosDeLaIda(anterior.ida, elegida.ida, comoSube, trae),
+        }));
+    };
 
     const elegirSubida = (comoSube: Subida) => {
         setSubida(comoSube);
         fijarParadas(data.paradas, comoSube);
+        ajustarComplementosDeSubida(comoSube, traeDe(data.tracto_id));
     };
 
     /** Elegir la unidad deja puestos la carreta y el conductor de su última GR. */
@@ -517,16 +604,17 @@ export function ProgramarVueltaDialog({
         const unidad = opciones.tractos.find(
             (opcion) => opcion.id === tractoId,
         );
-
-        const comoSube = subidaPorZona(unidad?.zona_actual);
+        const trae = traeDe(tractoId);
+        const comoSube = subidaInicial(trae);
 
         setSubida(comoSube);
+        ajustarComplementosDeSubida(comoSube, trae);
         setData((anterior) => ({
             ...anterior,
             tracto_id: tractoId,
             carreta_id: unidad?.carreta_id ?? anterior.carreta_id,
             conductor_id: unidad?.conductor_id ?? anterior.conductor_id,
-            paradas: normalizar(anterior.paradas, comoSube),
+            paradas: normalizar(anterior.paradas, comoSube, trae),
         }));
     };
 
@@ -546,19 +634,17 @@ export function ProgramarVueltaDialog({
             return;
         }
 
-        const unidad = opciones.tractos.find(
-            (opcion) => opcion.id === conductor.tracto_id,
-        );
-
-        const comoSube = subidaPorZona(unidad?.zona_actual);
+        const trae = traeDe(conductor.tracto_id);
+        const comoSube = subidaInicial(trae);
 
         setSubida(comoSube);
+        ajustarComplementosDeSubida(comoSube, trae);
         setData((anterior) => ({
             ...anterior,
             conductor_id: conductorId,
             tracto_id: conductor.tracto_id,
             carreta_id: conductor.carreta_id ?? anterior.carreta_id,
-            paradas: normalizar(anterior.paradas, comoSube),
+            paradas: normalizar(anterior.paradas, comoSube, trae),
         }));
     };
 
@@ -665,13 +751,22 @@ export function ProgramarVueltaDialog({
     ) => {
         setElegida((anterior) => ({ ...anterior, [sentido]: valor }));
 
-        // Sin ruta principal no hay complementos.
-        const extras = valor === POR_DEFINIR ? [] : complementos[sentido];
+        // Sin ruta principal no hay complementos. En la ida, el que se suma
+        // solo por la carga con la que sube (escoria) entra si la ruta sube
+        // a la mina, y sale si no.
+        const extras =
+            valor === POR_DEFINIR
+                ? []
+                : sentido === 'ida'
+                  ? complementosDeLaIda(
+                        complementos.ida,
+                        valor,
+                        subida,
+                        traeDe(data.tracto_id),
+                    )
+                  : complementos[sentido];
 
-        if (valor === POR_DEFINIR) {
-            setComplementos((anterior) => ({ ...anterior, [sentido]: [] }));
-        }
-
+        setComplementos((anterior) => ({ ...anterior, [sentido]: extras }));
         armarTramo(sentido, valor, extras, lugar);
     };
 
@@ -932,14 +1027,34 @@ export function ProgramarVueltaDialog({
             fijas.length === 0 &&
             'paradas' in opcion &&
             (opcion as OpcionTramo).paradas[0]?.zona_origen === 'mina';
+        const traeAhora = traeDe(data.tracto_id);
+        const subidas: { value: Subida; label: string }[] = [
+            { value: 'vacia', label: 'Sube vacía desde Juliaca' },
+            ...(traeAhora
+                ? [
+                      {
+                          value: 'continua' as const,
+                          label: `Sigue con la ${traeAhora.tipo_carga_label.toLowerCase()} que trae${traeAhora.numero_gr ? ` (GR ${traeAhora.numero_gr})` : ''}`,
+                      },
+                  ]
+                : []),
+            {
+                value: 'cargada',
+                label: 'Sube con carga nueva desde Juliaca (Minsur u otro)',
+            },
+            // Solo para tickets viejos que arrancaban en la mina.
+            ...(subida === 'ninguna'
+                ? [{ value: 'ninguna' as const, label: 'Ya está en la mina' }]
+                : []),
+        ];
         const selectorSubida = (
             <div className="flex flex-col gap-2">
                 <span className="flex items-center gap-1 text-xs font-medium text-muted-foreground">
                     <MapPin className="size-3.5" />
-                    ¿Cómo llega a la mina?
+                    ¿Cómo sube de Juliaca a la mina?
                 </span>
                 <div className="flex flex-wrap gap-1.5">
-                    {SUBIDAS.map((candidata) => (
+                    {subidas.map((candidata) => (
                         <button
                             key={candidata.value}
                             type="button"
@@ -959,6 +1074,16 @@ export function ProgramarVueltaDialog({
                     <span className="text-[11px] text-muted-foreground">
                         La GR de esa carga (Juliaca → San Rafael) se asigna a
                         esta subida desde «GR por asignar».
+                    </span>
+                )}
+                {subida === 'continua' && traeAhora && (
+                    <span className="text-[11px] text-muted-foreground">
+                        Sigue la GR {traeAhora.numero_gr ?? 'anterior'}
+                        {traeAhora.ticket && ` del ${traeAhora.ticket}`}: su
+                        combustible le alcanzó hasta Juliaca y la subida va en
+                        esta ida, sin GR nueva.
+                        {traeAhora.tipo_carga === 'escoria' &&
+                            ' Con escoria se suma «Sube con escoria» (+10 gal).'}
                     </span>
                 )}
             </div>

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\SentidoTramo;
+use App\Enums\TipoCarga;
 use App\Enums\TipoLineaAbastecimiento;
 use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\RutaFactory;
@@ -30,6 +31,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $descripcion
  * @property SentidoTramo|null $sentido Null: sirve en la ida y en la vuelta.
  * @property bool $es_complemento
+ * @property TipoCarga|null $sube_con Un complemento que se suma solo cuando la ida sube a la mina con esta carga (con escoria, +10 gal).
  * @property list<ParadaRuta> $paradas
  * @property bool $pide_destino La carga particular a un destino que se elige al programar.
  * @property int|null $dias_viaje Lo que tarda: de aquí sale la llegada prevista.
@@ -42,7 +44,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, VarianteRuta> $variantes
  */
 #[Fillable([
-    'nombre', 'descripcion', 'sentido', 'es_complemento', 'paradas', 'pide_destino',
+    'nombre', 'descripcion', 'sentido', 'es_complemento', 'sube_con', 'paradas', 'pide_destino',
     'dias_viaje', 'km_estandar', 'color', 'nota', 'activa', 'orden',
 ])]
 class Ruta extends Model
@@ -142,6 +144,7 @@ class Ruta extends Model
         return [
             'sentido' => SentidoTramo::class,
             'es_complemento' => 'boolean',
+            'sube_con' => TipoCarga::class,
             'paradas' => 'array',
             'pide_destino' => 'boolean',
             'dias_viaje' => 'integer',

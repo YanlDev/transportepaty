@@ -72,6 +72,16 @@ function Parada({
                     {parada.cliente}
                 </span>
             )}
+            {parada.continua && (
+                <span className="text-xs text-muted-foreground">
+                    Sigue con la GR{' '}
+                    <span className="font-mono">
+                        {parada.continua.numero_gr ?? '¿?'}
+                    </span>
+                    {parada.continua.ticket && ` del ${parada.continua.ticket}`}
+                    : no lleva GR nueva.
+                </span>
+            )}
             {conGuias && parada.guias.length > 0 && (
                 <span className="font-mono text-xs text-muted-foreground">
                     {parada.guias.map((guia) => guia.numero_gr).join(' · ')}

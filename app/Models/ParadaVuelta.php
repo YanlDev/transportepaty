@@ -33,12 +33,15 @@ use Illuminate\Support\Carbon;
  * @property string|null $cliente
  * @property Carbon|null $fecha
  * @property bool $fuera_de_programa Entró por una GR que no calzaba con lo programado.
+ * @property int|null $viaje_continuado_id La GR del ticket anterior cuya carga sigue en esta parada (Juliaca → mina con la escoria que trae).
  * @property-read Vuelta $vuelta
  * @property-read Collection<int, Viaje> $viajes
+ * @property-read Viaje|null $viajeContinuado
  */
 #[Fillable([
     'vuelta_id', 'sentido', 'orden', 'zona_origen', 'zona_destino', 'lugar_origen',
     'lugar_destino', 'tipo_carga', 'cliente_id', 'cliente', 'fecha', 'fuera_de_programa',
+    'viaje_continuado_id',
 ])]
 class ParadaVuelta extends Model
 {
@@ -66,6 +69,23 @@ class ParadaVuelta extends Model
     public function viajes(): HasMany
     {
         return $this->hasMany(Viaje::class);
+    }
+
+    /**
+     * La GR del ticket anterior cuya carga sigue en esta parada: la escoria
+     * que viene de la costa llega a Juliaca en un ticket y sube a la mina en
+     * el siguiente, con la misma GR. Esta parada no espera una GR propia.
+     *
+     * @return BelongsTo<Viaje, $this>
+     */
+    public function viajeContinuado(): BelongsTo
+    {
+        return $this->belongsTo(Viaje::class, 'viaje_continuado_id');
+    }
+
+    public function esContinuacion(): bool
+    {
+        return $this->viaje_continuado_id !== null;
     }
 
     public function esVacio(): bool

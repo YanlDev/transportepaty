@@ -38,6 +38,11 @@ it('sends whatever ends on the coast to the outbound leg', function (): void {
  * La vuelta empieza al salir de la sierra (ahí se abastece) y termina al
  * volver a ella.
  */
+it('has Juliaca as the only base: there the fuel starts over', function (): void {
+    expect(collect(ZonaRuta::cases())->filter(fn (ZonaRuta $zona): bool => $zona->esBase())->values()->all())
+        ->toBe([ZonaRuta::Juliaca]);
+});
+
 it('places each leg of the circuit in its part of the trip', function (?ZonaRuta $origen, ?ZonaRuta $destino, bool $yaRegresando, SentidoTramo $sentido): void {
     expect(SentidoTramo::entre($origen, $destino, $yaRegresando))->toBe($sentido);
 })->with([
@@ -50,6 +55,8 @@ it('places each leg of the circuit in its part of the trip', function (?ZonaRuta
     'Lima → Tacna, particular' => [ZonaRuta::Lima, ZonaRuta::Tacna, false, SentidoTramo::Regreso],
     'Tacna ⇢ Juliaca: sigue el regreso' => [ZonaRuta::Tacna, ZonaRuta::Juliaca, true, SentidoTramo::Regreso],
     'Cusco ⇢ mina: sigue el regreso' => [ZonaRuta::Cusco, ZonaRuta::Mina, true, SentidoTramo::Regreso],
+    'mina → Juliaca: vuelve a la base' => [ZonaRuta::Mina, ZonaRuta::Juliaca, false, SentidoTramo::Regreso],
+    'Juliaca → mina con escoria: arranca la ida' => [ZonaRuta::Juliaca, ZonaRuta::Mina, true, SentidoTramo::Ida],
     'Tacna → Ilo: dentro del sur' => [ZonaRuta::Tacna, ZonaRuta::Moquegua, true, SentidoTramo::Regreso],
     'Arequipa → Lima: baja' => [ZonaRuta::Arequipa, ZonaRuta::Lima, true, SentidoTramo::Ida],
 ]);

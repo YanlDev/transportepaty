@@ -49,6 +49,8 @@ export type VueltaAbastecimiento = {
     despachos_pendientes: number;
     /** Soles del combustible despachado (el voucher trae el precio). */
     importe_registrado: number;
+    /** El costo del combustible: el voucher si llegó, si no lo autorizado por su precio. */
+    importe_estimado: number;
     /** Una barra por tramo: la ida y, si tiene vuelta, la vuelta. */
     tramos: TramoCombustible[];
     /** Cada combustible del ticket, también los anulados. */
@@ -64,6 +66,10 @@ export type CombustibleDelTicket = {
     punto: string | null;
     fuera_de_lista: boolean;
     galones: number;
+    /** Con qué precio se autorizó (null en los registros viejos). */
+    precio_autorizado: number | null;
+    /** El voucher si ya llegó; si no, lo autorizado por su precio. */
+    costo: number | null;
     motivo_exceso: string | null;
     observacion: string | null;
     registrado_por: string | null;
@@ -121,6 +127,7 @@ export type RegistroAbastecimiento = {
     id: number;
     fecha: string;
     placa: string;
+    conductor: string | null;
     punto: string | null;
     /** Un grifo escrito a mano, que no está en la lista de puntos. */
     fuera_de_lista: boolean;

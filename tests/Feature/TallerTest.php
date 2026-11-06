@@ -85,6 +85,7 @@ it('does not let fuel be registered without the workshop OK', function (): void 
         'sentido' => 'ida',
         'fecha' => now()->toDateString(),
         'galones' => 100,
+        'precio_galon' => 16.4,
     ];
 
     actingAs(actorConRol('abastecimiento'))

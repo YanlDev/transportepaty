@@ -28,25 +28,48 @@ class AbastecimientoPolicy
     }
 
     /**
-     * Nada se borra: se anula con motivo. Lo de un ticket cerrado (o anulado) no
-     * se toca: el cerrado se reabre antes.
+     * Corregir lo autorizado (punto, galones, fecha, tramo) es de quien
+     * corrige registros: quien registra no enmienda lo suyo.
      */
-    public function anular(User $user, Abastecimiento $abastecimiento): bool
+    public function update(User $user, Abastecimiento $abastecimiento): bool
     {
-        return ! $abastecimiento->estaAnulado()
-            && ($abastecimiento->vuelta?->estaAbierta() ?? true)
-            && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
+        return $this->sePuedeTocar($abastecimiento)
+            && $user->checkPermissionTo(Permiso::AbastecimientoCorregir);
     }
 
     /**
-     * Lo que de verdad cargó, según el voucher del grifo. Se puede corregir
-     * mientras el ticket siga abierto.
+     * Nada se borra: se anula con motivo, y solo quien corrige registros.
+     */
+    public function anular(User $user, Abastecimiento $abastecimiento): bool
+    {
+        return $this->sePuedeTocar($abastecimiento)
+            && $user->checkPermissionTo(Permiso::AbastecimientoCorregir);
+    }
+
+    /**
+     * Lo que de verdad cargó, según el voucher del grifo. Quien registra lo
+     * anota una vez; corregirlo después es de quien corrige registros.
      */
     public function registrarDespacho(User $user, Abastecimiento $abastecimiento): bool
     {
-        return ! $abastecimiento->estaAnulado()
-            && ($abastecimiento->vuelta?->estaAbierta() ?? true)
-            && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar);
+        if (! $this->sePuedeTocar($abastecimiento)) {
+            return false;
+        }
+
+        return $user->checkPermissionTo(Permiso::AbastecimientoCorregir)
+            || (! $abastecimiento->tieneDespacho() && $user->checkPermissionTo(Permiso::AbastecimientoRegistrar));
+    }
+
+    /**
+     * El precio del voucher sí lo corrige quien registra: es lo que más se
+     * equivoca y no mueve galones ni kilometraje.
+     */
+    public function corregirPrecio(User $user, Abastecimiento $abastecimiento): bool
+    {
+        return $this->sePuedeTocar($abastecimiento)
+            && $abastecimiento->tieneDespacho()
+            && ($user->checkPermissionTo(Permiso::AbastecimientoRegistrar)
+                || $user->checkPermissionTo(Permiso::AbastecimientoCorregir));
     }
 
     /**
@@ -60,5 +83,15 @@ class AbastecimientoPolicy
     public function configurar(User $user): bool
     {
         return $user->checkPermissionTo(Permiso::AbastecimientoConfigurar);
+    }
+
+    /**
+     * Lo anulado ya no se toca, y lo de un ticket cerrado (o anulado) tampoco:
+     * el cerrado se reabre antes.
+     */
+    private function sePuedeTocar(Abastecimiento $abastecimiento): bool
+    {
+        return ! $abastecimiento->estaAnulado()
+            && ($abastecimiento->vuelta?->estaAbierta() ?? true);
     }
 }

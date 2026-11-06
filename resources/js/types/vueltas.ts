@@ -31,6 +31,9 @@ export type ParadaVuelta = {
     pendiente: boolean;
     /** Llegó una GR que no estaba en lo programado. */
     fuera_de_programa: boolean;
+    /** La GR del ticket anterior cuya carga sigue en esta parada. */
+    viaje_continuado_id: number | null;
+    continua: { numero_gr: string | null; ticket: string | null } | null;
     guias: GuiaParada[];
 };
 
@@ -83,6 +86,8 @@ export type OpcionTramo = {
     descripcion: string;
     /** Se suma a la ruta principal del tramo en vez de definirlo. */
     es_complemento: boolean;
+    /** Complemento que se suma solo si la ida sube a la mina con esta carga. */
+    sube_con: string | null;
     /** La carga particular a otro destino: hay que elegir a dónde va. */
     pide_destino: boolean;
     paradas: {
@@ -118,6 +123,14 @@ export type OpcionesVuelta = {
         zona_actual: string | null;
         /** El distrito al que fue su última GR, para explicarlo. */
         llego_a: string | null;
+        /** La carga con la que sube a la mina: su última GR fue a la mina cargada. */
+        trae: {
+            viaje_id: number;
+            numero_gr: string | null;
+            tipo_carga: string;
+            tipo_carga_label: string;
+            ticket: string | null;
+        } | null;
         /** Lo que dice esa GR, aunque no calce con el padrón. */
         ultima_gr: {
             numero: string;
@@ -254,7 +267,10 @@ export type LiquidacionTicket = {
         autorizado: number;
         despachado: number;
         diferencia: number;
+        /** Lo de los vouchers. */
         importe: number;
+        /** Los vouchers más lo autorizado sin voucher, por su precio. */
+        estimado: number;
     };
     viaticos: { depositado: number; pendiente: number };
     km: {
@@ -264,5 +280,7 @@ export type LiquidacionTicket = {
     };
     /** Km por galón despachado; null sin los dos kilometrajes. */
     rendimiento: number | null;
+    /** Combustible (estimado hasta tener todos los vouchers) + viáticos. */
     total: number;
+    total_es_estimado: boolean;
 };

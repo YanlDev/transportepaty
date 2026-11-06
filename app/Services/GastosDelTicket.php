@@ -33,6 +33,7 @@ use Illuminate\Support\Collection;
  *     viaticos_anulados: list<array<string, mixed>>,
  *     movimientos_viaticos: list<array<string, mixed>>,
  *     importe_registrado: float,
+ *     importe_estimado: float,
  *     abastecimientos: list<array<string, mixed>>
  * }
  */
@@ -88,6 +89,9 @@ class GastosDelTicket
                     $movimientos->get($vuelta->id, collect()),
                 ),
                 'importe_registrado' => round((float) $delTicket->whereNull('anulado_at')->sum('importe'), 2),
+                // El costo del combustible desde que se autoriza: lo del
+                // voucher si ya llegó y, si no, lo autorizado por su precio.
+                'importe_estimado' => round((float) $delTicket->whereNull('anulado_at')->sum(fn (Abastecimiento $abastecimiento): float => $abastecimiento->costo() ?? 0.0), 2),
                 'despachos_pendientes' => $delTicket->filter(fn (Abastecimiento $abastecimiento): bool => ! $abastecimiento->estaAnulado() && ! $abastecimiento->tieneDespacho())->count(),
                 'abastecimientos' => array_values($delTicket
                     ->map(fn (Abastecimiento $abastecimiento): array => $this->registro($abastecimiento))
@@ -114,6 +118,8 @@ class GastosDelTicket
             'punto' => $abastecimiento->nombrePunto(),
             'fuera_de_lista' => $abastecimiento->punto_abastecimiento_id === null && filled($abastecimiento->punto_libre),
             'galones' => (float) $abastecimiento->galones,
+            'precio_autorizado' => $abastecimiento->precio_autorizado === null ? null : (float) $abastecimiento->precio_autorizado,
+            'costo' => $abastecimiento->costo(),
             'motivo_exceso' => $abastecimiento->motivo_exceso,
             'observacion' => $abastecimiento->observacion,
             'registrado_por' => $abastecimiento->registradoPor?->name,

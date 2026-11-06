@@ -65,6 +65,7 @@ enum Permiso: string
     case AbastecimientoConfigurar = 'abastecimiento.configurar';
     case AbastecimientoViaticos = 'abastecimiento.viaticos';
     case AbastecimientoExcederTope = 'abastecimiento.exceder_tope';
+    case AbastecimientoCorregir = 'abastecimiento.corregir';
 
     case AsistenciaVer = 'asistencia.ver';
     case AsistenciaMarcar = 'asistencia.marcar';
@@ -199,6 +200,7 @@ enum Permiso: string
             self::AbastecimientoConfigurar => 'Configurar puntos y reglas de dotación',
             self::AbastecimientoViaticos => 'Depositar, corregir y anular viáticos',
             self::AbastecimientoExcederTope => 'Autorizar combustible por encima del tope de la tarjeta',
+            self::AbastecimientoCorregir => 'Editar y anular el combustible ya registrado y corregir su voucher',
             self::AsistenciaVer => 'Ver la asistencia',
             self::AsistenciaMarcar => 'Marcar y desmarcar días',
             self::AsistenciaAjustar => 'Ajustar días debidos y notas',

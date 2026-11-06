@@ -332,6 +332,28 @@ it('places a unit back in Juliaca when its last GR went to the south', function 
         }));
 });
 
+it('places a unit back in Juliaca when its last GR went up to the mine', function (): void {
+    $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
+    Viaje::factory()->create([
+        'tracto_id' => $tracto->id,
+        'fecha_traslado' => '2026-10-20',
+        'origen' => 'KM 245 - PARACAS - PISCO - ICA',
+        'destino' => 'SAN RAFAEL - ANTAUTA - MELGAR - PUNO',
+        'tipo_carga' => TipoCarga::Escoria,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('tractos', function ($tractos) use ($tracto): bool {
+            $unidad = collect($tractos)->firstWhere('id', $tracto->id);
+
+            // La escoria a la mina le alcanzó hasta Juliaca: el ticket
+            // siguiente arranca ahí, subiendo con la carga que trae.
+            return $unidad['zona_actual'] === 'juliaca'
+                && $unidad['trae']['tipo_carga'] === 'escoria';
+        }));
+});
+
 it('rejects a stop that starts and ends in the same zone', function (): void {
     $tracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]);
 

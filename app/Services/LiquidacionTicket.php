@@ -17,11 +17,12 @@ use App\Models\Vuelta;
  *     pendientes: list<string>,
  *     avisos: list<string>,
  *     puede_cerrar: bool,
- *     combustible: array{autorizado: float, despachado: float, diferencia: float, importe: float},
+ *     combustible: array{autorizado: float, despachado: float, diferencia: float, importe: float, estimado: float},
  *     viaticos: array{depositado: float, pendiente: float},
  *     km: array{salida: int|null, llegada: int|null, recorridos: int|null},
  *     rendimiento: float|null,
- *     total: float
+ *     total: float,
+ *     total_es_estimado: bool
  * }
  */
 class LiquidacionTicket
@@ -75,6 +76,9 @@ class LiquidacionTicket
                 'despachado' => $despachado,
                 'diferencia' => round($despachado - (float) $gastos['total_registrado'], 2),
                 'importe' => (float) $gastos['importe_registrado'],
+                // Lo del voucher más lo autorizado que todavía no tiene voucher,
+                // por su precio: al cerrar (todo con voucher) es el real.
+                'estimado' => (float) $gastos['importe_estimado'],
             ],
             'viaticos' => [
                 'depositado' => (float) $gastos['viatico_depositado'],
@@ -82,7 +86,8 @@ class LiquidacionTicket
             ],
             'km' => ['salida' => $salida, 'llegada' => $vuelta->km_llegada, 'recorridos' => $recorridos],
             'rendimiento' => $recorridos !== null && $despachado > 0 ? round($recorridos / $despachado, 2) : null,
-            'total' => round((float) $gastos['importe_registrado'] + (float) $gastos['viatico_depositado'], 2),
+            'total' => round((float) $gastos['importe_estimado'] + (float) $gastos['viatico_depositado'], 2),
+            'total_es_estimado' => $gastos['despachos_pendientes'] > 0,
         ];
     }
 }

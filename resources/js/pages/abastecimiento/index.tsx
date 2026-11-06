@@ -68,7 +68,7 @@ type Props = {
  */
 function BarraViaticos({ vuelta }: { vuelta: VueltaAbastecimiento }) {
     const total = vuelta.viatico_depositado + vuelta.viatico_pendiente;
-    const gastado = vuelta.importe_registrado + vuelta.viatico_depositado;
+    const gastado = vuelta.importe_estimado + vuelta.viatico_depositado;
 
     if (total === 0) {
         return (
@@ -356,7 +356,7 @@ export default function AbastecimientoIndex({
                 <Table>
                     <TableHeader>
                         <TableRow className="hover:bg-transparent">
-                            <TableHead className="w-28">Unidad</TableHead>
+                            <TableHead className="w-40">Unidad</TableHead>
                             <TableHead className="w-24">Ticket</TableHead>
                             <TableHead className="w-24">Etapa</TableHead>
                             <TableHead>Rutas</TableHead>
@@ -393,7 +393,21 @@ export default function AbastecimientoIndex({
                                     onClick={() => setAbiertaId(vuelta.id)}
                                 >
                                     <TableCell className="whitespace-nowrap">
-                                        <Placa placa={vuelta.tracto.placa} />
+                                        <span className="flex flex-col gap-1">
+                                            <Placa
+                                                placa={vuelta.tracto.placa}
+                                            />
+                                            <span
+                                                className="max-w-40 truncate text-xs text-muted-foreground"
+                                                title={
+                                                    vuelta.conductor ??
+                                                    undefined
+                                                }
+                                            >
+                                                {vuelta.conductor ??
+                                                    'Sin conductor'}
+                                            </span>
+                                        </span>
                                     </TableCell>
                                     <TableCell
                                         className="font-mono text-xs text-muted-foreground"
@@ -574,8 +588,20 @@ export default function AbastecimientoIndex({
                                     <TableCell className="whitespace-nowrap tabular-nums">
                                         {formatearFecha(registro.fecha)}
                                     </TableCell>
-                                    <TableCell className="font-mono">
-                                        {formatearPlaca(registro.placa)}
+                                    <TableCell>
+                                        <span className="flex flex-col">
+                                            <span className="font-mono">
+                                                {formatearPlaca(registro.placa)}
+                                            </span>
+                                            {registro.conductor && (
+                                                <span
+                                                    className="max-w-40 truncate text-xs text-muted-foreground"
+                                                    title={registro.conductor}
+                                                >
+                                                    {registro.conductor}
+                                                </span>
+                                            )}
+                                        </span>
                                     </TableCell>
                                     <TableCell className="font-mono text-xs">
                                         {registro.vuelta ?? '—'}
@@ -742,10 +768,10 @@ export default function AbastecimientoIndex({
                                             ))}
                                     <span className="flex justify-between text-xs font-medium text-muted-foreground">
                                         Autorizado y despachado
-                                        {abierta.importe_registrado > 0 && (
+                                        {abierta.importe_estimado > 0 && (
                                             <span className="tabular-nums">
                                                 {soles(
-                                                    abierta.importe_registrado,
+                                                    abierta.importe_estimado,
                                                 )}
                                             </span>
                                         )}
@@ -753,6 +779,9 @@ export default function AbastecimientoIndex({
                                     <CombustiblesDelTicket
                                         registros={abierta.abastecimientos}
                                         puedeGestionar={puedeRegistrar}
+                                        puedeCorregir={puede(
+                                            'abastecimiento.corregir',
+                                        )}
                                         onAccion={setAccionCombustible}
                                     />
                                 </section>
