@@ -390,3 +390,55 @@ it('marks a fuel line as full tank from the route editor', function (): void {
         ->and($full->galones)->toBeNull()
         ->and($ruta->topePara(null))->toBe(150.0);
 });
+
+it('adds a one-off extra to a leg, kept when editing and frozen once it has fuel', function (): void {
+    $ida = [
+        ['sentido' => 'ida', 'zona_origen' => 'juliaca', 'zona_destino' => 'mina', 'tipo_carga' => 'vacio'],
+        ['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado'],
+    ];
+    $concentrado = [['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Concentrado a Pisco')->id, 'variante_ruta_id' => null]];
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), programar($this->tracto, $concentrado, $ida))->assertSessionHasNoErrors();
+    $ticket = Vuelta::query()->sole();
+    $adicional = ['sentido' => 'ida', 'galones' => 20, 'motivo' => 'Descarga en Lurín antes de subir'];
+
+    // Abastecimiento no programa: no agrega adicionales.
+    actingAs(actorConRol('abastecimiento'))->post(route('vueltas.adicionales.store', $ticket), $adicional)->assertForbidden();
+    actingAs(actorConRol('admin'))->post(route('vueltas.adicionales.store', $ticket), ['sentido' => 'ida', 'galones' => 20, 'motivo' => ''])
+        ->assertSessionHasErrors('motivo');
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.adicionales.store', $ticket), $adicional)->assertSessionHasNoErrors();
+    expect($ticket->fresh()->topeDe(SentidoTramo::Ida))->toBe(240.0);
+
+    // Editar el ticket no lo toca, y no aparece entre las rutas del formulario.
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $ticket), programar($this->tracto, $concentrado, $ida))->assertSessionHasNoErrors();
+    expect($ticket->fresh()->topeDe(SentidoTramo::Ida))->toBe(240.0);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.show', $ticket))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('ticket.rutas', 1)
+            ->where('ticket.adicionales.0.motivo', 'Descarga en Lurín antes de subir')
+            ->where('ticket.adicionales.0.quitable', true));
+
+    // Con combustible autorizado ya no se quita; también se puede sumar otro.
+    Abastecimiento::factory()->paraVuelta($ticket)->create(['galones' => 150]);
+    $extra = $ticket->rutas()->whereNotNull('motivo')->sole();
+    actingAs(actorConRol('admin'))->delete(route('vueltas.adicionales.destroy', [$ticket, $extra]))->assertSessionHasErrors('adicional');
+    actingAs(actorConRol('admin'))->post(route('vueltas.adicionales.store', $ticket), [...$adicional, 'galones' => 10, 'motivo' => 'Desvío por obras'])->assertSessionHasNoErrors();
+    expect($ticket->fresh()->topeDe(SentidoTramo::Ida))->toBe(250.0);
+});
+
+it('removes an extra while the leg has no fuel', function (): void {
+    $vuelta = [['sentido' => 'regreso', 'zona_origen' => 'lima', 'zona_destino' => 'juliaca', 'tipo_carga' => 'particular']];
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), programar($this->tracto, [
+        ['sentido' => 'regreso', 'ruta_id' => rutaDelCatalogo('Particular a Juliaca')->id, 'variante_ruta_id' => null],
+    ], $vuelta))->assertSessionHasNoErrors();
+    $ticket = Vuelta::query()->sole();
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.adicionales.store', $ticket), ['sentido' => 'regreso', 'galones' => 15, 'motivo' => 'Recojo en Chosica'])->assertSessionHasNoErrors();
+    expect($ticket->fresh()->topeDe(SentidoTramo::Regreso))->toBe(205.0);
+
+    $extra = $ticket->rutas()->whereNotNull('motivo')->sole();
+    actingAs(actorConRol('admin'))->delete(route('vueltas.adicionales.destroy', [$ticket, $extra]))->assertSessionHasNoErrors();
+    expect($ticket->fresh()->topeDe(SentidoTramo::Regreso))->toBe(190.0);
+});

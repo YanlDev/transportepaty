@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $variante_ruta_id
  * @property bool $es_complemento
  * @property string $nombre
+ * @property string|null $motivo Solo en un adicional: por qué ese ticket lleva galones de más.
  * @property string|null $variante
  * @property string|null $color
  * @property list<LineaCopiada> $lineas
@@ -41,7 +42,7 @@ use Illuminate\Support\Carbon;
  * @property-read User|null $usuario
  */
 #[Fillable([
-    'vuelta_id', 'sentido', 'ruta_id', 'variante_ruta_id', 'es_complemento', 'nombre', 'variante',
+    'vuelta_id', 'sentido', 'ruta_id', 'variante_ruta_id', 'es_complemento', 'nombre', 'motivo', 'variante',
     'color', 'lineas', 'variante_pendiente', 'dias_viaje', 'km_estandar', 'orden', 'user_id',
 ])]
 class RutaVuelta extends Model
@@ -119,6 +120,40 @@ class RutaVuelta extends Model
      * El combustible que aporta esta ruta. Null si falta elegir la variante
      * o alguna línea tiene galones por definir.
      */
+    /**
+     * Galones extra solo para este ticket (un desvío que no se repite): no
+     * viene del catálogo y lleva su motivo. Lo que se repite es un
+     * complemento del catálogo, como Huaral.
+     */
+    public function esAdicional(): bool
+    {
+        return $this->motivo !== null;
+    }
+
+    /**
+     * Un adicional del tramo como ruta del ticket: una sola línea de
+     * combustible con el motivo.
+     *
+     * @return array<string, mixed>
+     */
+    public static function adicional(float $galones, string $motivo): array
+    {
+        return [
+            'ruta_id' => null,
+            'variante_ruta_id' => null,
+            'es_complemento' => true,
+            'nombre' => mb_strimwidth('Adicional: '.$motivo, 0, 100, '…'),
+            'motivo' => $motivo,
+            'variante' => null,
+            'color' => null,
+            'lineas' => [[
+                'linea_id' => null, 'tipo' => TipoLineaAbastecimiento::Combustible->value, 'concepto' => $motivo,
+                'punto_id' => null, 'punto' => null, 'galones' => $galones, 'tanque_lleno' => false, 'monto' => null,
+            ]],
+            'variante_pendiente' => false,
+        ];
+    }
+
     public function tope(): ?float
     {
         if ($this->variante_pendiente) {

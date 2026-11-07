@@ -246,7 +246,7 @@ class GuardarVueltaRequest extends FormRequest
                 continue;
             }
 
-            $tenia = $vuelta->rutas()->where('sentido', $sentido)->get();
+            $tenia = $vuelta->rutas()->where('sentido', $sentido)->whereNull('motivo')->get();
             $nuevas = $elegidas->where('sentido', $sentido->value)->values();
             $usadas = [];
 

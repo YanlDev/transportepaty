@@ -81,7 +81,9 @@ class ProgramadorVueltas
      */
     private function guardarRutas(Vuelta $vuelta, array $elegidas, ?User $usuario): void
     {
-        $existentes = $vuelta->rutas()->get();
+        // Los adicionales no los elige el formulario: se agregan aparte y
+        // editar el ticket no los toca.
+        $existentes = $vuelta->rutas()->whereNull('motivo')->get();
         $catalogo = Ruta::query()->with(['lineas.punto', 'variantes'])->findMany(array_column($elegidas, 'ruta_id'))->keyBy('id');
         $conservadas = [];
 
