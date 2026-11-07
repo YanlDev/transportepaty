@@ -530,7 +530,11 @@ class VueltaController extends Controller
     private function resumenDeDotacion(array $lineas): string
     {
         $combustible = array_map(
-            fn (array $linea): string => ($linea['punto'] ?? $linea['concepto']).' '.($linea['galones'] === null ? '¿?' : rtrim(rtrim(number_format($linea['galones'], 1, '.', ''), '0'), '.')).' gal',
+            fn (array $linea): string => ($linea['punto'] ?? $linea['concepto']).' '.match (true) {
+                $linea['tanque_lleno'] => 'tanque full',
+                $linea['galones'] === null => '¿? gal',
+                default => rtrim(rtrim(number_format($linea['galones'], 1, '.', ''), '0'), '.').' gal',
+            },
             array_values(array_filter($lineas, fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value)),
         );
         $viaticos = array_sum(array_column(array_filter($lineas, fn (array $linea): bool => $linea['tipo'] !== TipoLineaAbastecimiento::Combustible->value), 'monto'));
