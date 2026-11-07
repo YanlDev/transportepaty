@@ -306,7 +306,14 @@ function TarjetaOpcion({
 }) {
     if (elegida && children) {
         return (
-            <div className="flex flex-col gap-2 rounded-xl border border-amber-500 bg-amber-500/5 p-1 ring-1 ring-amber-500">
+            <div
+                className={cn(
+                    'flex flex-col gap-2 rounded-xl border p-1 ring-1',
+                    sentido === 'ida'
+                        ? 'border-amber-500 bg-amber-500/5 ring-amber-500'
+                        : 'border-violet-500 bg-violet-500/5 ring-violet-500',
+                )}
+            >
                 <TarjetaOpcion
                     icono={icono}
                     titulo={titulo}
@@ -1088,6 +1095,49 @@ export function ProgramarVueltaDialog({
                 )}
             </div>
         );
+        // Los complementos van dentro de la ruta elegida, donde se hace
+        // clic: al final de una lista larga no se veían.
+        const selectorComplementos = extras.length > 0 && (
+            <div className="flex flex-col gap-2">
+                <span className="text-xs font-medium text-muted-foreground">
+                    Complementos (se suman a la ruta)
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                    {extras.map((extra) => {
+                        const marcado = complementos[sentido].includes(
+                            extra.value,
+                        );
+
+                        return (
+                            <button
+                                key={extra.value}
+                                type="button"
+                                title={
+                                    [extra.descripcion, extra.dotacion]
+                                        .filter(Boolean)
+                                        .join(' · ') || undefined
+                                }
+                                aria-pressed={marcado}
+                                onClick={() =>
+                                    alternarComplemento(sentido, extra.value)
+                                }
+                                className={cn(
+                                    'rounded-full border px-3 py-1 text-xs transition',
+                                    marcado
+                                        ? subiendo
+                                            ? 'border-violet-500 bg-violet-500 text-white'
+                                            : 'border-amber-500 bg-amber-500 text-white'
+                                        : 'hover:bg-accent',
+                                )}
+                            >
+                                {marcado ? '✓ ' : '+ '}
+                                {extra.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+        );
         const conParticular = data.paradas.some(
             (parada) =>
                 parada.sentido === sentido &&
@@ -1152,55 +1202,18 @@ export function ProgramarVueltaDialog({
                             )}
                             onElegir={() => elegirOpcion(sentido, opcion.value)}
                         >
-                            {arrancaEnMina(opcion) && selectorSubida}
+                            {(arrancaEnMina(opcion) ||
+                                (opcion.value !== POR_DEFINIR &&
+                                    selectorComplementos)) && (
+                                <div className="flex flex-col gap-3">
+                                    {arrancaEnMina(opcion) && selectorSubida}
+                                    {opcion.value !== POR_DEFINIR &&
+                                        selectorComplementos}
+                                </div>
+                            )}
                         </TarjetaOpcion>
                     ))}
                 </div>
-
-                {principal && extras.length > 0 && (
-                    <div className="flex flex-col gap-2">
-                        <span className="text-xs font-medium text-muted-foreground">
-                            Complementos (se suman a la ruta)
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                            {extras.map((extra) => {
-                                const marcado = complementos[sentido].includes(
-                                    extra.value,
-                                );
-
-                                return (
-                                    <button
-                                        key={extra.value}
-                                        type="button"
-                                        title={
-                                            [extra.descripcion, extra.dotacion]
-                                                .filter(Boolean)
-                                                .join(' · ') || undefined
-                                        }
-                                        aria-pressed={marcado}
-                                        onClick={() =>
-                                            alternarComplemento(
-                                                sentido,
-                                                extra.value,
-                                            )
-                                        }
-                                        className={cn(
-                                            'rounded-full border px-3 py-1 text-xs transition',
-                                            marcado
-                                                ? subiendo
-                                                    ? 'border-violet-500 bg-violet-500 text-white'
-                                                    : 'border-amber-500 bg-amber-500 text-white'
-                                                : 'hover:bg-accent',
-                                        )}
-                                    >
-                                        {marcado ? '✓ ' : '+ '}
-                                        {extra.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
 
                 {conVariantes.map((ruta) => {
                     const clave = `${sentido}:${ruta.value}`;
