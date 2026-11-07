@@ -19,6 +19,7 @@ import {
     SheetHeader,
     SheetTitle,
 } from '@/components/ui/sheet';
+import { AdicionalesVuelta } from '@/components/vueltas/adicionales-vuelta';
 import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
 import { LlegadaDialog } from '@/components/vueltas/llegada-dialog';
@@ -183,6 +184,7 @@ export function DetalleVuelta({
                             </div>
                             <TallerVuelta ticket={vuelta} />
                             <TramosVuelta vuelta={vuelta} conGuias />
+                            <AdicionalesVuelta vuelta={vuelta} />
                         </div>
                     </>
                 )}

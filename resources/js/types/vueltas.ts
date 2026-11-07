@@ -63,6 +63,17 @@ export type Vuelta = {
     regreso: ParadaVuelta[];
     /** Las rutas elegidas para cada tramo: la principal y sus complementos. */
     rutas: RutaDelTicket[];
+    /** Galones extra solo para este ticket, con su motivo (un desvío que no se repite). */
+    adicionales: {
+        id: number;
+        sentido: Sentido;
+        galones: number;
+        motivo: string;
+        por: string | null;
+        fecha: string;
+        /** Se puede quitar: el tramo todavía no tiene combustible. */
+        quitable: boolean;
+    }[];
 };
 
 /** Una ruta elegida para un tramo del ticket (su copia). */

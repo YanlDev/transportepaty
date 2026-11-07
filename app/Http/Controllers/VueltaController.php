@@ -525,7 +525,7 @@ class VueltaController extends Controller
      * La dotación en una línea: «Mina 100 gal · Arequipa 120 gal · viáticos
      * S/ 843».
      *
-     * @param  list<array{tipo: string, punto: string|null, concepto: string, galones: float|null, monto: float|null}>  $lineas
+     * @param  list<array{tipo: string, punto: string|null, concepto: string, galones: float|null, tanque_lleno: bool, monto: float|null}>  $lineas
      */
     private function resumenDeDotacion(array $lineas): string
     {
@@ -680,7 +680,7 @@ class VueltaController extends Controller
             'carreta:id,placa',
             'conductor:id,nombres,apellidos,telefono,telefono_alterno',
             'revisiones.usuario:id,name',
-            'rutas',
+            'rutas.usuario:id,name',
             'llegadaRegistradaPor:id,name',
             'paradas.viajeContinuado:id,numero_gr,parada_vuelta_id',
             'paradas.viajeContinuado.parada.vuelta:id,codigo',
@@ -740,7 +740,8 @@ class VueltaController extends Controller
             'ida' => $vuelta->paradasDe(SentidoTramo::Ida)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada, $origenes[$parada->id] ?? null))->all(),
             'regreso' => $vuelta->paradasDe(SentidoTramo::Regreso)->map(fn (ParadaVuelta $parada): array => $this->parada($parada, $programada, $origenes[$parada->id] ?? null))->all(),
             // Las rutas elegidas: el formulario las vuelve a marcar al editar.
-            'rutas' => $vuelta->rutas->map(fn (RutaVuelta $ruta): array => [
+            // Los adicionales van aparte: el formulario no los elige.
+            'rutas' => $vuelta->rutas->reject(fn (RutaVuelta $ruta): bool => $ruta->esAdicional())->map(fn (RutaVuelta $ruta): array => [
                 'id' => $ruta->id,
                 'sentido' => $ruta->sentido->value,
                 'ruta_id' => $ruta->ruta_id,
@@ -749,6 +750,16 @@ class VueltaController extends Controller
                 'variante' => $ruta->variante,
                 'es_complemento' => $ruta->es_complemento,
                 'variante_pendiente' => $ruta->variante_pendiente,
+            ])->values()->all(),
+            'adicionales' => $vuelta->rutas->filter(fn (RutaVuelta $ruta): bool => $ruta->esAdicional())->map(fn (RutaVuelta $ruta): array => [
+                'id' => $ruta->id,
+                'sentido' => $ruta->sentido->value,
+                'galones' => (float) array_sum(array_column($ruta->lineasDeCombustible(), 'galones')),
+                'motivo' => $ruta->motivo,
+                'por' => $ruta->usuario?->name,
+                'fecha' => $ruta->created_at->toDateString(),
+                // Con combustible ya autorizado contra él, se queda.
+                'quitable' => ($request->user()?->can('update', $vuelta) ?? false) && ! $vuelta->tramoConGastos($ruta->sentido),
             ])->values()->all(),
         ];
     }

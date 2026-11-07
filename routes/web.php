@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AbastecimientoController;
+use App\Http\Controllers\AdicionalTramoController;
 use App\Http\Controllers\AlertaController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
@@ -235,6 +236,8 @@ Route::middleware('auth')->group(function () {
     Route::put('vueltas/{vuelta}', [VueltaController::class, 'update'])->name('vueltas.update');
     Route::delete('vueltas/{vuelta}', [VueltaController::class, 'destroy'])->name('vueltas.destroy');
     Route::post('vueltas/{vuelta}/llegada', [VueltaController::class, 'registrarLlegada'])->name('vueltas.llegada');
+    Route::post('vueltas/{vuelta}/adicionales', [AdicionalTramoController::class, 'store'])->name('vueltas.adicionales.store');
+    Route::delete('vueltas/{vuelta}/adicionales/{adicional}', [AdicionalTramoController::class, 'destroy'])->name('vueltas.adicionales.destroy');
     Route::post('vueltas/{vuelta}/cerrar', [VueltaController::class, 'cerrar'])->name('vueltas.cerrar');
     Route::post('vueltas/{vuelta}/reabrir', [VueltaController::class, 'reabrir'])->name('vueltas.reabrir');
     Route::post('vueltas/{vuelta}/aviso', [VueltaController::class, 'avisarConductor'])->name('vueltas.aviso');
