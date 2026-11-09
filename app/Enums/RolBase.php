@@ -24,6 +24,7 @@ enum RolBase: string
     case Abastecimiento = 'abastecimiento';
     case Contador = 'contador';
     case Rrhh = 'rrhh';
+    case Almacen = 'almacen';
 
     /**
      * @return list<Permiso>
@@ -38,6 +39,7 @@ enum RolBase: string
             self::Gerencia => [
                 ...array_values(array_filter(Permiso::cases(), fn (Permiso $permiso): bool => str_ends_with($permiso->value, '.ver'))),
                 Permiso::AbastecimientoExcederTope,
+                Permiso::AlmacenVerCostos,
             ],
 
             // Programa los tickets, sube y asigna las GR, registra la llegada
@@ -63,6 +65,7 @@ enum RolBase: string
                 Permiso::MantenimientoVer, Permiso::MantenimientoRegistrarKm, Permiso::MantenimientoGestionar,
                 Permiso::MantenimientoLlantas, Permiso::MantenimientoEquipamiento,
                 Permiso::NovedadesRegistrar, Permiso::NovedadesLevantar,
+                Permiso::AlmacenVer,
             ],
 
             // Autoriza el combustible, registra los vouchers, deposita los
@@ -89,6 +92,15 @@ enum RolBase: string
                 Permiso::TableroVer,
                 Permiso::ConductoresVer, Permiso::ConductoresCrear, Permiso::ConductoresEditar,
                 Permiso::AsistenciaVer, Permiso::AsistenciaMarcar, Permiso::AsistenciaAjustar,
+            ],
+
+            // El almacén del taller: el catálogo, lo que entra y lo que sale,
+            // los conteos y el kardex valorizado.
+            self::Almacen => [
+                Permiso::TableroVer, Permiso::VehiculosVer, Permiso::MantenimientoVer,
+                Permiso::AlmacenVer, Permiso::AlmacenVerCostos, Permiso::AlmacenCatalogo,
+                Permiso::AlmacenIngresar, Permiso::AlmacenDespachar,
+                Permiso::AlmacenInventariar, Permiso::AlmacenAnular,
             ],
         };
     }

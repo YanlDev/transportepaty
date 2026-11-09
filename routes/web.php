@@ -3,6 +3,12 @@
 use App\Http\Controllers\AbastecimientoController;
 use App\Http\Controllers\AdicionalTramoController;
 use App\Http\Controllers\AlertaController;
+use App\Http\Controllers\Almacen\AlmacenController;
+use App\Http\Controllers\Almacen\ArticuloController;
+use App\Http\Controllers\Almacen\IngresoAlmacenController;
+use App\Http\Controllers\Almacen\InventarioAlmacenController;
+use App\Http\Controllers\Almacen\ProveedorController;
+use App\Http\Controllers\Almacen\SalidaAlmacenController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\ClienteController;
@@ -303,6 +309,49 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.planes.edit');
     Route::put('mantenimiento/planes/{plan}', [PlanMantenimientoController::class, 'update'])
         ->name('mantenimiento.planes.update');
+
+    // Almacén del taller: el stock, el catálogo, lo que entra (compras y
+    // devoluciones), lo que sale (vales) y los conteos. Las rutas fijas
+    // (`crear`, `exportar`) van antes que las de un documento.
+    Route::prefix('almacen')->name('almacen.')->group(function () {
+        Route::get('/', [AlmacenController::class, 'index'])->name('index');
+        Route::get('stock/exportar', [AlmacenController::class, 'exportar'])->name('exportar');
+        Route::get('kardex/exportar', [ArticuloController::class, 'exportarKardexGeneral'])->name('kardex.exportar');
+
+        Route::get('articulos/crear', [ArticuloController::class, 'create'])->name('articulos.create');
+        Route::post('articulos', [ArticuloController::class, 'store'])->name('articulos.store');
+        Route::post('categorias', [ArticuloController::class, 'crearCategoria'])->name('categorias.store');
+        Route::get('articulos/{articulo}', [ArticuloController::class, 'show'])->name('articulos.show');
+        Route::get('articulos/{articulo}/editar', [ArticuloController::class, 'edit'])->name('articulos.edit');
+        Route::put('articulos/{articulo}', [ArticuloController::class, 'update'])->name('articulos.update');
+        Route::get('articulos/{articulo}/kardex', [ArticuloController::class, 'exportarKardex'])->name('articulos.kardex');
+
+        Route::get('proveedores', [ProveedorController::class, 'index'])->name('proveedores.index');
+        Route::post('proveedores', [ProveedorController::class, 'store'])->name('proveedores.store');
+        Route::put('proveedores/{proveedor}', [ProveedorController::class, 'update'])->name('proveedores.update');
+
+        Route::get('ingresos', [IngresoAlmacenController::class, 'index'])->name('ingresos.index');
+        Route::get('ingresos/crear', [IngresoAlmacenController::class, 'create'])->name('ingresos.create');
+        Route::post('ingresos', [IngresoAlmacenController::class, 'store'])->name('ingresos.store');
+        Route::get('ingresos/{ingreso}', [IngresoAlmacenController::class, 'show'])->name('ingresos.show');
+        Route::get('ingresos/{ingreso}/comprobante', [IngresoAlmacenController::class, 'comprobante'])->name('ingresos.comprobante');
+        Route::post('ingresos/{ingreso}/anular', [IngresoAlmacenController::class, 'anular'])->name('ingresos.anular');
+
+        Route::get('salidas', [SalidaAlmacenController::class, 'index'])->name('salidas.index');
+        Route::get('salidas/crear', [SalidaAlmacenController::class, 'create'])->name('salidas.create');
+        Route::post('salidas', [SalidaAlmacenController::class, 'store'])->name('salidas.store');
+        Route::get('salidas/{salida}', [SalidaAlmacenController::class, 'show'])->name('salidas.show');
+        Route::post('salidas/{salida}/devolver', [SalidaAlmacenController::class, 'devolver'])->name('salidas.devolver');
+        Route::post('salidas/{salida}/anular', [SalidaAlmacenController::class, 'anular'])->name('salidas.anular');
+
+        Route::get('inventarios', [InventarioAlmacenController::class, 'index'])->name('inventarios.index');
+        Route::post('inventarios', [InventarioAlmacenController::class, 'store'])->name('inventarios.store');
+        Route::get('inventarios/{inventario}', [InventarioAlmacenController::class, 'show'])->name('inventarios.show');
+        Route::post('inventarios/{inventario}/lineas', [InventarioAlmacenController::class, 'guardarLinea'])->name('inventarios.lineas.store');
+        Route::delete('inventarios/{inventario}/lineas/{detalle}', [InventarioAlmacenController::class, 'quitarLinea'])->name('inventarios.lineas.destroy');
+        Route::post('inventarios/{inventario}/cerrar', [InventarioAlmacenController::class, 'cerrar'])->name('inventarios.cerrar');
+        Route::post('inventarios/{inventario}/anular', [InventarioAlmacenController::class, 'anular'])->name('inventarios.anular');
+    });
 
     Route::get('asistencia', [AsistenciaController::class, 'index'])->name('asistencia.index');
     Route::patch('asistencia/{conductor}', [AsistenciaController::class, 'marcar'])->name('asistencia.marcar');

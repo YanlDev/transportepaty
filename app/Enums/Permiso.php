@@ -37,6 +37,14 @@ enum Permiso: string
     case MantenimientoLlantas = 'mantenimiento.llantas';
     case MantenimientoEquipamiento = 'mantenimiento.equipamiento';
 
+    case AlmacenVer = 'almacen.ver';
+    case AlmacenVerCostos = 'almacen.ver_costos';
+    case AlmacenCatalogo = 'almacen.catalogo';
+    case AlmacenIngresar = 'almacen.ingresar';
+    case AlmacenDespachar = 'almacen.despachar';
+    case AlmacenInventariar = 'almacen.inventariar';
+    case AlmacenAnular = 'almacen.anular';
+
     case TallerVer = 'taller.ver';
     case TallerRevisar = 'taller.revisar';
 
@@ -111,6 +119,7 @@ enum Permiso: string
         'novedades' => 'Novedades de unidades',
         'conductores' => 'Conductores',
         'asistencia' => 'Asistencia',
+        'almacen' => 'Almacén',
         'cotizaciones' => 'Cotizaciones',
         'clientes' => 'Clientes',
         'costos' => 'Parámetros de costo',
@@ -134,6 +143,7 @@ enum Permiso: string
         'general' => ['nombre' => 'General', 'modulos' => ['tablero']],
         'operacion' => ['nombre' => 'Operación', 'modulos' => ['programacion', 'taller', 'abastecimiento', 'viajes']],
         'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades', 'conductores', 'asistencia']],
+        'almacen' => ['nombre' => 'Almacén', 'modulos' => ['almacen']],
         'comercial' => ['nombre' => 'Comercial', 'modulos' => ['cotizaciones', 'clientes', 'costos']],
         'finanzas' => ['nombre' => 'Finanzas', 'modulos' => ['cobranza', 'cuentas']],
         'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp', 'alertas', 'historial']],
@@ -176,6 +186,13 @@ enum Permiso: string
             self::MantenimientoConfigurar => 'Configurar el plan de cada marca',
             self::MantenimientoLlantas => 'Registrar instalaciones, mediciones y cambios de llantas',
             self::MantenimientoEquipamiento => 'Contar el equipamiento de las carretas',
+            self::AlmacenVer => 'Ver el stock, el kardex y los documentos del almacén',
+            self::AlmacenVerCostos => 'Ver los costos y el inventario valorizado',
+            self::AlmacenCatalogo => 'Registrar y editar artículos y proveedores',
+            self::AlmacenIngresar => 'Registrar compras y devoluciones',
+            self::AlmacenDespachar => 'Emitir vales de salida',
+            self::AlmacenInventariar => 'Hacer y cerrar los conteos de inventario',
+            self::AlmacenAnular => 'Anular ingresos, vales y conteos',
             self::TallerVer => 'Ver los tickets por revisar',
             self::TallerRevisar => 'Dar el apto o no apto de salida',
             self::NovedadesRegistrar => 'Registrar novedades',

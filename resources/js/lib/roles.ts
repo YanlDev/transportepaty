@@ -10,6 +10,7 @@ const NOMBRES_ROL: Record<string, string> = {
     taller: 'Taller',
     rrhh: 'RRHH',
     contador: 'Contabilidad',
+    almacen: 'Almacén',
 };
 
 export function nombreRol(rol: string): string {
@@ -29,6 +30,8 @@ const DESCRIPCIONES_ROL: Record<string, string> = {
     rrhh: 'Maneja el padrón de conductores y la asistencia.',
     contador:
         'Factura, registra cobros, corrige viáticos y liquida los tickets.',
+    almacen:
+        'Lleva el almacén del taller: artículos, proveedores, compras, vales de salida, conteos y kardex.',
 };
 
 export function descripcionRol(rol: string): string | null {
