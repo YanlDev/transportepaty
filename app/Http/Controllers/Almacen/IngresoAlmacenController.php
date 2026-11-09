@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Almacen;
 use App\Enums\Moneda;
 use App\Enums\TipoComprobante;
 use App\Enums\TipoIngreso;
+use App\Enums\UnidadMedida;
 use App\Http\Controllers\Almacen\Concerns\CatalogosAlmacen;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Almacen\AnularDocumentoRequest;
 use App\Http\Requests\Almacen\StoreIngresoRequest;
 use App\Models\Articulo;
+use App\Models\CategoriaArticulo;
 use App\Models\DetalleIngreso;
 use App\Models\IngresoAlmacen;
 use App\Services\CostoDeCompra;
@@ -88,6 +90,13 @@ class IngresoAlmacenController extends Controller
             'monedas' => Moneda::options(),
             'hoy' => RelojOperativo::hoy(),
             'tasaIgv' => CostoDeCompra::TASA_IGV,
+            'puedeCrearArticulo' => $request->user()?->can('create', Articulo::class) ?? false,
+            'puedeCrearProveedor' => $request->user()?->can('create', Proveedor::class) ?? false,
+            'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
+            'unidades' => array_map(
+                fn (UnidadMedida $unidad): array => ['value' => $unidad->value, 'label' => "{$unidad->label()} ({$unidad->abreviatura()})"],
+                UnidadMedida::cases(),
+            ),
         ]);
     }
 

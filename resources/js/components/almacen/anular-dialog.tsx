@@ -39,6 +39,9 @@ export function AnularDialog({
 
     const anular = (evento: React.FormEvent) => {
         evento.preventDefault();
+        // Va en un portal, pero React propaga el submit por el árbol: sin
+        // esto, enviaría también el formulario de la pantalla de atrás.
+        evento.stopPropagation();
 
         post(url, {
             preserveScroll: true,

@@ -51,9 +51,14 @@ export function ProveedorDialog({
 
     const guardar = (evento: React.FormEvent) => {
         evento.preventDefault();
+        // Va en un portal, pero React propaga el submit por el árbol: sin
+        // esto, enviaría también el formulario de la pantalla de atrás.
+        evento.stopPropagation();
 
         const opciones = {
             preserveScroll: true,
+            // La pantalla de atrás (un ingreso a medio llenar) no se pierde.
+            preserveState: true,
             onSuccess: () => {
                 if (!proveedor) {
                     reset();
