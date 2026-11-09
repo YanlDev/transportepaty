@@ -35,12 +35,15 @@ export function ArticuloRapidoDialog({
     ubicaciones,
     unidades,
     ubicacionInicial,
+    onCreado,
 }: {
     categorias: Opcion[];
     ubicaciones: Opcion[];
     unidades: EnumOption[];
     /** En un conteo, el estante que se está recorriendo. */
     ubicacionInicial?: number | null;
+    /** Recibe el id del artículo recién creado, para dejarlo elegido. */
+    onCreado?: (id: number) => void;
 }) {
     const [abierto, setAbierto] = useState(false);
     const { data, setData, post, processing, errors, reset, clearErrors } =
@@ -69,6 +72,15 @@ export function ArticuloRapidoDialog({
             preserveScroll: true,
             // La pantalla de atrás (un ingreso a medio llenar) no se pierde.
             preserveState: true,
+            onFlash: (flash) => {
+                const creado = flash.articulo_creado as
+                    | { id: number }
+                    | undefined;
+
+                if (creado) {
+                    onCreado?.(creado.id);
+                }
+            },
             onSuccess: () => {
                 reset();
                 setAbierto(false);

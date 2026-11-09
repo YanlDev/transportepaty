@@ -30,9 +30,12 @@ import type { Proveedor } from '@/types/almacen';
 export function ProveedorDialog({
     proveedor,
     trigger,
+    onCreado,
 }: {
     proveedor?: Proveedor;
     trigger?: React.ReactNode;
+    /** Recibe el id del proveedor recién creado: la compra lo deja elegido. */
+    onCreado?: (id: number) => void;
 }) {
     const [abierto, setAbierto] = useState(false);
     const { data, setData, post, put, processing, errors, reset, clearErrors } =
@@ -59,6 +62,15 @@ export function ProveedorDialog({
             preserveScroll: true,
             // La pantalla de atrás (un ingreso a medio llenar) no se pierde.
             preserveState: true,
+            onFlash: (flash: Record<string, unknown>) => {
+                const creado = flash.proveedor_creado as
+                    | { id: number }
+                    | undefined;
+
+                if (creado) {
+                    onCreado?.(creado.id);
+                }
+            },
             onSuccess: () => {
                 if (!proveedor) {
                     reset();

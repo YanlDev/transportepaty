@@ -219,6 +219,9 @@ export default function IngresoCreate({
                             </div>
                             {puedeCrearProveedor && (
                                 <ProveedorDialog
+                                    onCreado={(id) =>
+                                        setData('proveedor_id', id)
+                                    }
                                     trigger={
                                         <Button
                                             type="button"
@@ -393,6 +396,38 @@ export default function IngresoCreate({
                                 categorias={categorias}
                                 ubicaciones={ubicaciones}
                                 unidades={unidades}
+                                onCreado={(id) =>
+                                    // Va a la primera línea vacía, o a una nueva.
+                                    setData((actual) => {
+                                        const vacia = actual.detalles.findIndex(
+                                            (linea) =>
+                                                linea.articulo_id === null,
+                                        );
+
+                                        return {
+                                            ...actual,
+                                            detalles:
+                                                vacia === -1
+                                                    ? [
+                                                          ...actual.detalles,
+                                                          {
+                                                              ...lineaVacia(),
+                                                              articulo_id: id,
+                                                          },
+                                                      ]
+                                                    : actual.detalles.map(
+                                                          (linea, i) =>
+                                                              i === vacia
+                                                                  ? {
+                                                                        ...linea,
+                                                                        articulo_id:
+                                                                            id,
+                                                                    }
+                                                                  : linea,
+                                                      ),
+                                        };
+                                    })
+                                }
                             />
                         )}
                     </div>

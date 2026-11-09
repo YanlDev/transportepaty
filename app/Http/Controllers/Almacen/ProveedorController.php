@@ -67,6 +67,9 @@ class ProveedorController extends Controller
 
         $proveedor = Proveedor::create($request->validated());
 
+        // Quien lo creó desde una compra lo encuentra ya elegido.
+        Inertia::flash('proveedor_creado', ['id' => $proveedor->id]);
+
         return back()->with('toast', ['type' => 'success', 'message' => "Proveedor {$proveedor->nombre()} registrado."]);
     }
 

@@ -251,6 +251,7 @@ export default function InventarioShow({
                                             ? Number(estante)
                                             : null
                                     }
+                                    onCreado={elegir}
                                 />
                             )}
                         </div>

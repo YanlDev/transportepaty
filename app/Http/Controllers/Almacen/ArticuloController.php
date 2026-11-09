@@ -53,6 +53,8 @@ class ArticuloController extends Controller
 
         // Desde un conteo o un ingreso se crea sin salir de la pantalla.
         if ($request->boolean('volver')) {
+            Inertia::flash('articulo_creado', ['id' => $articulo->id]);
+
             return back()->with('toast', ['type' => 'success', 'message' => "Artículo {$articulo->codigo} creado: ya se puede elegir."]);
         }
 

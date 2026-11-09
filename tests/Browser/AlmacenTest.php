@@ -141,3 +141,24 @@ it('configura estantes y mínimos desde la pantalla', function (): void {
     expect((float) $filtro->refresh()->stock_minimo)->toBe(6.0)
         ->and(UbicacionAlmacen::query()->sole()->nombre)->toBe('A-1');
 });
+
+/**
+ * El proveedor que se crea desde la compra queda elegido: no hay que ir a
+ * buscarlo a la lista.
+ */
+it('deja elegido el proveedor que se crea desde la compra', function (): void {
+    Proveedor::factory()->create(['razon_social' => 'YA EXISTIA SAC']);
+
+    actingAs(actorConRol('almacen'));
+
+    visit('/almacen/ingresos/crear')
+        ->on()->desktop()
+        ->click('[aria-label="Proveedor nuevo"]')
+        ->type('input[placeholder="20123456789"]', '20555666777')
+        ->type('[role="dialog"] input >> nth=1', 'nuevo proveedor sac')
+        ->click('[role="dialog"] button[type="submit"]')
+        ->wait(1)
+        ->assertSeeIn('#ingreso-proveedor', 'NUEVO PROVEEDOR SAC')
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'almacen-proveedor-creado');
+});
