@@ -18,6 +18,7 @@ use App\Models\Proveedor;
 use App\Models\UbicacionAlmacen;
 use App\Services\CostoDeCompra;
 use App\Services\Kardex;
+use App\Services\PeriodoAlmacen;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -92,6 +93,9 @@ class IngresoAlmacenController extends Controller
             'monedas' => Moneda::options(),
             'hoy' => RelojOperativo::hoy(),
             'tasaIgv' => CostoDeCompra::TASA_IGV,
+            'toleranciaTotal' => StoreIngresoRequest::TOLERANCIA_TOTAL,
+            'inicioPeriodo' => PeriodoAlmacen::inicio()->toDateString(),
+            'maximoKb' => StoreIngresoRequest::MAXIMO_KB,
             'puedeCrearArticulo' => $request->user()?->can('create', Articulo::class) ?? false,
             'puedeCrearProveedor' => $request->user()?->can('create', Proveedor::class) ?? false,
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
@@ -116,6 +120,7 @@ class IngresoAlmacenController extends Controller
             'cantidad' => (float) $linea['cantidad'],
             'precio_unitario' => (float) $linea['precio_unitario'],
             'factor' => $articulos[$linea['articulo_id']]->factor(),
+            'bonificacion' => (bool) ($linea['bonificacion'] ?? false),
         ], $datos['detalles']));
 
         $calculo = $this->costoDeCompra->calcular(
@@ -124,21 +129,31 @@ class IngresoAlmacenController extends Controller
             isset($datos['tipo_cambio']) ? (float) $datos['tipo_cambio'] : null,
             $request->boolean('precios_con_igv'),
             $lineas,
+            (float) ($datos['descuento'] ?? 0),
+            (float) ($datos['flete'] ?? 0),
         );
 
-        $ingreso = DB::transaction(function () use ($request, $datos, $comprobante, $moneda, $lineas, $calculo): IngresoAlmacen {
+        // Se guarda el total del papel; el IGV es lo que va del subtotal a ese
+        // total (absorbe los céntimos del redondeo por línea del proveedor).
+        $total = round((float) $datos['total_comprobante'], 2);
+
+        $ingreso = DB::transaction(function () use ($request, $datos, $comprobante, $moneda, $lineas, $calculo, $total): IngresoAlmacen {
             $ingreso = IngresoAlmacen::create([
                 'tipo' => TipoIngreso::Compra,
                 'fecha' => $datos['fecha'],
+                'fecha_emision' => $datos['fecha_emision'],
                 'proveedor_id' => $datos['proveedor_id'],
                 'tipo_comprobante' => $comprobante,
-                'serie_numero' => $comprobante === TipoComprobante::SinComprobante ? null : $datos['serie_numero'],
+                'serie_numero' => $datos['serie_numero'] ?? null,
+                'comprobante_clave' => IngresoAlmacen::claveComprobante($datos['serie_numero'] ?? null),
                 'moneda' => $moneda,
                 'tipo_cambio' => $moneda === Moneda::Dolares ? $datos['tipo_cambio'] : null,
                 'precios_con_igv' => $request->boolean('precios_con_igv'),
+                'descuento' => (float) ($datos['descuento'] ?? 0),
+                'flete' => (float) ($datos['flete'] ?? 0),
                 'subtotal' => $calculo['subtotal'],
-                'igv' => $calculo['igv'],
-                'total' => $calculo['total'],
+                'igv' => $comprobante->llevaIgv() ? round($total - $calculo['subtotal'], 2) : 0,
+                'total' => $total,
                 'costo_total' => $calculo['costo_total'],
                 'observacion' => $datos['observacion'] ?? null,
                 'user_id' => $request->user()?->id,
@@ -147,6 +162,7 @@ class IngresoAlmacenController extends Controller
             foreach ($datos['detalles'] as $i => $linea) {
                 $ingreso->detalles()->create([
                     'articulo_id' => $linea['articulo_id'],
+                    'bonificacion' => $lineas[$i]['bonificacion'],
                     'cantidad' => $lineas[$i]['cantidad'],
                     'precio_unitario' => $lineas[$i]['precio_unitario'],
                     'factor' => $lineas[$i]['factor'],
@@ -154,17 +170,33 @@ class IngresoAlmacenController extends Controller
                 ]);
             }
 
-            if ($request->hasFile('comprobante')) {
-                $ingreso->addMediaFromRequest('comprobante')->toMediaCollection('comprobante');
-            }
-
             $this->kardex->registrarIngreso($ingreso, $request->user()?->id);
+
+            // Al final: si algo falla antes, no queda un archivo suelto en el disco.
+            $ingreso->addMediaFromRequest('comprobante')->toMediaCollection('comprobante');
 
             return $ingreso;
         });
 
         return to_route('almacen.ingresos.show', $ingreso)
             ->with('toast', ['type' => 'success', 'message' => "Ingreso {$ingreso->numero()} registrado: el stock ya se actualizó."]);
+    }
+
+    /**
+     * Cambiar la foto o el PDF (se subió el equivocado o salió borroso). El
+     * anterior se borra: la colección guarda uno solo.
+     */
+    public function reemplazarComprobante(Request $request, IngresoAlmacen $ingreso): RedirectResponse
+    {
+        $this->authorize('reemplazarComprobante', $ingreso);
+
+        $request->validate([
+            'comprobante' => ['required', 'file', 'mimetypes:application/pdf,image/jpeg,image/png,image/webp', 'max:'.StoreIngresoRequest::MAXIMO_KB],
+        ], (new StoreIngresoRequest)->messages());
+
+        $ingreso->addMediaFromRequest('comprobante')->toMediaCollection('comprobante');
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Comprobante reemplazado.']);
     }
 
     public function show(Request $request, IngresoAlmacen $ingreso): Response
@@ -180,6 +212,9 @@ class IngresoAlmacenController extends Controller
                 ...$this->cabecera($ingreso, $veCostos),
                 'tipo_cambio' => $ingreso->tipo_cambio === null ? null : (float) $ingreso->tipo_cambio,
                 'precios_con_igv' => $ingreso->precios_con_igv,
+                'fecha_emision' => $ingreso->fecha_emision?->toDateString(),
+                'descuento' => $this->costo($veCostos, $ingreso->descuento),
+                'flete' => $this->costo($veCostos, $ingreso->flete),
                 'subtotal' => $this->costo($veCostos, $ingreso->subtotal),
                 'igv' => $this->costo($veCostos, $ingreso->igv),
                 'observacion' => $ingreso->observacion,
@@ -189,6 +224,7 @@ class IngresoAlmacenController extends Controller
                     'nombre' => $archivo->file_name,
                     'url' => route('almacen.ingresos.comprobante', $ingreso),
                     'es_pdf' => $archivo->mime_type === 'application/pdf',
+                    'peso_kb' => (int) ceil($archivo->size / 1024),
                 ],
                 'proveedor_detalle' => $ingreso->proveedor === null ? null : [
                     'ruc' => $ingreso->proveedor->ruc,
@@ -202,6 +238,7 @@ class IngresoAlmacenController extends Controller
                     'nombre' => $detalle->articulo->nombre,
                     'unidad' => $detalle->articulo->unidad->abreviatura(),
                     'unidad_compra' => (float) $detalle->factor !== 1.0 ? $detalle->articulo->unidad_compra?->abreviatura() : null,
+                    'bonificacion' => $detalle->bonificacion,
                     'cantidad' => (float) $detalle->cantidad,
                     'cantidad_base' => (float) $detalle->cantidad_base,
                     'precio_unitario' => $this->costo($veCostos, $detalle->precio_unitario),
@@ -210,6 +247,9 @@ class IngresoAlmacenController extends Controller
                 ])->values()->all(),
             ],
             'puedeAnular' => $request->user()?->can('anular', $ingreso) ?? false,
+            'periodoAbierto' => PeriodoAlmacen::estaAbierto($ingreso->fecha),
+            'puedeReemplazarComprobante' => $request->user()?->can('reemplazarComprobante', $ingreso) ?? false,
+            'maximoKb' => StoreIngresoRequest::MAXIMO_KB,
         ]);
     }
 
@@ -229,6 +269,7 @@ class IngresoAlmacenController extends Controller
     public function anular(AnularDocumentoRequest $request, IngresoAlmacen $ingreso): RedirectResponse
     {
         $this->authorize('anular', $ingreso);
+        PeriodoAlmacen::exigirAbierto($ingreso->fecha);
 
         DB::transaction(function () use ($request, $ingreso): void {
             $ingreso->update([

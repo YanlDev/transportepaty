@@ -78,3 +78,75 @@ export function errorDeLinea(
 ): string | undefined {
     return errores[`detalles.${indice}.${campo}`];
 }
+
+export const TIPOS_CON_IGV = ['factura', 'boleta'];
+
+export type LineaCompra = {
+    cantidad: number;
+    precio_unitario: number;
+    bonificacion: boolean;
+};
+
+/**
+ * Lo mismo que `App\Services\CostoDeCompra`, para mostrarlo mientras se
+ * llena la compra: el total que debería decir el papel y lo que entra al
+ * kardex. Es solo vista previa: el servidor vuelve a calcular todo.
+ */
+export function calcularCompra({
+    tipoComprobante,
+    preciosConIgv,
+    tasaIgv,
+    tipoCambio,
+    lineas,
+    descuento,
+    flete,
+}: {
+    tipoComprobante: string;
+    preciosConIgv: boolean;
+    tasaIgv: number;
+    /** 1 en soles. */
+    tipoCambio: number;
+    lineas: LineaCompra[];
+    descuento: number;
+    flete: number;
+}) {
+    const redondear = (monto: number) => Math.round(monto * 100) / 100;
+    const llevaIgv = TIPOS_CON_IGV.includes(tipoComprobante);
+
+    const sumaItems = redondear(
+        lineas
+            .filter((linea) => !linea.bonificacion)
+            .reduce((suma, l) => suma + l.cantidad * l.precio_unitario, 0),
+    );
+    const bonificado = redondear(
+        lineas
+            .filter((linea) => linea.bonificacion)
+            .reduce((suma, l) => suma + l.cantidad * l.precio_unitario, 0) *
+            tipoCambio,
+    );
+    const base = redondear(sumaItems - descuento + flete);
+
+    const subtotal = !llevaIgv
+        ? base
+        : preciosConIgv
+          ? redondear(base / (1 + tasaIgv))
+          : base;
+    const total = !llevaIgv
+        ? base
+        : preciosConIgv
+          ? base
+          : redondear(base + redondear(base * tasaIgv));
+
+    const costoPagado = redondear(
+        (tipoComprobante === 'factura' ? subtotal : total) * tipoCambio,
+    );
+
+    return {
+        sumaItems,
+        subtotal,
+        igv: redondear(total - subtotal),
+        total,
+        costoKardex: redondear(costoPagado + bonificado),
+        bonificado,
+    };
+}

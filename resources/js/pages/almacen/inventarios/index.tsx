@@ -22,6 +22,7 @@ type Props = {
     inventarios: Paginator<InventarioFila>;
     hayArticulos: boolean;
     hoy: string;
+    inicioPeriodo: string;
 };
 
 const TONO = {
@@ -38,6 +39,7 @@ export default function InventariosIndex({
     inventarios: paginador,
     hayArticulos,
     hoy,
+    inicioPeriodo,
 }: Props) {
     const { puede } = usePermisos();
     const { data, setData, post, processing, errors } = useForm({
@@ -77,6 +79,7 @@ export default function InventariosIndex({
                         <Input
                             id="conteo-fecha"
                             type="date"
+                            min={inicioPeriodo}
                             max={hoy}
                             value={data.fecha}
                             onChange={(e) => setData('fecha', e.target.value)}

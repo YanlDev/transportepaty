@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Almacen;
 
 use App\Enums\DestinoSalida;
+use App\Rules\FechaDelAlmacen;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -24,7 +25,7 @@ class StoreSalidaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'fecha' => ['required', 'date', 'before_or_equal:today'],
+            'fecha' => ['required', 'date', new FechaDelAlmacen],
             'destino' => ['required', Rule::enum(DestinoSalida::class)],
             'orden_trabajo_id' => ['nullable', 'required_if:destino,'.DestinoSalida::OrdenTrabajo->value, 'integer', Rule::exists('ordenes_trabajo', 'id')],
             'vehiculo_id' => ['nullable', 'required_if:destino,'.DestinoSalida::Unidad->value, 'integer', Rule::exists('vehiculos', 'id')],
@@ -42,7 +43,6 @@ class StoreSalidaRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'fecha.before_or_equal' => 'La fecha no puede ser futura.',
             'orden_trabajo_id.required_if' => 'Elige la orden de trabajo.',
             'vehiculo_id.required_if' => 'Elige la unidad.',
             'detalles.required' => 'Agrega al menos un artículo.',

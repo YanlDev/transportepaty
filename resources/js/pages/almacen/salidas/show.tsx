@@ -47,6 +47,7 @@ import type { SalidaDetalle } from '@/types/almacen';
 type Props = {
     salida: SalidaDetalle;
     puedeAnular: boolean;
+    periodoAbierto: boolean;
     puedeDevolver: boolean;
     hoy: string;
 };
@@ -56,6 +57,7 @@ export default function SalidaShow({
     salida,
     puedeAnular,
     puedeDevolver,
+    periodoAbierto,
     hoy,
 }: Props) {
     const { puede } = usePermisos();
@@ -90,7 +92,7 @@ export default function SalidaShow({
                         {puedeDevolver && pendiente && (
                             <DevolucionDialog salida={salida} hoy={hoy} />
                         )}
-                        {puedeAnular && (
+                        {puedeAnular && periodoAbierto && (
                             <AnularDialog
                                 url={anular(salida.id).url}
                                 titulo={`Anular ${salida.numero}`}

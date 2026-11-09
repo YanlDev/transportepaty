@@ -15,6 +15,7 @@ use App\Models\UbicacionAlmacen;
 use App\Models\Vehiculo;
 use App\Services\ExportadorAlmacen;
 use App\Services\RelojOperativo;
+use App\Services\SincronizadorPermisos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -92,11 +93,17 @@ class ArticuloController extends Controller
         // Dónde se fue: lo que se llevó cada unidad en el último año.
         $consumo = MovimientoAlmacen::query()
             ->where('articulo_id', $articulo->id)
-            ->where('tipo', 'salida')
+            ->whereIn('tipo', ['salida', 'devolucion'])
             ->whereNotNull('vehiculo_id')
             ->whereDate('fecha', '>=', RelojOperativo::fechaDeHoy()->subYear()->toDateString())
             ->groupBy('vehiculo_id')
-            ->select('vehiculo_id', DB::raw('sum(salida) as cantidad'), DB::raw('sum(costo_total) as costo'))
+            // Lo que volvió sin usar no se consumió.
+            ->select(
+                'vehiculo_id',
+                DB::raw('sum(salida) - sum(entrada) as cantidad'),
+                DB::raw("sum(case when tipo = 'salida' then costo_total else -costo_total end) as costo"),
+            )
+            ->havingRaw('sum(salida) - sum(entrada) > 0')
             ->orderByDesc('cantidad')
             ->limit(10)
             ->get();
@@ -169,6 +176,15 @@ class ArticuloController extends Controller
         // en ella y cambiarla desordenaría todas las cantidades.
         if ($articulo->movimientos()->exists() && $datos['unidad'] !== $articulo->unidad->value) {
             return back()->withErrors(['unidad' => 'El artículo ya tiene movimientos en '.$articulo->unidad->label().': su unidad no se cambia.']);
+        }
+
+        // Dar de baja algo que todavía tiene stock lo hace solo el admin: el
+        // artículo sigue sumando al inventario y se puede despachar hasta
+        // vaciarlo, pero ya no se compra.
+        $seDaDeBaja = $articulo->activo && ! ($datos['activo'] ?? true);
+
+        if ($seDaDeBaja && (float) $articulo->stock > 0 && ! $request->user()?->hasRole(SincronizadorPermisos::ROL_ADMIN)) {
+            return back()->withErrors(['activo' => 'Todavía tiene '.rtrim(rtrim(number_format((float) $articulo->stock, 3, '.', ''), '0'), '.').' '.$articulo->unidad->abreviatura().' en stock: solo el administrador puede darlo de baja. Despáchalo o ajústalo con un conteo primero.']);
         }
 
         $articulo->update([...$datos, 'codigo' => $datos['codigo'] ?? $articulo->codigo]);

@@ -40,6 +40,8 @@ type Props = {
     articulos: ArticuloElegible[];
     puedeEditar: boolean;
     puedeAnular: boolean;
+    /** El mes del conteo sigue abierto: se puede cerrar o anular. */
+    periodoAbierto: boolean;
     puedeCrearArticulo: boolean;
     categorias: Opcion[];
     ubicaciones: Opcion[];
@@ -62,6 +64,7 @@ export default function InventarioShow({
     articulos,
     puedeEditar,
     puedeAnular,
+    periodoAbierto,
     puedeCrearArticulo,
     categorias,
     ubicaciones,
@@ -98,7 +101,7 @@ export default function InventarioShow({
     });
 
     const elegido = articulos.find((a) => a.id === data.articulo_id);
-    const sinHistorial = elegido !== undefined && elegido.stock === 0;
+    const sinHistorial = elegido !== undefined && !elegido.con_historial;
 
     const elegir = (id: number) => {
         const anotado = inventario.detalles.find((d) => d.articulo_id === id);
@@ -140,7 +143,7 @@ export default function InventarioShow({
                         <EstadoDocumento tono={TONO[inventario.estado]}>
                             {inventario.estado_label}
                         </EstadoDocumento>
-                        {puedeEditar && (
+                        {puedeEditar && periodoAbierto && (
                             <Button
                                 onClick={() =>
                                     router.post(
@@ -155,7 +158,7 @@ export default function InventarioShow({
                                 Cerrar conteo
                             </Button>
                         )}
-                        {puedeAnular && (
+                        {puedeAnular && (abierto || periodoAbierto) && (
                             <AnularDialog
                                 url={anular(inventario.id).url}
                                 etiqueta={abierto ? 'Descartar' : 'Anular'}
@@ -178,6 +181,15 @@ export default function InventarioShow({
             <InputError
                 message={(errors as Record<string, string>).inventario}
             />
+
+            {!periodoAbierto && inventario.estado !== 'anulado' && (
+                <p className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    El mes de este conteo ya cerró:{' '}
+                    {abierto
+                        ? 'no se puede cerrar. Descártalo y abre uno con fecha de este mes.'
+                        : 'ya no se puede anular.'}
+                </p>
+            )}
 
             {inventario.estado === 'anulado' && (
                 <p className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
@@ -291,7 +303,7 @@ export default function InventarioShow({
                             <InputError message={errors.cantidad_contada} />
                         </div>
                     </div>
-                    {veCostos && (
+                    {(veCostos || sinHistorial) && (
                         <div className="grid gap-3 sm:grid-cols-[12rem_1fr] sm:items-center">
                             <div>
                                 <Input

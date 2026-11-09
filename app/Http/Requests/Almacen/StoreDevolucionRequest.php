@@ -4,6 +4,7 @@ namespace App\Http\Requests\Almacen;
 
 use App\Models\DetalleSalida;
 use App\Models\SalidaAlmacen;
+use App\Rules\FechaDelAlmacen;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
@@ -25,7 +26,7 @@ class StoreDevolucionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'fecha' => ['required', 'date', 'before_or_equal:today'],
+            'fecha' => ['required', 'date', new FechaDelAlmacen],
             'observacion' => ['nullable', 'string', 'max:1000'],
             'detalles' => ['required', 'array', 'min:1'],
             'detalles.*.detalle_salida_id' => ['required', 'integer', 'distinct'],
@@ -77,7 +78,6 @@ class StoreDevolucionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'fecha.before_or_equal' => 'La fecha no puede ser futura.',
             'detalles.required' => 'Anota al menos una cantidad que vuelve.',
         ];
     }

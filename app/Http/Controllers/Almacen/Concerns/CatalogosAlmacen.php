@@ -36,20 +36,27 @@ trait CatalogosAlmacen
     protected function articulosParaElegir(bool $veCostos, bool $soloConStock = false): array
     {
         return array_values(Articulo::query()
-            ->where('activo', true)
-            ->when($soloConStock, fn ($query) => $query->where('stock', '>', 0))
+            ->withExists('movimientos as con_historial')
+            // Para despachar vale todo lo que tenga stock, aunque esté dado de
+            // baja: es la forma de vaciarlo. Para comprar, solo los activos.
+            ->when(
+                $soloConStock,
+                fn ($query) => $query->where('stock', '>', 0),
+                fn ($query) => $query->where('activo', true),
+            )
             ->orderBy('nombre')
             ->get()
             ->map(fn (Articulo $articulo): array => [
                 'id' => $articulo->id,
                 'codigo' => $articulo->codigo,
-                'nombre' => $articulo->nombre,
+                'nombre' => $articulo->activo ? $articulo->nombre : "{$articulo->nombre} (dado de baja)",
                 'numero_parte' => $articulo->numero_parte,
                 'marca' => $articulo->marca,
                 'unidad' => $articulo->unidad->abreviatura(),
                 'unidad_compra' => $articulo->unidad_compra?->abreviatura(),
                 'factor_compra' => $articulo->factor(),
                 'ubicacion_id' => $articulo->ubicacion_almacen_id,
+                'con_historial' => (bool) $articulo->getAttribute('con_historial'),
                 'stock' => (float) $articulo->stock,
                 'costo_promedio' => $this->costo($veCostos, $articulo->costo_promedio),
             ])

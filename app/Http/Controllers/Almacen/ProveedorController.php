@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Almacen;
 
+use App\Enums\Moneda;
 use App\Http\Controllers\Almacen\Concerns\CatalogosAlmacen;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Almacen\ProveedorRequest;
@@ -30,6 +31,7 @@ class ProveedorController extends Controller
             ->withCount(['ingresos' => fn ($query) => $query->vigentes()])
             ->withSum(['ingresos' => fn ($query) => $query->vigentes()], 'costo_total')
             ->withMax(['ingresos' => fn ($query) => $query->vigentes()], 'fecha')
+            ->withSum(['ingresos as comprado_usd' => fn ($query) => $query->vigentes()->where('moneda', Moneda::Dolares)], 'total')
             ->orderByDesc('activo')
             ->orderBy('razon_social')
             ->paginate(30)
@@ -49,6 +51,8 @@ class ProveedorController extends Controller
                 'compras' => (int) $proveedor->getAttribute('ingresos_count'),
                 'comprado' => $this->costo($veCostos, (float) $proveedor->getAttribute('ingresos_sum_costo_total')),
                 'ultima_compra' => $proveedor->getAttribute('ingresos_max_fecha'),
+                // Lo comprado en dólares, en dólares y con IGV: como dicen sus facturas.
+                'comprado_usd' => $this->costo($veCostos, (float) $proveedor->getAttribute('comprado_usd')),
             ]);
 
         return Inertia::render('almacen/proveedores/index', [

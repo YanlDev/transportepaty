@@ -39,6 +39,7 @@ type Props = {
         entregado_a: string | null;
     };
     hoy: string;
+    inicioPeriodo: string;
 };
 
 type Linea = { articulo_id: number | null; cantidad: string };
@@ -55,6 +56,7 @@ export default function SalidaCreate({
     destinos,
     inicial,
     hoy,
+    inicioPeriodo,
 }: Props) {
     setLayoutProps({
         breadcrumbs: migasAlmacen(
@@ -199,6 +201,7 @@ export default function SalidaCreate({
                             <Input
                                 id={id}
                                 type="date"
+                                min={inicioPeriodo}
                                 max={hoy}
                                 value={data.fecha}
                                 onChange={(e) =>

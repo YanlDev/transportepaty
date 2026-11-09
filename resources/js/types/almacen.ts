@@ -33,6 +33,8 @@ export type ArticuloElegible = {
     unidad_compra: string | null;
     factor_compra: number;
     ubicacion_id: number | null;
+    /** Ya tiene movimientos: un conteo ya no es su saldo inicial. */
+    con_historial: boolean;
     stock: number;
     costo_promedio: number | null;
 };
@@ -116,6 +118,7 @@ export type Proveedor = {
     activo: boolean;
     compras: number;
     comprado: number | null;
+    comprado_usd: number | null;
     ultima_compra: string | null;
 };
 
@@ -151,12 +154,20 @@ export type IngresoCabecera = {
 export type IngresoDetalle = IngresoCabecera & {
     tipo_cambio: number | null;
     precios_con_igv: boolean;
+    fecha_emision: string | null;
+    descuento: number | null;
+    flete: number | null;
     subtotal: number | null;
     igv: number | null;
     observacion: string | null;
     anulado_por: string | null;
     motivo_anulacion: string | null;
-    comprobante: { nombre: string; url: string; es_pdf: boolean } | null;
+    comprobante: {
+        nombre: string;
+        url: string;
+        es_pdf: boolean;
+        peso_kb: number;
+    } | null;
     proveedor_detalle: { ruc: string | null; razon_social: string } | null;
     salida_id: number | null;
     detalles: {
@@ -166,6 +177,7 @@ export type IngresoDetalle = IngresoCabecera & {
         nombre: string;
         unidad: string;
         unidad_compra: string | null;
+        bonificacion: boolean;
         cantidad: number;
         cantidad_base: number;
         precio_unitario: number | null;

@@ -8,6 +8,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 /**
+ * Una línea del ingreso. Una bonificación es lo que el proveedor regala: su
+ * precio es el valor con que entra al almacén, pero no suma al comprobante.
+ *
  * Una línea del ingreso. `cantidad` y `precio_unitario` son las del
  * comprobante (2 cilindros a S/ 1,500); `cantidad_base` y `costo_unitario`,
  * las del almacén (416 litros a S/ 7.21 sin IGV).
@@ -16,6 +19,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  * @property int $ingreso_almacen_id
  * @property int $articulo_id
  * @property int|null $detalle_salida_id
+ * @property bool $bonificacion
  * @property string $cantidad
  * @property string $precio_unitario
  * @property string $factor
@@ -30,6 +34,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
     'ingreso_almacen_id',
     'articulo_id',
     'detalle_salida_id',
+    'bonificacion',
     'cantidad',
     'precio_unitario',
     'factor',
@@ -79,6 +84,7 @@ class DetalleIngreso extends Model
     protected function casts(): array
     {
         return [
+            'bonificacion' => 'boolean',
             'cantidad' => 'decimal:3',
             'precio_unitario' => 'decimal:4',
             'factor' => 'decimal:3',

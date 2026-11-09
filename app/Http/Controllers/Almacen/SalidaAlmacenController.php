@@ -15,6 +15,7 @@ use App\Models\IngresoAlmacen;
 use App\Models\OrdenTrabajo;
 use App\Models\SalidaAlmacen;
 use App\Services\Kardex;
+use App\Services\PeriodoAlmacen;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -96,6 +97,7 @@ class SalidaAlmacenController extends Controller
                 'entregado_a' => $orden?->tecnico,
             ],
             'hoy' => RelojOperativo::hoy(),
+            'inicioPeriodo' => PeriodoAlmacen::inicio()->toDateString(),
         ]);
     }
 
@@ -178,6 +180,7 @@ class SalidaAlmacenController extends Controller
             ],
             'puedeAnular' => $request->user()?->can('anular', $salida) ?? false,
             'puedeDevolver' => $request->user()?->can('devolver', $salida) ?? false,
+            'periodoAbierto' => PeriodoAlmacen::estaAbierto($salida->fecha),
             'hoy' => RelojOperativo::hoy(),
         ]);
     }
@@ -228,6 +231,7 @@ class SalidaAlmacenController extends Controller
     public function anular(AnularDocumentoRequest $request, SalidaAlmacen $salida): RedirectResponse
     {
         $this->authorize('anular', $salida);
+        PeriodoAlmacen::exigirAbierto($salida->fecha);
 
         if ($salida->devoluciones()->vigentes()->exists()) {
             throw ValidationException::withMessages(['motivo' => 'El vale tiene devoluciones: anúlalas primero.']);

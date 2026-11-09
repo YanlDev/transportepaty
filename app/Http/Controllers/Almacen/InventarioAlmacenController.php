@@ -15,6 +15,7 @@ use App\Models\DetalleInventario;
 use App\Models\InventarioAlmacen;
 use App\Models\UbicacionAlmacen;
 use App\Services\Kardex;
+use App\Services\PeriodoAlmacen;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -61,6 +62,7 @@ class InventarioAlmacenController extends Controller
             'inventarios' => $inventarios,
             'hayArticulos' => Articulo::query()->exists(),
             'hoy' => RelojOperativo::hoy(),
+            'inicioPeriodo' => PeriodoAlmacen::inicio()->toDateString(),
         ]);
     }
 
@@ -124,6 +126,7 @@ class InventarioAlmacenController extends Controller
             'articulos' => $this->articulosParaElegir($veCostos),
             'puedeEditar' => $request->user()?->can('update', $inventario) ?? false,
             'puedeAnular' => $request->user()?->can('anular', $inventario) ?? false,
+            'periodoAbierto' => PeriodoAlmacen::estaAbierto($inventario->fecha),
             'puedeCrearArticulo' => $request->user()?->can('create', Articulo::class) ?? false,
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
             'ubicaciones' => UbicacionAlmacen::query()->orderBy('nombre')->get(['id', 'nombre']),
@@ -177,6 +180,9 @@ class InventarioAlmacenController extends Controller
             throw ValidationException::withMessages(['inventario' => 'El conteo está vacío: anota al menos un artículo.']);
         }
 
+        // Abierto el mes pasado y cerrado hoy: sus ajustes caerían en un mes ya cerrado.
+        PeriodoAlmacen::exigirAbierto($inventario->fecha, 'inventario');
+
         DB::transaction(function () use ($request, $inventario): void {
             $inventario->update([
                 'estado' => EstadoInventario::Cerrado,
@@ -198,6 +204,10 @@ class InventarioAlmacenController extends Controller
         $this->authorize('anular', $inventario);
 
         $estabaCerrado = $inventario->estado === EstadoInventario::Cerrado;
+
+        if ($estabaCerrado) {
+            PeriodoAlmacen::exigirAbierto($inventario->fecha);
+        }
 
         DB::transaction(function () use ($request, $inventario, $estabaCerrado): void {
             $inventario->update([

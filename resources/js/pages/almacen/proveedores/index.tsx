@@ -114,6 +114,9 @@ export default function ProveedoresIndex({
                                     {proveedor.comprado !== null &&
                                         proveedor.compras > 0 &&
                                         ` · ${formatearSoles(proveedor.comprado)} sin IGV`}
+                                    {proveedor.comprado_usd !== null &&
+                                        proveedor.comprado_usd > 0 &&
+                                        ` (de eso, US$ ${proveedor.comprado_usd.toFixed(2)} en facturas en dólares)`}
                                     {proveedor.ultima_compra &&
                                         ` · última el ${formatearFecha(proveedor.ultima_compra)}`}
                                     {proveedor.condicion_pago &&

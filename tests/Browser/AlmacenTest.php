@@ -2,7 +2,6 @@
 
 use App\Enums\TipoVehiculo;
 use App\Models\Articulo;
-use App\Models\IngresoAlmacen;
 use App\Models\InventarioAlmacen;
 use App\Models\Proveedor;
 use App\Models\SalidaAlmacen;
@@ -42,7 +41,8 @@ it('arranca el stock con un conteo desde la pantalla', function (): void {
 });
 
 /**
- * Una compra con factura entra al stock sin IGV.
+ * La compra se llena en la pantalla: el total cuadra con los ítems y el
+ * PDF queda adjunto.
  */
 it('registra una compra desde la pantalla', function (): void {
     Articulo::factory()->create(['nombre' => 'PASTILLA DE FRENO']);
@@ -50,7 +50,7 @@ it('registra una compra desde la pantalla', function (): void {
 
     actingAs(actorConRol('almacen'));
 
-    visit('/almacen/ingresos/crear')
+    $pagina = visit('/almacen/ingresos/crear')
         ->on()->desktop()
         ->click('#ingreso-proveedor')
         ->click('REPUESTOS DEL SUR SAC')
@@ -59,14 +59,31 @@ it('registra una compra desde la pantalla', function (): void {
         ->click('PASTILLA DE FRENO')
         ->type('[aria-label="Cantidad"]', '4')
         ->type('[aria-label="Precio unitario"]', '100')
-        ->assertSee('472.00')
-        ->click('button[type="submit"]:has-text("Registrar compra")')
-        ->wait(1)
-        ->assertSee('Compra IN-')
+        ->type('[aria-label="Total del comprobante"]', '472')
+        ->assertSee('Cuadra con los ítems');
+
+    // El servidor de Playwright no adjunta archivos del disco: el PDF se arma
+    // en la página y se le pasa al campo, como si se hubiera elegido.
+    $pagina->script(<<<'JS'
+        (() => {
+            const pdf = new File(['%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n'], 'factura-777.pdf', { type: 'application/pdf' });
+            const transferencia = new DataTransfer();
+            transferencia.items.add(pdf);
+            const campo = document.querySelector('input[type="file"]:not([capture])');
+            campo.files = transferencia.files;
+            campo.dispatchEvent(new Event('change', { bubbles: true }));
+            return true;
+        })()
+        JS);
+
+    // El envío no se prueba acá: el servidor del plugin de navegador todavía
+    // no pasa archivos (`@TODO files` en LaravelHttpServer). El registro con
+    // su PDF lo cubren las pruebas de `Feature/AlmacenTest`.
+    $pagina
+        ->assertSee('factura-777.pdf')
+        ->assertSee('Entra al kardex')
         ->assertNoJavaScriptErrors()
         ->screenshot(fullPage: true, filename: 'almacen-ingreso');
-
-    expect((float) IngresoAlmacen::query()->sole()->costo_total)->toBe(400.0);
 });
 
 /**

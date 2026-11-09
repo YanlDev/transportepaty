@@ -65,7 +65,10 @@ class AlmacenController extends Controller
                 'articulos' => (clone $activos)->count(),
                 'bajo_minimo' => (clone $activos)->bajoMinimo()->count(),
                 'sin_stock' => (clone $activos)->where('stock', '<=', 0)->count(),
-                'valor' => $this->costo($veCostos, (clone $activos)->sum('valor')),
+                // Todo lo que hay, aunque el artículo esté dado de baja: mientras
+                // tenga stock, vale.
+                'valor' => $this->costo($veCostos, Articulo::query()->sum('valor')),
+                'baja_con_stock' => Articulo::query()->where('activo', false)->where('stock', '>', 0)->count(),
                 'ingresos_mes' => IngresoAlmacen::query()->vigentes()->whereDate('fecha', '>=', RelojOperativo::inicioDelMes()->toDateString())->count(),
                 'salidas_mes' => SalidaAlmacen::query()->vigentes()->whereDate('fecha', '>=', RelojOperativo::inicioDelMes()->toDateString())->count(),
             ],

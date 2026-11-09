@@ -11,6 +11,7 @@ import {
 } from '@/actions/App/Http/Controllers/Almacen/ConfiguracionAlmacenController';
 import { migasAlmacen } from '@/components/almacen/almacen-nav';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
+import InputError from '@/components/input-error';
 import { SelectorBuscable } from '@/components/selector-buscable';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -465,6 +466,7 @@ export default function ArticuloForm({
                             </Label>
                         </div>
                     )}
+                    {editando && <InputError message={errors.activo} />}
                 </section>
 
                 <div className="flex justify-end gap-2">

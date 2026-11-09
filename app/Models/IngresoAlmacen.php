@@ -26,12 +26,16 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property int $id
  * @property TipoIngreso $tipo
  * @property Carbon $fecha
+ * @property Carbon|null $fecha_emision
  * @property int|null $proveedor_id
  * @property TipoComprobante|null $tipo_comprobante
  * @property string|null $serie_numero
+ * @property string|null $comprobante_clave
  * @property Moneda $moneda
  * @property string|null $tipo_cambio
  * @property bool $precios_con_igv
+ * @property string $descuento
+ * @property string $flete
  * @property string $subtotal
  * @property string $igv
  * @property string $total
@@ -48,12 +52,16 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 #[Fillable([
     'tipo',
     'fecha',
+    'fecha_emision',
     'proveedor_id',
     'tipo_comprobante',
     'serie_numero',
+    'comprobante_clave',
     'moneda',
     'tipo_cambio',
     'precios_con_igv',
+    'descuento',
+    'flete',
     'subtotal',
     'igv',
     'total',
@@ -78,6 +86,26 @@ class IngresoAlmacen extends Model implements HasMedia
     public function numero(): string
     {
         return sprintf('IN-%06d', $this->id);
+    }
+
+    /**
+     * La serie y el número tal como se comparan para reconocer un repetido:
+     * en mayúsculas, sin espacios y sin los ceros con que se rellena el
+     * número. «f001-00012345» y «F001-12345» son la misma factura.
+     */
+    public static function claveComprobante(?string $serieNumero): ?string
+    {
+        $limpio = mb_strtoupper(preg_replace('/\s+/', '', (string) $serieNumero) ?? '');
+
+        if ($limpio === '') {
+            return null;
+        }
+
+        $partes = explode('-', $limpio);
+        $numero = array_pop($partes);
+        $numero = ltrim($numero, '0') === '' ? '0' : ltrim($numero, '0');
+
+        return $partes === [] ? $numero : implode('-', $partes).'-'.$numero;
     }
 
     /**
@@ -129,11 +157,13 @@ class IngresoAlmacen extends Model implements HasMedia
     }
 
     /**
-     * El comprobante escaneado o el PDF que mandó el proveedor.
+     * La foto o el PDF del comprobante. Va al disco privado: solo se abre por
+     * la ruta del ingreso, que revisa permisos. Reemplazarlo borra el anterior.
      */
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('comprobante')
+            ->useDisk('local')
             ->singleFile()
             ->acceptsMimeTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
     }
@@ -151,10 +181,13 @@ class IngresoAlmacen extends Model implements HasMedia
         return [
             'tipo' => TipoIngreso::class,
             'fecha' => 'date:Y-m-d',
+            'fecha_emision' => 'date:Y-m-d',
             'tipo_comprobante' => TipoComprobante::class,
             'moneda' => Moneda::class,
             'tipo_cambio' => 'decimal:4',
             'precios_con_igv' => 'boolean',
+            'descuento' => 'decimal:2',
+            'flete' => 'decimal:2',
             'subtotal' => 'decimal:2',
             'igv' => 'decimal:2',
             'total' => 'decimal:2',

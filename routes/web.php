@@ -344,6 +344,7 @@ Route::middleware('auth')->group(function () {
         Route::post('ingresos', [IngresoAlmacenController::class, 'store'])->name('ingresos.store');
         Route::get('ingresos/{ingreso}', [IngresoAlmacenController::class, 'show'])->name('ingresos.show');
         Route::get('ingresos/{ingreso}/comprobante', [IngresoAlmacenController::class, 'comprobante'])->name('ingresos.comprobante');
+        Route::post('ingresos/{ingreso}/comprobante', [IngresoAlmacenController::class, 'reemplazarComprobante'])->name('ingresos.comprobante.update');
         Route::post('ingresos/{ingreso}/anular', [IngresoAlmacenController::class, 'anular'])->name('ingresos.anular');
 
         Route::get('salidas', [SalidaAlmacenController::class, 'index'])->name('salidas.index');

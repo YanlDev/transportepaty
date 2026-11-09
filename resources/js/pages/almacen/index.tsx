@@ -70,6 +70,8 @@ type Props = {
         sin_stock: number;
         valor: number | null;
         ingresos_mes: number;
+        /** Dados de baja que todavía tienen stock: suman al valor. */
+        baja_con_stock: number;
         salidas_mes: number;
     };
 };
@@ -192,6 +194,19 @@ export default function AlmacenIndex({
                     />
                 </button>
             </div>
+
+            {resumen.baja_con_stock > 0 && (
+                <button
+                    type="button"
+                    onClick={() => aplicar({ estado: 'inactivos' })}
+                    className="self-start rounded-full border border-amber-300 bg-amber-50 px-3 py-1.5 text-sm text-amber-800 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+                >
+                    {resumen.baja_con_stock === 1
+                        ? '1 artículo dado de baja todavía tiene stock'
+                        : `${resumen.baja_con_stock} artículos dados de baja todavía tienen stock`}
+                    : suma al valor y se puede despachar.
+                </button>
+            )}
 
             {resumen.articulos === 0 && (
                 <div className="flex flex-col gap-3 rounded-xl border border-sky-300 bg-sky-50 p-4 text-sm text-sky-900 sm:flex-row sm:items-center sm:justify-between dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
