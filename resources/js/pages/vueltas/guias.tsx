@@ -1,5 +1,5 @@
 import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/react';
-import { FileStack, Undo2 } from 'lucide-react';
+import { FileStack, Undo2, UserRound } from 'lucide-react';
 import { useState } from 'react';
 import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import vueltasRutas from '@/actions/App/Http/Controllers/VueltaController';
@@ -35,6 +35,7 @@ type DatosGuia = {
     fecha: string;
     placa: string;
     tiene_unidad: boolean;
+    conductor: string | null;
     origen: string | null;
     destino: string | null;
     carga: string;
@@ -143,6 +144,14 @@ function FilaGuia({
                             {' '}
                             · {guia.carga} · {guia.peso}
                         </span>
+                    </span>
+                    <span className="flex items-center gap-1.5 text-sm font-medium">
+                        <UserRound className="size-3.5 shrink-0 text-muted-foreground" />
+                        {guia.conductor ?? (
+                            <span className="font-normal text-muted-foreground">
+                                Sin conductor en la GR
+                            </span>
+                        )}
                     </span>
                     <span className="max-w-xl truncate text-xs text-muted-foreground">
                         {guia.cliente}
@@ -429,6 +438,8 @@ export default function GuiasPorAsignar({
                                         </span>{' '}
                                         · {guia.placa} ·{' '}
                                         {formatearFecha(guia.fecha)}
+                                        {guia.conductor &&
+                                            ` · ${guia.conductor}`}
                                     </span>
                                     <span className="text-xs text-muted-foreground">
                                         {guia.motivo}

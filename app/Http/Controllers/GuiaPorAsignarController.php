@@ -33,7 +33,7 @@ class GuiaPorAsignarController extends Controller
         $pendientes = Viaje::query()
             ->whereNull('parada_vuelta_id')
             ->whereNull('sin_ticket_at')
-            ->with('tracto:id,placa')
+            ->with(['tracto:id,placa', 'conductor:id,nombres,apellidos'])
             ->orderBy('fecha_traslado')
             ->orderBy('id')
             ->get();
@@ -42,7 +42,7 @@ class GuiaPorAsignarController extends Controller
             'pendientes' => $pendientes->map(fn (Viaje $guia): array => $this->pendiente($guia))->all(),
             'sinTicket' => Viaje::query()
                 ->whereNotNull('sin_ticket_por')
-                ->with('sinTicketPor:id,name')
+                ->with(['tracto:id,placa', 'conductor:id,nombres,apellidos', 'sinTicketPor:id,name'])
                 ->latest('sin_ticket_at')
                 ->limit(self::SIN_TICKET_RECIENTES)
                 ->get()
@@ -153,7 +153,10 @@ class GuiaPorAsignarController extends Controller
     }
 
     /**
-     * @return array{id: int, numero_gr: string, fecha: string, placa: string, tiene_unidad: bool, origen: string|null, destino: string|null, carga: string, peso: string, cliente: string}
+     * El conductor sale del padrón si la GR está enlazada; si no, el nombre
+     * tal como viene en la GR.
+     *
+     * @return array{id: int, numero_gr: string, fecha: string, placa: string, tiene_unidad: bool, conductor: string|null, origen: string|null, destino: string|null, carga: string, peso: string, cliente: string}
      */
     private function datosDeGuia(Viaje $guia): array
     {
@@ -163,6 +166,7 @@ class GuiaPorAsignarController extends Controller
             'fecha' => $guia->fecha_traslado->toDateString(),
             'placa' => $guia->tracto->placa ?? $guia->placa_tracto,
             'tiene_unidad' => $guia->tracto_id !== null,
+            'conductor' => $guia->conductor?->nombre_completo ?: ($guia->conductor_nombre ?: null),
             'origen' => $this->asignador->lugar($guia->origen),
             'destino' => $this->asignador->lugar($guia->destino),
             'carga' => $guia->tipo_carga->label(),
