@@ -210,7 +210,11 @@ export default function SalidaCreate({
                             />
                         )}
                     </Field>
-                    <Field label="Recibe" error={errors.entregado_a}>
+                    <Field
+                        label="Técnico que recibe"
+                        error={errors.entregado_a}
+                        required
+                    >
                         {(id) => (
                             <Input
                                 id={id}

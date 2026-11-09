@@ -105,6 +105,7 @@ it('emite un vale de salida desde la pantalla', function (): void {
         ->click('[aria-label="Artículo"]')
         ->click('[cmdk-item]:has-text("PASTILLA DE FRENO")')
         ->type('[aria-label="Cantidad"]', '1')
+        ->type('input[placeholder="El técnico que se lo lleva"]', 'Juan Quispe')
         ->click('Emitir vale')
         ->wait(1)
         ->assertSee('Vale VS-')

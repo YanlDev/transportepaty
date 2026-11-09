@@ -224,6 +224,7 @@ it('does not issue more than there is in stock', function (): void {
     actingAs(almacenero())
         ->post(route('almacen.salidas.store'), [
             'fecha' => '2026-11-05',
+            'entregado_a' => 'Juan Quispe',
             'destino' => 'consumo',
             'detalles' => [['articulo_id' => $filtro->id, 'cantidad' => 5]],
         ])
@@ -240,6 +241,7 @@ it('does not issue on a date when the stock had not arrived yet', function (): v
     actingAs(almacenero())
         ->post(route('almacen.salidas.store'), [
             'fecha' => '2026-11-04',
+            'entregado_a' => 'Juan Quispe',
             'destino' => 'consumo',
             'detalles' => [['articulo_id' => $filtro->id, 'cantidad' => 1]],
         ])
@@ -402,6 +404,7 @@ it('charges an issue to the unit of its work order', function (): void {
     actingAs(almacenero())
         ->post(route('almacen.salidas.store'), [
             'fecha' => '2026-11-05',
+            'entregado_a' => 'Juan Quispe',
             'destino' => 'orden_trabajo',
             'orden_trabajo_id' => $orden->id,
             'detalles' => [['articulo_id' => $filtro->id, 'cantidad' => 2]],
@@ -414,10 +417,26 @@ it('charges an issue to the unit of its work order', function (): void {
         ->and(MovimientoAlmacen::query()->where('tipo', 'salida')->sole()->orden_trabajo_id)->toBe($orden->id);
 });
 
+it('requires the technician who receives the issue', function (): void {
+    $filtro = Articulo::factory()->create();
+    comprar([[$filtro, 5, 10]]);
+
+    actingAs(almacenero())
+        ->post(route('almacen.salidas.store'), [
+            'fecha' => '2026-11-05',
+            'destino' => 'consumo',
+            'detalles' => [['articulo_id' => $filtro->id, 'cantidad' => 1]],
+        ])
+        ->assertSessionHasErrors('entregado_a');
+
+    expect(SalidaAlmacen::query()->count())->toBe(0);
+});
+
 it('requires a unit when the issue goes to a unit', function (): void {
     actingAs(almacenero())
         ->post(route('almacen.salidas.store'), [
             'fecha' => '2026-11-05',
+            'entregado_a' => 'Juan Quispe',
             'destino' => 'unidad',
             'detalles' => [['articulo_id' => Articulo::factory()->create()->id, 'cantidad' => 1]],
         ])
