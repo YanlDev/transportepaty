@@ -8,6 +8,7 @@ use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
 use App\Models\IngresoAlmacen;
 use App\Models\SalidaAlmacen;
+use App\Models\UbicacionAlmacen;
 use App\Services\ExportadorAlmacen;
 use App\Services\RelojOperativo;
 use Illuminate\Database\Eloquent\Builder;
@@ -32,7 +33,7 @@ class AlmacenController extends Controller
         $filtros = $this->filtros($request);
 
         $articulos = $this->consulta($filtros)
-            ->with('categoria')
+            ->with(['categoria', 'ubicacion'])
             ->orderBy('nombre')
             ->paginate(30)
             ->withQueryString()
@@ -44,7 +45,7 @@ class AlmacenController extends Controller
                 'marca' => $articulo->marca,
                 'categoria' => $articulo->categoria?->nombre,
                 'unidad' => $articulo->unidad->abreviatura(),
-                'ubicacion' => $articulo->ubicacion,
+                'ubicacion' => $articulo->ubicacion?->nombre,
                 'stock' => (float) $articulo->stock,
                 'stock_minimo' => $articulo->stock_minimo === null ? null : (float) $articulo->stock_minimo,
                 'bajo_minimo' => $articulo->estaBajoMinimo(),
@@ -59,6 +60,7 @@ class AlmacenController extends Controller
             'articulos' => $articulos,
             'filtros' => $filtros,
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
+            'ubicaciones' => UbicacionAlmacen::query()->orderBy('nombre')->get(['id', 'nombre']),
             'resumen' => [
                 'articulos' => (clone $activos)->count(),
                 'bajo_minimo' => (clone $activos)->bajoMinimo()->count(),
@@ -80,7 +82,7 @@ class AlmacenController extends Controller
         $ruta = tempnam(sys_get_temp_dir(), 'stock');
 
         $exportador->stock(
-            $this->consulta($this->filtros($request))->with('categoria')->orderBy('nombre')->get(),
+            $this->consulta($this->filtros($request))->with(['categoria', 'ubicacion'])->orderBy('nombre')->get(),
             $this->veCostos($request->user()),
             $ruta,
         );
@@ -91,19 +93,20 @@ class AlmacenController extends Controller
     }
 
     /**
-     * @return array{buscar: string, categoria: string, estado: string}
+     * @return array{buscar: string, categoria: string, ubicacion: string, estado: string}
      */
     private function filtros(Request $request): array
     {
         return [
             'buscar' => $request->string('buscar')->trim()->value(),
             'categoria' => $request->string('categoria')->value(),
+            'ubicacion' => $request->string('ubicacion')->value(),
             'estado' => $request->string('estado')->value(),
         ];
     }
 
     /**
-     * @param  array{buscar: string, categoria: string, estado: string}  $filtros
+     * @param  array{buscar: string, categoria: string, ubicacion: string, estado: string}  $filtros
      * @return Builder<Articulo>
      */
     private function consulta(array $filtros): Builder
@@ -112,6 +115,7 @@ class AlmacenController extends Controller
             ->where('activo', $filtros['estado'] !== 'inactivos')
             ->when($filtros['buscar'] !== '', fn (Builder $query) => $query->buscar($filtros['buscar']))
             ->when($filtros['categoria'] !== '', fn (Builder $query) => $query->where('categoria_articulo_id', (int) $filtros['categoria']))
+            ->when($filtros['ubicacion'] !== '', fn (Builder $query) => $query->where('ubicacion_almacen_id', (int) $filtros['ubicacion']))
             ->when($filtros['estado'] === 'bajo_minimo', fn (Builder $query) => $query->bajoMinimo())
             ->when($filtros['estado'] === 'sin_stock', fn (Builder $query) => $query->where('stock', '<=', 0))
             ->when($filtros['estado'] === 'con_stock', fn (Builder $query) => $query->where('stock', '>', 0));

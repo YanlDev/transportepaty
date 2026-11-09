@@ -11,13 +11,13 @@ use App\Models\CategoriaArticulo;
 use App\Models\DetalleIngreso;
 use App\Models\DetalleSalida;
 use App\Models\MovimientoAlmacen;
+use App\Models\UbicacionAlmacen;
 use App\Models\Vehiculo;
 use App\Services\ExportadorAlmacen;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -64,7 +64,7 @@ class ArticuloController extends Controller
         $this->authorize('view', $articulo);
 
         $veCostos = $this->veCostos($request->user());
-        $articulo->load('categoria');
+        $articulo->load(['categoria', 'ubicacion']);
 
         $movimientos = MovimientoAlmacen::query()
             ->where('articulo_id', $articulo->id)
@@ -114,7 +114,7 @@ class ArticuloController extends Controller
                 'unidad_label' => $articulo->unidad->label(),
                 'unidad_compra' => $articulo->unidad_compra?->abreviatura(),
                 'factor_compra' => $articulo->factor(),
-                'ubicacion' => $articulo->ubicacion,
+                'ubicacion' => $articulo->ubicacion?->nombre,
                 'marcas_compatibles' => $articulo->marcas_compatibles ?? [],
                 'observacion' => $articulo->observacion,
                 'activo' => $articulo->activo,
@@ -149,7 +149,7 @@ class ArticuloController extends Controller
                 'unidad_compra' => $articulo->unidad_compra?->value,
                 'factor_compra' => (float) $articulo->factor_compra,
                 'stock_minimo' => $articulo->stock_minimo === null ? null : (float) $articulo->stock_minimo,
-                'ubicacion' => $articulo->ubicacion,
+                'ubicacion_almacen_id' => $articulo->ubicacion_almacen_id,
                 'marcas_compatibles' => $articulo->marcas_compatibles ?? [],
                 'observacion' => $articulo->observacion,
                 'activo' => $articulo->activo,
@@ -175,22 +175,6 @@ class ArticuloController extends Controller
 
         return to_route('almacen.articulos.show', $articulo)
             ->with('toast', ['type' => 'success', 'message' => 'Artículo actualizado.']);
-    }
-
-    /**
-     * Una categoría nueva, desde el formulario del artículo.
-     */
-    public function crearCategoria(Request $request): RedirectResponse
-    {
-        $this->authorize('create', Articulo::class);
-
-        $datos = $request->validate([
-            'nombre' => ['required', 'string', 'max:100', Rule::unique('categorias_articulo', 'nombre')],
-        ], ['nombre.unique' => 'Esa categoría ya existe.']);
-
-        CategoriaArticulo::create(['nombre' => mb_convert_case(trim($datos['nombre']), MB_CASE_TITLE)]);
-
-        return back()->with('toast', ['type' => 'success', 'message' => 'Categoría creada.']);
     }
 
     /**
@@ -252,6 +236,7 @@ class ArticuloController extends Controller
     {
         return [
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
+            'ubicaciones' => UbicacionAlmacen::query()->orderBy('nombre')->get(['id', 'nombre']),
             'unidades' => array_map(
                 fn (UnidadMedida $unidad): array => ['value' => $unidad->value, 'label' => "{$unidad->label()} ({$unidad->abreviatura()})"],
                 UnidadMedida::cases(),

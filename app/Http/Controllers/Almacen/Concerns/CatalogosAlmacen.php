@@ -49,6 +49,7 @@ trait CatalogosAlmacen
                 'unidad' => $articulo->unidad->abreviatura(),
                 'unidad_compra' => $articulo->unidad_compra?->abreviatura(),
                 'factor_compra' => $articulo->factor(),
+                'ubicacion_id' => $articulo->ubicacion_almacen_id,
                 'stock' => (float) $articulo->stock,
                 'costo_promedio' => $this->costo($veCostos, $articulo->costo_promedio),
             ])

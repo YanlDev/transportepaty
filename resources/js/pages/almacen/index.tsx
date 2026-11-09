@@ -7,11 +7,13 @@ import {
     FileSpreadsheet,
     Package,
     Plus,
+    Settings,
     Warehouse,
 } from 'lucide-react';
 import { useState } from 'react';
 import almacen from '@/actions/App/Http/Controllers/Almacen/AlmacenController';
 import articulos from '@/actions/App/Http/Controllers/Almacen/ArticuloController';
+import { index as configuracionAlmacen } from '@/actions/App/Http/Controllers/Almacen/ConfiguracionAlmacenController';
 import ingresos from '@/actions/App/Http/Controllers/Almacen/IngresoAlmacenController';
 import inventarios from '@/actions/App/Http/Controllers/Almacen/InventarioAlmacenController';
 import salidas from '@/actions/App/Http/Controllers/Almacen/SalidaAlmacenController';
@@ -53,6 +55,7 @@ import type { Paginator } from '@/types/fleet';
 type Filtros = {
     buscar: string;
     categoria: string;
+    ubicacion: string;
     estado: string;
 };
 
@@ -60,6 +63,7 @@ type Props = {
     articulos: Paginator<ArticuloStock>;
     filtros: Filtros;
     categorias: Opcion[];
+    ubicaciones: Opcion[];
     resumen: {
         articulos: number;
         bajo_minimo: number;
@@ -85,6 +89,7 @@ export default function AlmacenIndex({
     articulos: paginador,
     filtros,
     categorias,
+    ubicaciones,
     resumen,
 }: Props) {
     const { puede } = usePermisos();
@@ -92,7 +97,7 @@ export default function AlmacenIndex({
     const { buscar, setBuscar, aplicar } = useFiltros(
         filtros,
         almacen.index().url,
-        { conservar: ['categorias'] },
+        { conservar: ['categorias', 'ubicaciones'] },
     );
 
     setLayoutProps({ breadcrumbs: migasAlmacen() });
@@ -223,6 +228,20 @@ export default function AlmacenIndex({
                         label: categoria.nombre,
                     }))}
                 />
+                {ubicaciones.length > 0 && (
+                    <FiltroSelect
+                        valor={filtros.ubicacion || null}
+                        onCambio={(valor) =>
+                            aplicar({ ubicacion: valor ?? '' })
+                        }
+                        todos="Todas las ubicaciones"
+                        etiqueta="Ubicación"
+                        opciones={ubicaciones.map((ubicacion) => ({
+                            value: String(ubicacion.id),
+                            label: ubicacion.nombre,
+                        }))}
+                    />
+                )}
                 <FiltroSelect
                     valor={filtros.estado || null}
                     onCambio={(valor) => aplicar({ estado: valor ?? '' })}
@@ -243,6 +262,19 @@ export default function AlmacenIndex({
                         </a>
                     </Button>
                     {veCostos && <KardexGeneralDialog />}
+                    {puede('almacen.catalogo') && (
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            asChild
+                            aria-label="Configurar el almacén"
+                            title="Categorías, ubicaciones y mínimos"
+                        >
+                            <Link href={configuracionAlmacen().url}>
+                                <Settings className="size-4" />
+                            </Link>
+                        </Button>
+                    )}
                     {puede('almacen.catalogo') && (
                         <Button variant="outline" asChild>
                             <Link href={articulos.create()}>

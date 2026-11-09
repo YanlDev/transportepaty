@@ -15,6 +15,7 @@ use App\Models\CategoriaArticulo;
 use App\Models\DetalleIngreso;
 use App\Models\IngresoAlmacen;
 use App\Models\Proveedor;
+use App\Models\UbicacionAlmacen;
 use App\Services\CostoDeCompra;
 use App\Services\Kardex;
 use App\Services\RelojOperativo;
@@ -94,6 +95,7 @@ class IngresoAlmacenController extends Controller
             'puedeCrearArticulo' => $request->user()?->can('create', Articulo::class) ?? false,
             'puedeCrearProveedor' => $request->user()?->can('create', Proveedor::class) ?? false,
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
+            'ubicaciones' => UbicacionAlmacen::query()->orderBy('nombre')->get(['id', 'nombre']),
             'unidades' => array_map(
                 fn (UnidadMedida $unidad): array => ['value' => $unidad->value, 'label' => "{$unidad->label()} ({$unidad->abreviatura()})"],
                 UnidadMedida::cases(),

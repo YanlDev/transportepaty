@@ -4,12 +4,14 @@ use App\Enums\DestinoSalida;
 use App\Enums\EstadoInventario;
 use App\Enums\TipoMovimientoAlmacen;
 use App\Models\Articulo;
+use App\Models\CategoriaArticulo;
 use App\Models\IngresoAlmacen;
 use App\Models\InventarioAlmacen;
 use App\Models\MovimientoAlmacen;
 use App\Models\OrdenTrabajo;
 use App\Models\Proveedor;
 use App\Models\SalidaAlmacen;
+use App\Models\UbicacionAlmacen;
 use App\Models\User;
 use App\Models\Vehiculo;
 use Illuminate\Http\UploadedFile;
@@ -507,4 +509,91 @@ it('lets the warehouse create a supplier or an item while registering a purchase
     actingAs(actorConRol('gerencia'))
         ->get(route('almacen.ingresos.create'))
         ->assertForbidden();
+});
+
+// ─── Configuración ──────────────────────────────────────────────────────────
+
+it('creates and renames categories without repeating them', function (): void {
+    actingAs(almacenero())
+        ->post(route('almacen.categorias.store'), ['nombre' => 'aire acondicionado'])
+        ->assertSessionHasNoErrors();
+
+    $categoria = CategoriaArticulo::query()->where('nombre', 'Aire Acondicionado')->sole();
+
+    actingAs(almacenero())
+        ->put(route('almacen.categorias.update', $categoria), ['nombre' => 'Filtros'])
+        ->assertSessionHasErrors('nombre');
+
+    actingAs(almacenero())
+        ->put(route('almacen.categorias.update', $categoria), ['nombre' => 'Climatización'])
+        ->assertSessionHasNoErrors();
+
+    expect($categoria->refresh()->nombre)->toBe('Climatización');
+});
+
+/**
+ * Quitar una categoría con artículos es la forma de fusionarla con otra.
+ */
+it('merges a category into another when it is removed', function (): void {
+    $frenos = CategoriaArticulo::query()->where('nombre', 'Frenos')->sole();
+    $repetida = CategoriaArticulo::factory()->create(['nombre' => 'Sistema De Frenos']);
+    $pastilla = Articulo::factory()->create(['categoria_articulo_id' => $repetida->id]);
+
+    actingAs(almacenero())
+        ->delete(route('almacen.categorias.destroy', $repetida), ['mover_a' => $frenos->id])
+        ->assertSessionHasNoErrors();
+
+    expect(CategoriaArticulo::query()->find($repetida->id))->toBeNull()
+        ->and($pastilla->refresh()->categoria_articulo_id)->toBe($frenos->id);
+});
+
+it('leaves the items without location when a shelf is removed without destination', function (): void {
+    $estante = UbicacionAlmacen::factory()->create();
+    $filtro = Articulo::factory()->create(['ubicacion_almacen_id' => $estante->id]);
+
+    actingAs(almacenero())
+        ->delete(route('almacen.ubicaciones.destroy', $estante))
+        ->assertSessionHasNoErrors();
+
+    expect($filtro->refresh()->ubicacion_almacen_id)->toBeNull();
+});
+
+it('creates shelves in capitals and assigns them to items', function (): void {
+    actingAs(almacenero())
+        ->post(route('almacen.ubicaciones.store'), ['nombre' => ' a-3 ', 'descripcion' => 'Filtros y fajas'])
+        ->assertSessionHasNoErrors();
+
+    $estante = UbicacionAlmacen::query()->sole();
+    expect($estante->nombre)->toBe('A-3');
+
+    actingAs(almacenero())
+        ->post(route('almacen.articulos.store'), ['nombre' => 'Filtro de aire', 'unidad' => 'und', 'ubicacion_almacen_id' => $estante->id])
+        ->assertSessionHasNoErrors();
+
+    actingAs(almacenero())
+        ->get(route('almacen.index', ['ubicacion' => $estante->id]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('articulos.data', 1)
+            ->where('articulos.data.0.ubicacion', 'A-3'));
+});
+
+it('saves the minimums of many items at once', function (): void {
+    $filtro = Articulo::factory()->create(['stock_minimo' => 5]);
+    $faja = Articulo::factory()->create();
+
+    actingAs(almacenero())
+        ->put(route('almacen.minimos.update'), ['minimos' => [
+            ['id' => $filtro->id, 'stock_minimo' => null],
+            ['id' => $faja->id, 'stock_minimo' => 4],
+        ]])
+        ->assertSessionHasNoErrors();
+
+    expect($filtro->refresh()->stock_minimo)->toBeNull()
+        ->and((float) $faja->refresh()->stock_minimo)->toBe(4.0);
+});
+
+it('keeps the warehouse configuration to who manages the catalog', function (): void {
+    actingAs(almacenero())->get(route('almacen.configuracion'))->assertOk();
+    actingAs(actorConRol('taller'))->get(route('almacen.configuracion'))->assertForbidden();
+    actingAs(actorConRol('taller'))->post(route('almacen.ubicaciones.store'), ['nombre' => 'X'])->assertForbidden();
 });

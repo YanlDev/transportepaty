@@ -47,6 +47,7 @@ type Props = {
     puedeCrearArticulo: boolean;
     puedeCrearProveedor: boolean;
     categorias: Opcion[];
+    ubicaciones: Opcion[];
     unidades: EnumOption[];
 };
 
@@ -77,6 +78,7 @@ export default function IngresoCreate({
     puedeCrearArticulo,
     puedeCrearProveedor,
     categorias,
+    ubicaciones,
     unidades,
 }: Props) {
     setLayoutProps({
@@ -328,6 +330,7 @@ export default function IngresoCreate({
                         {puedeCrearArticulo && (
                             <ArticuloRapidoDialog
                                 categorias={categorias}
+                                ubicaciones={ubicaciones}
                                 unidades={unidades}
                             />
                         )}

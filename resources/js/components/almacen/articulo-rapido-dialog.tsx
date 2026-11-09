@@ -32,10 +32,15 @@ import type { EnumOption } from '@/types/fleet';
  */
 export function ArticuloRapidoDialog({
     categorias,
+    ubicaciones,
     unidades,
+    ubicacionInicial,
 }: {
     categorias: Opcion[];
+    ubicaciones: Opcion[];
     unidades: EnumOption[];
+    /** En un conteo, el estante que se está recorriendo. */
+    ubicacionInicial?: number | null;
 }) {
     const [abierto, setAbierto] = useState(false);
     const { data, setData, post, processing, errors, reset, clearErrors } =
@@ -48,7 +53,9 @@ export function ArticuloRapidoDialog({
             unidad: 'und',
             unidad_compra: '',
             factor_compra: '',
-            ubicacion: '',
+            ubicacion_almacen_id: ubicacionInicial
+                ? String(ubicacionInicial)
+                : '',
             volver: true,
         });
 
@@ -199,16 +206,31 @@ export function ArticuloRapidoDialog({
                                 />
                             )}
                         </Field>
-                        <Field label="Ubicación" error={errors.ubicacion}>
+                        <Field
+                            label="Ubicación"
+                            error={errors.ubicacion_almacen_id}
+                        >
                             {(id) => (
-                                <Input
-                                    id={id}
-                                    value={data.ubicacion}
-                                    onChange={(e) =>
-                                        setData('ubicacion', e.target.value)
+                                <Select
+                                    value={data.ubicacion_almacen_id}
+                                    onValueChange={(valor) =>
+                                        setData('ubicacion_almacen_id', valor)
                                     }
-                                    placeholder="Estante A-3"
-                                />
+                                >
+                                    <SelectTrigger id={id}>
+                                        <SelectValue placeholder="Sin ubicación" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {ubicaciones.map((ubicacion) => (
+                                            <SelectItem
+                                                key={ubicacion.id}
+                                                value={String(ubicacion.id)}
+                                            >
+                                                {ubicacion.nombre}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             )}
                         </Field>
                     </div>

@@ -45,7 +45,7 @@ class ArticuloRequest extends FormRequest
             'unidad_compra' => ['nullable', Rule::enum(UnidadMedida::class), 'different:unidad'],
             'factor_compra' => ['nullable', 'required_with:unidad_compra', 'numeric', 'gt:0', 'max:100000'],
             'stock_minimo' => ['nullable', 'numeric', 'min:0', 'max:9999999'],
-            'ubicacion' => ['nullable', 'string', 'max:255'],
+            'ubicacion_almacen_id' => ['nullable', 'integer', Rule::exists('ubicaciones_almacen', 'id')],
             'marcas_compatibles' => ['nullable', 'array'],
             'marcas_compatibles.*' => ['string', 'max:30'],
             'observacion' => ['nullable', 'string', 'max:1000'],

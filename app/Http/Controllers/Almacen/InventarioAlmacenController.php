@@ -13,6 +13,7 @@ use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
 use App\Models\DetalleInventario;
 use App\Models\InventarioAlmacen;
+use App\Models\UbicacionAlmacen;
 use App\Services\Kardex;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
@@ -82,7 +83,7 @@ class InventarioAlmacenController extends Controller
         $this->authorize('view', $inventario);
 
         $veCostos = $this->veCostos($request->user());
-        $inventario->load(['user:id,name', 'cerradoPor:id,name', 'anuladoPor:id,name', 'detalles.articulo']);
+        $inventario->load(['user:id,name', 'cerradoPor:id,name', 'anuladoPor:id,name', 'detalles.articulo.ubicacion']);
 
         return Inertia::render('almacen/inventarios/show', [
             'inventario' => [
@@ -104,7 +105,7 @@ class InventarioAlmacenController extends Controller
                         'articulo_id' => $detalle->articulo_id,
                         'codigo' => $detalle->articulo->codigo,
                         'nombre' => $detalle->articulo->nombre,
-                        'ubicacion' => $detalle->articulo->ubicacion,
+                        'ubicacion' => $detalle->articulo->ubicacion?->nombre,
                         'unidad' => $detalle->articulo->unidad->abreviatura(),
                         'cantidad_contada' => (float) $detalle->cantidad_contada,
                         // Abierto, lo que dice el sistema hoy; cerrado, lo que decía al cerrar.
@@ -125,6 +126,7 @@ class InventarioAlmacenController extends Controller
             'puedeAnular' => $request->user()?->can('anular', $inventario) ?? false,
             'puedeCrearArticulo' => $request->user()?->can('create', Articulo::class) ?? false,
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
+            'ubicaciones' => UbicacionAlmacen::query()->orderBy('nombre')->get(['id', 'nombre']),
             'unidades' => array_map(
                 fn (UnidadMedida $unidad): array => ['value' => $unidad->value, 'label' => "{$unidad->label()} ({$unidad->abreviatura()})"],
                 UnidadMedida::cases(),

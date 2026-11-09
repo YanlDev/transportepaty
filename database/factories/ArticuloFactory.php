@@ -26,7 +26,7 @@ class ArticuloFactory extends Factory
             'unidad_compra' => null,
             'factor_compra' => 1,
             'stock_minimo' => null,
-            'ubicacion' => null,
+            'ubicacion_almacen_id' => null,
             'activo' => true,
         ];
     }

@@ -5,6 +5,7 @@ use App\Http\Controllers\AdicionalTramoController;
 use App\Http\Controllers\AlertaController;
 use App\Http\Controllers\Almacen\AlmacenController;
 use App\Http\Controllers\Almacen\ArticuloController;
+use App\Http\Controllers\Almacen\ConfiguracionAlmacenController;
 use App\Http\Controllers\Almacen\IngresoAlmacenController;
 use App\Http\Controllers\Almacen\InventarioAlmacenController;
 use App\Http\Controllers\Almacen\ProveedorController;
@@ -320,11 +321,19 @@ Route::middleware('auth')->group(function () {
 
         Route::get('articulos/crear', [ArticuloController::class, 'create'])->name('articulos.create');
         Route::post('articulos', [ArticuloController::class, 'store'])->name('articulos.store');
-        Route::post('categorias', [ArticuloController::class, 'crearCategoria'])->name('categorias.store');
         Route::get('articulos/{articulo}', [ArticuloController::class, 'show'])->name('articulos.show');
         Route::get('articulos/{articulo}/editar', [ArticuloController::class, 'edit'])->name('articulos.edit');
         Route::put('articulos/{articulo}', [ArticuloController::class, 'update'])->name('articulos.update');
         Route::get('articulos/{articulo}/kardex', [ArticuloController::class, 'exportarKardex'])->name('articulos.kardex');
+
+        Route::get('configuracion', [ConfiguracionAlmacenController::class, 'index'])->name('configuracion');
+        Route::post('configuracion/categorias', [ConfiguracionAlmacenController::class, 'crearCategoria'])->name('categorias.store');
+        Route::put('configuracion/categorias/{categoria}', [ConfiguracionAlmacenController::class, 'renombrarCategoria'])->name('categorias.update');
+        Route::delete('configuracion/categorias/{categoria}', [ConfiguracionAlmacenController::class, 'quitarCategoria'])->name('categorias.destroy');
+        Route::post('configuracion/ubicaciones', [ConfiguracionAlmacenController::class, 'crearUbicacion'])->name('ubicaciones.store');
+        Route::put('configuracion/ubicaciones/{ubicacion}', [ConfiguracionAlmacenController::class, 'editarUbicacion'])->name('ubicaciones.update');
+        Route::delete('configuracion/ubicaciones/{ubicacion}', [ConfiguracionAlmacenController::class, 'quitarUbicacion'])->name('ubicaciones.destroy');
+        Route::put('configuracion/minimos', [ConfiguracionAlmacenController::class, 'guardarMinimos'])->name('minimos.update');
 
         Route::get('proveedores', [ProveedorController::class, 'index'])->name('proveedores.index');
         Route::post('proveedores', [ProveedorController::class, 'store'])->name('proveedores.store');

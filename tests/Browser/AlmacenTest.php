@@ -6,6 +6,7 @@ use App\Models\IngresoAlmacen;
 use App\Models\InventarioAlmacen;
 use App\Models\Proveedor;
 use App\Models\SalidaAlmacen;
+use App\Models\UbicacionAlmacen;
 use App\Models\Vehiculo;
 use App\Services\Kardex;
 
@@ -95,4 +96,31 @@ it('emite un vale de salida desde la pantalla', function (): void {
 
     expect((float) SalidaAlmacen::query()->sole()->costo_total)->toBe(100.0)
         ->and((float) $filtro->refresh()->stock)->toBe(3.0);
+});
+
+/**
+ * La configuración: un estante nuevo y los mínimos en bloque.
+ */
+it('configura estantes y mínimos desde la pantalla', function (): void {
+    $filtro = Articulo::factory()->create(['nombre' => 'FILTRO DE AIRE']);
+
+    actingAs(actorConRol('almacen'));
+
+    visit('/almacen/configuracion')
+        ->on()->desktop()
+        ->click('button:has-text("Ubicaciones")')
+        ->type('input[placeholder^="Nuevo estante"]', 'A-1')
+        ->click('button[type="submit"]:has-text("Agregar")')
+        ->wait(1)
+        ->assertSee('Sin artículos')
+        ->click('button:has-text("Mínimos")')
+        ->type('[aria-label="Mínimo de FILTRO DE AIRE"]', '6')
+        ->click('button:has-text("Guardar 1 mínimo")')
+        ->wait(1)
+        ->assertSee('Sin cambios')
+        ->assertNoJavaScriptErrors()
+        ->screenshot(fullPage: true, filename: 'almacen-configuracion');
+
+    expect((float) $filtro->refresh()->stock_minimo)->toBe(6.0)
+        ->and(UbicacionAlmacen::query()->sole()->nombre)->toBe('A-1');
 });

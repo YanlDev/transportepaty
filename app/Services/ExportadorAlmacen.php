@@ -61,7 +61,7 @@ class ExportadorAlmacen
                 $articulo->numero_parte,
                 $articulo->marca,
                 $articulo->categoria?->nombre,
-                $articulo->ubicacion,
+                $articulo->ubicacion?->nombre,
                 $articulo->unidad->abreviatura(),
                 (float) $articulo->stock,
                 $articulo->stock_minimo === null ? null : (float) $articulo->stock_minimo,

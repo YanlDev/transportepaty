@@ -29,7 +29,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property UnidadMedida|null $unidad_compra
  * @property string $factor_compra
  * @property string|null $stock_minimo
- * @property string|null $ubicacion
+ * @property int|null $ubicacion_almacen_id
  * @property list<string>|null $marcas_compatibles
  * @property string|null $observacion
  * @property bool $activo
@@ -37,6 +37,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string $costo_promedio
  * @property string $valor
  * @property-read CategoriaArticulo|null $categoria
+ * @property-read UbicacionAlmacen|null $ubicacion
  */
 #[Fillable([
     'codigo',
@@ -48,7 +49,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'unidad_compra',
     'factor_compra',
     'stock_minimo',
-    'ubicacion',
+    'ubicacion_almacen_id',
     'marcas_compatibles',
     'observacion',
     'activo',
@@ -79,6 +80,14 @@ class Articulo extends Model
     public function categoria(): BelongsTo
     {
         return $this->belongsTo(CategoriaArticulo::class, 'categoria_articulo_id');
+    }
+
+    /**
+     * @return BelongsTo<UbicacionAlmacen, $this>
+     */
+    public function ubicacion(): BelongsTo
+    {
+        return $this->belongsTo(UbicacionAlmacen::class, 'ubicacion_almacen_id');
     }
 
     /**

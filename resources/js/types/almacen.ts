@@ -32,6 +32,7 @@ export type ArticuloElegible = {
     unidad: string;
     unidad_compra: string | null;
     factor_compra: number;
+    ubicacion_id: number | null;
     stock: number;
     costo_promedio: number | null;
 };
@@ -69,7 +70,7 @@ export type ArticuloEditable = {
     unidad_compra: string | null;
     factor_compra: number;
     stock_minimo: number | null;
-    ubicacion: string | null;
+    ubicacion_almacen_id: number | null;
     marcas_compatibles: string[];
     observacion: string | null;
     activo: boolean;

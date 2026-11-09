@@ -1,5 +1,6 @@
 import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/react';
 import { CheckCheck, ClipboardList, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import articulosRutas from '@/actions/App/Http/Controllers/Almacen/ArticuloController';
 import inventarios, {
     anular,
@@ -41,6 +42,7 @@ type Props = {
     puedeAnular: boolean;
     puedeCrearArticulo: boolean;
     categorias: Opcion[];
+    ubicaciones: Opcion[];
     unidades: EnumOption[];
 };
 
@@ -62,11 +64,20 @@ export default function InventarioShow({
     puedeAnular,
     puedeCrearArticulo,
     categorias,
+    ubicaciones,
     unidades,
 }: Props) {
     const { puede } = usePermisos();
     const veCostos = puede('almacen.ver_costos');
     const abierto = inventario.estado === 'abierto';
+    // El estante que se está recorriendo: la lista se acota a lo que va ahí.
+    const [estante, setEstante] = useState<string>('');
+    const delEstante =
+        estante === ''
+            ? articulos
+            : estante === 'sin'
+              ? articulos.filter((a) => a.ubicacion_id === null)
+              : articulos.filter((a) => a.ubicacion_id === Number(estante));
 
     setLayoutProps({
         breadcrumbs: migasAlmacen(
@@ -197,20 +208,63 @@ export default function InventarioShow({
                 >
                     <div className="flex flex-wrap items-end justify-between gap-2">
                         <h2 className="text-sm font-semibold">Anotar</h2>
-                        {puedeCrearArticulo && (
-                            <ArticuloRapidoDialog
-                                categorias={categorias}
-                                unidades={unidades}
-                            />
-                        )}
+                        <div className="flex flex-wrap gap-2">
+                            {ubicaciones.length > 0 && (
+                                <select
+                                    aria-label="Estante"
+                                    value={estante}
+                                    onChange={(e) => setEstante(e.target.value)}
+                                    className="h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+                                >
+                                    <option value="">Todos los estantes</option>
+                                    {ubicaciones.map((ubicacion) => (
+                                        <option
+                                            key={ubicacion.id}
+                                            value={ubicacion.id}
+                                        >
+                                            {ubicacion.nombre}
+                                        </option>
+                                    ))}
+                                    <option value="sin">Sin ubicación</option>
+                                </select>
+                            )}
+                            {puedeCrearArticulo && (
+                                <ArticuloRapidoDialog
+                                    key={estante}
+                                    categorias={categorias}
+                                    ubicaciones={ubicaciones}
+                                    unidades={unidades}
+                                    ubicacionInicial={
+                                        estante !== '' && estante !== 'sin'
+                                            ? Number(estante)
+                                            : null
+                                    }
+                                />
+                            )}
+                        </div>
                     </div>
+                    {estante !== '' && (
+                        <p className="text-xs text-muted-foreground">
+                            {delEstante.length}{' '}
+                            {delEstante.length === 1 ? 'artículo' : 'artículos'}{' '}
+                            en este estante ·{' '}
+                            {
+                                delEstante.filter((a) =>
+                                    inventario.detalles.some(
+                                        (d) => d.articulo_id === a.id,
+                                    ),
+                                ).length
+                            }{' '}
+                            ya contados
+                        </p>
+                    )}
                     <div className="grid gap-3 sm:grid-cols-[1fr_8rem] sm:items-start">
                         <div className="min-w-0">
                             <SelectorBuscable
                                 valor={data.articulo_id}
                                 onCambio={elegir}
                                 etiqueta="Artículo"
-                                opciones={opcionesArticulo(articulos)}
+                                opciones={opcionesArticulo(delEstante)}
                                 invalido={!!errors.articulo_id}
                             />
                             {elegido && (

@@ -2,10 +2,13 @@ import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/react';
 import { Package, X } from 'lucide-react';
 import { useState } from 'react';
 import articulos, {
-    crearCategoria,
     store,
     update,
 } from '@/actions/App/Http/Controllers/Almacen/ArticuloController';
+import {
+    crearCategoria,
+    crearUbicacion,
+} from '@/actions/App/Http/Controllers/Almacen/ConfiguracionAlmacenController';
 import { migasAlmacen } from '@/components/almacen/almacen-nav';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { SelectorBuscable } from '@/components/selector-buscable';
@@ -29,6 +32,7 @@ import type { EnumOption } from '@/types/fleet';
 type Props = {
     articulo: ArticuloEditable | null;
     categorias: Opcion[];
+    ubicaciones: Opcion[];
     unidades: EnumOption[];
     marcasFlota: string[];
 };
@@ -43,6 +47,7 @@ const MISMA_UNIDAD = '__misma__';
 export default function ArticuloForm({
     articulo,
     categorias,
+    ubicaciones,
     unidades,
     marcasFlota,
 }: Props) {
@@ -81,7 +86,7 @@ export default function ArticuloForm({
             articulo?.stock_minimo === null || articulo === null
                 ? ''
                 : String(articulo.stock_minimo),
-        ubicacion: articulo?.ubicacion ?? '',
+        ubicacion_almacen_id: articulo?.ubicacion_almacen_id ?? null,
         marcas_compatibles: articulo?.marcas_compatibles ?? ([] as string[]),
         observacion: articulo?.observacion ?? '',
         activo: articulo?.activo ?? true,
@@ -218,15 +223,34 @@ export default function ArticuloForm({
                             />
                         )}
                     </Field>
-                    <Field label="Ubicación" error={errors.ubicacion}>
+                    <Field
+                        label="Ubicación"
+                        error={errors.ubicacion_almacen_id}
+                    >
                         {(id) => (
-                            <Input
+                            <SelectorBuscable
                                 id={id}
-                                value={data.ubicacion}
-                                onChange={(e) =>
-                                    setData('ubicacion', e.target.value)
+                                valor={data.ubicacion_almacen_id}
+                                onCambio={(valor) =>
+                                    setData('ubicacion_almacen_id', valor)
                                 }
-                                placeholder="Estante A-3, nivel 2"
+                                etiqueta="Estante o zona"
+                                opciones={ubicaciones.map((ubicacion) => ({
+                                    valor: ubicacion.id,
+                                    etiqueta: ubicacion.nombre,
+                                }))}
+                                crear={{
+                                    etiqueta: 'Crear ubicación',
+                                    onCrear: (texto) =>
+                                        router.post(
+                                            crearUbicacion().url,
+                                            { nombre: texto },
+                                            {
+                                                preserveState: true,
+                                                preserveScroll: true,
+                                            },
+                                        ),
+                                }}
                             />
                         )}
                     </Field>

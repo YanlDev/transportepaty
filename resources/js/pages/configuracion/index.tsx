@@ -14,9 +14,11 @@ import {
     ShieldCheck,
     User,
     Users,
+    Warehouse,
     Wrench,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { index as configuracionAlmacen } from '@/actions/App/Http/Controllers/Almacen/ConfiguracionAlmacenController';
 import configuracionAbastecimiento from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
 import alertas from '@/actions/App/Http/Controllers/ConfiguracionAlertaController';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionController';
@@ -169,6 +171,20 @@ export default function Configuracion({
                               'Las fajas y los mínimos por carreta («Ítems y mínimos» en la pantalla).',
                           href: equipamiento.index().url,
                           icono: ShieldCheck,
+                      },
+                  ]
+                : [],
+        },
+        {
+            titulo: 'Almacén',
+            ajustes: puede('almacen.catalogo')
+                ? [
+                      {
+                          titulo: 'Almacén',
+                          descripcion:
+                              'Las categorías de los artículos, los estantes donde se guardan y los mínimos de stock.',
+                          href: configuracionAlmacen().url,
+                          icono: Warehouse,
                       },
                   ]
                 : [],
