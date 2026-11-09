@@ -5,6 +5,7 @@ use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
+use App\Models\Conductor;
 use App\Models\ParadaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
@@ -213,12 +214,27 @@ it('lists the tray with the open tickets of each unit and what the system sugges
             ->component('vueltas/guias')
             ->has('pendientes', 1)
             ->where('pendientes.0.id', $guia->id)
+            ->where('pendientes.0.conductor', $guia->conductor?->nombre_completo ?? $guia->conductor_nombre)
             ->where('pendientes.0.tickets.0.codigo', $vuelta->codigo)
             // El vacío no se ofrece: no lleva GR.
             ->has('pendientes.0.tickets.0.paradas', 2)
             ->where('pendientes.0.sugerencia.parada_id', paradaDe($vuelta, 1)->id)
             ->where('sinTicket.0.motivo', 'En ruta')
             ->where('puedeAsignar', true));
+});
+
+it('shows the driver of the padrón, or the name on the GR when it is not linked', function (): void {
+    $conductor = Conductor::factory()->create(['nombres' => 'Juan Carlos', 'apellidos' => 'Quispe Mamani']);
+    $enlazada = registrarGuia($this->tracto, '2026-11-05', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
+    $enlazada->update(['conductor_id' => $conductor->id, 'conductor_nombre' => 'QUISPE MAMANI JUAN']);
+    $suelta = registrarGuia($this->tracto, '2026-11-06', DIR_MINA, DIR_PISCO, TipoCarga::Concentrado);
+    $suelta->update(['conductor_id' => null, 'conductor_nombre' => 'PEREZ LOPEZ PEDRO']);
+
+    actingAs($this->admin)
+        ->get(route('vueltas.guias'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pendientes.0.conductor', 'Juan Carlos Quispe Mamani')
+            ->where('pendientes.1.conductor', 'PEREZ LOPEZ PEDRO'));
 });
 
 it('only lets whoever has the permission assign GR', function (): void {
