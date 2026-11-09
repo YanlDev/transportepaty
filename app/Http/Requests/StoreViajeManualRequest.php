@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
+use App\Services\Archivos\ReglasDeArchivo;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -43,7 +44,7 @@ class StoreViajeManualRequest extends FormRequest
                 Rule::enum(TipoCarga::class)->except(TipoCarga::excluidosDeViaje()),
             ],
             'observaciones' => ['nullable', 'string'],
-            'archivo' => ['nullable', 'file', 'mimes:pdf', 'max:10240'],
+            'archivo' => ['nullable', ...ReglasDeArchivo::pdf()],
         ];
     }
 }

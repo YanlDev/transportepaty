@@ -16,7 +16,9 @@ use App\Models\DetalleIngreso;
 use App\Models\IngresoAlmacen;
 use App\Models\Proveedor;
 use App\Models\UbicacionAlmacen;
+use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\CostoDeCompra;
+use App\Services\FileUploadService;
 use App\Services\Kardex;
 use App\Services\PeriodoAlmacen;
 use App\Services\RelojOperativo;
@@ -39,6 +41,7 @@ class IngresoAlmacenController extends Controller
     public function __construct(
         private readonly Kardex $kardex,
         private readonly CostoDeCompra $costoDeCompra,
+        private readonly FileUploadService $subidas,
     ) {}
 
     public function index(Request $request): Response
@@ -95,7 +98,7 @@ class IngresoAlmacenController extends Controller
             'tasaIgv' => CostoDeCompra::TASA_IGV,
             'toleranciaTotal' => StoreIngresoRequest::TOLERANCIA_TOTAL,
             'inicioPeriodo' => PeriodoAlmacen::inicio()->toDateString(),
-            'maximoKb' => StoreIngresoRequest::MAXIMO_KB,
+            'maximoKb' => (int) config('uploads.imagenes.max_kb'),
             'puedeCrearArticulo' => $request->user()?->can('create', Articulo::class) ?? false,
             'puedeCrearProveedor' => $request->user()?->can('create', Proveedor::class) ?? false,
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
@@ -173,7 +176,7 @@ class IngresoAlmacenController extends Controller
             $this->kardex->registrarIngreso($ingreso, $request->user()?->id);
 
             // Al final: si algo falla antes, no queda un archivo suelto en el disco.
-            $ingreso->addMediaFromRequest('comprobante')->toMediaCollection('comprobante');
+            $this->subidas->guardar($ingreso, $request->file('comprobante'), 'comprobante', 'comprobante');
 
             return $ingreso;
         });
@@ -191,10 +194,10 @@ class IngresoAlmacenController extends Controller
         $this->authorize('reemplazarComprobante', $ingreso);
 
         $request->validate([
-            'comprobante' => ['required', 'file', 'mimetypes:application/pdf,image/jpeg,image/png,image/webp', 'max:'.StoreIngresoRequest::MAXIMO_KB],
+            'comprobante' => ['required', ...ReglasDeArchivo::imagenOPdf()],
         ], (new StoreIngresoRequest)->messages());
 
-        $ingreso->addMediaFromRequest('comprobante')->toMediaCollection('comprobante');
+        $this->subidas->guardar($ingreso, $request->file('comprobante'), 'comprobante', 'comprobante');
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Comprobante reemplazado.']);
     }
@@ -221,7 +224,7 @@ class IngresoAlmacenController extends Controller
                 'anulado_por' => $ingreso->anuladoPor?->name,
                 'motivo_anulacion' => $ingreso->motivo_anulacion,
                 'comprobante' => $archivo === null ? null : [
-                    'nombre' => $archivo->file_name,
+                    'nombre' => $archivo->name.'.'.$archivo->extension,
                     'url' => route('almacen.ingresos.comprobante', $ingreso),
                     'es_pdf' => $archivo->mime_type === 'application/pdf',
                     'peso_kb' => (int) ceil($archivo->size / 1024),
@@ -249,7 +252,7 @@ class IngresoAlmacenController extends Controller
             'puedeAnular' => $request->user()?->can('anular', $ingreso) ?? false,
             'periodoAbierto' => PeriodoAlmacen::estaAbierto($ingreso->fecha),
             'puedeReemplazarComprobante' => $request->user()?->can('reemplazarComprobante', $ingreso) ?? false,
-            'maximoKb' => StoreIngresoRequest::MAXIMO_KB,
+            'maximoKb' => (int) config('uploads.imagenes.max_kb'),
         ]);
     }
 

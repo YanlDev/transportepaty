@@ -1,5 +1,6 @@
 import { Head, setLayoutProps, useForm } from '@inertiajs/react';
 import { Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import {
     destroy,
@@ -79,7 +80,11 @@ export default function OrdenTrabajo({
 }: Props) {
     const editando = orden !== null;
 
-    const { data, setData, post, transform, processing, errors } =
+    // Cada grupo de fotos avisa mientras comprime las suyas.
+    const [preparandoAntes, setPreparandoAntes] = useState(false);
+    const [preparandoDespues, setPreparandoDespues] = useState(false);
+
+    const { data, setData, post, transform, processing, progress, errors } =
         useForm<Formulario>({
             vehiculo_id: inicial.vehiculo_id,
             tipo: inicial.tipo,
@@ -307,6 +312,7 @@ export default function OrdenTrabajo({
                     onNuevas={(fotos) => setData('fotos_antes', fotos)}
                     guardadas={fotosDe(orden, 'antes')}
                     error={errores(errors, 'fotos_antes')}
+                    onPreparando={setPreparandoAntes}
                 />
 
                 <SelectorFotos
@@ -315,6 +321,8 @@ export default function OrdenTrabajo({
                     onNuevas={(fotos) => setData('fotos_despues', fotos)}
                     guardadas={fotosDe(orden, 'despues')}
                     error={errores(errors, 'fotos_despues')}
+                    progreso={progress?.percentage ?? null}
+                    onPreparando={setPreparandoDespues}
                 />
 
                 <div className="grid gap-1.5">
@@ -385,7 +393,9 @@ export default function OrdenTrabajo({
                 <Button
                     type="submit"
                     className="h-12 text-base"
-                    disabled={processing}
+                    disabled={
+                        processing || preparandoAntes || preparandoDespues
+                    }
                 >
                     {processing && <Spinner />}
                     {editando ? 'Guardar cambios' : 'Registrar orden'}

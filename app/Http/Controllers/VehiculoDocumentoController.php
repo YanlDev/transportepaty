@@ -7,6 +7,7 @@ use App\Http\Requests\ActualizarVencimientoRequest;
 use App\Http\Requests\StoreVehiculoDocumentoRequest;
 use App\Models\Vehiculo;
 use App\Models\VehiculoDocumento;
+use App\Services\FileUploadService;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -49,7 +50,7 @@ class VehiculoDocumentoController extends Controller
      * contra el índice único: renovar un SOAT es subir el nuevo, sin borrar
      * antes el viejo.
      */
-    public function store(StoreVehiculoDocumentoRequest $request, Vehiculo $vehiculo): RedirectResponse
+    public function store(StoreVehiculoDocumentoRequest $request, Vehiculo $vehiculo, FileUploadService $subidas): RedirectResponse
     {
         $this->authorize('update', $vehiculo);
 
@@ -61,7 +62,7 @@ class VehiculoDocumentoController extends Controller
         );
 
         // La colección es `singleFile`, así que esto descarta el archivo previo.
-        $documento->addMediaFromRequest('archivo')->toMediaCollection('archivo');
+        $subidas->guardar($documento, $request->file('archivo'), 'archivo');
 
         return back()->with('toast', [
             'type' => 'success',

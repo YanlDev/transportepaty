@@ -8,13 +8,14 @@ import {
     TriangleAlert,
     UserPlus,
 } from 'lucide-react';
+import { useState } from 'react';
 import ingresos, {
     store,
 } from '@/actions/App/Http/Controllers/Almacen/IngresoAlmacenController';
 import { migasAlmacen } from '@/components/almacen/almacen-nav';
 import { ArticuloRapidoDialog } from '@/components/almacen/articulo-rapido-dialog';
-import { ComprobanteAdjunto } from '@/components/almacen/comprobante-adjunto';
 import { ProveedorDialog } from '@/components/almacen/proveedor-dialog';
+import { CampoArchivo } from '@/components/campo-archivo';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import InputError from '@/components/input-error';
 import { SelectorBuscable } from '@/components/selector-buscable';
@@ -111,6 +112,7 @@ export default function IngresoCreate({
         ),
     });
 
+    const [preparando, setPreparando] = useState(false);
     const { data, setData, post, processing, errors, progress } = useForm<{
         fecha: string;
         fecha_emision: string;
@@ -730,13 +732,18 @@ export default function IngresoCreate({
                             Foto o PDF del comprobante{' '}
                             <span className="text-destructive">*</span>
                         </span>
-                        <ComprobanteAdjunto
-                            archivo={data.comprobante}
-                            onCambio={(archivo) =>
-                                setData('comprobante', archivo)
+                        <CampoArchivo
+                            archivos={
+                                data.comprobante ? [data.comprobante] : []
                             }
+                            onArchivos={(lista) =>
+                                setData('comprobante', lista[0] ?? null)
+                            }
+                            perfil="comprobante"
                             maximoKb={maximoKb}
+                            progreso={progress?.percentage ?? null}
                             error={errors.comprobante}
+                            onPreparando={setPreparando}
                         />
                     </div>
                     <Field label="Observación" error={errors.observacion}>
@@ -754,12 +761,7 @@ export default function IngresoCreate({
                 </section>
 
                 <div className="flex items-center justify-end gap-3">
-                    {progress && (
-                        <span className="text-xs text-muted-foreground">
-                            Subiendo {progress.percentage}%
-                        </span>
-                    )}
-                    <Button type="submit" disabled={processing}>
+                    <Button type="submit" disabled={processing || preparando}>
                         {processing && <Spinner />}
                         Registrar compra
                     </Button>

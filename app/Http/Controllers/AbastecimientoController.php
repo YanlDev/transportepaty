@@ -17,6 +17,7 @@ use App\Models\VarianteRuta;
 use App\Models\Vehiculo;
 use App\Models\Vuelta;
 use App\Services\DotacionVuelta;
+use App\Services\FileUploadService;
 use App\Services\GastosDelTicket;
 use App\Services\OdometroDeUnidad;
 use Illuminate\Http\RedirectResponse;
@@ -210,7 +211,7 @@ class AbastecimientoController extends Controller
      * Lo que de verdad cargó, según el voucher. El kilometraje también queda
      * como lectura para mantenimiento.
      */
-    public function despacho(RegistrarDespachoRequest $request, Abastecimiento $abastecimiento, OdometroDeUnidad $odometro): RedirectResponse
+    public function despacho(RegistrarDespachoRequest $request, Abastecimiento $abastecimiento, OdometroDeUnidad $odometro, FileUploadService $subidas): RedirectResponse
     {
         $this->authorize('registrarDespacho', $abastecimiento);
 
@@ -229,7 +230,7 @@ class AbastecimientoController extends Controller
         ]);
 
         if ($request->hasFile('foto_voucher')) {
-            $abastecimiento->addMediaFromRequest('foto_voucher')->toMediaCollection('voucher');
+            $subidas->guardar($abastecimiento, $request->file('foto_voucher'), 'voucher', 'foto_voucher');
         }
 
         if ($kmNuevo) {

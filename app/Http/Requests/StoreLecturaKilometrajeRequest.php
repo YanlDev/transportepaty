@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\TipoVehiculo;
 use App\Models\Vehiculo;
+use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\ProximoMantenimiento;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -35,7 +36,7 @@ class StoreLecturaKilometrajeRequest extends FormRequest
                     ->whereNull('deleted_at'),
             ],
             'kilometraje' => ['required', 'integer', 'min:1', 'max:9999999'],
-            'foto' => ['nullable', 'image', 'mimes:jpeg,png,webp', 'max:10240'],
+            'foto' => ['nullable', ...ReglasDeArchivo::imagen()],
             'observacion' => ['nullable', 'string', 'max:500'],
         ];
     }
@@ -75,6 +76,7 @@ class StoreLecturaKilometrajeRequest extends FormRequest
     {
         return [
             'vehiculo_id.exists' => 'Elige un tracto activo.',
+            'foto.mimetypes' => 'La foto debe ser JPG, PNG, WEBP o HEIC.',
         ];
     }
 }

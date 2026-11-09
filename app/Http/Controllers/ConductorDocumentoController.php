@@ -6,6 +6,7 @@ use App\Http\Requests\ActualizarVencimientoRequest;
 use App\Http\Requests\StoreConductorDocumentoRequest;
 use App\Models\Conductor;
 use App\Models\ConductorDocumento;
+use App\Services\FileUploadService;
 use Illuminate\Http\RedirectResponse;
 
 class ConductorDocumentoController extends Controller
@@ -15,7 +16,7 @@ class ConductorDocumentoController extends Controller
      * tipo, si ya existe se actualiza y se reemplaza su archivo en vez de
      * crear un duplicado.
      */
-    public function store(StoreConductorDocumentoRequest $request, Conductor $conductor): RedirectResponse
+    public function store(StoreConductorDocumentoRequest $request, Conductor $conductor, FileUploadService $subidas): RedirectResponse
     {
         $this->authorize('update', $conductor);
 
@@ -27,7 +28,7 @@ class ConductorDocumentoController extends Controller
         );
 
         // La colección es `singleFile`, así que esto descarta el archivo previo.
-        $documento->addMediaFromRequest('archivo')->toMediaCollection('archivo');
+        $subidas->guardar($documento, $request->file('archivo'), 'archivo');
 
         return back()->with('toast', [
             'type' => 'success',

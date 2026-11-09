@@ -24,6 +24,7 @@ function subirPdfs(
     url: string,
     archivos: File[],
     alTerminar: () => void,
+    alAvanzar: (porcentaje: number) => void = () => {},
 ): void {
     const pdfs = archivos.filter(
         (archivo) => archivo.type === 'application/pdf',
@@ -52,6 +53,7 @@ function subirPdfs(
         {
             forceFormData: true,
             preserveScroll: true,
+            onProgress: (avance) => alAvanzar(avance?.percentage ?? 0),
             onFinish: alTerminar,
         },
     );
@@ -72,6 +74,7 @@ export function BotonSubirPdf({
 }) {
     const fileInput = useRef<HTMLInputElement>(null);
     const [subiendo, setSubiendo] = useState(false);
+    const [avance, setAvance] = useState(0);
 
     const seleccionar = (evento: React.ChangeEvent<HTMLInputElement>) => {
         const archivos = Array.from(evento.target.files ?? []);
@@ -81,14 +84,20 @@ export function BotonSubirPdf({
         }
 
         setSubiendo(true);
+        setAvance(0);
 
-        subirPdfs(url, archivos, () => {
-            setSubiendo(false);
+        subirPdfs(
+            url,
+            archivos,
+            () => {
+                setSubiendo(false);
 
-            if (fileInput.current) {
-                fileInput.current.value = '';
-            }
-        });
+                if (fileInput.current) {
+                    fileInput.current.value = '';
+                }
+            },
+            setAvance,
+        );
     };
 
     return (
@@ -107,7 +116,9 @@ export function BotonSubirPdf({
                 disabled={subiendo}
             >
                 <Upload className="size-4" />
-                {subiendo ? 'Subiendo...' : documento.boton}
+                {subiendo
+                    ? `Subiendo… ${Math.round(avance)} %`
+                    : documento.boton}
             </Button>
         </>
     );
@@ -133,6 +144,10 @@ export function ZonaSoltarPdf({
 }) {
     const [encima, setEncima] = useState(false);
     const [subiendo, setSubiendo] = useState(false);
+    const [avance, setAvance] = useState(0);
+    // El oyente de `drop` vive fuera del render: necesita saber al momento
+    // si ya hay una subida en curso, para no mandar el lote dos veces.
+    const ocupado = useRef(false);
     // Los eventos de arrastre se disparan también al pasar por encima de cada
     // hijo: sin contar entradas y salidas, el cartel parpadea al recorrer la
     // tabla.
@@ -178,12 +193,22 @@ export function ZonaSoltarPdf({
 
             const archivos = Array.from(evento.dataTransfer?.files ?? []);
 
-            if (archivos.length === 0) {
+            if (archivos.length === 0 || ocupado.current) {
                 return;
             }
 
+            ocupado.current = true;
             setSubiendo(true);
-            subirPdfs(url, archivos, () => setSubiendo(false));
+            setAvance(0);
+            subirPdfs(
+                url,
+                archivos,
+                () => {
+                    ocupado.current = false;
+                    setSubiendo(false);
+                },
+                setAvance,
+            );
         };
 
         window.addEventListener('dragenter', alEntrar);
@@ -211,7 +236,7 @@ export function ZonaSoltarPdf({
                 />
                 <p className="text-lg font-semibold">
                     {subiendo
-                        ? `Subiendo ${documento.plural}...`
+                        ? `Subiendo ${documento.plural}… ${Math.round(avance)} %`
                         : `Suelta ${documento.plural} aquí`}
                 </p>
                 <p className="text-sm text-muted-foreground">

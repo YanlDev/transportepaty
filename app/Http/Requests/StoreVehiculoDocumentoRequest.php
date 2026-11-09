@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Enums\TipoDocumento;
 use App\Models\Vehiculo;
+use App\Services\Archivos\ReglasDeArchivo;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -33,7 +34,7 @@ class StoreVehiculoDocumentoRequest extends FormRequest
             'fecha_emision' => ['nullable', 'date'],
             'fecha_vencimiento' => ['nullable', 'date', 'after_or_equal:fecha_emision'],
             'observaciones' => ['nullable', 'string', 'max:1000'],
-            'archivo' => ['required', 'file', 'mimes:jpeg,png,webp,pdf', 'max:10240'],
+            'archivo' => ['required', ...ReglasDeArchivo::imagenOPdf()],
         ];
     }
 
@@ -44,6 +45,7 @@ class StoreVehiculoDocumentoRequest extends FormRequest
     {
         return [
             'tipo.in' => 'Ese tipo de documento no aplica a este vehículo.',
+            'archivo.mimetypes' => 'El archivo debe ser un PDF o una foto (JPG, PNG, WEBP o HEIC).',
         ];
     }
 

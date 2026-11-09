@@ -4,6 +4,7 @@ namespace App\Http\Requests;
 
 use App\Models\Abastecimiento;
 use App\Models\CapacidadTanque;
+use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\OdometroDeUnidad;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -34,7 +35,7 @@ class RegistrarDespachoRequest extends FormRequest
             'precio_galon' => ['required', 'numeric', 'min:0.01', 'max:99'],
             'kilometraje' => [$this->abastecimiento()->tanque_lleno ? 'required' : 'nullable', 'integer', 'min:1', 'max:9999999'],
             'despachado_el' => ['required', 'date'],
-            'foto_voucher' => [$this->abastecimiento()->hasMedia('voucher') ? 'nullable' : 'required', 'image', 'max:10240'],
+            'foto_voucher' => [$this->abastecimiento()->hasMedia('voucher') ? 'nullable' : 'required', ...ReglasDeArchivo::imagen()],
             'confirmar_capacidad' => ['boolean'],
         ];
     }

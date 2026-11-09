@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\TipoDocumentoConductor;
+use App\Services\Archivos\ReglasDeArchivo;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -30,7 +31,7 @@ class StoreConductorDocumentoRequest extends FormRequest
             'fecha_emision' => ['nullable', 'date'],
             'fecha_vencimiento' => ['nullable', 'date', 'after_or_equal:fecha_emision'],
             'observaciones' => ['nullable', 'string', 'max:1000'],
-            'archivo' => ['required', 'file', 'mimes:jpeg,png,webp,pdf', 'max:10240'],
+            'archivo' => ['required', ...ReglasDeArchivo::imagenOPdf()],
         ];
     }
 }

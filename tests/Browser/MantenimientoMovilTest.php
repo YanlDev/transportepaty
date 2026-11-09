@@ -187,3 +187,51 @@ it('cuenta las fajas de una carreta desde el celular', function (): void {
 
     expect(ConteoEquipamiento::query()->where('vehiculo_id', $carreta->id)->count())->toBe(1);
 });
+
+it('achica en el navegador la foto elegida y muestra el peso antes y después', function (): void {
+    actingAs(actorConRol('admin'));
+
+    // Una foto grande armada en la propia página (3000 px, con ruido para que pese)
+    // y puesta en el campo como si se hubiera elegido de la galería.
+    $elegirFotoGrande = <<<'JS'
+        new Promise((listo) => {
+            const lienzo = document.createElement('canvas');
+            lienzo.width = 3000;
+            lienzo.height = 2250;
+            const pincel = lienzo.getContext('2d');
+
+            for (let i = 0; i < 40000; i++) {
+                pincel.fillStyle = `rgb(${Math.random() * 255}, ${Math.random() * 255}, ${Math.random() * 255})`;
+                pincel.fillRect(Math.random() * 3000, Math.random() * 2250, 40, 40);
+            }
+
+            lienzo.toBlob((blob) => {
+                const carga = new DataTransfer();
+                carga.items.add(new File([blob], 'tablero.png', { type: 'image/png' }));
+                const campo = document.querySelector('input[type="file"][multiple]');
+                campo.files = carga.files;
+                campo.dispatchEvent(new Event('change', { bubbles: true }));
+
+                // Resuelve con el texto de la fila cuando la foto ya está
+                // comprimida y sumada al formulario (o tras 15 s, vacío).
+                const inicio = Date.now();
+                const espera = setInterval(() => {
+                    const fila = Array.from(document.querySelectorAll('li')).find((li) => li.innerText.includes('tablero'));
+
+                    if (fila || Date.now() - inicio > 15000) {
+                        clearInterval(espera);
+                        listo(fila ? fila.innerText : '');
+                    }
+                }, 200);
+            }, 'image/png');
+        })
+    JS;
+
+    $pagina = visit("/mantenimiento/ordenes/crear?vehiculo={$this->unidad->id}")->on()->mobile();
+    $fila = $pagina->script($elegirFotoGrande);
+
+    // Entró como PNG y quedó en JPEG, con el peso de antes y el de después.
+    expect($fila)->toContain('tablero.jpg')->toContain(' → ');
+
+    $pagina->assertNoJavaScriptErrors();
+});

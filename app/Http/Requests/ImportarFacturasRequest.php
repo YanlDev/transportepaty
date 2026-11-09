@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\Archivos\ReglasDeArchivo;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
@@ -13,10 +14,6 @@ use Illuminate\Foundation\Http\FormRequest;
  */
 class ImportarFacturasRequest extends FormRequest
 {
-    private const MAXIMO_ARCHIVOS = 20;
-
-    private const MAXIMO_KB_POR_ARCHIVO = 2048;
-
     public function authorize(): bool
     {
         return true;
@@ -28,8 +25,8 @@ class ImportarFacturasRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'archivos' => ['required', 'array', 'min:1', 'max:'.self::MAXIMO_ARCHIVOS],
-            'archivos.*' => ['file', 'mimes:pdf', 'max:'.self::MAXIMO_KB_POR_ARCHIVO],
+            'archivos' => ['required', 'array', 'min:1', 'max:'.config('uploads.pdf.lote.max_archivos')],
+            'archivos.*' => ReglasDeArchivo::pdfDeLote(),
         ];
     }
 
@@ -41,6 +38,7 @@ class ImportarFacturasRequest extends FormRequest
         return [
             'archivos.max' => 'Se pueden subir hasta :max facturas por vez. Divide el lote.',
             'archivos.*.max' => 'Cada factura debe pesar menos de 2 MB.',
+            'archivos.*.mimetypes' => 'Solo se pueden subir archivos PDF.',
         ];
     }
 }

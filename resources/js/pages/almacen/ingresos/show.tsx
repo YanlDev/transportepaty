@@ -9,9 +9,9 @@ import ingresos, {
 import salidas from '@/actions/App/Http/Controllers/Almacen/SalidaAlmacenController';
 import { migasAlmacen } from '@/components/almacen/almacen-nav';
 import { AnularDialog } from '@/components/almacen/anular-dialog';
-import { ComprobanteAdjunto } from '@/components/almacen/comprobante-adjunto';
 import { Dato } from '@/components/almacen/dato';
 import { EstadoDocumento } from '@/components/almacen/estado-documento';
+import { CampoArchivo } from '@/components/campo-archivo';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Button } from '@/components/ui/button';
 import {
@@ -405,21 +405,20 @@ function ReemplazarComprobanteDialog({
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
-                        <ComprobanteAdjunto
-                            archivo={data.comprobante}
-                            onCambio={(archivo) =>
-                                setData('comprobante', archivo)
+                        <CampoArchivo
+                            archivos={
+                                data.comprobante ? [data.comprobante] : []
                             }
+                            onArchivos={(lista) =>
+                                setData('comprobante', lista[0] ?? null)
+                            }
+                            perfil="comprobante"
                             maximoKb={maximoKb}
+                            progreso={progress?.percentage ?? null}
                             error={errors.comprobante}
                         />
                     </div>
                     <DialogFooter>
-                        {progress && (
-                            <span className="self-center text-xs text-muted-foreground">
-                                Subiendo {progress.percentage}%
-                            </span>
-                        )}
                         <Button
                             type="submit"
                             disabled={processing || data.comprobante === null}

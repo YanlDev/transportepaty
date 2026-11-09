@@ -2,6 +2,7 @@ import { Link, useForm } from '@inertiajs/react';
 import viajes, {
     storeManual,
 } from '@/actions/App/Http/Controllers/ViajeController';
+import { CampoArchivo } from '@/components/campo-archivo';
 import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
@@ -56,23 +57,24 @@ export function ViajeManualForm({
     conductores,
     tiposCarga,
 }: Props) {
-    const { data, setData, post, processing, errors } = useForm<FormData>({
-        numero_gr: '',
-        fecha_traslado: new Date().toISOString().slice(0, 10),
-        tracto_id: '',
-        carreta_id: null,
-        conductor_id: '',
-        cliente: '',
-        destinatario: '',
-        origen: '',
-        direccion_destino: '',
-        departamento_destino: '',
-        peso: '',
-        unidad_peso: 'TNE',
-        tipo_carga: 'particular',
-        observaciones: '',
-        archivo: null,
-    });
+    const { data, setData, post, processing, progress, errors } =
+        useForm<FormData>({
+            numero_gr: '',
+            fecha_traslado: new Date().toISOString().slice(0, 10),
+            tracto_id: '',
+            carreta_id: null,
+            conductor_id: '',
+            cliente: '',
+            destinatario: '',
+            origen: '',
+            direccion_destino: '',
+            departamento_destino: '',
+            peso: '',
+            unidad_peso: 'TNE',
+            tipo_carga: 'particular',
+            observaciones: '',
+            archivo: null,
+        });
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -132,17 +134,16 @@ export function ViajeManualForm({
                             label="Archivo de referencia (opcional)"
                             error={errors.archivo}
                         >
-                            {(id) => (
-                                <Input
-                                    id={id}
-                                    type="file"
-                                    accept="application/pdf"
-                                    onChange={(e) =>
-                                        setData(
-                                            'archivo',
-                                            e.target.files?.[0] ?? null,
-                                        )
+                            {() => (
+                                <CampoArchivo
+                                    acepta="pdf"
+                                    archivos={
+                                        data.archivo ? [data.archivo] : []
                                     }
+                                    onArchivos={(lista) =>
+                                        setData('archivo', lista[0] ?? null)
+                                    }
+                                    progreso={progress?.percentage ?? null}
                                 />
                             )}
                         </Field>

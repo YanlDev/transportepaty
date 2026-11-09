@@ -693,8 +693,11 @@ it('keeps the invoice file private', function (): void {
     $archivo = $compra->getFirstMedia('comprobante');
 
     expect($archivo->disk)->toBe('local');
-    Storage::disk('local')->assertExists("{$archivo->id}/{$archivo->file_name}");
-    Storage::disk('public')->assertMissing("{$archivo->id}/{$archivo->file_name}");
+    Storage::disk('local')->assertExists($archivo->getPathRelativeToRoot());
+    Storage::disk('public')->assertMissing($archivo->getPathRelativeToRoot());
+
+    // En disco lleva un nombre generado, dentro de la carpeta del módulo.
+    expect($archivo->getPathRelativeToRoot())->toStartWith('almacen/');
 
     actingAs(almacenero())->get(route('almacen.ingresos.comprobante', $compra))->assertOk();
     actingAs(actorConRol('contador'))->get(route('almacen.ingresos.comprobante', $compra))->assertForbidden();
@@ -710,7 +713,7 @@ it('replaces the invoice file without touching the kardex', function (): void {
         ->assertSessionHasNoErrors();
 
     $nuevo = $compra->refresh()->getFirstMedia('comprobante');
-    expect($nuevo->file_name)->toBe('factura-legible.pdf')
+    expect($nuevo->name)->toBe('factura-legible')
         ->and($nuevo->id)->not->toBe($anterior->id)
         ->and($compra->getMedia('comprobante'))->toHaveCount(1)
         ->and((float) $filtro->refresh()->stock)->toBe(2.0);

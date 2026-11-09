@@ -6,6 +6,7 @@ use App\Enums\Moneda;
 use App\Enums\TipoComprobante;
 use App\Models\IngresoAlmacen;
 use App\Rules\FechaDelAlmacen;
+use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\CostoDeCompra;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -21,9 +22,6 @@ class StoreIngresoRequest extends FormRequest
 {
     /** Lo que se tolera entre el total del papel y la suma: el redondeo del IGV por línea. */
     public const TOLERANCIA_TOTAL = 0.10;
-
-    /** El tope del archivo, en KB. Las fotos se achican en el celular antes de subir. */
-    public const MAXIMO_KB = 10240;
 
     public function authorize(): bool
     {
@@ -60,7 +58,7 @@ class StoreIngresoRequest extends FormRequest
             'flete' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'total_comprobante' => ['required', 'numeric', 'min:0', 'max:999999999'],
             'observacion' => ['nullable', 'string', 'max:1000'],
-            'comprobante' => ['required', 'file', 'mimetypes:application/pdf,image/jpeg,image/png,image/webp', 'max:'.self::MAXIMO_KB],
+            'comprobante' => ['required', ...ReglasDeArchivo::imagenOPdf()],
             'detalles' => ['required', 'array', 'min:1', 'max:100'],
             'detalles.*.articulo_id' => ['required', 'integer', Rule::exists('articulos', 'id')->where('activo', true)],
             'detalles.*.cantidad' => ['required', 'numeric', 'gt:0', 'max:9999999'],
@@ -170,7 +168,7 @@ class StoreIngresoRequest extends FormRequest
             'total_comprobante.required' => 'Anota el total que dice el comprobante.',
             'comprobante.required' => 'Adjunta la foto o el PDF del comprobante.',
             'comprobante.uploaded' => 'El archivo no se pudo subir: probablemente es muy pesado. Prueba con una foto o un PDF más liviano.',
-            'comprobante.mimetypes' => 'El comprobante tiene que ser PDF o foto JPG, PNG o WEBP. Si es una foto de iPhone (HEIC), tómala con «Tomar foto» o guárdala como JPG.',
+            'comprobante.mimetypes' => 'El comprobante tiene que ser un PDF o una foto (JPG, PNG, WEBP o HEIC).',
             'comprobante.max' => 'El archivo pesa más de 10 MB.',
             'detalles.required' => 'Agrega al menos un artículo.',
             'detalles.*.articulo_id.required' => 'Elige el artículo.',

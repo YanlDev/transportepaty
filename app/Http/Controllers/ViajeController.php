@@ -14,6 +14,7 @@ use App\Models\Conductor;
 use App\Models\Factura;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
+use App\Services\FileUploadService;
 use App\Services\ImportadorViaje;
 use App\Services\Sunat\BajaGre;
 use App\Services\Sunat\BajaRechazada;
@@ -206,7 +207,7 @@ class ViajeController extends Controller
         return Inertia::render('viajes/create', $this->opcionesFormulario());
     }
 
-    public function storeManual(StoreViajeManualRequest $request): RedirectResponse
+    public function storeManual(StoreViajeManualRequest $request, FileUploadService $subidas): RedirectResponse
     {
         $this->authorize('create', Viaje::class);
 
@@ -244,7 +245,7 @@ class ViajeController extends Controller
         ]);
 
         if ($request->hasFile('archivo')) {
-            $viaje->addMediaFromRequest('archivo')->toMediaCollection('archivo');
+            $subidas->guardar($viaje, $request->file('archivo'), 'archivo');
         }
 
         return to_route('viajes.index')

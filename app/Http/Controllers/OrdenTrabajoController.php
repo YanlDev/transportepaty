@@ -11,6 +11,7 @@ use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\ServicioMantenimiento;
 use App\Models\Vehiculo;
+use App\Services\FileUploadService;
 use App\Services\ProximoMantenimiento;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
@@ -49,17 +50,17 @@ class OrdenTrabajoController extends Controller
         ]);
     }
 
-    public function store(StoreOrdenTrabajoRequest $request): RedirectResponse
+    public function store(StoreOrdenTrabajoRequest $request, FileUploadService $subidas): RedirectResponse
     {
         $this->authorize('create', OrdenTrabajo::class);
 
-        $orden = DB::transaction(function () use ($request): OrdenTrabajo {
+        $orden = DB::transaction(function () use ($request, $subidas): OrdenTrabajo {
             $orden = OrdenTrabajo::create([
                 ...$request->safe()->except(['fotos_antes', 'fotos_despues']),
                 'user_id' => $request->user()?->id,
             ]);
 
-            $this->guardarFotos($request, $orden);
+            $this->guardarFotos($request, $orden, $subidas);
 
             return $orden;
         });
@@ -106,14 +107,14 @@ class OrdenTrabajoController extends Controller
         ]);
     }
 
-    public function update(UpdateOrdenTrabajoRequest $request, OrdenTrabajo $orden): RedirectResponse
+    public function update(UpdateOrdenTrabajoRequest $request, OrdenTrabajo $orden, FileUploadService $subidas): RedirectResponse
     {
         $this->authorize('update', $orden);
 
-        DB::transaction(function () use ($request, $orden): void {
+        DB::transaction(function () use ($request, $orden, $subidas): void {
             $orden->update($request->safe()->except(['fotos_antes', 'fotos_despues']));
 
-            $this->guardarFotos($request, $orden);
+            $this->guardarFotos($request, $orden, $subidas);
         });
 
         return to_route('mantenimiento.show', $orden->vehiculo_id)->with('toast', [
@@ -148,11 +149,11 @@ class OrdenTrabajoController extends Controller
         return back();
     }
 
-    private function guardarFotos(StoreOrdenTrabajoRequest $request, OrdenTrabajo $orden): void
+    private function guardarFotos(StoreOrdenTrabajoRequest $request, OrdenTrabajo $orden, FileUploadService $subidas): void
     {
         foreach (['fotos_antes' => 'antes', 'fotos_despues' => 'despues'] as $campo => $coleccion) {
-            foreach ($request->file($campo, []) as $foto) {
-                $orden->addMedia($foto)->toMediaCollection($coleccion);
+            foreach ($request->file($campo, []) as $indice => $foto) {
+                $subidas->guardar($orden, $foto, $coleccion, "{$campo}.{$indice}");
             }
         }
     }

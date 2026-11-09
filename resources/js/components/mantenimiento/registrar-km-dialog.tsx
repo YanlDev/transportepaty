@@ -1,7 +1,8 @@
 import { useForm } from '@inertiajs/react';
-import { Camera, Gauge, X } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { Gauge } from 'lucide-react';
+import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/LecturaKilometrajeController';
+import { CampoArchivo } from '@/components/campo-archivo';
 import InputError from '@/components/input-error';
 import { formatearKm } from '@/components/mantenimiento/estado-mantenimiento';
 import { SelectorBuscable } from '@/components/selector-buscable';
@@ -18,7 +19,6 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { comprimirImagen } from '@/lib/comprimir-imagen';
 import { formatearPlaca } from '@/lib/format';
 import type { TractoKm } from '@/types/mantenimiento';
 
@@ -57,17 +57,23 @@ export function RegistrarKmDialog({
 }: Props) {
     const [abiertoInterno, setAbiertoInterno] = useState(false);
     const abierto = abiertoControlado ?? abiertoInterno;
-    const camara = useRef<HTMLInputElement>(null);
-    const [vistaPrevia, setVistaPrevia] = useState<string | null>(null);
     const [comprimiendo, setComprimiendo] = useState(false);
 
-    const { data, setData, post, processing, errors, reset, clearErrors } =
-        useForm<Formulario>({
-            vehiculo_id: vehiculoInicial ?? null,
-            kilometraje: '',
-            foto: null,
-            observacion: '',
-        });
+    const {
+        data,
+        setData,
+        post,
+        processing,
+        progress,
+        errors,
+        reset,
+        clearErrors,
+    } = useForm<Formulario>({
+        vehiculo_id: vehiculoInicial ?? null,
+        kilometraje: '',
+        foto: null,
+        observacion: '',
+    });
 
     const tracto = tractos.find((opcion) => opcion.id === data.vehiculo_id);
     const nuevo = Number(data.kilometraje);
@@ -88,28 +94,6 @@ export function RegistrarKmDialog({
         }
     };
 
-    const quitarFoto = () => {
-        setData('foto', null);
-        setVistaPrevia(null);
-
-        if (camara.current) {
-            camara.current.value = '';
-        }
-    };
-
-    const elegirFoto = async (archivo: File | undefined) => {
-        if (!archivo) {
-            return;
-        }
-
-        setComprimiendo(true);
-        const comprimida = await comprimirImagen(archivo);
-        setComprimiendo(false);
-
-        setData('foto', comprimida);
-        setVistaPrevia(URL.createObjectURL(comprimida));
-    };
-
     const guardar = (evento: React.FormEvent) => {
         evento.preventDefault();
 
@@ -118,7 +102,6 @@ export function RegistrarKmDialog({
             onSuccess: () => {
                 reset();
                 setData('vehiculo_id', vehiculoInicial ?? null);
-                quitarFoto();
                 cambiarAbierto(false);
             },
         });
@@ -206,51 +189,16 @@ export function RegistrarKmDialog({
 
                         <div className="grid gap-1.5">
                             <Label>Foto del tablero (opcional)</Label>
-                            <input
-                                ref={camara}
-                                type="file"
-                                accept="image/*"
-                                capture="environment"
-                                className="hidden"
-                                onChange={(evento) =>
-                                    elegirFoto(evento.target.files?.[0])
+                            <CampoArchivo
+                                acepta="imagen"
+                                archivos={data.foto ? [data.foto] : []}
+                                onArchivos={(lista) =>
+                                    setData('foto', lista[0] ?? null)
                                 }
+                                progreso={progress?.percentage ?? null}
+                                error={errors.foto}
+                                onPreparando={setComprimiendo}
                             />
-                            {vistaPrevia ? (
-                                <div className="relative w-fit">
-                                    <img
-                                        src={vistaPrevia}
-                                        alt="Foto del tablero"
-                                        className="h-32 rounded-md border object-cover"
-                                    />
-                                    <Button
-                                        type="button"
-                                        size="icon"
-                                        variant="secondary"
-                                        className="absolute top-1 right-1 size-7"
-                                        onClick={quitarFoto}
-                                        aria-label="Quitar la foto"
-                                    >
-                                        <X className="size-4" />
-                                    </Button>
-                                </div>
-                            ) : (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    className="h-12 justify-start"
-                                    onClick={() => camara.current?.click()}
-                                    disabled={comprimiendo}
-                                >
-                                    {comprimiendo ? (
-                                        <Spinner />
-                                    ) : (
-                                        <Camera className="size-5" />
-                                    )}
-                                    Tomar foto
-                                </Button>
-                            )}
-                            <InputError message={errors.foto} />
                         </div>
 
                         <div className="grid gap-1.5">

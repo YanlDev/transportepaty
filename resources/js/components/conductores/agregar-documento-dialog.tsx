@@ -1,7 +1,8 @@
 import { useForm } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { store } from '@/actions/App/Http/Controllers/ConductorDocumentoController';
+import { CampoArchivo } from '@/components/campo-archivo';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -49,16 +50,25 @@ export function AgregarDocumentoConductorDialog({
     trigger,
 }: Props) {
     const [open, setOpen] = useState(false);
-    const fileInput = useRef<HTMLInputElement>(null);
 
-    const { data, setData, post, processing, errors, reset, clearErrors } =
-        useForm<DocumentoForm>({
-            tipo: tipoInicial ?? tipos[0]?.value ?? 'otro',
-            numero: '',
-            fecha_emision: '',
-            fecha_vencimiento: '',
-            archivo: null,
-        });
+    const [preparando, setPreparando] = useState(false);
+
+    const {
+        data,
+        setData,
+        post,
+        processing,
+        progress,
+        errors,
+        reset,
+        clearErrors,
+    } = useForm<DocumentoForm>({
+        tipo: tipoInicial ?? tipos[0]?.value ?? 'otro',
+        numero: '',
+        fecha_emision: '',
+        fecha_vencimiento: '',
+        archivo: null,
+    });
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -68,10 +78,6 @@ export function AgregarDocumentoConductorDialog({
             forceFormData: true,
             onSuccess: () => {
                 reset();
-
-                if (fileInput.current) {
-                    fileInput.current.value = '';
-                }
 
                 setOpen(false);
             },
@@ -177,23 +183,23 @@ export function AgregarDocumentoConductorDialog({
 
                         <div className="grid gap-1.5">
                             <Label>Archivo (imagen o PDF)</Label>
-                            <Input
-                                ref={fileInput}
-                                type="file"
-                                accept="image/jpeg,image/png,image/webp,application/pdf"
-                                onChange={(e) =>
-                                    setData(
-                                        'archivo',
-                                        e.target.files?.[0] ?? null,
-                                    )
+                            <CampoArchivo
+                                archivos={data.archivo ? [data.archivo] : []}
+                                onArchivos={(lista) =>
+                                    setData('archivo', lista[0] ?? null)
                                 }
+                                progreso={progress?.percentage ?? null}
+                                error={errors.archivo}
+                                onPreparando={setPreparando}
                             />
-                            <InputError message={errors.archivo} />
                         </div>
                     </div>
 
                     <DialogFooter>
-                        <Button type="submit" disabled={processing}>
+                        <Button
+                            type="submit"
+                            disabled={processing || preparando}
+                        >
                             {processing && <Spinner />}
                             Subir documento
                         </Button>

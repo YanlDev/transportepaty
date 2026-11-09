@@ -7,6 +7,7 @@ use App\Enums\TipoOrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\ServicioMantenimiento;
 use App\Models\Vehiculo;
+use App\Services\Archivos\ReglasDeArchivo;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -62,9 +63,9 @@ class StoreOrdenTrabajoRequest extends FormRequest
             'tecnico' => ['nullable', 'string', 'max:150'],
             'observacion' => ['nullable', 'string', 'max:2000'],
             'fotos_antes' => ['nullable', 'array', 'max:'.self::MAXIMO_FOTOS],
-            'fotos_antes.*' => ['image', 'mimes:jpeg,png,webp', 'max:10240'],
+            'fotos_antes.*' => ReglasDeArchivo::imagen(),
             'fotos_despues' => ['nullable', 'array', 'max:'.self::MAXIMO_FOTOS],
-            'fotos_despues.*' => ['image', 'mimes:jpeg,png,webp', 'max:10240'],
+            'fotos_despues.*' => ReglasDeArchivo::imagen(),
         ];
     }
 
@@ -116,6 +117,8 @@ class StoreOrdenTrabajoRequest extends FormRequest
             'fotos_despues.max' => 'Hasta :max fotos por grupo.',
             'fotos_antes.*.max' => 'Cada foto debe pesar menos de 10 MB.',
             'fotos_despues.*.max' => 'Cada foto debe pesar menos de 10 MB.',
+            'fotos_antes.*.mimetypes' => 'Cada foto debe ser JPG, PNG, WEBP o HEIC.',
+            'fotos_despues.*.mimetypes' => 'Cada foto debe ser JPG, PNG, WEBP o HEIC.',
             'termino.after_or_equal' => 'El término no puede ser antes del inicio.',
         ];
     }

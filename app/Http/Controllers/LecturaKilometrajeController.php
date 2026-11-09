@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreLecturaKilometrajeRequest;
 use App\Models\LecturaKilometraje;
 use App\Models\Vehiculo;
+use App\Services\FileUploadService;
 use App\Services\ProximoMantenimiento;
 use Illuminate\Http\RedirectResponse;
 
@@ -14,7 +15,7 @@ use Illuminate\Http\RedirectResponse;
  */
 class LecturaKilometrajeController extends Controller
 {
-    public function store(StoreLecturaKilometrajeRequest $request, ProximoMantenimiento $mantenimiento): RedirectResponse
+    public function store(StoreLecturaKilometrajeRequest $request, ProximoMantenimiento $mantenimiento, FileUploadService $subidas): RedirectResponse
     {
         $this->authorize('create', LecturaKilometraje::class);
 
@@ -25,7 +26,7 @@ class LecturaKilometrajeController extends Controller
         ]);
 
         if ($request->hasFile('foto')) {
-            $lectura->addMediaFromRequest('foto')->toMediaCollection('foto');
+            $subidas->guardar($lectura, $request->file('foto'), 'foto', 'foto');
         }
 
         $vehiculo = Vehiculo::query()->findOrFail($lectura->vehiculo_id);

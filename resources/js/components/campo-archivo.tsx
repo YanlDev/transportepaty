@@ -1,164 +1,257 @@
-import { Camera, FileText, Paperclip, X } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Camera, FileText, ImagePlus, Paperclip, X } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import { comprimirImagen } from '@/lib/comprimir-imagen';
+import { useSubidaArchivos } from '@/hooks/use-subida-archivos';
+import type { TipoAceptado } from '@/hooks/use-subida-archivos';
+import { formatearPeso, pesoOriginal } from '@/lib/comprimir-imagen';
+import type { PerfilDeImagen } from '@/lib/comprimir-imagen';
 
-/** Para leer un comprobante hace falta más detalle que para la foto de una pieza. */
-const LADO_MAXIMO = 2200;
-const CALIDAD = 0.85;
+const ACCEPT: Record<TipoAceptado, string> = {
+    imagen: 'image/*',
+    pdf: 'application/pdf',
+    'imagen-pdf': 'application/pdf,image/*',
+};
+
+type Props = {
+    /** Los archivos elegidos, todavía sin subir: viajan con el formulario. */
+    archivos: File[];
+    onArchivos: (archivos: File[]) => void;
+    acepta?: TipoAceptado;
+    /** Varios archivos (una galería) en vez de uno solo. */
+    multiple?: boolean;
+    /** Botón «Tomar foto», que en el celular abre la cámara de atrás. */
+    camara?: boolean;
+    perfil?: PerfilDeImagen;
+    maximoKb?: number;
+    /** Porcentaje de la subida en curso (`progress?.percentage` de useForm). */
+    progreso?: number | null;
+    error?: string;
+    deshabilitado?: boolean;
+    /** Avisa mientras se comprime, para bloquear el botón de enviar. */
+    onPreparando?: (preparando: boolean) => void;
+};
 
 /**
- * Adjuntar la foto o el PDF del comprobante. En el celular, «Tomar foto»
- * abre directo la cámara de atrás. Las fotos se achican antes de subirse
- * (pasan de 4-8 MB a menos de 1 MB) para que suban rápido con datos y no
- * choquen con el límite del servidor; un PDF va tal cual.
+ * El campo de archivo de todo el sistema: fotos, PDF o ambos, uno o varios.
  *
- * Muestra la foto elegida o el nombre del PDF, y avisa antes de enviar si el
- * archivo pesa más de lo permitido.
+ * Las fotos se achican en el navegador antes de sumarse al formulario (un
+ * PDF va tal cual). Muestra la vista previa, cuánto pesaba y cuánto pesa
+ * ahora, el avance de la subida y el error de validación del servidor.
  */
-export function ComprobanteAdjunto({
-    archivo,
-    onCambio,
+export function CampoArchivo({
+    archivos,
+    onArchivos,
+    acepta = 'imagen-pdf',
+    multiple = false,
+    camara = acepta !== 'pdf',
+    perfil = 'foto',
     maximoKb,
+    progreso = null,
     error,
-}: {
-    archivo: File | null;
-    onCambio: (archivo: File | null) => void;
-    maximoKb: number;
-    error?: string;
-}) {
-    const camara = useRef<HTMLInputElement>(null);
-    const selector = useRef<HTMLInputElement>(null);
-    const [preparando, setPreparando] = useState(false);
-    const [aviso, setAviso] = useState<string | null>(null);
-    const vista = useMemo(
-        () =>
-            archivo !== null && archivo.type.startsWith('image/')
-                ? URL.createObjectURL(archivo)
-                : null,
-        [archivo],
-    );
+    deshabilitado = false,
+    onPreparando,
+}: Props) {
+    const entradaCamara = useRef<HTMLInputElement>(null);
+    const entradaSelector = useRef<HTMLInputElement>(null);
+    const { preparando, aviso, vistas, preparar } = useSubidaArchivos({
+        archivos,
+        acepta,
+        perfil,
+        maximoKb,
+    });
+    const subiendo = progreso !== null;
+    const bloqueado = deshabilitado || preparando || subiendo;
 
-    useEffect(
-        () => () => {
-            if (vista) {
-                URL.revokeObjectURL(vista);
-            }
-        },
-        [vista],
-    );
+    useEffect(() => {
+        onPreparando?.(preparando);
+        // Solo interesa el cambio de estado, no la identidad del callback.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [preparando]);
 
     const elegir = async (lista: FileList | null) => {
-        const elegido = lista?.[0];
+        const elegidos = Array.from(lista ?? []);
 
-        for (const entrada of [camara.current, selector.current]) {
+        // Se vacían para que elegir otra vez el mismo archivo vuelva a avisar.
+        for (const entrada of [
+            entradaCamara.current,
+            entradaSelector.current,
+        ]) {
             if (entrada) {
                 entrada.value = '';
             }
         }
 
-        if (!elegido) {
+        if (elegidos.length === 0) {
             return;
         }
 
-        setPreparando(true);
-        const listo = await comprimirImagen(elegido, LADO_MAXIMO, CALIDAD);
-        setPreparando(false);
+        const listos = await preparar(multiple ? elegidos : [elegidos[0]]);
 
-        if (listo.size > maximoKb * 1024) {
-            setAviso(
-                `Pesa ${(listo.size / 1024 / 1024).toFixed(1)} MB y el máximo es ${Math.round(maximoKb / 1024)} MB. Si es un PDF escaneado, guárdalo en menor calidad; si es una foto, tómala con «Tomar foto».`,
-            );
-            onCambio(null);
-
-            return;
+        if (listos.length > 0) {
+            onArchivos(multiple ? [...archivos, ...listos] : listos);
         }
-
-        setAviso(null);
-        onCambio(listo);
     };
+
+    const quitar = (indice: number) =>
+        onArchivos(archivos.filter((_, i) => i !== indice));
+
+    const textoElegir =
+        acepta === 'pdf'
+            ? 'Elegir PDF'
+            : acepta === 'imagen'
+              ? 'Galería'
+              : 'Subir PDF o foto';
 
     return (
         <div className="grid gap-2">
             <input
-                ref={camara}
+                ref={entradaCamara}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 className="hidden"
-                onChange={(e) => elegir(e.target.files)}
+                onChange={(evento) => elegir(evento.target.files)}
             />
             <input
-                ref={selector}
+                ref={entradaSelector}
                 type="file"
-                accept="application/pdf,image/jpeg,image/png,image/webp,image/*"
+                accept={ACCEPT[acepta]}
+                multiple={multiple}
                 className="hidden"
-                onChange={(e) => elegir(e.target.files)}
+                onChange={(evento) => elegir(evento.target.files)}
             />
 
-            {archivo ? (
-                <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-2">
-                    {vista ? (
-                        <img
-                            src={vista}
-                            alt="Comprobante"
-                            className="size-16 rounded-md object-cover"
+            {archivos.length > 0 && (
+                <ul className="grid gap-2">
+                    {archivos.map((archivo, indice) => (
+                        <ArchivoElegido
+                            key={`${archivo.name}-${archivo.lastModified}-${indice}`}
+                            archivo={archivo}
+                            vista={vistas[indice] ?? null}
+                            onQuitar={() => quitar(indice)}
+                            bloqueado={subiendo || deshabilitado}
                         />
-                    ) : (
-                        <span className="flex size-16 items-center justify-center rounded-md bg-background">
-                            <FileText className="size-7 text-muted-foreground" />
-                        </span>
+                    ))}
+                </ul>
+            )}
+
+            {(multiple || archivos.length === 0) && (
+                <div
+                    className={camara ? 'grid grid-cols-2 gap-2' : 'grid gap-2'}
+                >
+                    {camara && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="h-12"
+                            onClick={() => entradaCamara.current?.click()}
+                            disabled={bloqueado}
+                        >
+                            {preparando ? (
+                                <Spinner />
+                            ) : (
+                                <Camera className="size-5" />
+                            )}
+                            Tomar foto
+                        </Button>
                     )}
-                    <div className="min-w-0 flex-1 text-sm">
-                        <p className="truncate font-medium">{archivo.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                            {archivo.size < 1024 * 1024
-                                ? `${Math.ceil(archivo.size / 1024)} KB`
-                                : `${(archivo.size / 1024 / 1024).toFixed(1)} MB`}
-                        </p>
-                    </div>
                     <Button
                         type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Quitar el comprobante"
-                        onClick={() => onCambio(null)}
+                        variant="outline"
+                        className="h-12"
+                        onClick={() => entradaSelector.current?.click()}
+                        disabled={bloqueado}
                     >
-                        <X className="size-4" />
+                        {preparando && !camara ? (
+                            <Spinner />
+                        ) : acepta === 'imagen' ? (
+                            <ImagePlus className="size-5" />
+                        ) : (
+                            <Paperclip className="size-5" />
+                        )}
+                        {textoElegir}
                     </Button>
                 </div>
-            ) : (
-                <div className="grid grid-cols-2 gap-2">
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="h-12"
-                        onClick={() => camara.current?.click()}
-                        disabled={preparando}
+            )}
+
+            {subiendo && (
+                <div className="grid gap-1" aria-live="polite">
+                    <div
+                        className="h-1.5 overflow-hidden rounded-full bg-muted"
+                        role="progressbar"
+                        aria-valuenow={Math.round(progreso)}
+                        aria-valuemin={0}
+                        aria-valuemax={100}
                     >
-                        {preparando ? (
-                            <Spinner />
-                        ) : (
-                            <Camera className="size-5" />
-                        )}
-                        Tomar foto
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="outline"
-                        className="h-12"
-                        onClick={() => selector.current?.click()}
-                        disabled={preparando}
-                    >
-                        <Paperclip className="size-5" />
-                        Subir PDF o foto
-                    </Button>
+                        <div
+                            className="h-full rounded-full bg-primary transition-[width]"
+                            style={{ width: `${progreso}%` }}
+                        />
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                        Subiendo… {Math.round(progreso)} %
+                    </span>
                 </div>
             )}
 
             <InputError message={aviso ?? error} />
         </div>
+    );
+}
+
+function ArchivoElegido({
+    archivo,
+    vista,
+    onQuitar,
+    bloqueado,
+}: {
+    archivo: File;
+    vista: string | null;
+    onQuitar: () => void;
+    bloqueado: boolean;
+}) {
+    const antes = pesoOriginal(archivo);
+
+    return (
+        <li className="flex items-center gap-3 rounded-lg border bg-muted/30 p-2">
+            {vista ? (
+                <a
+                    href={vista}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="shrink-0"
+                >
+                    <img
+                        src={vista}
+                        alt="Vista previa"
+                        className="size-16 rounded-md object-cover"
+                    />
+                </a>
+            ) : (
+                <span className="flex size-16 shrink-0 items-center justify-center rounded-md bg-background">
+                    <FileText className="size-7 text-muted-foreground" />
+                </span>
+            )}
+            <div className="min-w-0 flex-1 text-sm">
+                <p className="truncate font-medium">{archivo.name}</p>
+                <p className="text-xs text-muted-foreground tabular-nums">
+                    {antes > archivo.size
+                        ? `${formatearPeso(antes)} → ${formatearPeso(archivo.size)}`
+                        : formatearPeso(archivo.size)}
+                </p>
+            </div>
+            <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label="Quitar el archivo"
+                onClick={onQuitar}
+                disabled={bloqueado}
+            >
+                <X className="size-4" />
+            </Button>
+        </li>
     );
 }

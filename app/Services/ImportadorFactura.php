@@ -29,6 +29,7 @@ class ImportadorFactura
     public function __construct(
         private readonly LectorFactura $lector,
         private readonly AsociadorFacturas $asociador,
+        private readonly FileUploadService $subidas,
     ) {}
 
     /**
@@ -97,8 +98,7 @@ class ImportadorFactura
 
             $factura->save();
 
-            // El origen no se borra: es el archivo subido por HTTP.
-            $factura->addMedia($archivo)->preservingOriginal()->toMediaCollection('archivo');
+            $this->subidas->guardar($factura, $archivo, 'archivo', 'archivos');
 
             $resultado = $this->asociador->asociarCitadas($factura);
 

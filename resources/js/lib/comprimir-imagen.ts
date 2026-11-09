@@ -1,48 +1,79 @@
+import imageCompression from 'browser-image-compression';
+// La librería corre en un web worker, y ese worker la vuelve a cargar por
+// URL. Por defecto la pide a un CDN; acá se le da la copia que sirve la
+// propia aplicación, para no depender de nadie de afuera.
+import urlLibreria from 'browser-image-compression/dist/browser-image-compression.js?url';
+
+/**
+ * Tamaño y calidad con los que sale una foto. Son los mismos números de
+ * `config/uploads.php`: si cambias unos, cambia los otros.
+ *
+ * - `foto`: el estado de una pieza, un tablero, un voucher.
+ * - `comprobante`: un papel que hay que poder leer; pide más detalle.
+ */
+export const PERFILES_DE_IMAGEN = {
+    foto: { ladoMaximo: 1920, calidad: 0.8 },
+    comprobante: { ladoMaximo: 2200, calidad: 0.85 },
+} as const;
+
+export type PerfilDeImagen = keyof typeof PERFILES_DE_IMAGEN;
+
+/** Cuánto pesaba cada archivo antes de comprimirlo, para mostrarlo. */
+const pesosOriginales = new WeakMap<File, number>();
+
+/** El peso del archivo tal como salió de la cámara o de la carpeta. */
+export function pesoOriginal(archivo: File): number {
+    return pesosOriginales.get(archivo) ?? archivo.size;
+}
+
 /**
  * Achica una foto antes de subirla. La cámara de un celular saca fotos de 4
- * a 8 MB; para ver un tablero o el estado de una pieza alcanza con 1600 px
- * de lado mayor, que queda en unos 300 KB. Sube rápido con datos móviles y
- * no llena el servidor.
+ * a 8 MB; con 1920 px de lado mayor queda en unos cientos de KB: sube rápido
+ * con datos móviles y no llena el servidor. El trabajo corre en un web
+ * worker, así que la pantalla no se congela mientras tanto.
  *
- * Si el navegador no puede leer la imagen (un formato raro), devuelve el
- * archivo tal cual y que lo decida la validación del servidor.
+ * Un PDF —o cualquier cosa que no sea imagen— pasa sin tocarse. Si la
+ * compresión falla (un formato que el navegador no sabe leer, como el HEIC
+ * fuera de Safari) o el resultado pesa más, se devuelve el original y que lo
+ * resuelva el servidor.
  */
 export async function comprimirImagen(
     archivo: File,
-    ladoMaximo = 1600,
-    calidad = 0.8,
+    perfil: PerfilDeImagen = 'foto',
 ): Promise<File> {
     if (!archivo.type.startsWith('image/')) {
         return archivo;
     }
 
+    const { ladoMaximo, calidad } = PERFILES_DE_IMAGEN[perfil];
+
     try {
-        const imagen = await createImageBitmap(archivo);
-        const escala = Math.min(
-            1,
-            ladoMaximo / Math.max(imagen.width, imagen.height),
-        );
-        const ancho = Math.round(imagen.width * escala);
-        const alto = Math.round(imagen.height * escala);
+        const comprimido = await imageCompression(archivo, {
+            maxWidthOrHeight: ladoMaximo,
+            initialQuality: calidad,
+            fileType: 'image/jpeg',
+            useWebWorker: true,
+            libURL: new URL(urlLibreria, window.location.origin).href,
+        });
 
-        const lienzo = document.createElement('canvas');
-        lienzo.width = ancho;
-        lienzo.height = alto;
-        lienzo.getContext('2d')?.drawImage(imagen, 0, 0, ancho, alto);
-        imagen.close();
-
-        const blob = await new Promise<Blob | null>((resolver) =>
-            lienzo.toBlob(resolver, 'image/jpeg', calidad),
-        );
-
-        if (blob === null || blob.size >= archivo.size) {
+        if (comprimido.size >= archivo.size) {
             return archivo;
         }
 
         const nombre = archivo.name.replace(/\.[^.]+$/, '') + '.jpg';
+        const listo = new File([comprimido], nombre, { type: 'image/jpeg' });
 
-        return new File([blob], nombre, { type: 'image/jpeg' });
+        pesosOriginales.set(listo, archivo.size);
+
+        return listo;
     } catch {
         return archivo;
     }
+}
+
+/** «310 KB», «4.2 MB». */
+export function formatearPeso(bytes: number): string {
+    return bytes < 1024 * 1024
+        ? `${Math.max(1, Math.ceil(bytes / 1024))} KB`
+        : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }

@@ -43,7 +43,10 @@ class ImportadorViaje
         'conductor_nombre',
     ];
 
-    public function __construct(private readonly LectorGuiaRemision $lector) {}
+    public function __construct(
+        private readonly LectorGuiaRemision $lector,
+        private readonly FileUploadService $subidas,
+    ) {}
 
     /**
      * @return array{viaje: Viaje|null, reconocido: bool}
@@ -115,9 +118,7 @@ class ImportadorViaje
 
         $viaje = Viaje::query()->conAnuladas()->updateOrCreate(['numero_gr' => $campos['numero_gr']], $atributos);
 
-        // El origen no debe borrarse: es el archivo subido por HTTP, no algo
-        // desechable que MediaLibrary pueda consumir.
-        $viaje->addMedia($archivo)->preservingOriginal()->toMediaCollection('archivo');
+        $this->subidas->guardar($viaje, $archivo, 'archivo', 'archivos');
 
         return ['viaje' => $viaje, 'reconocido' => true];
     }

@@ -3,6 +3,7 @@ import { Ban, Fuel, Pencil, Receipt } from 'lucide-react';
 import { useState } from 'react';
 import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoController';
 import { galones, soles } from '@/components/abastecimiento/barra-combustible';
+import { CampoArchivo } from '@/components/campo-archivo';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -502,32 +503,34 @@ function FormDespacho({
     const ultimoPrecio = puntos.find(
         (punto) => punto.id === registro.punto_id,
     )?.ultimo_precio;
-    const { data, setData, post, transform, processing, errors } = useForm<{
-        galones_despachados: string;
-        precio_galon: string;
-        kilometraje: string;
-        despachado_el: string;
-        foto_voucher: File | null;
-        confirmar_capacidad: boolean;
-    }>({
-        galones_despachados: registro.tanque_lleno
-            ? registro.despacho
-                ? String(registro.despacho.galones)
-                : ''
-            : String(registro.despacho?.galones ?? registro.galones),
-        precio_galon: String(
-            registro.despacho?.precio_galon ??
-                registro.precio_autorizado ??
-                ultimoPrecio ??
-                '',
-        ),
-        kilometraje: registro.despacho?.kilometraje
-            ? String(registro.despacho.kilometraje)
-            : '',
-        despachado_el: registro.despacho?.fecha ?? hoy(),
-        foto_voucher: null,
-        confirmar_capacidad: false,
-    });
+    const [preparando, setPreparando] = useState(false);
+    const { data, setData, post, transform, processing, progress, errors } =
+        useForm<{
+            galones_despachados: string;
+            precio_galon: string;
+            kilometraje: string;
+            despachado_el: string;
+            foto_voucher: File | null;
+            confirmar_capacidad: boolean;
+        }>({
+            galones_despachados: registro.tanque_lleno
+                ? registro.despacho
+                    ? String(registro.despacho.galones)
+                    : ''
+                : String(registro.despacho?.galones ?? registro.galones),
+            precio_galon: String(
+                registro.despacho?.precio_galon ??
+                    registro.precio_autorizado ??
+                    ultimoPrecio ??
+                    '',
+            ),
+            kilometraje: registro.despacho?.kilometraje
+                ? String(registro.despacho.kilometraje)
+                : '',
+            despachado_el: registro.despacho?.fecha ?? hoy(),
+            foto_voucher: null,
+            confirmar_capacidad: false,
+        });
     // El servidor avisa si no cabe en el tanque de la marca: se confirma.
     const noCabe = (errors.galones_despachados ?? '').startsWith('No cabe');
     const importe =
@@ -672,18 +675,17 @@ function FormDespacho({
                             : 'Toma la foto con el celular: queda con el combustible.'
                     }
                 >
-                    {(id) => (
-                        <Input
-                            id={id}
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            onChange={(evento) =>
-                                setData(
-                                    'foto_voucher',
-                                    evento.target.files?.[0] ?? null,
-                                )
+                    {() => (
+                        <CampoArchivo
+                            acepta="imagen"
+                            archivos={
+                                data.foto_voucher ? [data.foto_voucher] : []
                             }
+                            onArchivos={(lista) =>
+                                setData('foto_voucher', lista[0] ?? null)
+                            }
+                            progreso={progress?.percentage ?? null}
+                            onPreparando={setPreparando}
                         />
                     )}
                 </Field>
@@ -714,7 +716,7 @@ function FormDespacho({
                 <Button
                     type="submit"
                     form="registrar-despacho"
-                    disabled={processing}
+                    disabled={processing || preparando}
                 >
                     Guardar voucher
                 </Button>
