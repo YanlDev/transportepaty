@@ -41,7 +41,11 @@ type Props = {
  * La ficha de un artículo: cuánto hay, cuánto vale, a qué unidades se fue y
  * su kardex, del movimiento más nuevo al más viejo.
  */
-export default function ArticuloShow({ articulo, movimientos, consumo }: Props) {
+export default function ArticuloShow({
+    articulo,
+    movimientos,
+    consumo,
+}: Props) {
     const { puede } = usePermisos();
     const veCostos = puede('almacen.ver_costos');
     const anio = new Date().getFullYear();
@@ -159,7 +163,10 @@ export default function ArticuloShow({ articulo, movimientos, consumo }: Props) 
                                 className="rounded-lg border bg-card px-3 py-1.5 text-sm"
                             >
                                 <strong>{formatearPlaca(fila.placa)}</strong>{' '}
-                                {formatearCantidad(fila.cantidad, articulo.unidad)}
+                                {formatearCantidad(
+                                    fila.cantidad,
+                                    articulo.unidad,
+                                )}
                                 {fila.costo !== null &&
                                     ` · ${formatearSoles(fila.costo)}`}
                             </span>
@@ -174,7 +181,10 @@ export default function ArticuloShow({ articulo, movimientos, consumo }: Props) 
                     {veCostos && (
                         <div className="flex flex-wrap items-end gap-2">
                             <div className="grid gap-1">
-                                <Label htmlFor="kardex-desde" className="text-xs">
+                                <Label
+                                    htmlFor="kardex-desde"
+                                    className="text-xs"
+                                >
                                     Desde
                                 </Label>
                                 <Input
@@ -186,7 +196,10 @@ export default function ArticuloShow({ articulo, movimientos, consumo }: Props) 
                                 />
                             </div>
                             <div className="grid gap-1">
-                                <Label htmlFor="kardex-hasta" className="text-xs">
+                                <Label
+                                    htmlFor="kardex-hasta"
+                                    className="text-xs"
+                                >
                                     Hasta
                                 </Label>
                                 <Input

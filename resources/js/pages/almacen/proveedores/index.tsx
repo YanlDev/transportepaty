@@ -26,10 +26,7 @@ export default function ProveedoresIndex({
 }: Props) {
     const { puede } = usePermisos();
     const puedeEditar = puede('almacen.catalogo');
-    const { buscar, setBuscar } = useFiltros(
-        filtros,
-        proveedores.index().url,
-    );
+    const { buscar, setBuscar } = useFiltros(filtros, proveedores.index().url);
 
     setLayoutProps({
         breadcrumbs: migasAlmacen({
@@ -101,7 +98,10 @@ export default function ProveedoresIndex({
                                 </div>
                                 {(proveedor.contacto || proveedor.telefono) && (
                                     <p className="text-sm">
-                                        {[proveedor.contacto, proveedor.telefono]
+                                        {[
+                                            proveedor.contacto,
+                                            proveedor.telefono,
+                                        ]
                                             .filter(Boolean)
                                             .join(' · ')}
                                     </p>

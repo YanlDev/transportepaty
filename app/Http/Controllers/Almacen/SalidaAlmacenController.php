@@ -9,6 +9,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Almacen\AnularDocumentoRequest;
 use App\Http\Requests\Almacen\StoreDevolucionRequest;
 use App\Http\Requests\Almacen\StoreSalidaRequest;
+use App\Models\Articulo;
 use App\Models\DetalleSalida;
 use App\Models\IngresoAlmacen;
 use App\Models\OrdenTrabajo;
@@ -52,7 +53,9 @@ class SalidaAlmacenController extends Controller
 
                 $query->where(fn ($query) => $query
                     ->whereRaw('lower(entregado_a) like ?', ['%'.mb_strtolower($texto).'%'])
-                    ->orWhereHas('detalles.articulo', fn ($query) => $query->buscar($texto))
+                    ->orWhereIn('id', DetalleSalida::query()
+                        ->whereIn('articulo_id', Articulo::query()->buscar($texto)->select('id'))
+                        ->select('salida_almacen_id'))
                     ->when($id > 0, fn ($query) => $query->orWhere('id', $id)));
             })
             ->when($filtros['destino'] !== '', fn ($query) => $query->where('destino', $filtros['destino']))
@@ -89,7 +92,7 @@ class SalidaAlmacenController extends Controller
             'inicial' => [
                 'destino' => $orden !== null ? DestinoSalida::OrdenTrabajo->value : DestinoSalida::Unidad->value,
                 'orden_trabajo_id' => $orden?->id,
-                'vehiculo_id' => $orden?->vehiculo_id ?? ($request->integer('vehiculo') ?: null),
+                'vehiculo_id' => $orden !== null ? $orden->vehiculo_id : ($request->integer('vehiculo') ?: null),
                 'entregado_a' => $orden?->tecnico,
             ],
             'hoy' => RelojOperativo::hoy(),
@@ -102,7 +105,7 @@ class SalidaAlmacenController extends Controller
 
         $datos = $request->validated();
         $destino = DestinoSalida::from($datos['destino']);
-        $orden = $destino === DestinoSalida::OrdenTrabajo ? OrdenTrabajo::query()->findOrFail($datos['orden_trabajo_id']) : null;
+        $orden = $destino === DestinoSalida::OrdenTrabajo ? OrdenTrabajo::query()->findOrFail((int) $datos['orden_trabajo_id']) : null;
 
         $salida = DB::transaction(function () use ($request, $datos, $destino, $orden): SalidaAlmacen {
             $salida = SalidaAlmacen::create([

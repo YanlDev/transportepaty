@@ -173,7 +173,7 @@ class ExportadorAlmacen
                     $movimiento->documento,
                     $movimiento->tipo->label(),
                     $movimiento->tipo->codigoSunat(),
-                    $movimiento->vehiculo?->placa ?? $movimiento->proveedor?->nombre(),
+                    $movimiento->vehiculo_id !== null ? $movimiento->vehiculo->placa : $movimiento->proveedor?->nombre(),
                     $entra ? (float) $movimiento->entrada : null,
                     $entra ? (float) $movimiento->costo_unitario : null,
                     $entra ? (float) $movimiento->costo_total : null,

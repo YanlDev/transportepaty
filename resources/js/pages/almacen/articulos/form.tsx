@@ -117,10 +117,16 @@ export default function ArticuloForm({
 
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-4 md:p-6">
-            <Head title={editando ? `Editar ${articulo.codigo}` : 'Artículo nuevo'} />
+            <Head
+                title={
+                    editando ? `Editar ${articulo.codigo}` : 'Artículo nuevo'
+                }
+            />
 
             <EncabezadoPantalla
-                titulo={editando ? `Editar ${articulo.nombre}` : 'Artículo nuevo'}
+                titulo={
+                    editando ? `Editar ${articulo.nombre}` : 'Artículo nuevo'
+                }
                 descripcion="Lo que se guarda en el almacén: cómo se llama, cómo se cuenta y dónde está."
                 icono={Package}
             />
@@ -271,10 +277,7 @@ export default function ArticuloForm({
                             </Select>
                         )}
                     </Field>
-                    <Field
-                        label="Se compra por"
-                        error={errors.unidad_compra}
-                    >
+                    <Field label="Se compra por" error={errors.unidad_compra}>
                         {(id) => (
                             <Select
                                 value={data.unidad_compra || MISMA_UNIDAD}
@@ -358,28 +361,31 @@ export default function ArticuloForm({
                         </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                        {[...new Set([...marcasFlota, ...data.marcas_compatibles])].map(
-                            (marca) => {
-                                const elegida =
-                                    data.marcas_compatibles.includes(marca);
+                        {[
+                            ...new Set([
+                                ...marcasFlota,
+                                ...data.marcas_compatibles,
+                            ]),
+                        ].map((marca) => {
+                            const elegida =
+                                data.marcas_compatibles.includes(marca);
 
-                                return (
-                                    <button
-                                        key={marca}
-                                        type="button"
-                                        onClick={() => alternarMarca(marca)}
-                                        className={
-                                            elegida
-                                                ? 'flex items-center gap-1 rounded-full border border-primary bg-primary/10 px-3 py-1 text-sm text-primary'
-                                                : 'rounded-full border px-3 py-1 text-sm text-muted-foreground hover:bg-accent'
-                                        }
-                                    >
-                                        {marca}
-                                        {elegida && <X className="size-3" />}
-                                    </button>
-                                );
-                            },
-                        )}
+                            return (
+                                <button
+                                    key={marca}
+                                    type="button"
+                                    onClick={() => alternarMarca(marca)}
+                                    className={
+                                        elegida
+                                            ? 'flex items-center gap-1 rounded-full border border-primary bg-primary/10 px-3 py-1 text-sm text-primary'
+                                            : 'rounded-full border px-3 py-1 text-sm text-muted-foreground hover:bg-accent'
+                                    }
+                                >
+                                    {marca}
+                                    {elegida && <X className="size-3" />}
+                                </button>
+                            );
+                        })}
                     </div>
                     <div className="flex max-w-sm gap-2">
                         <Input
@@ -430,8 +436,8 @@ export default function ArticuloForm({
                                 }
                             />
                             <Label htmlFor="articulo-activo">
-                                Activo (desmarcado, ya no se compra ni se
-                                elige; su historial se queda)
+                                Activo (desmarcado, ya no se compra ni se elige;
+                                su historial se queda)
                             </Label>
                         </div>
                     )}

@@ -41,7 +41,7 @@ class StoreIngresoRequest extends FormRequest
             'tipo_cambio' => ['nullable', 'required_if:moneda,'.Moneda::Dolares->value, 'numeric', 'gt:0', 'max:99'],
             'precios_con_igv' => ['boolean'],
             'observacion' => ['nullable', 'string', 'max:1000'],
-            'comprobante' => ['nullable', 'file', 'mimes:pdf,jpg,jpeg,png,webp', 'max:10240'],
+            'comprobante' => ['nullable', 'file', 'mimetypes:application/pdf,image/jpeg,image/png,image/webp', 'max:10240'],
             'detalles' => ['required', 'array', 'min:1', 'max:100'],
             'detalles.*.articulo_id' => ['required', 'integer', Rule::exists('articulos', 'id')->where('activo', true)],
             'detalles.*.cantidad' => ['required', 'numeric', 'gt:0', 'max:9999999'],

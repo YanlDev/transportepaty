@@ -14,6 +14,7 @@ use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
 use App\Models\DetalleIngreso;
 use App\Models\IngresoAlmacen;
+use App\Models\Proveedor;
 use App\Services\CostoDeCompra;
 use App\Services\Kardex;
 use App\Services\RelojOperativo;
@@ -58,7 +59,7 @@ class IngresoAlmacenController extends Controller
 
                 $query->where(fn ($query) => $query
                     ->where('serie_numero', 'like', '%'.mb_strtoupper($texto).'%')
-                    ->orWhereHas('proveedor', fn ($query) => $query->buscar($texto))
+                    ->orWhereIn('proveedor_id', Proveedor::query()->buscar($texto)->select('id'))
                     ->when($id > 0, fn ($query) => $query->orWhere('id', $id)));
             })
             ->when($filtros['proveedor'] !== '', fn ($query) => $query->where('proveedor_id', (int) $filtros['proveedor']))
@@ -109,11 +110,11 @@ class IngresoAlmacenController extends Controller
         $moneda = Moneda::from($datos['moneda']);
         $articulos = Articulo::query()->whereIn('id', array_column($datos['detalles'], 'articulo_id'))->get()->keyBy('id');
 
-        $lineas = array_map(fn (array $linea): array => [
+        $lineas = array_values(array_map(fn (array $linea): array => [
             'cantidad' => (float) $linea['cantidad'],
             'precio_unitario' => (float) $linea['precio_unitario'],
             'factor' => $articulos[$linea['articulo_id']]->factor(),
-        ], $datos['detalles']);
+        ], $datos['detalles']));
 
         $calculo = $this->costoDeCompra->calcular(
             $comprobante,

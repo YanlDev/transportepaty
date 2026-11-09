@@ -212,7 +212,10 @@ export function ProveedorDialog({
                                     id={id}
                                     value={data.condicion_pago}
                                     onChange={(e) =>
-                                        setData('condicion_pago', e.target.value)
+                                        setData(
+                                            'condicion_pago',
+                                            e.target.value,
+                                        )
                                     }
                                     placeholder="Contado, crédito 30 días…"
                                 />

@@ -96,7 +96,11 @@ export function ArticuloRapidoDialog({
                     </DialogHeader>
                     <div className="grid gap-4 py-4 sm:grid-cols-2">
                         <div className="sm:col-span-2">
-                            <Field label="Nombre" error={errors.nombre} required>
+                            <Field
+                                label="Nombre"
+                                error={errors.nombre}
+                                required
+                            >
                                 {(id) => (
                                     <Input
                                         id={id}

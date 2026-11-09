@@ -26,7 +26,12 @@ const SECCIONES: {
     href: string;
     icono: typeof Package;
 }[] = [
-    { clave: 'stock', titulo: 'Stock', href: almacen.index().url, icono: Package },
+    {
+        clave: 'stock',
+        titulo: 'Stock',
+        href: almacen.index().url,
+        icono: Package,
+    },
     {
         clave: 'ingresos',
         titulo: 'Ingresos',

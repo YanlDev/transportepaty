@@ -125,7 +125,8 @@ export default function IngresoCreate({
     const suma = data.detalles.reduce(
         (total, linea) =>
             total +
-            (Number(linea.cantidad) || 0) * (Number(linea.precio_unitario) || 0),
+            (Number(linea.cantidad) || 0) *
+                (Number(linea.precio_unitario) || 0),
         0,
     );
     const subtotal = !llevaIgv
@@ -159,7 +160,8 @@ export default function IngresoCreate({
                 <section className="grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="sm:col-span-2">
                         <Label htmlFor="ingreso-proveedor">
-                            Proveedor <span className="text-destructive">*</span>
+                            Proveedor{' '}
+                            <span className="text-destructive">*</span>
                         </Label>
                         <div className="mt-1.5 flex gap-2">
                             <div className="min-w-0 flex-1">
@@ -202,7 +204,9 @@ export default function IngresoCreate({
                                 type="date"
                                 max={hoy}
                                 value={data.fecha}
-                                onChange={(e) => setData('fecha', e.target.value)}
+                                onChange={(e) =>
+                                    setData('fecha', e.target.value)
+                                }
                             />
                         )}
                     </Field>
@@ -356,7 +360,9 @@ export default function IngresoCreate({
                                                 })
                                             }
                                             etiqueta="Artículo"
-                                            opciones={opcionesArticulo(articulos)}
+                                            opciones={opcionesArticulo(
+                                                articulos,
+                                            )}
                                             invalido={
                                                 !!errorDeLinea(
                                                     errores,
@@ -460,7 +466,10 @@ export default function IngresoCreate({
                         variant="outline"
                         className="self-start"
                         onClick={() =>
-                            setData('detalles', [...data.detalles, lineaVacia()])
+                            setData('detalles', [
+                                ...data.detalles,
+                                lineaVacia(),
+                            ])
                         }
                     >
                         <Plus className="size-4" />

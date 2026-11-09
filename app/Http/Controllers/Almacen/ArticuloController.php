@@ -9,7 +9,6 @@ use App\Http\Requests\Almacen\ArticuloRequest;
 use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
 use App\Models\DetalleIngreso;
-use App\Models\DetalleInventario;
 use App\Models\DetalleSalida;
 use App\Models\MovimientoAlmacen;
 use App\Models\Vehiculo;
@@ -80,7 +79,7 @@ class ArticuloController extends Controller
                 'tipo_label' => $movimiento->tipo->label(),
                 'documento' => $movimiento->documento,
                 'enlace' => $this->enlaceDocumento($movimiento),
-                'detalle' => $movimiento->vehiculo?->placa ?? $movimiento->proveedor?->nombre(),
+                'detalle' => $movimiento->vehiculo_id !== null ? $movimiento->vehiculo->placa : $movimiento->proveedor?->nombre(),
                 'entrada' => (float) $movimiento->entrada,
                 'salida' => (float) $movimiento->salida,
                 'costo_unitario' => $this->costo($veCostos, $movimiento->costo_unitario),
@@ -239,7 +238,7 @@ class ArticuloController extends Controller
             ->get();
 
         $ruta = tempnam(sys_get_temp_dir(), 'kardex');
-        $exportador->kardex($articulos->all(), $datos['desde'], $datos['hasta'], $ruta);
+        $exportador->kardex(array_values($articulos->all()), $datos['desde'], $datos['hasta'], $ruta);
 
         return response()
             ->download($ruta, "kardex-almacen-{$datos['desde']}-{$datos['hasta']}.xlsx")
@@ -272,17 +271,16 @@ class ArticuloController extends Controller
     /**
      * A qué documento lleva la fila del kardex.
      *
-     * @return array{tipo: string, id: int}|null
+     * @return array{tipo: string, id: int}
      */
-    private function enlaceDocumento(MovimientoAlmacen $movimiento): ?array
+    private function enlaceDocumento(MovimientoAlmacen $movimiento): array
     {
         $origen = $movimiento->origen;
 
         return match (true) {
             $origen instanceof DetalleIngreso => ['tipo' => 'ingreso', 'id' => $origen->ingreso_almacen_id],
             $origen instanceof DetalleSalida => ['tipo' => 'salida', 'id' => $origen->salida_almacen_id],
-            $origen instanceof DetalleInventario => ['tipo' => 'inventario', 'id' => $origen->inventario_almacen_id],
-            default => null,
+            default => ['tipo' => 'inventario', 'id' => $origen->inventario_almacen_id],
         };
     }
 }

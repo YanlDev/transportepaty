@@ -66,7 +66,7 @@ class Kardex
             ]);
         }
 
-        $this->recalcular($ingreso->detalles->pluck('articulo_id')->all());
+        $this->recalcular($this->articulosDe($ingreso->detalles));
 
         $ingreso->forceFill(['costo_total' => $ingreso->detalles()->sum('costo_total')])->saveQuietly();
     }
@@ -91,7 +91,7 @@ class Kardex
             ]);
         }
 
-        $this->recalcular($salida->detalles->pluck('articulo_id')->all());
+        $this->recalcular($this->articulosDe($salida->detalles));
     }
 
     /**
@@ -143,7 +143,7 @@ class Kardex
             ]);
         }
 
-        $this->recalcular($inventario->detalles->pluck('articulo_id')->all());
+        $this->recalcular($this->articulosDe($inventario->detalles));
     }
 
     /**
@@ -162,7 +162,7 @@ class Kardex
                 ->delete();
         }
 
-        $this->recalcular($detalles->pluck('articulo_id')->all());
+        $this->recalcular($this->articulosDe($detalles));
     }
 
     /**
@@ -327,6 +327,8 @@ class Kardex
             }
         }
 
+        $ultimo = $movimientos->last();
+
         $articulo->forceFill([
             'stock' => $cantidad,
             'valor' => $valor,
@@ -334,10 +336,27 @@ class Kardex
                 ? round($valor / $cantidad, 4)
                 // Sin stock se queda con el último costo conocido: sirve de
                 // referencia para cotizar y para el próximo conteo.
-                : ($movimientos->last()?->costo_unitario ?? $articulo->costo_promedio),
+                : ($ultimo instanceof MovimientoAlmacen ? $ultimo->costo_unitario : $articulo->costo_promedio),
         ])->saveQuietly();
 
         return [array_values(array_unique($salidas)), array_values(array_unique($ingresos))];
+    }
+
+    /**
+     * Los artículos que tocan las líneas de un documento.
+     *
+     * @param  iterable<DetalleIngreso|DetalleSalida|DetalleInventario>  $detalles
+     * @return list<int>
+     */
+    private function articulosDe(iterable $detalles): array
+    {
+        $ids = [];
+
+        foreach ($detalles as $detalle) {
+            $ids[] = $detalle->articulo_id;
+        }
+
+        return $ids;
     }
 
     private function cambia(DetalleSalida|DetalleIngreso $linea, float $costoUnitario, float $costoTotal): bool

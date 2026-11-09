@@ -35,7 +35,7 @@ trait CatalogosAlmacen
      */
     protected function articulosParaElegir(bool $veCostos, bool $soloConStock = false): array
     {
-        return Articulo::query()
+        return array_values(Articulo::query()
             ->where('activo', true)
             ->when($soloConStock, fn ($query) => $query->where('stock', '>', 0))
             ->orderBy('nombre')
@@ -52,8 +52,7 @@ trait CatalogosAlmacen
                 'stock' => (float) $articulo->stock,
                 'costo_promedio' => $this->costo($veCostos, $articulo->costo_promedio),
             ])
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -61,7 +60,7 @@ trait CatalogosAlmacen
      */
     protected function vehiculosParaElegir(): array
     {
-        return Vehiculo::query()
+        return array_values(Vehiculo::query()
             ->orderBy('tipo')
             ->orderBy('placa')
             ->get(['id', 'placa', 'tipo', 'marca'])
@@ -71,8 +70,7 @@ trait CatalogosAlmacen
                 'tipo' => $vehiculo->tipo->label(),
                 'marca' => $vehiculo->marca,
             ])
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -85,7 +83,7 @@ trait CatalogosAlmacen
     {
         $desde = RelojOperativo::fechaDeHoy()->subDays(30)->toDateString();
 
-        return OrdenTrabajo::query()
+        return array_values(OrdenTrabajo::query()
             ->with('vehiculo:id,placa')
             ->where(fn ($query) => $query
                 ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
@@ -100,8 +98,7 @@ trait CatalogosAlmacen
                 'vehiculo_id' => $orden->vehiculo_id,
                 'placa' => $orden->vehiculo->placa,
             ])
-            ->values()
-            ->all();
+            ->all());
     }
 
     /**
@@ -109,7 +106,7 @@ trait CatalogosAlmacen
      */
     protected function proveedoresParaElegir(): array
     {
-        return Proveedor::query()
+        return array_values(Proveedor::query()
             ->where('activo', true)
             ->orderBy('razon_social')
             ->get()
@@ -118,7 +115,6 @@ trait CatalogosAlmacen
                 'nombre' => $proveedor->nombre(),
                 'ruc' => $proveedor->ruc,
             ])
-            ->values()
-            ->all();
+            ->all());
     }
 }

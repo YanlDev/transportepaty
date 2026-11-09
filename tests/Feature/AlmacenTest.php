@@ -414,7 +414,7 @@ it('registers a supplier and does not repeat its RUC', function (): void {
 it('keeps the scanned invoice with the purchase', function (): void {
     $filtro = Articulo::factory()->create();
 
-    $compra = comprar([[$filtro, 1, 10]], extra: ['comprobante' => UploadedFile::fake()->create('factura.pdf', 50, 'application/pdf')]);
+    $compra = comprar([[$filtro, 1, 10]], extra: ['comprobante' => UploadedFile::fake()->createWithContent('factura.pdf', "%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n")]);
 
     expect($compra->getFirstMedia('comprobante'))->not->toBeNull();
 
@@ -495,4 +495,16 @@ it('downloads the stock and the kardex in Excel', function (): void {
     actingAs(almacenero())->get(route('almacen.exportar'))->assertOk()->assertDownload();
     actingAs(almacenero())->get(route('almacen.articulos.kardex', $filtro))->assertOk()->assertDownload();
     actingAs(almacenero())->get(route('almacen.kardex.exportar', ['desde' => '2026-11-01', 'hasta' => '2026-11-30']))->assertOk()->assertDownload();
+});
+
+it('lets the warehouse create a supplier or an item while registering a purchase', function (): void {
+    actingAs(almacenero())
+        ->get(route('almacen.ingresos.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('puedeCrearProveedor', true)
+            ->where('puedeCrearArticulo', true));
+
+    actingAs(actorConRol('gerencia'))
+        ->get(route('almacen.ingresos.create'))
+        ->assertForbidden();
 });

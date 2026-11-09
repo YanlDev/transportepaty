@@ -191,10 +191,9 @@ export default function AlmacenIndex({
             {resumen.articulos === 0 && (
                 <div className="flex flex-col gap-3 rounded-xl border border-sky-300 bg-sky-50 p-4 text-sm text-sky-900 sm:flex-row sm:items-center sm:justify-between dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
                     <p>
-                        <strong>Para empezar:</strong> abre un conteo y anota
-                        lo que hay en cada estante. Lo contado es el saldo
-                        inicial; desde ahí, todo entra con su factura y sale
-                        con su vale.
+                        <strong>Para empezar:</strong> abre un conteo y anota lo
+                        que hay en cada estante. Lo contado es el saldo inicial;
+                        desde ahí, todo entra con su factura y sale con su vale.
                     </p>
                     {puede('almacen.inventariar') && (
                         <Button asChild variant="outline" className="shrink-0">

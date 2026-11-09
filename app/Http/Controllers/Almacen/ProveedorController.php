@@ -46,9 +46,9 @@ class ProveedorController extends Controller
                 'condicion_pago' => $proveedor->condicion_pago,
                 'notas' => $proveedor->notas,
                 'activo' => $proveedor->activo,
-                'compras' => $proveedor->ingresos_count,
-                'comprado' => $this->costo($veCostos, $proveedor->ingresos_sum_costo_total ?? 0),
-                'ultima_compra' => $proveedor->ingresos_max_fecha,
+                'compras' => (int) $proveedor->getAttribute('ingresos_count'),
+                'comprado' => $this->costo($veCostos, (float) $proveedor->getAttribute('ingresos_sum_costo_total')),
+                'ultima_compra' => $proveedor->getAttribute('ingresos_max_fecha'),
             ]);
 
         return Inertia::render('almacen/proveedores/index', [

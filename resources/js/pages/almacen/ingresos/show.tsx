@@ -25,7 +25,11 @@ import {
     formatearMonto,
     formatearUnitario,
 } from '@/lib/almacen';
-import { formatearFecha, formatearFechaHora, formatearSoles } from '@/lib/format';
+import {
+    formatearFecha,
+    formatearFechaHora,
+    formatearSoles,
+} from '@/lib/format';
 import type { IngresoDetalle } from '@/types/almacen';
 
 type Props = {
@@ -177,7 +181,9 @@ export default function IngresoShow({ ingreso, puedeAnular }: Props) {
                             <TableRow key={detalle.id}>
                                 <TableCell>
                                     <Link
-                                        href={articulos.show(detalle.articulo_id)}
+                                        href={articulos.show(
+                                            detalle.articulo_id,
+                                        )}
                                         className="font-medium hover:underline"
                                     >
                                         {detalle.nombre}
@@ -214,7 +220,9 @@ export default function IngresoShow({ ingreso, puedeAnular }: Props) {
                                             )}
                                         </TableCell>
                                         <TableCell className="text-right font-medium tabular-nums">
-                                            {formatearSoles(detalle.costo_total)}
+                                            {formatearSoles(
+                                                detalle.costo_total,
+                                            )}
                                         </TableCell>
                                     </>
                                 )}
@@ -230,7 +238,10 @@ export default function IngresoShow({ ingreso, puedeAnular }: Props) {
                         <>
                             <dt className="text-muted-foreground">Subtotal</dt>
                             <dd className="text-right tabular-nums">
-                                {formatearMonto(ingreso.subtotal, ingreso.moneda)}
+                                {formatearMonto(
+                                    ingreso.subtotal,
+                                    ingreso.moneda,
+                                )}
                             </dd>
                             <dt className="text-muted-foreground">IGV</dt>
                             <dd className="text-right tabular-nums">

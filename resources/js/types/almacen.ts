@@ -118,7 +118,11 @@ export type Proveedor = {
     ultima_compra: string | null;
 };
 
-export type ProveedorElegible = { id: number; nombre: string; ruc: string | null };
+export type ProveedorElegible = {
+    id: number;
+    nombre: string;
+    ruc: string | null;
+};
 
 export type IngresoCabecera = {
     id: number;

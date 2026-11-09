@@ -12,9 +12,11 @@ import {
     Route,
     Settings,
     Truck,
+    Warehouse,
     Wrench,
 } from 'lucide-react';
 import abastecimiento from '@/actions/App/Http/Controllers/AbastecimientoController';
+import almacen from '@/actions/App/Http/Controllers/Almacen/AlmacenController';
 import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import clientes from '@/actions/App/Http/Controllers/ClienteController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
@@ -74,6 +76,13 @@ const mantenimientoNavItem: NavItem = {
     title: 'Mantenimiento',
     href: mantenimiento.index(),
     icon: Wrench,
+};
+
+/** El almacén del taller: stock, compras, vales y conteos. */
+const almacenNavItem: NavItem = {
+    title: 'Almacén',
+    href: almacen.index(),
+    icon: Warehouse,
 };
 
 /** El OK de salida de cada ticket: la bandeja de taller. */
@@ -220,6 +229,16 @@ export function AppSidebar() {
         ...(puede('asistencia.ver') ? [asistenciaNavItem] : []),
     ];
 
+    // Todo lo de `/almacen` marca la entrada: el stock, los vales, las fichas.
+    const almacenItems = puede('almacen.ver')
+        ? [
+              {
+                  ...almacenNavItem,
+                  isActive: isCurrentUrl('/almacen', undefined, true),
+              },
+          ]
+        : [];
+
     // Cotizaciones antes que Clientes: es lo que se usa a diario.
     const comercial = [...gestion].reverse();
 
@@ -230,6 +249,7 @@ export function AppSidebar() {
     const secciones = [
         { label: 'Operación', items: operacion },
         { label: 'Flota', items: flota },
+        { label: 'Almacén', items: almacenItems },
         { label: 'Comercial', items: comercial },
         { label: 'Finanzas', items: finanzas },
     ];
