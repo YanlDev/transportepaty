@@ -26,6 +26,7 @@ export type Permiso =
     | 'conductores.eliminar'
     | 'mantenimiento.ver'
     | 'mantenimiento.registrar_km'
+    | 'mantenimiento.corregir_km'
     | 'mantenimiento.gestionar'
     | 'mantenimiento.configurar'
     | 'mantenimiento.llantas'

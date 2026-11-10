@@ -469,7 +469,7 @@ export default function MantenimientoShow({
                                             </a>
                                         </Button>
                                     )}
-                                    {puedeKm && (
+                                    {puede('mantenimiento.corregir_km') && (
                                         <ConfirmarBorradoDialog
                                             url={borrarLectura(lectura.id).url}
                                             titulo="¿Eliminar este km?"

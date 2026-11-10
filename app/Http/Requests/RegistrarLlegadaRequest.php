@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\Permiso;
 use App\Models\Viaje;
 use App\Models\Vuelta;
 use App\Services\OdometroDeUnidad;
@@ -54,8 +55,19 @@ class RegistrarLlegadaRequest extends FormRequest
                     $validator->errors()->add('llegada_el', 'La última GR del ticket es del '.Carbon::parse($ultimaGuia)->format('d/m').': no pudo llegar antes.');
                 }
 
-                if ($this->filled('km_llegada') && $this->integer('km_llegada') !== $vuelta->km_llegada) {
-                    $error = app(OdometroDeUnidad::class)->error($vuelta->tracto, $this->integer('km_llegada'), OdometroDeUnidad::deLlegada($vuelta->id));
+                $kmNuevo = $this->filled('km_llegada') ? $this->integer('km_llegada') : null;
+
+                // Anotar el km que faltaba es de quien registra la llegada;
+                // cambiar o quitar uno ya anotado es una corrección.
+                if ($vuelta->km_llegada !== null && $kmNuevo !== $vuelta->km_llegada
+                    && ! ($this->user()?->checkPermissionTo(Permiso::MantenimientoCorregirKm) ?? false)) {
+                    $validator->errors()->add('km_llegada', 'El km de llegada ya está anotado ('.number_format($vuelta->km_llegada, 0, '.', ',').'): corregirlo lo hace quien tiene ese permiso.');
+
+                    return;
+                }
+
+                if ($kmNuevo !== null && $kmNuevo !== $vuelta->km_llegada) {
+                    $error = app(OdometroDeUnidad::class)->error($vuelta->tracto, $kmNuevo, OdometroDeUnidad::deLlegada($vuelta->id), $this->date('llegada_el'));
 
                     if ($error !== null) {
                         $validator->errors()->add('km_llegada', $error);

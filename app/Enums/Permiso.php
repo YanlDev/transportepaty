@@ -32,6 +32,7 @@ enum Permiso: string
 
     case MantenimientoVer = 'mantenimiento.ver';
     case MantenimientoRegistrarKm = 'mantenimiento.registrar_km';
+    case MantenimientoCorregirKm = 'mantenimiento.corregir_km';
     case MantenimientoGestionar = 'mantenimiento.gestionar';
     case MantenimientoAnular = 'mantenimiento.anular';
     case MantenimientoCargaInicial = 'mantenimiento.carga_inicial';
@@ -192,6 +193,7 @@ enum Permiso: string
             self::ConductoresEliminar => 'Eliminar conductores',
             self::MantenimientoVer => 'Ver el mantenimiento de la flota',
             self::MantenimientoRegistrarKm => 'Registrar kilometrajes',
+            self::MantenimientoCorregirKm => 'Corregir o quitar un kilometraje ya registrado',
             self::MantenimientoGestionar => 'Registrar y editar órdenes de trabajo',
             self::MantenimientoAnular => 'Anular órdenes de trabajo y movimientos de equipamiento',
             self::MantenimientoCargaInicial => 'Cargar llantas que ya estaban montadas antes del almacén',

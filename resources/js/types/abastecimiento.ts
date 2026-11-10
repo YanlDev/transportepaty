@@ -22,6 +22,11 @@ export type VueltaAbastecimiento = {
     taller: RevisionTaller | null;
     /** Por qué no se le puede registrar combustible ni viáticos; null si se puede. */
     bloqueo_gastos: string | null;
+    /** El día que llegó a la base; null si sigue en ruta. */
+    llegada_el: string | null;
+    km_llegada: number | null;
+    /** El mayor km anotado de la unidad y el día en que se leyó. */
+    ultimo_km: { km: number; fecha: string } | null;
     inicio: string | null;
     tracto: { id: number; placa: string };
     conductor: string | null;
@@ -128,7 +133,9 @@ export type TramoCombustible = {
     tanque_lleno: {
         puntos: { punto_id: number | null; punto: string }[];
         usado: boolean;
-        /** Lo que entró según los vouchers. */
+        /** Hay un full sin voucher: no se autoriza nada más al tramo hasta que llegue. */
+        sin_voucher: boolean;
+        /** Lo que entró según los vouchers: descuenta del tope del tramo. */
         galones: number;
     };
     pendiente: string | null;

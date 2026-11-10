@@ -31,7 +31,13 @@ import type {
     PuntoRegistro,
     RutaDelTramo,
     TramoCombustible,
+    VueltaAbastecimiento,
 } from '@/types/abastecimiento';
+
+/** El mismo tope del servidor: más que esto sobre el último km es un dígito de más. */
+const SALTO_MAXIMO_KM = 500_000;
+
+const km = (valor: number): string => valor.toLocaleString('es-PE');
 
 function hoy(): string {
     const ahora = new Date();
@@ -337,10 +343,16 @@ export function CombustiblesDelTicket({
 export function DialogoCombustible({
     accion,
     puntos,
+    vueltas = [],
+    vouchersPendientes = 0,
     onCerrar,
 }: {
     accion: AccionCombustible;
     puntos: PuntoRegistro[];
+    /** Los tickets de la página: de ahí sale de qué unidad es el voucher. */
+    vueltas?: VueltaAbastecimiento[];
+    /** Cuántos vouchers faltan en total, contando este. */
+    vouchersPendientes?: number;
     onCerrar: () => void;
 }) {
     return (
@@ -353,6 +365,14 @@ export function DialogoCombustible({
                     <FormDespacho
                         registro={accion.registro}
                         puntos={puntos}
+                        vuelta={
+                            vueltas.find((vuelta) =>
+                                vuelta.abastecimientos.some(
+                                    (otro) => otro.id === accion.registro.id,
+                                ),
+                            ) ?? null
+                        }
+                        vouchersPendientes={vouchersPendientes}
                         onCerrar={onCerrar}
                     />
                 )}
@@ -482,10 +502,15 @@ function FormVariante({
 function FormDespacho({
     registro,
     puntos,
+    vuelta,
+    vouchersPendientes,
     onCerrar,
 }: {
     registro: CombustibleDelTicket;
     puntos: PuntoRegistro[];
+    /** El ticket del voucher, si la página lo tiene: de ahí salen el tope y el último km. */
+    vuelta: VueltaAbastecimiento | null;
+    vouchersPendientes: number;
     onCerrar: () => void;
 }) {
     const ultimoPrecio = puntos.find(
@@ -530,6 +555,38 @@ function FormDespacho({
             ? Number(data.galones_despachados) - registro.galones
             : 0;
 
+    // Lo que queda del tope del tramo con lo que diga este voucher: lo que
+    // ya contaba este registro sale y entra lo que se está escribiendo.
+    const tramo =
+        vuelta?.tramos.find((opcion) => opcion.sentido === registro.sentido) ??
+        null;
+    const yaContaba = registro.despacho?.galones ?? registro.galones;
+    const queda =
+        tramo?.previsto != null && data.galones_despachados !== ''
+            ? tramo.previsto -
+              (tramo.registrado - yaContaba) -
+              Number(data.galones_despachados)
+            : null;
+
+    // El mismo aviso del servidor, antes de guardar: el km de hoy no puede
+    // ser menor que el último ni pasarlo por más del tope. Un voucher de una
+    // fecha pasada lo decide el servidor, que conoce lo anotado en medio.
+    const ultimoKm = vuelta?.ultimo_km ?? null;
+    const kmEscrito = data.kilometraje === '' ? null : Number(data.kilometraje);
+    const esDeHoy = data.despachado_el === hoy();
+    const avisoKm =
+        ultimoKm === null ||
+        kmEscrito === null ||
+        kmEscrito === registro.despacho?.kilometraje
+            ? null
+            : kmEscrito - ultimoKm.km > SALTO_MAXIMO_KM
+              ? `Son más de ${km(SALTO_MAXIMO_KM)} km sobre el último (${km(ultimoKm.km)}): revisa si sobra un dígito.`
+              : esDeHoy && kmEscrito < ultimoKm.km
+                ? `Es menor que el último km anotado (${km(ultimoKm.km)}).`
+                : null;
+    const quedanDespues =
+        registro.despacho === null ? vouchersPendientes - 1 : null;
+
     // Con la foto va como formulario con archivo: PUT por POST.
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -545,12 +602,15 @@ function FormDespacho({
         <>
             <DialogHeader>
                 <DialogTitle>
-                    Voucher · {registro.punto ?? 'Sin punto'}
+                    Voucher
+                    {vuelta ? ` de ${vuelta.tracto.placa}` : ''} ·{' '}
+                    {registro.punto ?? 'Sin punto'}
                 </DialogTitle>
                 <DialogDescription>
+                    {vuelta?.codigo ? `${vuelta.codigo} · ` : ''}
                     {registro.tanque_lleno
                         ? 'Tanque full: anota lo que entró según el voucher, con el kilometraje y la foto.'
-                        : `Se autorizaron ${galones(registro.galones)}. Anota lo que dice el voucher del grifo.`}
+                        : `Se autorizaron ${galones(registro.galones)} el ${formatearFecha(registro.fecha)}. Anota lo que dice el voucher del grifo.`}
                 </DialogDescription>
             </DialogHeader>
 
@@ -559,6 +619,42 @@ function FormDespacho({
                 onSubmit={enviar}
                 className="flex flex-col gap-4 px-1"
             >
+                {/* La foto primero: con el voucher a la vista, el resto se
+                    copia de ahí. */}
+                <Field
+                    label="Foto del voucher"
+                    error={errors.foto_voucher}
+                    required={!registro.foto_voucher}
+                    ayuda={
+                        registro.foto_voucher
+                            ? 'Ya tiene una foto: sube otra solo si la quieres reemplazar.'
+                            : 'Toma la foto con el celular: queda con el combustible.'
+                    }
+                >
+                    {() => (
+                        <CampoArchivo
+                            acepta="imagen"
+                            archivos={
+                                data.foto_voucher ? [data.foto_voucher] : []
+                            }
+                            onArchivos={(lista) =>
+                                setData('foto_voucher', lista[0] ?? null)
+                            }
+                            progreso={progress?.percentage ?? null}
+                            onPreparando={setPreparando}
+                        />
+                    )}
+                </Field>
+                {registro.foto_voucher && (
+                    <a
+                        href={registro.foto_voucher}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-xs text-primary underline-offset-2 hover:underline"
+                    >
+                        Ver la foto actual
+                    </a>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                     <Field
                         label="Galones cargados"
@@ -617,7 +713,11 @@ function FormDespacho({
                         label="Kilometraje"
                         error={errors.kilometraje}
                         required={registro.tanque_lleno}
-                        ayuda="El odómetro al cargar: sirve para el rendimiento y el mantenimiento."
+                        ayuda={
+                            ultimoKm !== null
+                                ? `Último km de la unidad: ${km(ultimoKm.km)} el ${formatearFecha(ultimoKm.fecha)}.`
+                                : 'El odómetro al cargar: sirve para el rendimiento y el mantenimiento.'
+                        }
                     >
                         {(id) => (
                             <Input
@@ -653,39 +753,20 @@ function FormDespacho({
                         )}
                     </Field>
                 </div>
-                <Field
-                    label="Foto del voucher"
-                    error={errors.foto_voucher}
-                    required={!registro.foto_voucher}
-                    ayuda={
-                        registro.foto_voucher
-                            ? 'Ya tiene una foto: sube otra solo si la quieres reemplazar.'
-                            : 'Toma la foto con el celular: queda con el combustible.'
-                    }
-                >
-                    {() => (
-                        <CampoArchivo
-                            acepta="imagen"
-                            archivos={
-                                data.foto_voucher ? [data.foto_voucher] : []
-                            }
-                            onArchivos={(lista) =>
-                                setData('foto_voucher', lista[0] ?? null)
-                            }
-                            progreso={progress?.percentage ?? null}
-                            onPreparando={setPreparando}
-                        />
-                    )}
-                </Field>
-                {registro.foto_voucher && (
-                    <a
-                        href={registro.foto_voucher}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-xs text-primary underline-offset-2 hover:underline"
+                {avisoKm && !errors.kilometraje && (
+                    <p
+                        role="alert"
+                        className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200"
                     >
-                        Ver la foto actual
-                    </a>
+                        {avisoKm}
+                    </p>
+                )}
+                {queda !== null && (
+                    <p className="text-xs text-muted-foreground tabular-nums">
+                        {queda >= 0
+                            ? `Con este voucher quedan ${galones(Math.round(queda * 100) / 100)} del tope de ${galones(tramo?.previsto ?? 0)}.`
+                            : `Con este voucher el tramo pasa su tope de ${galones(tramo?.previsto ?? 0)} por ${galones(Math.round(-queda * 100) / 100)}.`}
+                    </p>
                 )}
                 {noCabe && (
                     <label className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -697,6 +778,13 @@ function FormDespacho({
                         />
                         Revisé el voucher: los galones están bien.
                     </label>
+                )}
+                {quedanDespues !== null && quedanDespues > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                        {quedanDespues === 1
+                            ? 'Queda 1 voucher pendiente después de este.'
+                            : `Quedan ${quedanDespues} vouchers pendientes después de este.`}
+                    </p>
                 )}
             </form>
 

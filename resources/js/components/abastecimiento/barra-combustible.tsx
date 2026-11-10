@@ -175,7 +175,7 @@ export function BarraCombustible({
                                 {conEtiqueta && <span />}
                                 <span
                                     className="text-[10px] text-muted-foreground"
-                                    title="Va aparte del tope: los galones los dice el voucher"
+                                    title="Los galones los dice el voucher y descuentan del tope del tramo"
                                 >
                                     + tanque full en{' '}
                                     {tramo.tanque_lleno.puntos
@@ -184,7 +184,7 @@ export function BarraCombustible({
                                     {tramo.tanque_lleno.usado
                                         ? tramo.tanque_lleno.galones > 0
                                             ? ` · ${galones(tramo.tanque_lleno.galones)}`
-                                            : ' · falta el voucher'
+                                            : ' · falta el voucher: no se autoriza más hasta registrarlo'
                                         : ' · pendiente'}
                                 </span>
                                 <span />

@@ -5,7 +5,7 @@ namespace App\Http\Requests;
 use App\Enums\TipoVehiculo;
 use App\Models\Vehiculo;
 use App\Services\Archivos\ReglasDeArchivo;
-use App\Services\ProximoMantenimiento;
+use App\Services\OdometroDeUnidad;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -57,13 +57,10 @@ class StoreLecturaKilometrajeRequest extends FormRequest
                 }
 
                 $vehiculo = Vehiculo::query()->findOrFail($this->integer('vehiculo_id'));
-                $ultimo = app(ProximoMantenimiento::class)->paraVehiculo($vehiculo)['km_actual'];
+                $error = app(OdometroDeUnidad::class)->error($vehiculo, $this->integer('kilometraje'));
 
-                if ($ultimo !== null && $this->integer('kilometraje') < $ultimo) {
-                    $validator->errors()->add(
-                        'kilometraje',
-                        'El último km de '.$vehiculo->placa.' es '.number_format($ultimo, 0, '.', ',').': el nuevo no puede ser menor.',
-                    );
+                if ($error !== null) {
+                    $validator->errors()->add('kilometraje', $error);
                 }
             },
         ];

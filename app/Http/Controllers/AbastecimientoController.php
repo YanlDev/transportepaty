@@ -10,6 +10,7 @@ use App\Http\Requests\CorregirAbastecimientoRequest;
 use App\Http\Requests\RegistrarAbastecimientoRequest;
 use App\Http\Requests\RegistrarDespachoRequest;
 use App\Models\Abastecimiento;
+use App\Models\LecturaKilometraje;
 use App\Models\ParadaVuelta;
 use App\Models\PuntoAbastecimiento;
 use App\Models\RutaVuelta;
@@ -62,6 +63,7 @@ class AbastecimientoController extends Controller
             ->values();
 
         $gastos = $this->gastos->de($vueltas);
+        $ultimosKm = $this->ultimosKm($vueltas->pluck('tracto_id')->unique()->all());
 
         return Inertia::render('abastecimiento/index', [
             'vueltas' => $vueltas
@@ -76,6 +78,12 @@ class AbastecimientoController extends Controller
                     'etapa' => $vuelta->etapa(),
                     'taller' => $vuelta->revision?->resumen(),
                     'bloqueo_gastos' => $vuelta->bloqueoDeGastos(),
+                    // Para la cola de trabajo: quién llegó a base sin km.
+                    'llegada_el' => $vuelta->llegada_el?->toDateString(),
+                    'km_llegada' => $vuelta->km_llegada,
+                    // El último km conocido de la unidad: el del voucher
+                    // se compara contra este antes de guardar.
+                    'ultimo_km' => $ultimosKm[$vuelta->tracto_id] ?? null,
                     'recorrido' => $this->recorrido($vuelta),
                     ...$gastos[$vuelta->id],
                 ])
@@ -192,7 +200,7 @@ class AbastecimientoController extends Controller
     /**
      * Nada se borra: queda anulado, con quién, cuándo y por qué.
      */
-    public function anular(Request $request, Abastecimiento $abastecimiento): RedirectResponse
+    public function anular(Request $request, Abastecimiento $abastecimiento, OdometroDeUnidad $odometro): RedirectResponse
     {
         $this->authorize('anular', $abastecimiento);
 
@@ -203,6 +211,10 @@ class AbastecimientoController extends Controller
             'anulado_por' => $request->user()?->id,
             'motivo_anulacion' => $datos['motivo'],
         ]);
+
+        // El km de un combustible anulado deja de contar para la unidad: si
+        // se anuló por ser de otra placa, ese km tampoco era suyo.
+        $odometro->quitar(OdometroDeUnidad::deDespacho($abastecimiento->id));
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Combustible anulado.']);
     }
@@ -240,6 +252,7 @@ class AbastecimientoController extends Controller
                 $request->user(),
                 'Al cargar combustible ('.($abastecimiento->vuelta->codigo ?? 'sin ticket').')',
                 OdometroDeUnidad::deDespacho($abastecimiento->id),
+                $request->date('despachado_el'),
             );
         }
 
@@ -274,6 +287,25 @@ class AbastecimientoController extends Controller
         $dotacion->elegirVariante($rutaVuelta, $variante, $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => "«{$rutaVuelta->nombre}»: {$variante->nombre}."]);
+    }
+
+    /**
+     * El mayor km anotado de cada unidad y el día en que se leyó.
+     *
+     * @param  array<int, int>  $tractoIds
+     * @return array<int, array{km: int, fecha: string}>
+     */
+    private function ultimosKm(array $tractoIds): array
+    {
+        return LecturaKilometraje::query()
+            ->whereIn('vehiculo_id', $tractoIds)
+            ->orderByDesc('kilometraje')
+            ->get(['vehiculo_id', 'kilometraje', 'leido_en'])
+            ->unique('vehiculo_id')
+            ->mapWithKeys(fn (LecturaKilometraje $lectura): array => [
+                $lectura->vehiculo_id => ['km' => $lectura->kilometraje, 'fecha' => $lectura->leido_en->toDateString()],
+            ])
+            ->all();
     }
 
     /**

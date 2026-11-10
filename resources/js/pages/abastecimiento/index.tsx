@@ -11,6 +11,10 @@ import {
     soles,
 } from '@/components/abastecimiento/barra-combustible';
 import {
+    ColaDeTrabajo,
+    vouchersPendientes,
+} from '@/components/abastecimiento/cola-de-trabajo';
+import {
     CombustiblesDelTicket,
     DialogoCombustible,
     RutasDelTicket,
@@ -146,6 +150,43 @@ function tramoEnCurso(vuelta: VueltaAbastecimiento): 'ida' | 'regreso' {
     return !conRuta('ida') && conRuta('regreso') ? 'regreso' : 'ida';
 }
 
+/**
+ * El próximo paso del ticket en el tramo que se mira, en una palabra: lo que
+ * está detenido primero (ámbar), después lo que toca hacer (azul).
+ */
+function loQueSigue(
+    vuelta: VueltaAbastecimiento,
+    sentido: 'ida' | 'regreso',
+): { texto: string; tono: 'detenido' | 'accion' | 'listo' } {
+    const tramo = vuelta.tramos.find((opcion) => opcion.sentido === sentido);
+
+    if (vuelta.bloqueo_gastos !== null) {
+        return { texto: 'OK de taller', tono: 'detenido' };
+    }
+
+    if (vuelta.despachos_pendientes > 0) {
+        return { texto: 'Voucher', tono: 'detenido' };
+    }
+
+    if (tramo && tramo.rutas.length > 0 && !tramo.confirmada) {
+        return { texto: 'Definir tope', tono: 'detenido' };
+    }
+
+    if (tramo && (tramo.falta ?? 0) > 0) {
+        return { texto: 'Autorizar', tono: 'accion' };
+    }
+
+    if (vuelta.viatico_pendiente > 0) {
+        return { texto: 'Viático', tono: 'accion' };
+    }
+
+    if (vuelta.llegada_el !== null && vuelta.km_llegada === null) {
+        return { texto: 'Km de llegada', tono: 'accion' };
+    }
+
+    return { texto: 'Al día', tono: 'listo' };
+}
+
 const TRAMOS = [
     { sentido: 'ida', titulo: 'Ida' },
     { sentido: 'regreso', titulo: 'Vuelta' },
@@ -264,6 +305,18 @@ export default function AbastecimientoIndex({
                 titulo="Abastecimiento"
                 descripcion="El combustible y los viáticos de cada ticket, contra las rutas de cada tramo."
                 icono={Fuel}
+            />
+
+            <ColaDeTrabajo
+                vueltas={vueltas}
+                puedeRegistrar={puedeRegistrar}
+                onVoucher={(pendiente) =>
+                    setAccionCombustible({
+                        tipo: 'despacho',
+                        registro: pendiente.registro,
+                    })
+                }
+                onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
             />
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -427,6 +480,7 @@ export default function AbastecimientoIndex({
                             <TableHead className="w-32 text-right">
                                 Falta
                             </TableHead>
+                            <TableHead className="w-32">Sigue</TableHead>
                             {/* La acción queda fija a la derecha: en pantallas
                                 angostas la tabla se desplaza por debajo. */}
                             <TableHead className="sticky right-0 w-24 bg-card" />
@@ -436,7 +490,7 @@ export default function AbastecimientoIndex({
                         {delTramo.length === 0 && (
                             <TableRow className="hover:bg-transparent">
                                 <TableCell
-                                    colSpan={8}
+                                    colSpan={9}
                                     className="py-10 text-center text-sm text-muted-foreground"
                                 >
                                     {vacio}
@@ -456,6 +510,7 @@ export default function AbastecimientoIndex({
                                     opcion.confirmada &&
                                     (opcion.falta ?? 0) > 0,
                             );
+                            const sigue = loQueSigue(vuelta, sentido);
 
                             return (
                                 <TableRow
@@ -590,6 +645,19 @@ export default function AbastecimientoIndex({
                                                 )}
                                             </span>
                                         )}
+                                    </TableCell>
+                                    <TableCell
+                                        className={cn(
+                                            'text-sm font-medium whitespace-nowrap',
+                                            sigue.tono === 'detenido' &&
+                                                'text-amber-700 dark:text-amber-400',
+                                            sigue.tono === 'accion' &&
+                                                'text-primary',
+                                            sigue.tono === 'listo' &&
+                                                'text-muted-foreground',
+                                        )}
+                                    >
+                                        {sigue.texto}
                                     </TableCell>
                                     <TableCell
                                         className="sticky right-0 bg-card"
@@ -913,6 +981,8 @@ export default function AbastecimientoIndex({
                     key={JSON.stringify(accionCombustible)}
                     accion={accionCombustible}
                     puntos={puntos}
+                    vueltas={vueltas}
+                    vouchersPendientes={vouchersPendientes(vueltas).length}
                     onCerrar={() => setAccionCombustible(null)}
                 />
             )}

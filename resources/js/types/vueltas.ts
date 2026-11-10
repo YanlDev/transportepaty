@@ -67,7 +67,11 @@ export type Vuelta = {
     adicionales: {
         id: number;
         sentido: Sentido;
+        /** La ruta de la tabla que se sumó (carga posterior); null si son galones sueltos. */
+        ruta: string | null;
         galones: number;
+        /** Los viáticos que trae esa ruta. */
+        viaticos: number;
         motivo: string;
         por: string | null;
         fecha: string;

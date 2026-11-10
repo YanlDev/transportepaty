@@ -14,10 +14,12 @@ class LecturaKilometrajePolicy
     }
 
     /**
-     * Borrar una lectura es corregir un dedazo: lo hace quien registra km.
+     * Quitar una lectura cambia el km de la unidad y con él cuándo le toca
+     * su servicio: es una corrección, y la hace quien tiene ese permiso (el
+     * administrador). Quién la quitó y qué decía queda en el historial.
      */
     public function delete(User $user, LecturaKilometraje $lectura): bool
     {
-        return $user->checkPermissionTo(Permiso::MantenimientoRegistrarKm);
+        return $user->checkPermissionTo(Permiso::MantenimientoCorregirKm);
     }
 }

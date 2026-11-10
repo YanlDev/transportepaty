@@ -25,7 +25,7 @@ use Illuminate\Database\Eloquent\Collection;
  * El combustible cuenta en el tramo que se eligió al registrarlo, nunca se
  * reparte solo.
  *
- * @phpstan-type Tramo array{sentido: string, confirmada: bool, rutas: list<array{id: int, nombre: string, variante: string|null, color: string|null, es_complemento: bool, variante_pendiente: bool, tope: float|null, variantes: list<array{id: int, nombre: string}>, sugerida: int|null}>, tarjeta: string|null, color: string|null, previsto: float|null, registrado: float, despachado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null}>, tanque_lleno: array{puntos: list<array{punto_id: int|null, punto: string}>, usado: bool, galones: float}, pendiente: string|null}
+ * @phpstan-type Tramo array{sentido: string, confirmada: bool, rutas: list<array{id: int, nombre: string, variante: string|null, color: string|null, es_complemento: bool, variante_pendiente: bool, tope: float|null, variantes: list<array{id: int, nombre: string}>, sugerida: int|null}>, tarjeta: string|null, color: string|null, previsto: float|null, registrado: float, despachado: float, falta: float|null, puntos: list<array{punto: string, previsto: float|null}>, tanque_lleno: array{puntos: list<array{punto_id: int|null, punto: string}>, usado: bool, sin_voucher: bool, galones: float}, pendiente: string|null}
  * @phpstan-type FilaCombustible array{punto_id: int|null, punto: string, previsto: float|null, registrado: float, despachado: float, falta: float|null}
  */
 class DotacionVuelta
@@ -169,9 +169,10 @@ class DotacionVuelta
      */
     private function tramo(Vuelta $vuelta, SentidoTramo $sentido, Collection $rutas, Collection $delTramo): array
     {
-        // El tanque full no tiene galones fijos: no cuenta contra el tope.
+        // El tanque full no tiene galones fijos: cuenta contra el tope con
+        // los de su voucher (tope 180, tanquea 150, quedan 30). Mientras el
+        // voucher no llega suma cero y el tramo queda en espera.
         $llenos = $delTramo->filter(fn (Abastecimiento $abastecimiento): bool => $abastecimiento->tanque_lleno);
-        $delTramo = $delTramo->reject(fn (Abastecimiento $abastecimiento): bool => $abastecimiento->tanque_lleno);
 
         // Redondeado: sumar decimales (118.53 + 101.47…) deja restos que
         // harían que un tramo completo diga «faltan 0 gal».
@@ -221,6 +222,8 @@ class DotacionVuelta
                     $rutas->flatMap(fn (RutaVuelta $ruta): array => $ruta->lineasDeTanqueLleno())->all(),
                 )),
                 'usado' => $llenos->isNotEmpty(),
+                // Con un full sin voucher no se autoriza nada más al tramo.
+                'sin_voucher' => $llenos->contains(fn (Abastecimiento $abastecimiento): bool => ! $abastecimiento->tieneDespacho()),
                 'galones' => round((float) $llenos->sum(fn (Abastecimiento $abastecimiento): float => (float) $abastecimiento->galones_despachados), 2),
             ],
             'pendiente' => $this->pendiente($rutas),

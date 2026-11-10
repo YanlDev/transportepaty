@@ -63,6 +63,8 @@ type ParadaForm = {
     lugar_destino: string | null;
     tipo_carga: string;
     cliente_id: number | null;
+    /** El cliente escrito a mano, cuando todavía no está en el padrón. */
+    cliente: string | null;
     /** La GR del ticket anterior cuya carga sigue en esta parada. */
     viaje_continuado_id: number | null;
     /** Con GR: es lo que pasó, se muestra pero no se toca. */
@@ -143,6 +145,7 @@ function desdeParada(parada: ParadaVuelta): ParadaForm {
         lugar_destino: parada.lugar_destino,
         tipo_carga: parada.tipo_carga,
         cliente_id: parada.cliente_id,
+        cliente: parada.cliente_id === null ? (parada.cliente ?? null) : null,
         viaje_continuado_id: parada.viaje_continuado_id,
         bloqueada: parada.guias.length > 0,
     };
@@ -161,6 +164,7 @@ function nuevaParada(
         lugar_destino: null,
         tipo_carga: 'particular',
         cliente_id: null,
+        cliente: null,
         viaje_continuado_id: null,
         bloqueada: false,
         ...datos,
@@ -836,7 +840,33 @@ export function ProgramarVueltaDialog({
                 parada.sentido === sentido &&
                 !parada.bloqueada &&
                 parada.tipo_carga === 'particular'
-                    ? { ...parada, cliente_id: clienteId }
+                    ? { ...parada, cliente_id: clienteId, cliente: null }
+                    : parada,
+            ),
+        );
+
+    /** El cliente escrito a mano del tramo, si no se eligió uno del padrón. */
+    const clienteEscritoDe = (sentido: Sentido) =>
+        data.paradas.find(
+            (parada) =>
+                parada.sentido === sentido &&
+                !parada.bloqueada &&
+                parada.tipo_carga === 'particular',
+        )?.cliente ?? '';
+
+    // Escribirlo quita el del padrón: es uno o el otro.
+    const escribirCliente = (sentido: Sentido, nombre: string) =>
+        setData(
+            'paradas',
+            data.paradas.map((parada) =>
+                parada.sentido === sentido &&
+                !parada.bloqueada &&
+                parada.tipo_carga === 'particular'
+                    ? {
+                          ...parada,
+                          cliente_id: null,
+                          cliente: nombre === '' ? null : nombre,
+                      }
                     : parada,
             ),
         );
@@ -1309,6 +1339,30 @@ export function ProgramarVueltaDialog({
                                 onAbrir={() =>
                                     setEligiendo({ campo: 'cliente', sentido })
                                 }
+                            />
+                        )}
+                    </Field>
+                )}
+                {/* Al padrón entra a quien se le factura: un cliente nuevo
+                    se escribe acá y el ticket no espera a que lo den de
+                    alta. */}
+                {conParticular && clienteDe(sentido) === null && (
+                    <Field
+                        label="Cliente que no está en la lista"
+                        ayuda="Escríbelo tal como lo conoces; se puede cambiar después."
+                    >
+                        {(id) => (
+                            <Input
+                                id={id}
+                                value={clienteEscritoDe(sentido)}
+                                onChange={(evento) =>
+                                    escribirCliente(
+                                        sentido,
+                                        evento.target.value,
+                                    )
+                                }
+                                maxLength={150}
+                                placeholder="Nombre del cliente"
                             />
                         )}
                     </Field>

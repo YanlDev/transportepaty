@@ -644,7 +644,13 @@ function ticketConTanqueFull(Vehiculo $tracto): Vuelta
     return $vuelta;
 }
 
-it('fills the tank at Kio apart from the cap, once, and settles it with the voucher', function (): void {
+/**
+ * El tanque full se autoriza sin galones —no se sabe cuánto va a entrar— y,
+ * con su voucher, descuenta del tope del tramo: tope 190, tanquea 85.5,
+ * quedan 104.5. Mientras el voucher no llega no se sabe cuánto queda, así
+ * que el tramo no admite más combustible.
+ */
+it('fills the tank at Kio once, blocks the tramo until its voucher arrives, and counts it against the cap', function (): void {
     $vuelta = ticketConTanqueFull($this->tracto);
     $full = ['sentido' => 'regreso', 'tanque_lleno' => true, 'punto_abastecimiento_id' => $this->kio->id, 'galones' => null];
 
@@ -654,11 +660,16 @@ it('fills the tank at Kio apart from the cap, once, and settles it with the vouc
     $registro = Abastecimiento::query()->where('tanque_lleno', true)->sole();
     expect((float) $registro->galones)->toBe(0.0);
 
-    // Una vez por ruta: el siguiente llenado es otro viaje.
-    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, $full))->assertSessionHasErrors('tanque_lleno');
+    $tramo = fn (): array => collect(app(DotacionVuelta::class)->de($vuelta->fresh(['paradas.viajes', 'rutas']), $vuelta->abastecimientos()->vigentes()->with('punto')->get())['tramos'])
+        ->firstWhere('sentido', 'regreso');
 
-    // No consume el tope: los 190 de Arequipa siguen enteros.
-    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, ['sentido' => 'regreso', 'galones' => 190]))->assertSessionHasNoErrors();
+    expect($tramo()['tanque_lleno']['sin_voucher'])->toBeTrue();
+
+    // Sin el voucher del full no se autoriza nada más en el tramo: ni otro
+    // full ni galones.
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, $full))->assertSessionHasErrors('sentido');
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, ['sentido' => 'regreso', 'galones' => 50]))
+        ->assertSessionHasErrors(['sentido' => 'Falta el voucher del tanque full de Kio en la Vuelta: regístralo para saber cuánto queda del tope antes de autorizar más.']);
 
     // El voucher del full exige el kilometraje y la foto.
     $voucher = ['galones_despachados' => 85.5, 'precio_galon' => 16.2, 'despachado_el' => now()->toDateString()];
@@ -669,14 +680,22 @@ it('fills the tank at Kio apart from the cap, once, and settles it with the vouc
 
     $registro->refresh();
     expect($registro->getFirstMedia('voucher'))->not->toBeNull()
-        ->and((float) $registro->galones_despachados)->toBe(85.5);
+        ->and((float) $registro->galones_despachados)->toBe(85.5)
+        ->and($tramo()['registrado'])->toBe(85.5)
+        ->and($tramo()['falta'])->toBe(104.5)
+        ->and($tramo()['tanque_lleno']['sin_voucher'])->toBeFalse();
 
-    $tramo = collect(app(DotacionVuelta::class)->de($vuelta->fresh(['paradas.viajes', 'rutas']), $vuelta->abastecimientos()->vigentes()->with('punto')->get())['tramos'])
-        ->firstWhere('sentido', 'regreso');
-    expect($tramo['registrado'])->toBe(190.0)
-        ->and($tramo['falta'])->toBe(0.0)
-        ->and($tramo['tanque_lleno']['usado'])->toBeTrue()
-        ->and($tramo['tanque_lleno']['galones'])->toBe(85.5);
+    // Ya se sabe cuánto queda: los 190 enteros no entran, los 104.5 sí.
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, ['sentido' => 'regreso', 'galones' => 190]))->assertSessionHasErrors('galones');
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, ['sentido' => 'regreso', 'galones' => 104.5]))->assertSessionHasNoErrors();
+
+    // Una vez por ruta: el siguiente llenado es otro viaje.
+    actingAs(actorConRol('abastecimiento'))->post(route('abastecimiento.store'), autorizacion($vuelta, $full))->assertSessionHasErrors('tanque_lleno');
+
+    expect($tramo()['registrado'])->toBe(190.0)
+        ->and($tramo()['falta'])->toBe(0.0)
+        ->and($tramo()['tanque_lleno']['usado'])->toBeTrue()
+        ->and($tramo()['tanque_lleno']['galones'])->toBe(85.5);
 });
 
 it('does not fill the tank on a route without it', function (): void {
@@ -719,4 +738,36 @@ it('keeps the tank capacity of each brand of the active tractors', function (): 
     actingAs(actorConRol('abastecimiento'))
         ->put(route('abastecimiento.capacidades'), ['capacidades' => [['marca' => 'VOLVO', 'galones' => null]]]);
     expect(CapacidadTanque::de('Volvo'))->toBeNull();
+});
+
+/**
+ * La cola de trabajo se arma con lo que ya trae cada ticket: el combustible
+ * sin voucher, si llegó a base sin km y el último km de la unidad, que el
+ * formulario del voucher muestra antes de guardar.
+ */
+it('sends what the work queue needs: pending vouchers, the arrival without km and the last km of the unit', function (): void {
+    $vuelta = ticketListo($this->tracto);
+    $vuelta->update(['llegada_el' => now()->toDateString(), 'km_llegada' => null]);
+    Abastecimiento::factory()->paraVuelta($vuelta)->create(['galones' => 150, 'fecha' => now()->subDays(6)->toDateString()]);
+    LecturaKilometraje::factory()->create(['vehiculo_id' => $this->tracto->id, 'kilometraje' => 249000, 'leido_en' => now()->subDays(20)]);
+    LecturaKilometraje::factory()->create(['vehiculo_id' => $this->tracto->id, 'kilometraje' => 251300, 'leido_en' => now()->subDays(9)]);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vueltas.0.despachos_pendientes', 1)
+            ->where('vueltas.0.abastecimientos.0.despacho', null)
+            ->where('vueltas.0.abastecimientos.0.fecha', now()->subDays(6)->toDateString())
+            ->where('vueltas.0.llegada_el', now()->toDateString())
+            ->where('vueltas.0.km_llegada', null)
+            ->where('vueltas.0.ultimo_km.km', 251300)
+            ->where('vueltas.0.ultimo_km.fecha', now()->subDays(9)->toDateString()));
+});
+
+it('sends no last km for a unit that never had one', function (): void {
+    ticketListo($this->tracto);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('vueltas.0.ultimo_km', null));
 });

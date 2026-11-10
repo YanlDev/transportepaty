@@ -241,3 +241,28 @@ it('only lets fuel and accounting settle, and reopens only the latest ticket', f
 
     actingAs(actorConRol('admin'))->post(route('vueltas.reabrir', $vuelta))->assertForbidden();
 });
+
+/**
+ * Anotar el km que faltaba es de quien registra la llegada; cambiar uno ya
+ * anotado es una corrección y la hace el administrador.
+ */
+it('lets only the admin change a km de llegada that was already registered', function (): void {
+    foreach (['admin', 'operaciones'] as $rol) {
+        Role::findOrCreate($rol, 'web');
+    }
+
+    $vuelta = ticketConRansa($this->tracto, now()->subDays(2)->toDateString());
+    $hoy = now()->toDateString();
+
+    // Sin km primero, y lo completa después quien registra la llegada.
+    actingAs(actorConRol('operaciones'))->post(route('vueltas.llegada', $vuelta), ['llegada_el' => $hoy])->assertSessionHasNoErrors();
+    actingAs(actorConRol('operaciones'))->post(route('vueltas.llegada', $vuelta), ['llegada_el' => $hoy, 'km_llegada' => 251800])->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('operaciones'))->post(route('vueltas.llegada', $vuelta), ['llegada_el' => $hoy, 'km_llegada' => 252900])
+        ->assertSessionHasErrors('km_llegada');
+    expect($vuelta->fresh()->km_llegada)->toBe(251800);
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.llegada', $vuelta), ['llegada_el' => $hoy, 'km_llegada' => 252900])->assertSessionHasNoErrors();
+    expect($vuelta->fresh()->km_llegada)->toBe(252900)
+        ->and(LecturaKilometraje::query()->where('origen', "llegada:{$vuelta->id}")->value('kilometraje'))->toBe(252900);
+});

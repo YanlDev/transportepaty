@@ -6,6 +6,7 @@ use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Models\Abastecimiento;
+use App\Models\Cliente;
 use App\Models\DestinoParticular;
 use App\Models\LineaRuta;
 use App\Models\PalabraZona;
@@ -441,4 +442,66 @@ it('removes an extra while the leg has no fuel', function (): void {
     $extra = $ticket->rutas()->whereNotNull('motivo')->sole();
     actingAs(actorConRol('admin'))->delete(route('vueltas.adicionales.destroy', [$ticket, $extra]))->assertSessionHasNoErrors();
     expect($ticket->fresh()->topeDe(SentidoTramo::Regreso))->toBe(190.0);
+});
+
+/**
+ * La carga posterior: la unidad descarga en Moquegua y carga harina en Ilo
+ * para volver a Juliaca. La ruta de la tabla se suma al tramo después de
+ * programado —aunque ya tenga combustible autorizado—, con sus galones, sus
+ * viáticos y su parada, y la agrega quien programa.
+ */
+it('adds a route of the catalog to a leg afterwards, even with fuel already authorized', function (): void {
+    $vuelta = [['sentido' => 'regreso', 'zona_origen' => 'lima', 'zona_destino' => 'juliaca', 'tipo_carga' => 'particular']];
+    $aJuliaca = [['sentido' => 'regreso', 'ruta_id' => rutaDelCatalogo('Particular a Juliaca')->id, 'variante_ruta_id' => null]];
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), programar($this->tracto, $aJuliaca, $vuelta))->assertSessionHasNoErrors();
+    $ticket = Vuelta::query()->sole();
+    Abastecimiento::factory()->paraVuelta($ticket)->create(['sentido' => SentidoTramo::Regreso, 'galones' => 100]);
+
+    $harina = rutaDelCatalogo('Ilo a Juliaca con harina')->load(['lineas.punto', 'variantes']);
+    $posterior = ['sentido' => 'regreso', 'ruta_id' => $harina->id, 'motivo' => 'Descargó en Moquegua y carga harina en Ilo'];
+
+    actingAs(actorConRol('abastecimiento'))->post(route('vueltas.adicionales.store', $ticket), $posterior)->assertForbidden();
+    actingAs(actorConRol('admin'))->post(route('vueltas.adicionales.store', $ticket), [...$posterior, 'galones' => 30])->assertSessionHasErrors('galones');
+    actingAs(actorConRol('admin'))->post(route('vueltas.adicionales.store', $ticket), [...$posterior, 'sentido' => 'ida'])->assertSessionHasErrors('ruta_id');
+    actingAs(actorConRol('admin'))->post(route('vueltas.adicionales.store', $ticket), $posterior)->assertSessionHasNoErrors();
+
+    $ticket->refresh();
+    $sumada = $ticket->rutas()->whereNotNull('motivo')->sole();
+
+    expect($ticket->topeDe(SentidoTramo::Regreso))->toBe(190.0 + (float) $harina->topePara(null))
+        ->and($sumada->ruta_id)->toBe($harina->id)
+        ->and($sumada->nombre)->toBe('Ilo a Juliaca con harina')
+        ->and($ticket->paradas()->where('lugar_origen', 'Ilo')->count())->toBe(1);
+
+    // Editar el ticket no la toca.
+    $paradas = $ticket->paradas()->orderBy('orden')->get()->map(fn ($parada): array => [
+        'id' => $parada->id, 'sentido' => $parada->sentido->value, 'zona_origen' => $parada->zona_origen->value,
+        'zona_destino' => $parada->zona_destino->value, 'tipo_carga' => $parada->tipo_carga->value,
+        'lugar_origen' => $parada->lugar_origen, 'lugar_destino' => $parada->lugar_destino,
+    ])->all();
+    actingAs(actorConRol('admin'))->put(route('vueltas.update', $ticket), programar($this->tracto, $aJuliaca, $paradas))->assertSessionHasNoErrors();
+    expect($ticket->fresh()->rutas()->whereNotNull('motivo')->count())->toBe(1);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.show', $ticket))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('ticket.adicionales.0.ruta', 'Ilo a Juliaca con harina')
+            ->where('ticket.adicionales.0.motivo', 'Descargó en Moquegua y carga harina en Ilo'));
+});
+
+/**
+ * Al padrón entra a quien se le factura: un cliente nuevo se escribe en el
+ * ticket y no hay que darlo de alta para programar.
+ */
+it('programs a parada with a cliente written by hand, without registering it', function (): void {
+    $vuelta = [['sentido' => 'regreso', 'zona_origen' => 'lima', 'zona_destino' => 'juliaca', 'tipo_carga' => 'particular', 'cliente' => '  Molinera   del Sur  ']];
+    $aJuliaca = [['sentido' => 'regreso', 'ruta_id' => rutaDelCatalogo('Particular a Juliaca')->id, 'variante_ruta_id' => null]];
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), programar($this->tracto, $aJuliaca, $vuelta))->assertSessionHasNoErrors();
+
+    $parada = Vuelta::query()->sole()->paradas()->sole();
+
+    expect($parada->cliente)->toBe('Molinera del Sur')
+        ->and($parada->cliente_id)->toBeNull()
+        ->and(Cliente::query()->count())->toBe(0);
 });

@@ -179,7 +179,7 @@ class VueltaController extends Controller
         ]);
 
         if ($kmNuevo) {
-            $odometro->anotar($vuelta->tracto_id, $kilometraje, $request->user(), "Llegada a la base ({$vuelta->codigo})", OdometroDeUnidad::deLlegada($vuelta->id));
+            $odometro->anotar($vuelta->tracto_id, $kilometraje, $request->user(), "Llegada a la base ({$vuelta->codigo})", OdometroDeUnidad::deLlegada($vuelta->id), $request->date('llegada_el'));
         }
 
         return back()->with('toast', ['type' => 'success', 'message' => "Llegada del ticket {$vuelta->codigo} registrada."]);
@@ -754,7 +754,11 @@ class VueltaController extends Controller
             'adicionales' => $vuelta->rutas->filter(fn (RutaVuelta $ruta): bool => $ruta->esAdicional())->map(fn (RutaVuelta $ruta): array => [
                 'id' => $ruta->id,
                 'sentido' => $ruta->sentido->value,
+                // Una ruta de la tabla sumada después (carga posterior), o
+                // null si son galones sueltos.
+                'ruta' => $ruta->ruta_id === null ? null : $ruta->nombre.($ruta->variante ? " · {$ruta->variante}" : ''),
                 'galones' => (float) array_sum(array_column($ruta->lineasDeCombustible(), 'galones')),
+                'viaticos' => (float) array_sum(array_column($ruta->lineasDeViaticos(), 'monto')),
                 'motivo' => $ruta->motivo,
                 'por' => $ruta->usuario?->name,
                 'fecha' => $ruta->created_at->toDateString(),

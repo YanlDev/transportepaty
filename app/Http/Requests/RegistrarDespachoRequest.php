@@ -69,7 +69,13 @@ class RegistrarDespachoRequest extends FormRequest
                     return;
                 }
 
-                $error = app(OdometroDeUnidad::class)->error($abastecimiento->vehiculo, $this->integer('kilometraje'), OdometroDeUnidad::deDespacho($abastecimiento->id));
+                // El km es del día del voucher, aunque se registre después.
+                $error = app(OdometroDeUnidad::class)->error(
+                    $abastecimiento->vehiculo,
+                    $this->integer('kilometraje'),
+                    OdometroDeUnidad::deDespacho($abastecimiento->id),
+                    $this->date('despachado_el'),
+                );
 
                 if ($error !== null) {
                     $validator->errors()->add('kilometraje', $error);

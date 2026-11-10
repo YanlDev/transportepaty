@@ -14,6 +14,7 @@ use App\Models\RutaVuelta;
 use App\Models\User;
 use App\Models\Vuelta;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * Programar una vuelta y corregirla en el camino.
@@ -161,7 +162,10 @@ class ProgramadorVueltas
                 continue;
             }
 
-            $clienteId = $parada['tipo_carga'] === TipoCarga::Vacio->value ? null : ($parada['cliente_id'] ?? null);
+            $vacia = $parada['tipo_carga'] === TipoCarga::Vacio->value;
+            $clienteId = $vacia ? null : ($parada['cliente_id'] ?? null);
+            // Sin cliente del padrón vale el nombre escrito a mano.
+            $escrito = $vacia || blank($parada['cliente'] ?? null) ? null : Str::squish((string) $parada['cliente']);
             $campos = [
                 'sentido' => $parada['sentido'],
                 'orden' => $indice + 1,
@@ -171,7 +175,7 @@ class ProgramadorVueltas
                 'lugar_destino' => $parada['lugar_destino'] ?? null,
                 'tipo_carga' => $parada['tipo_carga'],
                 'cliente_id' => $clienteId,
-                'cliente' => $clienteId ? Cliente::query()->whereKey($clienteId)->value('alias') : null,
+                'cliente' => $clienteId ? Cliente::query()->whereKey($clienteId)->value('alias') : $escrito,
                 'viaje_continuado_id' => $parada['viaje_continuado_id'] ?? null,
             ];
 

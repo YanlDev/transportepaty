@@ -156,8 +156,8 @@ export function RegistrarAbastecimientoDialog({
         data.galones !== '' && data.precio_galon !== ''
             ? Number(data.galones) * Number(data.precio_galon)
             : null;
-    // El tanque full de la ruta (Kio), si todavía no se cargó: va aparte
-    // del tope y sin galones.
+    // El tanque full de la ruta (Kio), si todavía no se cargó: se autoriza
+    // sin galones y, con su voucher, descuenta del tope del tramo.
     const tanqueLlenoDisponible =
         tramo !== undefined &&
         tramo.tanque_lleno.puntos.length > 0 &&

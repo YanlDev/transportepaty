@@ -121,9 +121,9 @@ class RutaVuelta extends Model
      * o alguna línea tiene galones por definir.
      */
     /**
-     * Galones extra solo para este ticket (un desvío que no se repite): no
-     * viene del catálogo y lleva su motivo. Lo que se repite es un
-     * complemento del catálogo, como Huaral.
+     * Lo que se sumó al tramo después de programado, con su motivo: galones
+     * sueltos por un desvío que no está en la tabla, o una ruta de la tabla
+     * (la carga posterior). Editar el ticket no lo toca.
      */
     public function esAdicional(): bool
     {

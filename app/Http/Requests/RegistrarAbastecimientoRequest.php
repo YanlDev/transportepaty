@@ -40,7 +40,8 @@ class RegistrarAbastecimientoRequest extends FormRequest
             // Un grifo fuera de la lista, en un caso excepcional: o uno o el otro.
             'punto_libre' => ['nullable', 'string', 'max:80', 'prohibits:punto_abastecimiento_id'],
             'fecha' => ['required', 'date'],
-            // El tanque full no lleva galones: los dice el voucher.
+            // El tanque full no lleva galones: los dice el voucher, y con
+            // ellos descuenta del tope del tramo.
             'tanque_lleno' => ['boolean'],
             'galones' => ['exclude_if:tanque_lleno,true', 'required', 'numeric', 'min:0.1', 'max:999'],
             // Con qué precio se autoriza: el costo del ticket se ve desde ya.
@@ -80,6 +81,25 @@ class RegistrarAbastecimientoRequest extends FormRequest
 
                 if ($rutas->isEmpty()) {
                     $validator->errors()->add('sentido', "La {$sentido->label()} del ticket {$vuelta->codigo} no tiene ruta: se elige al programarlo.");
+
+                    return;
+                }
+
+                // El tanque full descuenta del tope lo que diga su voucher:
+                // sin el voucher no se sabe cuánto queda del tramo, así que
+                // no se autoriza nada más hasta que llegue.
+                $fullSinVoucher = Abastecimiento::query()
+                    ->vigentes()
+                    ->where('vuelta_id', $vuelta->id)
+                    ->where('sentido', $sentido)
+                    ->where('tanque_lleno', true)
+                    ->whereNull('galones_despachados')
+                    ->when($this->registroQueSeCorrige(), fn ($query, int $id) => $query->whereKeyNot($id))
+                    ->with('punto:id,nombre')
+                    ->first();
+
+                if ($fullSinVoucher !== null) {
+                    $validator->errors()->add('sentido', 'Falta el voucher del tanque full'.($fullSinVoucher->nombrePunto() ? ' de '.$fullSinVoucher->nombrePunto() : '')." en la {$sentido->label()}: regístralo para saber cuánto queda del tope antes de autorizar más.");
 
                     return;
                 }
@@ -131,7 +151,7 @@ class RegistrarAbastecimientoRequest extends FormRequest
             ->vigentes()
             ->where('vuelta_id', $vuelta->id)
             ->where('sentido', $sentido)
-            ->where('tanque_lleno', false)
+            // El tanque full también cuenta, por los galones de su voucher.
             ->when($this->registroQueSeCorrige(), fn ($query, int $id) => $query->whereKeyNot($id))
             ->sum(DB::raw(Abastecimiento::GALONES_QUE_CUENTAN));
 
