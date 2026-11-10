@@ -43,7 +43,6 @@ import {
 } from '@/components/ui/table';
 import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { usePermisos } from '@/hooks/use-permisos';
-import { colorTarjeta } from '@/lib/color-tarjeta';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type {
@@ -83,9 +82,12 @@ function BarraViaticos({ vuelta }: { vuelta: VueltaAbastecimiento }) {
     return (
         <div className="flex flex-col gap-1">
             <div className="flex items-center gap-2">
-                <div className="h-2.5 w-28 overflow-hidden rounded-full bg-muted">
+                <div className="h-2.5 w-16 shrink-0 overflow-hidden rounded-full bg-muted">
                     <div
-                        className="h-full rounded-full bg-emerald-500"
+                        className={cn(
+                            'h-full rounded-full',
+                            completo ? 'bg-emerald-500' : 'bg-primary',
+                        )}
                         style={{
                             width: `${Math.min(100, (vuelta.viatico_depositado / total) * 100)}%`,
                         }}
@@ -93,10 +95,10 @@ function BarraViaticos({ vuelta }: { vuelta: VueltaAbastecimiento }) {
                 </div>
                 <span
                     className={cn(
-                        'text-xs font-medium whitespace-nowrap tabular-nums',
+                        'text-xs whitespace-nowrap tabular-nums',
                         completo
-                            ? 'text-emerald-700 dark:text-emerald-400'
-                            : 'text-amber-700 dark:text-amber-400',
+                            ? 'font-medium text-emerald-700 dark:text-emerald-400'
+                            : 'text-muted-foreground',
                     )}
                 >
                     {soles(vuelta.viatico_depositado)} / {soles(total)}
@@ -125,9 +127,29 @@ function faltaTotal(vuelta: VueltaAbastecimiento): number | null {
     return vuelta.tramos.reduce((suma, tramo) => suma + (tramo.falta ?? 0), 0);
 }
 
-/** Por qué algún tramo todavía no tiene tope; null si todos lo tienen. */
-const sinTope = (vuelta: VueltaAbastecimiento): string | null =>
-    vuelta.tramos.find((tramo) => !tramo.confirmada)?.pendiente ?? null;
+/**
+ * En qué tramo va el ticket para abastecimiento: la ida es de quien sale o
+ * va subiendo; la vuelta, de quien ya viene o llegó. Un ticket que arranca
+ * en la costa no tiene ida (su ida no tiene ruta): desde que se programa lo
+ * que hay que abastecerle es la vuelta.
+ */
+function tramoEnCurso(vuelta: VueltaAbastecimiento): 'ida' | 'regreso' {
+    if (vuelta.etapa === 'en_vuelta' || vuelta.etapa === 'en_base') {
+        return 'regreso';
+    }
+
+    const conRuta = (sentido: 'ida' | 'regreso') =>
+        vuelta.tramos.some(
+            (tramo) => tramo.sentido === sentido && tramo.rutas.length > 0,
+        );
+
+    return !conRuta('ida') && conRuta('regreso') ? 'regreso' : 'ida';
+}
+
+const TRAMOS = [
+    { sentido: 'ida', titulo: 'Ida' },
+    { sentido: 'regreso', titulo: 'Vuelta' },
+] as const;
 
 /**
  * El tablero de abastecimiento como tabla: una fila por unidad con su ticket
@@ -145,6 +167,15 @@ export default function AbastecimientoIndex({
     const puedeRegistrar = puede('abastecimiento.registrar');
     const [buscar, setBuscar] = useState('');
     const [soloPendientes, setSoloPendientes] = useState(false);
+    // La pantalla se parte por el tramo que cada ticket tiene en curso: la
+    // ida y la vuelta se abastecen en momentos y lugares distintos.
+    const [sentido, setSentido] = useState<'ida' | 'regreso'>(() =>
+        // Si nadie está en ida, se abre en la vuelta: no en una lista vacía.
+        vueltas.length === 0 ||
+        vueltas.some((vuelta) => tramoEnCurso(vuelta) === 'ida')
+            ? 'ida'
+            : 'regreso',
+    );
     // Desde el expediente del ticket se llega con `?ticket=ID`: su ficha
     // se abre sola.
     const [abiertaId, setAbiertaId] = useState<number | null>(() => {
@@ -188,6 +219,9 @@ export default function AbastecimientoIndex({
     const pendientes = vueltas.filter(
         (vuelta) => (faltaTotal(vuelta) ?? 1) > 0,
     ).length;
+    const delTramo = filtradas.filter(
+        (vuelta) => tramoEnCurso(vuelta) === sentido,
+    );
     const abierta = vueltas.find((vuelta) => vuelta.id === abiertaId) ?? null;
 
     /**
@@ -213,6 +247,15 @@ export default function AbastecimientoIndex({
         });
     };
 
+    const vacio =
+        vueltas.length === 0
+            ? 'No hay tickets abiertos.'
+            : filtradas.length === 0
+              ? 'Ningún ticket coincide.'
+              : sentido === 'ida'
+                ? 'Ningún ticket por salir ni en ida.'
+                : 'Ningún ticket en vuelta ni en base.';
+
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Abastecimiento" />
@@ -226,30 +269,43 @@ export default function AbastecimientoIndex({
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="inline-flex rounded-lg border p-0.5">
-                        {(
-                            [
-                                [false, `Todas · ${vueltas.length}`],
-                                [
-                                    true,
-                                    `Con combustible pendiente · ${pendientes}`,
-                                ],
-                            ] as const
-                        ).map(([valor, etiqueta]) => (
+                        {TRAMOS.map((tramo) => (
                             <button
-                                key={String(valor)}
+                                key={tramo.sentido}
                                 type="button"
-                                onClick={() => setSoloPendientes(valor)}
+                                onClick={() => setSentido(tramo.sentido)}
+                                aria-pressed={sentido === tramo.sentido}
                                 className={cn(
-                                    'rounded-md px-3 py-1.5 text-sm transition',
-                                    soloPendientes === valor
+                                    'min-h-9 rounded-md px-4 py-1.5 text-sm font-medium transition pointer-coarse:min-h-11',
+                                    sentido === tramo.sentido
                                         ? 'bg-primary text-primary-foreground'
                                         : 'text-muted-foreground hover:text-foreground',
                                 )}
                             >
-                                {etiqueta}
+                                {tramo.titulo} ·{' '}
+                                {
+                                    filtradas.filter(
+                                        (vuelta) =>
+                                            tramoEnCurso(vuelta) ===
+                                            tramo.sentido,
+                                    ).length
+                                }
                             </button>
                         ))}
                     </div>
+                    <button
+                        type="button"
+                        onClick={() => setSoloPendientes(!soloPendientes)}
+                        aria-pressed={soloPendientes}
+                        className={cn(
+                            'min-h-9 rounded-full border px-3 text-sm transition pointer-coarse:min-h-11',
+                            soloPendientes
+                                ? 'border-primary bg-accent font-medium text-accent-foreground'
+                                : 'text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        Solo con combustible pendiente · {pendientes}
+                    </button>
                 </div>
                 <div className="flex gap-2">
                     <div className="relative flex-1 lg:w-64">
@@ -289,14 +345,12 @@ export default function AbastecimientoIndex({
             {/* En el celular: una tarjeta por ticket, con su barra y los
                 botones grandes. Tocarla abre la ficha completa. */}
             <div className="flex flex-col gap-2 md:hidden">
-                {filtradas.length === 0 && (
+                {delTramo.length === 0 && (
                     <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                        {vueltas.length === 0
-                            ? 'No hay tickets abiertos.'
-                            : 'Ningún ticket coincide.'}
+                        {vacio}
                     </p>
                 )}
-                {filtradas.map((vuelta) => (
+                {delTramo.map((vuelta) => (
                     <article
                         key={vuelta.id}
                         className="flex flex-col gap-3 rounded-xl border bg-card p-4"
@@ -322,7 +376,10 @@ export default function AbastecimientoIndex({
                                 <EtapaBadge etapa={vuelta.etapa} />
                             </span>
                         </button>
-                        <BarraCombustible tramos={vuelta.tramos} />
+                        <BarraCombustible
+                            tramos={vuelta.tramos}
+                            sentido={sentido}
+                        />
                         <BarraViaticos vuelta={vuelta} />
                         {vuelta.bloqueo_gastos !== null ? (
                             <p className="rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -333,7 +390,9 @@ export default function AbastecimientoIndex({
                                 <div className="grid grid-cols-2 gap-2">
                                     <Button
                                         className="h-12 text-base"
-                                        onClick={() => registrarEn(vuelta)}
+                                        onClick={() =>
+                                            registrarEn(vuelta, sentido)
+                                        }
                                     >
                                         <Fuel className="size-5" />
                                         Combustible
@@ -356,35 +415,47 @@ export default function AbastecimientoIndex({
                 <Table>
                     <TableHeader>
                         <TableRow className="hover:bg-transparent">
-                            <TableHead className="w-40">Unidad</TableHead>
+                            <TableHead>Unidad</TableHead>
                             <TableHead className="w-24">Ticket</TableHead>
                             <TableHead className="w-24">Etapa</TableHead>
-                            <TableHead>Rutas</TableHead>
-                            <TableHead className="min-w-80">
-                                Combustible
+                            <TableHead>Ruta</TableHead>
+                            <TableHead className="min-w-60">
+                                Combustible de la{' '}
+                                {sentido === 'ida' ? 'ida' : 'vuelta'}
                             </TableHead>
-                            <TableHead className="min-w-44">Viáticos</TableHead>
+                            <TableHead className="min-w-36">Viáticos</TableHead>
                             <TableHead className="w-32 text-right">
                                 Falta
                             </TableHead>
-                            <TableHead className="w-24" />
+                            {/* La acción queda fija a la derecha: en pantallas
+                                angostas la tabla se desplaza por debajo. */}
+                            <TableHead className="sticky right-0 w-24 bg-card" />
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {filtradas.length === 0 && (
+                        {delTramo.length === 0 && (
                             <TableRow className="hover:bg-transparent">
                                 <TableCell
                                     colSpan={8}
                                     className="py-10 text-center text-sm text-muted-foreground"
                                 >
-                                    {vueltas.length === 0
-                                        ? 'No hay tickets abiertos.'
-                                        : 'Ningún ticket coincide.'}
+                                    {vacio}
                                 </TableCell>
                             </TableRow>
                         )}
-                        {filtradas.map((vuelta) => {
-                            const falta = faltaTotal(vuelta);
+                        {delTramo.map((vuelta) => {
+                            const tramo =
+                                vuelta.tramos.find(
+                                    (opcion) => opcion.sentido === sentido,
+                                ) ?? null;
+                            // Lo que quedó debiendo el otro tramo (la ida
+                            // de un ticket que ya viene de vuelta).
+                            const otro = vuelta.tramos.find(
+                                (opcion) =>
+                                    opcion.sentido !== sentido &&
+                                    opcion.confirmada &&
+                                    (opcion.falta ?? 0) > 0,
+                            );
 
                             return (
                                 <TableRow
@@ -393,12 +464,12 @@ export default function AbastecimientoIndex({
                                     onClick={() => setAbiertaId(vuelta.id)}
                                 >
                                     <TableCell className="whitespace-nowrap">
-                                        <span className="flex flex-col gap-1">
+                                        <span className="flex flex-col items-start gap-1">
                                             <Placa
                                                 placa={vuelta.tracto.placa}
                                             />
                                             <span
-                                                className="max-w-40 truncate text-xs text-muted-foreground"
+                                                className="max-w-36 truncate text-xs text-muted-foreground"
                                                 title={
                                                     vuelta.conductor ??
                                                     undefined
@@ -439,21 +510,25 @@ export default function AbastecimientoIndex({
                                     </TableCell>
                                     <TableCell className="max-w-64">
                                         <div className="flex flex-wrap gap-1">
-                                            {vuelta.tarjetas.map((tarjeta) => (
-                                                <span
-                                                    key={tarjeta.sentido}
-                                                    className={cn(
-                                                        'truncate rounded px-1.5 py-0.5 text-[11px] font-medium',
-                                                        colorTarjeta(
-                                                            tarjeta.color,
-                                                        ).cabecera,
-                                                    )}
-                                                >
-                                                    {tarjeta.nombre}
-                                                </span>
-                                            ))}
-                                            {vuelta.tarjetas.length === 0 && (
-                                                <span className="rounded border border-dashed border-amber-400 px-1.5 py-0.5 text-[11px] text-amber-700 dark:text-amber-400">
+                                            {vuelta.tarjetas
+                                                .filter(
+                                                    (tarjeta) =>
+                                                        tarjeta.sentido ===
+                                                        sentido,
+                                                )
+                                                .map((tarjeta) => (
+                                                    <span
+                                                        key={`${tarjeta.id}-${tarjeta.nombre}`}
+                                                        className="truncate rounded bg-muted px-1.5 py-0.5 text-xs font-medium"
+                                                    >
+                                                        {tarjeta.nombre}
+                                                    </span>
+                                                ))}
+                                            {!vuelta.tarjetas.some(
+                                                (tarjeta) =>
+                                                    tarjeta.sentido === sentido,
+                                            ) && (
+                                                <span className="text-sm text-muted-foreground">
                                                     Sin ruta
                                                 </span>
                                             )}
@@ -462,31 +537,43 @@ export default function AbastecimientoIndex({
                                     <TableCell>
                                         <BarraCombustible
                                             tramos={vuelta.tramos}
+                                            sentido={sentido}
                                         />
                                     </TableCell>
                                     <TableCell>
                                         <BarraViaticos vuelta={vuelta} />
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        {sinTope(vuelta) !== null ? (
+                                        {tramo === null ? (
+                                            <span className="text-xs text-muted-foreground">
+                                                —
+                                            </span>
+                                        ) : !tramo.confirmada ||
+                                          tramo.falta === null ? (
                                             <span
                                                 className="text-xs font-medium text-amber-700 dark:text-amber-400"
                                                 title={
-                                                    sinTope(vuelta) ?? undefined
+                                                    tramo.pendiente ?? undefined
                                                 }
                                             >
                                                 Sin tope
                                             </span>
-                                        ) : falta === 0 ? (
+                                        ) : tramo.falta === 0 ? (
                                             <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700 dark:text-emerald-400">
                                                 <CircleCheck className="size-3.5" />
                                                 Completo
                                             </span>
                                         ) : (
-                                            <span className="text-xs font-medium text-amber-700 tabular-nums dark:text-amber-400">
-                                                {falta === null
-                                                    ? 'Galones por definir'
-                                                    : galones(falta)}
+                                            <span className="text-sm font-semibold tabular-nums">
+                                                {galones(tramo.falta)}
+                                            </span>
+                                        )}
+                                        {otro && (
+                                            <span className="block text-xs text-muted-foreground tabular-nums">
+                                                {otro.sentido === 'ida'
+                                                    ? 'Ida'
+                                                    : 'Vuelta'}
+                                                : faltan {galones(otro.falta)}
                                             </span>
                                         )}
                                         {vuelta.despachos_pendientes > 0 && (
@@ -496,7 +583,7 @@ export default function AbastecimientoIndex({
                                             </span>
                                         )}
                                         {vuelta.viatico_pendiente > 0 && (
-                                            <span className="block text-xs text-amber-700 tabular-nums dark:text-amber-400">
+                                            <span className="block text-xs text-muted-foreground tabular-nums">
                                                 Viático{' '}
                                                 {soles(
                                                     vuelta.viatico_pendiente,
@@ -505,6 +592,7 @@ export default function AbastecimientoIndex({
                                         )}
                                     </TableCell>
                                     <TableCell
+                                        className="sticky right-0 bg-card"
                                         onClick={(evento) =>
                                             evento.stopPropagation()
                                         }
@@ -522,7 +610,7 @@ export default function AbastecimientoIndex({
                                                     undefined
                                                 }
                                                 onClick={() =>
-                                                    registrarEn(vuelta)
+                                                    registrarEn(vuelta, sentido)
                                                 }
                                             >
                                                 <Fuel className="size-3.5" />

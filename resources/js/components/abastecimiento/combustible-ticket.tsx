@@ -24,8 +24,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { colorTarjeta } from '@/lib/color-tarjeta';
-import { colorDeSentido } from '@/lib/etapas';
 import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type {
@@ -86,12 +84,7 @@ export function RutasDelTicket({
                     className="flex flex-col gap-1.5 rounded-lg border p-2"
                 >
                     <span className="flex items-center justify-between gap-2">
-                        <span
-                            className={cn(
-                                'text-[11px] font-medium',
-                                colorDeSentido(tramo.sentido),
-                            )}
-                        >
+                        <span className="text-xs font-semibold">
                             {nombreTramo(tramo.sentido)}
                         </span>
                         <span className="text-[11px] text-muted-foreground tabular-nums">
@@ -110,12 +103,7 @@ export function RutasDelTicket({
                             key={ruta.id}
                             className="flex flex-wrap items-center justify-between gap-2"
                         >
-                            <span
-                                className={cn(
-                                    'truncate rounded px-1.5 py-0.5 text-xs font-medium',
-                                    colorTarjeta(ruta.color).cabecera,
-                                )}
-                            >
+                            <span className="truncate rounded bg-muted px-1.5 py-0.5 text-xs font-medium">
                                 {ruta.es_complemento && '+ '}
                                 {ruta.nombre}
                                 {ruta.variante && ` · ${ruta.variante}`}

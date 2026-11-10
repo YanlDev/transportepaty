@@ -1,5 +1,4 @@
 import { CircleCheck } from 'lucide-react';
-import { colorDeSentido } from '@/lib/etapas';
 import { cn } from '@/lib/utils';
 import type { TramoCombustible } from '@/types/abastecimiento';
 
@@ -22,11 +21,26 @@ export const soles = (valor: number | null): string =>
  * de la barra, con su nombre debajo. Un tramo sin tope (falta la variante o
  * hay galones por definir) no tiene barra: dice qué falta.
  */
-export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
+export function BarraCombustible({
+    tramos: todos,
+    sentido,
+}: {
+    tramos: TramoCombustible[];
+    /** Solo ese tramo, sin su etiqueta: la pantalla ya dice cuál es. */
+    sentido?: 'ida' | 'regreso';
+}) {
+    const tramos =
+        sentido === undefined
+            ? todos
+            : todos.filter((tramo) => tramo.sentido === sentido);
+    const conEtiqueta = sentido === undefined;
+
     if (tramos.length === 0) {
         return (
             <span className="text-xs text-muted-foreground">
-                Sin tramos programados
+                {sentido === 'regreso'
+                    ? 'Vuelta por definir'
+                    : 'Sin tramos programados'}
             </span>
         );
     }
@@ -38,18 +52,18 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                     return (
                         <div
                             key={tramo.sentido}
-                            className="grid grid-cols-[3.25rem_1fr] items-center gap-x-2"
+                            className={cn(
+                                'grid items-center gap-x-2',
+                                conEtiqueta && 'grid-cols-[3.25rem_1fr]',
+                            )}
                         >
+                            {conEtiqueta && (
+                                <span className="text-[11px] font-medium text-muted-foreground">
+                                    {tramo.sentido === 'ida' ? 'Ida' : 'Vuelta'}
+                                </span>
+                            )}
                             <span
-                                className={cn(
-                                    'text-[11px] font-medium',
-                                    colorDeSentido(tramo.sentido),
-                                )}
-                            >
-                                {tramo.sentido === 'ida' ? 'Ida' : 'Vuelta'}
-                            </span>
-                            <span
-                                className="truncate text-[11px] text-amber-700 dark:text-amber-400"
+                                className="truncate text-[11px] text-muted-foreground"
                                 title={tramo.pendiente ?? undefined}
                             >
                                 {tramo.pendiente ?? 'Sin tope'}
@@ -83,23 +97,23 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                 return (
                     <div
                         key={tramo.sentido}
-                        className="grid grid-cols-[3.25rem_1fr_auto] items-center gap-x-2"
+                        className={cn(
+                            'grid items-center gap-x-2',
+                            conEtiqueta
+                                ? 'grid-cols-[3.25rem_1fr_auto]'
+                                : 'grid-cols-[1fr_auto]',
+                        )}
                     >
-                        <span
-                            className={cn(
-                                'text-[11px] font-medium',
-                                colorDeSentido(tramo.sentido),
-                            )}
-                        >
-                            {tramo.sentido === 'ida' ? 'Ida' : 'Vuelta'}
-                        </span>
+                        {conEtiqueta && (
+                            <span className="text-[11px] font-medium text-muted-foreground">
+                                {tramo.sentido === 'ida' ? 'Ida' : 'Vuelta'}
+                            </span>
+                        )}
                         <div className="relative h-3 overflow-hidden rounded-full bg-muted">
                             <div
                                 className={cn(
                                     'h-full rounded-full transition-all',
-                                    completo
-                                        ? 'bg-emerald-500'
-                                        : 'bg-emerald-400',
+                                    completo ? 'bg-emerald-500' : 'bg-primary',
                                 )}
                                 style={{ width: `${avance}%` }}
                             />
@@ -132,7 +146,7 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                                 ? '¿? gal'
                                 : galones(tramo.previsto)}
                         </span>
-                        <span />
+                        {conEtiqueta && <span />}
                         <div
                             className="flex text-[10px] text-muted-foreground"
                             title="Sugerido: el reparto entre puntos puede variar"
@@ -158,14 +172,9 @@ export function BarraCombustible({ tramos }: { tramos: TramoCombustible[] }) {
                         <span />
                         {conFull && (
                             <>
-                                <span />
+                                {conEtiqueta && <span />}
                                 <span
-                                    className={cn(
-                                        'text-[10px]',
-                                        tramo.tanque_lleno.usado
-                                            ? 'text-emerald-700 dark:text-emerald-400'
-                                            : 'text-amber-700 dark:text-amber-400',
-                                    )}
+                                    className="text-[10px] text-muted-foreground"
                                     title="Va aparte del tope: los galones los dice el voucher"
                                 >
                                     + tanque full en{' '}
