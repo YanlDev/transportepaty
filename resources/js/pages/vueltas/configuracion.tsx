@@ -4,6 +4,7 @@ import { useState } from 'react';
 import hub from '@/actions/App/Http/Controllers/ConfiguracionController';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionProgramacionController';
 import rutas from '@/actions/App/Http/Controllers/RutaController';
+import { useConfirmar } from '@/components/confirmar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -94,6 +95,7 @@ export default function ConfiguracionProgramacion({
     palabras,
     zonas,
 }: Props) {
+    const confirmar = useConfirmar();
     const nuevoDestino = useForm({ lugar: '', zona: '' });
     const etiquetaZona = (zona: string) =>
         zonas.find((opcion) => opcion.value === zona)?.label ?? zona;
@@ -172,17 +174,23 @@ export default function ConfiguracionProgramacion({
                                             variant="ghost"
                                             size="icon"
                                             aria-label={`Quitar ${destino.lugar}`}
-                                            onClick={() =>
-                                                window.confirm(
-                                                    `¿Quitar ${destino.lugar}?`,
-                                                ) &&
-                                                router.delete(
-                                                    configuracion.destroyDestino(
-                                                        destino.id,
-                                                    ).url,
-                                                    { preserveScroll: true },
-                                                )
-                                            }
+                                            onClick={async () => {
+                                                if (
+                                                    await confirmar({
+                                                        titulo: `¿Quitar ${destino.lugar}?`,
+                                                        accion: 'Quitar',
+                                                    })
+                                                ) {
+                                                    router.delete(
+                                                        configuracion.destroyDestino(
+                                                            destino.id,
+                                                        ).url,
+                                                        {
+                                                            preserveScroll: true,
+                                                        },
+                                                    );
+                                                }
+                                            }}
                                         >
                                             <Trash2 className="size-4" />
                                         </Button>

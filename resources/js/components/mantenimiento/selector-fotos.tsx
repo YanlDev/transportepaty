@@ -1,6 +1,7 @@
 import { router } from '@inertiajs/react';
 import { X } from 'lucide-react';
 import { CampoArchivo } from '@/components/campo-archivo';
+import { useConfirmar } from '@/components/confirmar';
 import { Button } from '@/components/ui/button';
 import type { FotoOrden } from '@/types/mantenimiento';
 
@@ -34,6 +35,8 @@ export function SelectorFotos({
     error,
     onPreparando,
 }: Props) {
+    const confirmar = useConfirmar();
+
     return (
         <div className="grid gap-2">
             <span className="text-sm font-medium">{titulo}</span>
@@ -60,11 +63,14 @@ export function SelectorFotos({
                                 // La guardada se borra del servidor en el
                                 // acto: se pregunta antes, a diferencia de
                                 // una nueva.
-                                onClick={() => {
+                                onClick={async () => {
                                     if (
-                                        window.confirm(
-                                            '¿Quitar esta foto de la orden?',
-                                        )
+                                        await confirmar({
+                                            titulo: '¿Quitar esta foto de la orden?',
+                                            descripcion:
+                                                'Se borra en el acto y no se puede recuperar.',
+                                            accion: 'Quitar',
+                                        })
                                     ) {
                                         router.delete(foto.urlBorrar, {
                                             preserveScroll: true,

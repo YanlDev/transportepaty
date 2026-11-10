@@ -1,5 +1,8 @@
+import { Search } from 'lucide-react';
 import { Breadcrumbs } from '@/components/breadcrumbs';
+import { abrirBuscador } from '@/components/buscador-global';
 import { Campanita } from '@/components/campanita';
+import { Button } from '@/components/ui/button';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { BreadcrumbItem as BreadcrumbItemType } from '@/types';
 
@@ -14,6 +17,19 @@ export function AppSidebarHeader({
                 <SidebarTrigger className="-ml-1" />
                 <Breadcrumbs breadcrumbs={breadcrumbs} />
             </div>
+            {/* En el celular el buscador está en la barra de abajo. */}
+            <Button
+                variant="outline"
+                size="sm"
+                onClick={abrirBuscador}
+                className="hidden gap-2 text-muted-foreground md:inline-flex"
+            >
+                <Search className="size-4" />
+                Buscar
+                <kbd className="rounded border bg-muted px-1.5 font-mono text-[10px]">
+                    Ctrl K
+                </kbd>
+            </Button>
             <Campanita />
         </header>
     );

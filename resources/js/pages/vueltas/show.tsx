@@ -20,6 +20,7 @@ import {
     soles,
 } from '@/components/abastecimiento/barra-combustible';
 import { CombustiblesDelTicket } from '@/components/abastecimiento/combustible-ticket';
+import { useConfirmar } from '@/components/confirmar';
 import { Placa } from '@/components/placa';
 import { TallerVuelta } from '@/components/taller/taller-vuelta';
 import { Button } from '@/components/ui/button';
@@ -233,6 +234,7 @@ export default function ExpedienteTicket({
     whatsappConectado,
     ...opciones
 }: Props) {
+    const confirmar = useConfirmar();
     const { puede } = usePermisos();
     const [pestana, setPestana] = useState<Pestana>('recorrido');
     const [editando, setEditando] = useState(false);
@@ -619,10 +621,15 @@ export default function ExpedienteTicket({
                                                         variant="ghost"
                                                         size="sm"
                                                         title="Sacarla del ticket: vuelve a la bandeja de GR por asignar"
-                                                        onClick={() => {
+                                                        onClick={async () => {
                                                             if (
-                                                                window.confirm(
-                                                                    `¿Sacar la GR ${guia.numero_gr} del ticket ${ticket.codigo}? Vuelve a la bandeja.`,
+                                                                await confirmar(
+                                                                    {
+                                                                        titulo: `¿Sacar la GR ${guia.numero_gr} del ticket ${ticket.codigo}?`,
+                                                                        descripcion:
+                                                                            'Vuelve a la bandeja de GR por asignar.',
+                                                                        accion: 'Sacar',
+                                                                    },
                                                                 )
                                                             ) {
                                                                 router.delete(
@@ -734,11 +741,15 @@ export default function ExpedienteTicket({
                             <Button
                                 className="self-start"
                                 disabled={!liquidacion.puede_cerrar}
-                                onClick={() => {
+                                onClick={async () => {
                                     if (
-                                        window.confirm(
-                                            `¿Liquidar y cerrar el ticket ${ticket.codigo}? Ya no se le podrá registrar nada; para corregir habrá que reabrirlo.`,
-                                        )
+                                        await confirmar({
+                                            titulo: `¿Liquidar y cerrar el ticket ${ticket.codigo}?`,
+                                            descripcion:
+                                                'Ya no se le podrá registrar nada; para corregir habrá que reabrirlo.',
+                                            accion: 'Liquidar y cerrar',
+                                            tono: 'normal',
+                                        })
                                     ) {
                                         router.post(
                                             vueltasRutas.cerrar(ticket.id).url,

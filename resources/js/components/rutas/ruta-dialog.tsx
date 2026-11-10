@@ -1,6 +1,7 @@
 import { router, useForm } from '@inertiajs/react';
 import { Plus, X } from 'lucide-react';
 import rutas from '@/actions/App/Http/Controllers/RutaController';
+import { useConfirmar } from '@/components/confirmar';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -99,6 +100,7 @@ export function RutaDialog({
     opciones: OpcionesRutas;
     onCerrar: () => void;
 }) {
+    const confirmar = useConfirmar();
     const { data, setData, post, put, processing, errors, setError } =
         useForm<FormData>({
             nombre: ruta?.nombre ?? '',
@@ -191,14 +193,22 @@ export function RutaDialog({
         post(rutas.store().url, opcionesEnvio);
     };
 
-    const quitar = () => {
+    const quitar = async () => {
         if (
             !ruta ||
-            !window.confirm(
+            !(await confirmar(
                 ruta.usada
-                    ? `«${ruta.nombre}» ya está en tickets: se desactiva (deja de ofrecerse). ¿Seguir?`
-                    : `¿Quitar la ruta «${ruta.nombre}»?`,
-            )
+                    ? {
+                          titulo: `¿Desactivar «${ruta.nombre}»?`,
+                          descripcion:
+                              'Ya está en tickets: no se borra, deja de ofrecerse al programar.',
+                          accion: 'Desactivar',
+                      }
+                    : {
+                          titulo: `¿Quitar la ruta «${ruta.nombre}»?`,
+                          accion: 'Quitar',
+                      },
+            ))
         ) {
             return;
         }

@@ -3,6 +3,7 @@ import { AppShell } from '@/components/app-shell';
 import { AppSidebar } from '@/components/app-sidebar';
 import { AppSidebarHeader } from '@/components/app-sidebar-header';
 import { BottomNav } from '@/components/bottom-nav';
+import { BuscadorGlobal } from '@/components/buscador-global';
 import { FranjaAmbientePrueba } from '@/components/franja-ambiente-prueba';
 import type { AppLayoutProps } from '@/types';
 
@@ -25,6 +26,7 @@ export default function AppSidebarLayout({
                 {children}
             </AppContent>
             <BottomNav />
+            <BuscadorGlobal />
         </AppShell>
     );
 }

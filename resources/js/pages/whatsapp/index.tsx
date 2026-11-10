@@ -1,6 +1,7 @@
 import { Head, router, useForm, usePoll } from '@inertiajs/react';
 import { useEffect } from 'react';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
+import { useConfirmar } from '@/components/confirmar';
 import { IconoWhatsapp } from '@/components/icono-whatsapp';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -237,15 +238,19 @@ function Vinculando({
 }
 
 function Conectado() {
+    const confirmar = useConfirmar();
     const { data, setData, post, processing, errors } = useForm({
         numero: '',
     });
 
-    const desvincular = () => {
+    const desvincular = async () => {
         if (
-            window.confirm(
-                '¿Desvincular el número? Los avisos dejarán de salir solos hasta volver a vincularlo.',
-            )
+            await confirmar({
+                titulo: '¿Desvincular el número?',
+                descripcion:
+                    'Los avisos dejarán de salir solos hasta volver a vincularlo.',
+                accion: 'Desvincular',
+            })
         ) {
             router.post(
                 whatsapp.desvincular().url,

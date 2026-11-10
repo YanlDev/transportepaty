@@ -2,6 +2,7 @@ import { router, useForm } from '@inertiajs/react';
 import { Plus, Trash2 } from 'lucide-react';
 import areasAviso from '@/actions/App/Http/Controllers/AreaAvisoController';
 import whatsapp from '@/actions/App/Http/Controllers/WhatsappController';
+import { useConfirmar } from '@/components/confirmar';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -50,6 +51,7 @@ export function AreasAviso({ areas }: { areas: AreaAviso[] }) {
 
 /** Una fila editable; sin `area`, es la fila para agregar una nueva. */
 function FilaArea({ area }: { area?: AreaAviso }) {
+    const confirmar = useConfirmar();
     const nueva = area === undefined;
     const {
         data,
@@ -87,10 +89,14 @@ function FilaArea({ area }: { area?: AreaAviso }) {
         });
     };
 
-    const quitar = () => {
+    const quitar = async () => {
         if (
             area &&
-            window.confirm(`¿Quitar ${area.nombre}? Dejará de recibir avisos.`)
+            (await confirmar({
+                titulo: `¿Quitar ${area.nombre}?`,
+                descripcion: 'Dejará de recibir avisos.',
+                accion: 'Quitar',
+            }))
         ) {
             router.delete(areasAviso.destroy(area.id).url, {
                 preserveScroll: true,

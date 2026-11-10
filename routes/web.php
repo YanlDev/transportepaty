@@ -13,6 +13,7 @@ use App\Http\Controllers\Almacen\SalidaAlmacenController;
 use App\Http\Controllers\Almacen\ValeCompraController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
+use App\Http\Controllers\BuscadorGlobalController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConciliacionCombustibleController;
 use App\Http\Controllers\ConductorController;
@@ -73,6 +74,9 @@ Route::middleware('throttle:30,1')->group(function () {
 
 Route::middleware('auth')->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
+
+    // El buscador de toda la app: cada quien encuentra solo lo que puede ver.
+    Route::get('buscar', BuscadorGlobalController::class)->name('buscar');
 
     // La puerta única de la configuración: cada ajuste sigue en su
     // pantalla, acá se juntan.

@@ -1,90 +1,39 @@
-import { Link } from '@inertiajs/react';
-import {
-    CalendarCheck,
-    IdCard,
-    LayoutGrid,
-    Receipt,
-    Route,
-    Truck,
-    Wrench,
-} from 'lucide-react';
-import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
-import conductores from '@/actions/App/Http/Controllers/ConductorController';
-import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
-import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
-import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
-import viajes from '@/actions/App/Http/Controllers/ViajeController';
+import { Link, usePage } from '@inertiajs/react';
+import { LayoutGrid, Menu, Search } from 'lucide-react';
+import type { ElementType, ReactNode } from 'react';
+import { abrirBuscador } from '@/components/buscador-global';
+import { useSidebar } from '@/components/ui/sidebar';
 import { useCurrentUrl } from '@/hooks/use-current-url';
 import { usePermisos } from '@/hooks/use-permisos';
+import { destinosMoviles } from '@/lib/destinos-movil';
 import { cn } from '@/lib/utils';
 import { dashboard } from '@/routes';
-import type { NavItem } from '@/types';
+
+// min-h-14: área táctil cómoda (56px) para el pulgar, por encima de los 44px
+// mínimos.
+const CLASE_ITEM =
+    'relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-medium transition-colors';
 
 /**
- * Navegación de pulgar para el celular: los destinos del día a día quedan
- * abajo, al alcance de una mano, en vez de detrás del botón de menú de la
- * esquina superior —el punto más difícil de tocar sosteniendo el teléfono.
+ * Navegación de pulgar para el celular: lo de todos los días queda abajo, al
+ * alcance de una mano, en vez de detrás del botón de menú de la esquina
+ * superior —el punto más difícil de tocar sosteniendo el teléfono.
+ *
+ * Cinco lugares y no más (con seis ninguno se toca sin errarle): Inicio, las
+ * dos áreas donde la persona trabaja, Buscar y «Más», que abre el menú
+ * completo. Las áreas salen de sus permisos (`destinosMoviles`), así taller,
+ * almacén, abastecimiento y cobranza tienen cada uno su pantalla a un toque.
  *
  * Solo se ve por debajo de `md`; en escritorio manda el sidebar de siempre.
- * Deja fuera lo que no es tarea de calle (Clientes, Usuarios, Configuración):
- * eso sigue viviendo en el menú lateral, que también funciona en móvil. Más
- * de cinco destinos acá y ninguno se puede tocar sin errarle.
  */
 export function BottomNav() {
     const { puede } = usePermisos();
     const { isCurrentOrParentUrl } = useCurrentUrl();
+    const { pendientesMenu } = usePage().props;
+    const { toggleSidebar } = useSidebar();
 
-    const items: NavItem[] = [
-        ...(puede('tablero.ver')
-            ? [{ title: 'Inicio', href: dashboard(), icon: LayoutGrid }]
-            : []),
-        ...(puede('vehiculos.ver')
-            ? [{ title: 'Unidades', href: vehiculos.tractos(), icon: Truck }]
-            : []),
-        ...(puede('viajes.ver')
-            ? [{ title: 'Guías', href: viajes.index(), icon: Route }]
-            : []),
-        ...(puede('conductores.ver')
-            ? [
-                  {
-                      title: 'Conductores',
-                      href: conductores.index(),
-                      icon: IdCard,
-                  },
-              ]
-            : []),
-        // Para quien cobra, la cobranza es su pantalla, no una más; quien
-        // además opera la ve en el menú lateral, así no pasan de cinco.
-        ...(puede('cobranza.ver') && !puede('programacion.ver')
-            ? [
-                  {
-                      title: 'Cobranza',
-                      href: contabilidad.index(),
-                      icon: Receipt,
-                  },
-              ]
-            : []),
-        // Para el taller, mantenimiento es su pantalla; quien también ve los
-        // viajes lo tiene en el menú lateral, así no pasan de cinco.
-        ...(puede('mantenimiento.ver') && !puede('viajes.ver')
-            ? [
-                  {
-                      title: 'Taller',
-                      href: mantenimiento.index(),
-                      icon: Wrench,
-                  },
-              ]
-            : []),
-        ...(puede('asistencia.ver')
-            ? [
-                  {
-                      title: 'Asistencia',
-                      href: asistencia.index(),
-                      icon: CalendarCheck,
-                  },
-              ]
-            : []),
-    ];
+    const conInicio = puede('tablero.ver');
+    const destinos = destinosMoviles(puede, conInicio ? 2 : 3);
 
     return (
         <nav
@@ -93,31 +42,99 @@ export function BottomNav() {
             style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         >
             <ul className="flex items-stretch justify-around">
-                {items.map((item) => {
-                    const activo = isCurrentOrParentUrl(item.href);
-
-                    return (
-                        <li key={item.title} className="flex-1">
-                            <Link
-                                href={item.href}
-                                prefetch
-                                aria-current={activo ? 'page' : undefined}
-                                // min-h-14: área táctil cómoda (56px) para
-                                // el pulgar, por encima de los 44px mínimos.
-                                className={cn(
-                                    'flex min-h-14 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[11px] font-medium transition-colors',
-                                    activo
-                                        ? 'text-primary'
-                                        : 'text-muted-foreground hover:text-foreground',
-                                )}
-                            >
-                                {item.icon && <item.icon className="size-5" />}
-                                <span className="truncate">{item.title}</span>
-                            </Link>
-                        </li>
-                    );
-                })}
+                {conInicio && (
+                    <Destino
+                        titulo="Inicio"
+                        icono={LayoutGrid}
+                        href={dashboard()}
+                        activo={isCurrentOrParentUrl(dashboard())}
+                    />
+                )}
+                {destinos.map((destino) => (
+                    <Destino
+                        key={destino.clave}
+                        titulo={destino.titulo}
+                        icono={destino.icono}
+                        href={destino.href}
+                        activo={isCurrentOrParentUrl(destino.href)}
+                        pendientes={
+                            destino.pendientes
+                                ? pendientesMenu[destino.pendientes]
+                                : undefined
+                        }
+                    />
+                ))}
+                <li className="flex-1">
+                    <button
+                        type="button"
+                        onClick={abrirBuscador}
+                        className={cn(
+                            CLASE_ITEM,
+                            'text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        <Search className="size-5" />
+                        <span className="truncate">Buscar</span>
+                    </button>
+                </li>
+                <li className="flex-1">
+                    <button
+                        type="button"
+                        onClick={toggleSidebar}
+                        aria-label="Más: abrir el menú completo"
+                        className={cn(
+                            CLASE_ITEM,
+                            'text-muted-foreground hover:text-foreground',
+                        )}
+                    >
+                        <Menu className="size-5" />
+                        <span className="truncate">Más</span>
+                    </button>
+                </li>
             </ul>
         </nav>
+    );
+}
+
+function Destino({
+    titulo,
+    icono: Icono,
+    href,
+    activo,
+    pendientes,
+}: {
+    titulo: string;
+    icono: ElementType;
+    href: React.ComponentProps<typeof Link>['href'];
+    activo: boolean;
+    pendientes?: number;
+}): ReactNode {
+    return (
+        <li className="min-w-0 flex-1">
+            <Link
+                href={href}
+                prefetch
+                aria-current={activo ? 'page' : undefined}
+                className={cn(
+                    CLASE_ITEM,
+                    activo
+                        ? 'text-primary'
+                        : 'text-muted-foreground hover:text-foreground',
+                )}
+            >
+                <span className="relative">
+                    <Icono className="size-5" />
+                    {pendientes !== undefined && pendientes > 0 && (
+                        <span
+                            className="absolute -top-1.5 -right-2.5 flex min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] leading-4 font-semibold text-white tabular-nums"
+                            aria-label={`${pendientes} pendientes`}
+                        >
+                            {pendientes > 99 ? '99+' : pendientes}
+                        </span>
+                    )}
+                </span>
+                <span className="max-w-full truncate">{titulo}</span>
+            </Link>
+        </li>
     );
 }

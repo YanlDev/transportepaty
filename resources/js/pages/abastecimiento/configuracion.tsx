@@ -4,6 +4,7 @@ import { useState } from 'react';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionAbastecimientoController';
 import hub from '@/actions/App/Http/Controllers/ConfiguracionController';
 import rutas from '@/actions/App/Http/Controllers/RutaController';
+import { useConfirmar } from '@/components/confirmar';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -278,6 +279,7 @@ export default function AbastecimientoConfiguracion({
     zonas,
     capacidades,
 }: Props) {
+    const confirmar = useConfirmar();
     const [punto, setPunto] = useState<PuntoAbastecimiento | null | false>(
         false,
     );
@@ -292,8 +294,13 @@ export default function AbastecimientoConfiguracion({
         ],
     });
 
-    const quitarPunto = (elegido: PuntoAbastecimiento) => {
-        if (!window.confirm(`¿Quitar ${elegido.nombre}?`)) {
+    const quitarPunto = async (elegido: PuntoAbastecimiento) => {
+        if (
+            !(await confirmar({
+                titulo: `¿Quitar ${elegido.nombre}?`,
+                accion: 'Quitar',
+            }))
+        ) {
             return;
         }
 
