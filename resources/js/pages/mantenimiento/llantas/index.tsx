@@ -1,11 +1,12 @@
 import { Head, Link, setLayoutProps } from '@inertiajs/react';
-import { ChevronRight, CircleDot, Search } from 'lucide-react';
+import { ChevronRight, CircleCheck, CircleDot, Search } from 'lucide-react';
 import { useState } from 'react';
 import llantas from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import { EmptyState } from '@/components/empty-state';
 import { CortesLlantasDialog } from '@/components/llantas/cortes-llantas-dialog';
 import { formatearMm } from '@/components/llantas/esquema-llantas';
+import { GrupoDeUnidades } from '@/components/mantenimiento/grupo-de-unidades';
 import { Input } from '@/components/ui/input';
 import { usePermisos } from '@/hooks/use-permisos';
 import { formatearPlaca } from '@/lib/format';
@@ -24,8 +25,9 @@ const tipos = [
 ] as const;
 
 /**
- * Las llantas de la flota, unidad por unidad: cuántas tiene puestas y
- * cuántas hay que cambiar o revisar. Lo urgente viene arriba.
+ * Las llantas de la flota por lo que hay que hacer: primero las unidades
+ * con llantas para cambiar, después las de revisar y las que falta medir.
+ * Las que están al día y las que nunca se cargaron quedan plegadas.
  */
 export default function LlantasIndex({ unidades, umbrales }: Props) {
     const { puede } = usePermisos();
@@ -44,10 +46,6 @@ export default function LlantasIndex({ unidades, umbrales }: Props) {
     const visibles = delTipo.filter((unidad) =>
         unidad.placa.replace(/[\s-]/g, '').toUpperCase().includes(texto),
     );
-
-    const cambiar = delTipo.reduce((suma, u) => suma + u.cambiar, 0);
-    const revisar = delTipo.reduce((suma, u) => suma + u.revisar, 0);
-    const sinCargar = delTipo.filter((u) => u.montadas === 0).length;
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -93,23 +91,24 @@ export default function LlantasIndex({ unidades, umbrales }: Props) {
                 </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
-                <Cifra
-                    valor={cambiar}
-                    etiqueta={`Para cambiar (≤ ${formatearMm(umbrales.cambiar_mm)})`}
-                    className="text-red-700 dark:text-red-400"
-                />
-                <Cifra
-                    valor={revisar}
-                    etiqueta={`Para revisar (≤ ${formatearMm(umbrales.revisar_mm)})`}
-                    className="text-amber-700 dark:text-amber-400"
-                />
-                <Cifra
-                    valor={sinCargar}
-                    etiqueta="Unidades sin llantas cargadas"
-                    className="text-muted-foreground"
-                />
-            </div>
+            <p className="-mt-3 text-xs text-muted-foreground">
+                Se cambia con {formatearMm(umbrales.cambiar_mm)} o menos y se
+                revisa con {formatearMm(umbrales.revisar_mm)} o menos.
+            </p>
+
+            {texto === '' &&
+                visibles.length > 0 &&
+                !visibles.some(
+                    (unidad) =>
+                        GRUPOS.find((grupo) => grupo.clave === grupoDe(unidad))
+                            ?.abierto,
+                ) && (
+                    <p className="flex items-center gap-2 rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                        <CircleCheck className="size-4 shrink-0 text-emerald-600" />
+                        Nada por atender: sin llantas por cambiar, revisar ni
+                        medir.
+                    </p>
+                )}
 
             {visibles.length === 0 ? (
                 <EmptyState
@@ -118,81 +117,140 @@ export default function LlantasIndex({ unidades, umbrales }: Props) {
                     descripcion="Revisa la placa o cambia entre tractos y carretas."
                 />
             ) : (
-                <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {visibles.map((unidad) => (
-                        <li key={unidad.id}>
-                            <Link
-                                href={llantas.show(unidad.id)}
-                                className={cn(
-                                    'flex items-center gap-3 rounded-xl border border-l-4 bg-card p-3 transition-colors hover:bg-accent/50',
-                                    unidad.cambiar > 0
-                                        ? 'border-l-red-500'
-                                        : unidad.revisar > 0
-                                          ? 'border-l-amber-500'
-                                          : unidad.montadas > 0 &&
-                                              unidad.sin_medir === 0
-                                            ? 'border-l-emerald-500'
-                                            : 'border-l-zinc-300 dark:border-l-zinc-600',
-                                )}
-                            >
-                                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                                    <span className="font-semibold tracking-wide">
-                                        {formatearPlaca(unidad.placa)}
-                                        {unidad.marca && (
-                                            <span className="ml-2 text-xs font-normal text-muted-foreground">
-                                                {unidad.marca}
-                                            </span>
-                                        )}
-                                    </span>
-                                    <span className="flex flex-wrap gap-x-3 text-xs text-muted-foreground tabular-nums">
-                                        <span>
-                                            {unidad.montadas} de{' '}
-                                            {unidad.posiciones} llantas
-                                        </span>
-                                        {unidad.cambiar > 0 && (
-                                            <span className="font-medium text-red-700 dark:text-red-400">
-                                                {unidad.cambiar} para cambiar
-                                            </span>
-                                        )}
-                                        {unidad.revisar > 0 && (
-                                            <span className="font-medium text-amber-700 dark:text-amber-400">
-                                                {unidad.revisar} para revisar
-                                            </span>
-                                        )}
-                                        {unidad.sin_medir > 0 && (
-                                            <span>
-                                                {unidad.sin_medir} sin medir
-                                            </span>
-                                        )}
-                                    </span>
-                                </div>
-                                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+                GRUPOS.map((grupo) => {
+                    const delGrupo = visibles.filter(
+                        (unidad) => grupoDe(unidad) === grupo.clave,
+                    );
+
+                    return (
+                        <GrupoDeUnidades
+                            key={`${tipo}-${grupo.clave}`}
+                            titulo={grupo.titulo}
+                            cantidad={delGrupo.length}
+                            tono={grupo.tono}
+                            ayuda={grupo.ayuda}
+                            abiertoAlInicio={grupo.abierto}
+                            forzarAbierto={texto !== ''}
+                        >
+                            <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                                {delGrupo.map((unidad) => (
+                                    <li key={unidad.id}>
+                                        <Link
+                                            href={llantas.show(unidad.id)}
+                                            className={cn(
+                                                'flex items-center gap-3 rounded-xl border border-l-4 bg-card p-3 transition-colors hover:bg-accent/50',
+                                                unidad.cambiar > 0
+                                                    ? 'border-l-red-500'
+                                                    : unidad.revisar > 0
+                                                      ? 'border-l-amber-500'
+                                                      : unidad.montadas > 0 &&
+                                                          unidad.sin_medir === 0
+                                                        ? 'border-l-emerald-500'
+                                                        : 'border-l-zinc-300 dark:border-l-zinc-600',
+                                            )}
+                                        >
+                                            <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                                                <span className="font-semibold tracking-wide">
+                                                    {formatearPlaca(
+                                                        unidad.placa,
+                                                    )}
+                                                    {unidad.marca && (
+                                                        <span className="ml-2 text-xs font-normal text-muted-foreground">
+                                                            {unidad.marca}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                                <span className="flex flex-wrap gap-x-3 text-xs text-muted-foreground tabular-nums">
+                                                    <span>
+                                                        {unidad.montadas} de{' '}
+                                                        {unidad.posiciones}{' '}
+                                                        llantas
+                                                    </span>
+                                                    {unidad.cambiar > 0 && (
+                                                        <span className="font-medium text-red-700 dark:text-red-400">
+                                                            {unidad.cambiar}{' '}
+                                                            para cambiar
+                                                        </span>
+                                                    )}
+                                                    {unidad.revisar > 0 && (
+                                                        <span className="font-medium text-amber-700 dark:text-amber-400">
+                                                            {unidad.revisar}{' '}
+                                                            para revisar
+                                                        </span>
+                                                    )}
+                                                    {unidad.sin_medir > 0 && (
+                                                        <span>
+                                                            {unidad.sin_medir}{' '}
+                                                            sin medir
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </GrupoDeUnidades>
+                    );
+                })
             )}
         </div>
     );
 }
 
-function Cifra({
-    valor,
-    etiqueta,
-    className,
-}: {
-    valor: number;
-    etiqueta: string;
-    className: string;
-}) {
-    return (
-        <div className="flex flex-col rounded-xl border bg-card p-3">
-            <span
-                className={cn('text-2xl font-semibold tabular-nums', className)}
-            >
-                {valor}
-            </span>
-            <span className="text-xs text-muted-foreground">{etiqueta}</span>
-        </div>
-    );
+type ClaveGrupo = 'cambiar' | 'revisar' | 'sin_medir' | 'al_dia' | 'sin_cargar';
+
+/** Lo peor que tiene la unidad decide en qué grupo cae. */
+function grupoDe(unidad: UnidadLlantas): ClaveGrupo {
+    if (unidad.cambiar > 0) {
+        return 'cambiar';
+    }
+
+    if (unidad.revisar > 0) {
+        return 'revisar';
+    }
+
+    if (unidad.montadas === 0) {
+        return 'sin_cargar';
+    }
+
+    return unidad.sin_medir > 0 ? 'sin_medir' : 'al_dia';
 }
+
+/** En el orden en que se atienden; lo que no pide nada queda plegado. */
+const GRUPOS: {
+    clave: ClaveGrupo;
+    titulo: string;
+    tono: 'mal' | 'aviso' | 'bien' | 'neutro';
+    ayuda?: string;
+    abierto: boolean;
+}[] = [
+    {
+        clave: 'cambiar',
+        titulo: 'Con llantas para cambiar',
+        tono: 'mal',
+        abierto: true,
+    },
+    {
+        clave: 'revisar',
+        titulo: 'Con llantas para revisar',
+        tono: 'aviso',
+        abierto: true,
+    },
+    {
+        clave: 'sin_medir',
+        titulo: 'Con llantas sin medir',
+        tono: 'aviso',
+        ayuda: 'Tienen llantas cargadas, pero a alguna le falta la medida.',
+        abierto: true,
+    },
+    { clave: 'al_dia', titulo: 'Al día', tono: 'bien', abierto: false },
+    {
+        clave: 'sin_cargar',
+        titulo: 'Sin llantas cargadas',
+        tono: 'neutro',
+        ayuda: 'Todavía no se registró qué llantas tienen puestas.',
+        abierto: false,
+    },
+];

@@ -20,6 +20,7 @@ import {
     FaltanKm,
     formatearKm,
 } from '@/components/mantenimiento/estado-mantenimiento';
+import { GrupoDeUnidades } from '@/components/mantenimiento/grupo-de-unidades';
 import {
     MarcaLogo,
     resumenNiveles,
@@ -27,9 +28,9 @@ import {
 import {
     colorEstado,
     contarPorEstado,
-    TarjetaMarca,
 } from '@/components/mantenimiento/marca-tarjeta';
 import { RegistrarKmDialog } from '@/components/mantenimiento/registrar-km-dialog';
+import { Placa } from '@/components/placa';
 import { Button } from '@/components/ui/button';
 import { TableCell, TableHead, TableRow } from '@/components/ui/table';
 import { usePermisos } from '@/hooks/use-permisos';
@@ -103,9 +104,18 @@ export default function MantenimientoPreventivo({
         (unidad) => unidad.km_desactualizado,
     ).length;
 
+    // Sin filtro, la lista es de las unidades de las que se sabe algo: las
+    // que no tienen km ni servicios van aparte, plegadas, para que no
+    // entierren a las que hay que atender.
+    const sinFiltro = filtro === null && !soloDesactualizados;
+    const sinDatos = sinFiltro
+        ? deLaMarca.filter((unidad) => unidad.estado === 'sin_datos')
+        : [];
     const visibles = deLaMarca.filter(
         (unidad) =>
-            (filtro === null || unidad.estado === filtro) &&
+            (sinFiltro
+                ? unidad.estado !== 'sin_datos'
+                : filtro === null || unidad.estado === filtro) &&
             (!soloDesactualizados || unidad.km_desactualizado),
     );
 
@@ -136,23 +146,43 @@ export default function MantenimientoPreventivo({
                 </div>
             </div>
 
-            {/* Una tarjeta por marca: tocarla deja solo sus unidades. */}
-            <div className="grid grid-cols-2 gap-2 sm:gap-3 xl:grid-cols-4">
-                {marcas.map((item) => (
-                    <TarjetaMarca
-                        key={item.id}
-                        marca={item}
-                        conteo={contarPorEstado(
-                            unidades.filter(
-                                (unidad) => unidad.plan_id === item.id,
-                            ),
-                        )}
-                        activa={item.id === planId}
-                        onClick={() =>
-                            setPlanId(item.id === planId ? null : item.id)
-                        }
-                    />
-                ))}
+            {/* Una ficha por marca: tocarla deja solo sus unidades. Van en
+                una fila y no en tarjetas: la pantalla es de las unidades. */}
+            <div className="flex gap-2 overflow-x-auto pb-1">
+                {marcas.map((item) => {
+                    const deEsta = contarPorEstado(
+                        unidades.filter((unidad) => unidad.plan_id === item.id),
+                    );
+                    const urgentes = deEsta.vencido + deEsta.proximo;
+
+                    return (
+                        <button
+                            key={item.id}
+                            type="button"
+                            onClick={() =>
+                                setPlanId(item.id === planId ? null : item.id)
+                            }
+                            aria-pressed={item.id === planId}
+                            className={cn(
+                                'flex min-h-11 shrink-0 items-center gap-2 rounded-full border bg-card py-1 pr-4 pl-1.5 text-sm font-medium transition-colors hover:bg-accent/50',
+                                item.id === planId &&
+                                    'border-primary ring-1 ring-primary',
+                            )}
+                        >
+                            <MarcaLogo
+                                marca={item.marca}
+                                logoUrl={item.logo_url}
+                                className="h-8 w-10 rounded-full p-1"
+                            />
+                            {item.marca}
+                            {urgentes > 0 && (
+                                <span className="rounded-full bg-red-100 px-1.5 text-xs font-semibold text-red-800 tabular-nums dark:bg-red-950 dark:text-red-200">
+                                    {urgentes}
+                                </span>
+                            )}
+                        </button>
+                    );
+                })}
             </div>
 
             {seleccionada && (
@@ -193,8 +223,8 @@ export default function MantenimientoPreventivo({
                 </div>
             )}
 
-            {/* El resumen también filtra: tocar «Vencido» deja solo esas. */}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {/* Los estados filtran: tocar «Vencido» deja solo esas. */}
+            <div className="flex flex-wrap gap-2">
                 {resumen.map((item) => (
                     <button
                         key={item.estado}
@@ -206,20 +236,20 @@ export default function MantenimientoPreventivo({
                         }
                         aria-pressed={filtro === item.estado}
                         className={cn(
-                            'flex flex-col items-start rounded-xl border bg-card p-3 text-left transition-colors hover:bg-accent/50',
+                            'flex min-h-10 items-center gap-2 rounded-full border bg-card px-3 text-sm transition-colors hover:bg-accent/50',
                             filtro === item.estado &&
-                                'ring-2 ring-primary ring-offset-1 ring-offset-background',
+                                'border-primary ring-1 ring-primary',
                         )}
                     >
                         <span
                             className={cn(
-                                'text-2xl font-semibold tabular-nums',
+                                'font-semibold tabular-nums',
                                 colorEstado[item.estado],
                             )}
                         >
                             {conteo[item.estado]}
                         </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-muted-foreground">
                             {item.label}
                         </span>
                     </button>
@@ -255,12 +285,16 @@ export default function MantenimientoPreventivo({
                         titulo={
                             deLaMarca.length === 0
                                 ? 'Ninguna unidad con plan de mantenimiento'
-                                : 'Ninguna unidad con este filtro'
+                                : sinFiltro
+                                  ? 'Todavía no hay unidades con datos'
+                                  : 'Ninguna unidad con este filtro'
                         }
                         descripcion={
                             deLaMarca.length === 0
                                 ? 'Las unidades aparecen acá cuando su marca tiene un plan cargado.'
-                                : 'Quita el filtro para ver toda la flota.'
+                                : sinFiltro
+                                  ? 'El semáforo empieza cuando una unidad tiene su km anotado y su último servicio registrado.'
+                                  : 'Quita el filtro para ver toda la flota.'
                         }
                     />
                 }
@@ -363,6 +397,28 @@ export default function MantenimientoPreventivo({
                     </TableRow>
                 )}
             />
+
+            <GrupoDeUnidades
+                titulo="Sin datos"
+                cantidad={sinDatos.length}
+                ayuda="Les falta el km o su último servicio: todavía no se puede decir qué les toca."
+            >
+                <ul className="flex flex-wrap gap-2">
+                    {sinDatos.map((unidad) => (
+                        <li key={unidad.id}>
+                            <Link
+                                href={mantenimiento.show(unidad.id)}
+                                className="flex min-h-11 items-center gap-2 rounded-lg border bg-card px-2 text-xs text-muted-foreground transition-colors hover:bg-accent/50"
+                            >
+                                <Placa placa={unidad.placa} />
+                                {unidad.km_actual === null
+                                    ? 'sin km'
+                                    : 'sin servicios'}
+                            </Link>
+                        </li>
+                    ))}
+                </ul>
+            </GrupoDeUnidades>
 
             {puedeKm && (
                 <>

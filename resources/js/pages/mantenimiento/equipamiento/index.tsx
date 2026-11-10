@@ -1,5 +1,5 @@
 import { Head, Link, setLayoutProps } from '@inertiajs/react';
-import { ChevronRight, Package, Search } from 'lucide-react';
+import { ChevronRight, CircleCheck, Package, Search } from 'lucide-react';
 import { useState } from 'react';
 import equipamiento from '@/actions/App/Http/Controllers/EquipamientoCarretaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
@@ -9,6 +9,7 @@ import {
     bordeEquipamiento,
     EstadoEquipamientoBadge,
 } from '@/components/equipamiento/estado-equipamiento';
+import { GrupoDeUnidades } from '@/components/mantenimiento/grupo-de-unidades';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePermisos } from '@/hooks/use-permisos';
@@ -45,9 +46,6 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
             carreta.placa.replace(/[\s-]/g, '').toUpperCase().includes(texto),
     );
 
-    const conFalta = carretas.filter((c) => c.estado === 'falta').length;
-    const sinContar = carretas.filter((c) => c.estado === 'sin_contar').length;
-    const completas = carretas.filter((c) => c.estado === 'completo').length;
     const conMinimo = catalogo.some((item) => item.minimo !== null);
 
     return (
@@ -91,24 +89,6 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                 </p>
             )}
 
-            <div className="grid grid-cols-3 gap-2">
-                <Cifra
-                    valor={conFalta}
-                    etiqueta="Les falta algo"
-                    className="text-red-700 dark:text-red-400"
-                />
-                <Cifra
-                    valor={sinContar}
-                    etiqueta="Sin contar"
-                    className="text-amber-700 dark:text-amber-400"
-                />
-                <Cifra
-                    valor={completas}
-                    etiqueta="Completas"
-                    className="text-emerald-700 dark:text-emerald-400"
-                />
-            </div>
-
             <div className="flex gap-1.5">
                 {(
                     [
@@ -128,6 +108,19 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                 ))}
             </div>
 
+            {texto === '' &&
+                visibles.length > 0 &&
+                !visibles.some(
+                    (carreta) =>
+                        GRUPOS.find((grupo) => grupo.clave === grupoDe(carreta))
+                            ?.abierto,
+                ) && (
+                    <p className="flex items-center gap-2 rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                        <CircleCheck className="size-4 shrink-0 text-emerald-600" />
+                        Nada por atender: sin equipamiento faltante ni vencido.
+                    </p>
+                )}
+
             {visibles.length === 0 ? (
                 <EmptyState
                     icono={<Package className="size-7" />}
@@ -135,77 +128,134 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                     descripcion="Revisa la placa."
                 />
             ) : (
-                <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
-                    {visibles.map((carreta) => (
-                        <li key={carreta.id}>
-                            <Link
-                                href={equipamiento.show(carreta.id)}
-                                className={cn(
-                                    'flex items-center gap-3 rounded-xl border border-l-4 bg-card p-3 transition-colors hover:bg-accent/50',
-                                    bordeEquipamiento[carreta.estado],
-                                )}
-                            >
-                                <div className="flex min-w-0 flex-1 flex-col gap-1">
-                                    <div className="flex items-center justify-between gap-2">
-                                        <span className="font-semibold tracking-wide">
-                                            {formatearPlaca(carreta.placa)}
-                                        </span>
-                                        <EstadoEquipamientoBadge
-                                            estado={carreta.estado}
-                                            label={carreta.estado_label}
-                                        />
-                                    </div>
-                                    <span className="text-xs text-muted-foreground">
-                                        {carreta.estado === 'sin_contar'
-                                            ? 'Nunca se contó'
-                                            : carreta.faltan > 0
-                                              ? carreta.items
-                                                    .filter((i) => i.faltan > 0)
-                                                    .map(
-                                                        (i) =>
-                                                            `${i.faltan} ${i.nombre.toLowerCase()}`,
-                                                    )
-                                                    .join(' · ')
-                                              : carreta.vencidos > 0
-                                                ? carreta.items
-                                                      .filter((i) => i.vencido)
-                                                      .map(
-                                                          (i) =>
-                                                              `${i.nombre.toLowerCase()} vencido`,
-                                                      )
-                                                      .join(' · ')
-                                                : carreta.conteo_fecha
-                                                  ? `Contada el ${formatearFecha(carreta.conteo_fecha)}`
-                                                  : 'Con equipamiento del almacén, sin contar'}
-                                    </span>
-                                </div>
-                                <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                            </Link>
-                        </li>
-                    ))}
-                </ul>
+                GRUPOS.map((grupo) => {
+                    const delGrupo = visibles.filter(
+                        (carreta) => grupoDe(carreta) === grupo.clave,
+                    );
+
+                    return (
+                        <GrupoDeUnidades
+                            key={`${tipo}-${grupo.clave}`}
+                            titulo={grupo.titulo}
+                            cantidad={delGrupo.length}
+                            tono={grupo.tono}
+                            ayuda={grupo.ayuda}
+                            abiertoAlInicio={grupo.abierto}
+                            forzarAbierto={texto !== ''}
+                        >
+                            <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                                {delGrupo.map((carreta) => (
+                                    <li key={carreta.id}>
+                                        <Link
+                                            href={equipamiento.show(carreta.id)}
+                                            className={cn(
+                                                'flex items-center gap-3 rounded-xl border border-l-4 bg-card p-3 transition-colors hover:bg-accent/50',
+                                                bordeEquipamiento[
+                                                    carreta.estado
+                                                ],
+                                            )}
+                                        >
+                                            <div className="flex min-w-0 flex-1 flex-col gap-1">
+                                                <div className="flex items-center justify-between gap-2">
+                                                    <span className="font-semibold tracking-wide">
+                                                        {formatearPlaca(
+                                                            carreta.placa,
+                                                        )}
+                                                    </span>
+                                                    <EstadoEquipamientoBadge
+                                                        estado={carreta.estado}
+                                                        label={
+                                                            carreta.estado_label
+                                                        }
+                                                    />
+                                                </div>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {carreta.estado ===
+                                                    'sin_contar'
+                                                        ? 'Nunca se contó'
+                                                        : carreta.faltan > 0
+                                                          ? carreta.items
+                                                                .filter(
+                                                                    (i) =>
+                                                                        i.faltan >
+                                                                        0,
+                                                                )
+                                                                .map(
+                                                                    (i) =>
+                                                                        `${i.faltan} ${i.nombre.toLowerCase()}`,
+                                                                )
+                                                                .join(' · ')
+                                                          : carreta.vencidos > 0
+                                                            ? carreta.items
+                                                                  .filter(
+                                                                      (i) =>
+                                                                          i.vencido,
+                                                                  )
+                                                                  .map(
+                                                                      (i) =>
+                                                                          `${i.nombre.toLowerCase()} vencido`,
+                                                                  )
+                                                                  .join(' · ')
+                                                            : carreta.conteo_fecha
+                                                              ? `Contada el ${formatearFecha(carreta.conteo_fecha)}`
+                                                              : 'Con equipamiento del almacén, sin contar'}
+                                                </span>
+                                            </div>
+                                            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                                        </Link>
+                                    </li>
+                                ))}
+                            </ul>
+                        </GrupoDeUnidades>
+                    );
+                })
             )}
         </div>
     );
 }
 
-function Cifra({
-    valor,
-    etiqueta,
-    className,
-}: {
-    valor: number;
-    etiqueta: string;
-    className: string;
-}) {
-    return (
-        <div className="flex flex-col rounded-xl border bg-card p-3">
-            <span
-                className={cn('text-2xl font-semibold tabular-nums', className)}
-            >
-                {valor}
-            </span>
-            <span className="text-xs text-muted-foreground">{etiqueta}</span>
-        </div>
-    );
+type ClaveGrupo = 'atender' | 'sin_contar' | 'contado' | 'completo';
+
+/** Algo vencido pesa igual que algo que falta: las dos se atienden. */
+function grupoDe(carreta: EquipamientoCarreta): ClaveGrupo {
+    if (carreta.estado === 'falta' || carreta.vencidos > 0) {
+        return 'atender';
+    }
+
+    return carreta.estado === 'sin_contar'
+        ? 'sin_contar'
+        : carreta.estado === 'completo'
+          ? 'completo'
+          : 'contado';
 }
+
+/** En el orden en que se atienden; lo que no pide nada queda plegado. */
+const GRUPOS: {
+    clave: ClaveGrupo;
+    titulo: string;
+    tono: 'mal' | 'aviso' | 'bien' | 'neutro';
+    ayuda?: string;
+    abierto: boolean;
+}[] = [
+    {
+        clave: 'atender',
+        titulo: 'Les falta algo o lo tienen vencido',
+        tono: 'mal',
+        abierto: true,
+    },
+    {
+        clave: 'contado',
+        titulo: 'Contadas, sin mínimo con qué comparar',
+        tono: 'aviso',
+        ayuda: 'Tienen conteo, pero sus ítems no tienen mínimo definido.',
+        abierto: false,
+    },
+    { clave: 'completo', titulo: 'Completas', tono: 'bien', abierto: false },
+    {
+        clave: 'sin_contar',
+        titulo: 'Sin contar',
+        tono: 'neutro',
+        ayuda: 'Nunca se les hizo un conteo: se cuentan cuando la unidad está en base.',
+        abierto: false,
+    },
+];
