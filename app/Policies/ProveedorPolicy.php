@@ -13,9 +13,14 @@ class ProveedorPolicy
         return $user->checkPermissionTo(Permiso::AlmacenVer);
     }
 
+    /**
+     * Lo registra quien mantiene el catálogo, y también quien pide una
+     * compra: el pedido tiene que nombrar a su proveedor, aunque sea nuevo.
+     */
     public function create(User $user): bool
     {
-        return $user->checkPermissionTo(Permiso::AlmacenCatalogo);
+        return $user->checkPermissionTo(Permiso::AlmacenCatalogo)
+            || $user->checkPermissionTo(Permiso::ComprasSolicitar);
     }
 
     public function update(User $user, Proveedor $proveedor): bool

@@ -305,7 +305,9 @@ export default function IngresoCreate({
                                     opciones={proveedores.map((p) => ({
                                         valor: p.id,
                                         etiqueta: p.nombre,
-                                        detalle: p.ruc ?? '',
+                                        detalle: [p.ruc, p.razon_social]
+                                            .filter(Boolean)
+                                            .join(' · '),
                                     }))}
                                     invalido={!!errors.proveedor_id}
                                 />

@@ -1,11 +1,12 @@
 import { Head, setLayoutProps, useForm } from '@inertiajs/react';
-import { Plus, ShoppingCart, Trash2, Wrench } from 'lucide-react';
+import { Plus, ShoppingCart, Trash2, UserPlus, Wrench } from 'lucide-react';
 import { useState } from 'react';
 import compras, {
     store,
     update,
 } from '@/actions/App/Http/Controllers/Almacen/ValeCompraController';
 import { migasAlmacen } from '@/components/almacen/almacen-nav';
+import { ProveedorDialog } from '@/components/almacen/proveedor-dialog';
 import { CampoArchivo } from '@/components/campo-archivo';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import InputError from '@/components/input-error';
@@ -21,6 +22,7 @@ import { formatearPlaca } from '@/lib/format';
 import type {
     ArticuloElegible,
     OrdenElegible,
+    ProveedorElegible,
     VehiculoElegible,
 } from '@/types/almacen';
 import type { EnumOption } from '@/types/fleet';
@@ -53,7 +55,9 @@ type Props = {
     };
     tipos: EnumOption[];
     monedas: EnumOption[];
-    proveedores: { id: number; nombre: string; ruc: string | null }[];
+    proveedores: ProveedorElegible[];
+    /** Puede registrar un proveedor nuevo sin salir del pedido. */
+    puedeCrearProveedor: boolean;
     articulos: ArticuloElegible[];
     vehiculos: VehiculoElegible[];
     ordenes: OrdenElegible[];
@@ -87,6 +91,7 @@ export default function CompraForm({
     tipos,
     monedas,
     proveedores,
+    puedeCrearProveedor,
     articulos,
     vehiculos,
     ordenes,
@@ -227,20 +232,45 @@ export default function CompraForm({
                         required
                     >
                         {(id) => (
-                            <SelectorBuscable
-                                id={id}
-                                valor={data.proveedor_id}
-                                onCambio={(valor) =>
-                                    setData('proveedor_id', valor)
-                                }
-                                etiqueta="Proveedor"
-                                opciones={proveedores.map((p) => ({
-                                    valor: p.id,
-                                    etiqueta: p.nombre,
-                                    detalle: p.ruc ?? '',
-                                }))}
-                                invalido={!!errors.proveedor_id}
-                            />
+                            <div className="flex gap-2">
+                                <div className="min-w-0 flex-1">
+                                    <SelectorBuscable
+                                        id={id}
+                                        valor={data.proveedor_id}
+                                        onCambio={(valor) =>
+                                            setData('proveedor_id', valor)
+                                        }
+                                        etiqueta="Busca por nombre o RUC"
+                                        opciones={proveedores.map((p) => ({
+                                            valor: p.id,
+                                            etiqueta: p.nombre,
+                                            // Se busca también por RUC y por
+                                            // razón social.
+                                            detalle: [p.ruc, p.razon_social]
+                                                .filter(Boolean)
+                                                .join(' · '),
+                                        }))}
+                                        invalido={!!errors.proveedor_id}
+                                    />
+                                </div>
+                                {puedeCrearProveedor && (
+                                    <ProveedorDialog
+                                        onCreado={(nuevo) =>
+                                            setData('proveedor_id', nuevo)
+                                        }
+                                        trigger={
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="icon"
+                                                aria-label="Proveedor nuevo"
+                                            >
+                                                <UserPlus className="size-4" />
+                                            </Button>
+                                        }
+                                    />
+                                )}
+                            </div>
                         )}
                     </Field>
 

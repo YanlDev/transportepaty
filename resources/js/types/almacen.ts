@@ -124,7 +124,9 @@ export type Proveedor = {
 
 export type ProveedorElegible = {
     id: number;
+    /** El nombre comercial o, si no tiene, la razón social. */
     nombre: string;
+    razon_social: string;
     ruc: string | null;
 };
 

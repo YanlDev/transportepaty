@@ -106,7 +106,7 @@ trait CatalogosAlmacen
     }
 
     /**
-     * @return list<array{id: int, nombre: string, ruc: string|null}>
+     * @return list<array{id: int, nombre: string, razon_social: string, ruc: string|null}>
      */
     protected function proveedoresParaElegir(): array
     {
@@ -117,6 +117,7 @@ trait CatalogosAlmacen
             ->map(fn (Proveedor $proveedor): array => [
                 'id' => $proveedor->id,
                 'nombre' => $proveedor->nombre(),
+                'razon_social' => $proveedor->razon_social,
                 'ruc' => $proveedor->ruc,
             ])
             ->all());

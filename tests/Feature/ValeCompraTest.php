@@ -553,3 +553,31 @@ it('lists the vales and opens the request form from an orden', function (): void
             ->where('inicial.orden_trabajo_id', $orden->id)
             ->where('inicial.vehiculo_id', $orden->vehiculo_id));
 });
+
+it('lets whoever asks for a purchase register a new supplier from the request', function (): void {
+    actingAs(actorConRol('taller'))
+        ->get(route('almacen.compras.create'))
+        ->assertInertia(fn (Assert $page) => $page->where('puedeCrearProveedor', true));
+
+    actingAs(actorConRol('taller'))
+        ->post(route('almacen.proveedores.store'), ['ruc' => '20100136741', 'razon_social' => 'Llantas del Sur SAC', 'nombre_comercial' => 'Llantasur'])
+        ->assertSessionHasNoErrors();
+
+    $proveedor = Proveedor::query()->where('ruc', '20100136741')->sole();
+
+    // En el pedido se lo encuentra por su nombre, su razón social o su RUC.
+    actingAs(actorConRol('taller'))
+        ->get(route('almacen.compras.create'))
+        ->assertInertia(fn (Assert $page) => $page->where('proveedores', fn ($proveedores) => collect($proveedores)->contains(
+            fn (array $fila): bool => $fila['id'] === $proveedor->id && $fila['nombre'] === 'Llantasur' && $fila['ruc'] === '20100136741' && filled($fila['razon_social']),
+        )));
+
+    // Corregir el padrón sigue siendo de quien mantiene el catálogo.
+    actingAs(actorConRol('taller'))
+        ->put(route('almacen.proveedores.update', $proveedor), ['ruc' => '20100136741', 'razon_social' => 'Otro nombre'])
+        ->assertForbidden();
+
+    actingAs(actorConRol('rrhh'))
+        ->post(route('almacen.proveedores.store'), ['razon_social' => 'No debería'])
+        ->assertForbidden();
+});

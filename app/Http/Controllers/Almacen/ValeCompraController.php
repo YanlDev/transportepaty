@@ -14,6 +14,7 @@ use App\Models\Articulo;
 use App\Models\DetalleValeCompra;
 use App\Models\IngresoAlmacen;
 use App\Models\OrdenTrabajo;
+use App\Models\Proveedor;
 use App\Models\ValeCompra;
 use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\CodigoQr;
@@ -491,6 +492,7 @@ class ValeCompraController extends Controller
             'tipos' => TipoValeCompra::options(),
             'monedas' => Moneda::options(),
             'proveedores' => $this->proveedoresParaElegir(),
+            'puedeCrearProveedor' => request()->user()?->can('create', Proveedor::class) ?? false,
             'articulos' => $this->articulosParaElegir(false),
             'vehiculos' => $this->vehiculosParaElegir(),
             'ordenes' => $this->ordenesParaElegir(),
