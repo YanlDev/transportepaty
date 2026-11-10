@@ -2,18 +2,27 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\EstadoLlanta;
 use App\Enums\EstadoMantenimiento;
+use App\Enums\EstadoVuelta;
 use App\Enums\TipoVehiculo;
 use App\Models\Articulo;
 use App\Models\LecturaKilometraje;
+use App\Models\Llanta;
 use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
+use App\Models\RevisionTaller;
 use App\Models\ServicioMantenimiento;
 use App\Models\Vehiculo;
+use App\Models\Vuelta;
+use App\Services\AvisosDeTaller;
+use App\Services\EquipamientoDeUnidades;
+use App\Services\EstadoLlantas;
 use App\Services\MaterialesDeOrden;
 use App\Services\ProximoMantenimiento;
 use App\Services\RelojOperativo;
 use Carbon\CarbonImmutable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Inertia\Inertia;
@@ -30,9 +39,15 @@ use Inertia\Response;
  */
 class MantenimientoController extends Controller
 {
+    /** Cuántas unidades muestra cada lista de la portada; el resto, en su pantalla. */
+    private const POR_LISTA = 8;
+
     public function __construct(
         private readonly ProximoMantenimiento $mantenimiento,
         private readonly MaterialesDeOrden $materiales,
+        private readonly EstadoLlantas $llantas,
+        private readonly EquipamientoDeUnidades $equipamiento,
+        private readonly AvisosDeTaller $avisos,
     ) {}
 
     /**
@@ -56,7 +71,102 @@ class MantenimientoController extends Controller
             'unidades' => $unidades->count(),
             'desactualizados' => $unidades->where('km_desactualizado', true)->count(),
             'tractos' => $this->opcionesTractos($tractos, $estados),
+            // La portada es la cola de trabajo del taller: lo que ya está
+            // abierto, lo que venció, lo que viene y los datos que faltan.
+            'ordenes' => $this->avisos->ordenesAbiertas(),
+            'vencidos' => $this->preventivos($unidades, EstadoMantenimiento::Vencido),
+            'proximos' => $this->preventivos($unidades, EstadoMantenimiento::Proximo),
+            'llantas' => $this->llantasPorAtender(),
+            'equipamiento' => $this->equipamientoPorAtender(),
+            'sin_km' => [
+                'total' => $unidades->whereNull('km_actual')->count(),
+                'unidades' => array_values($unidades->whereNull('km_actual')->take(self::POR_LISTA)
+                    ->map(fn (array $unidad): array => ['id' => $unidad['id'], 'placa' => $unidad['placa']])
+                    ->all()),
+            ],
         ]);
+    }
+
+    /**
+     * Los tractos en ese estado frente a su plan, los más urgentes primero,
+     * con cuántos materiales del servicio no alcanzan hoy en el almacén.
+     *
+     * @param  Collection<int, array<string, mixed>>  $unidades  ya ordenadas por urgencia
+     * @return array{total: int, unidades: list<array<string, mixed>>}
+     */
+    private function preventivos(Collection $unidades, EstadoMantenimiento $estado): array
+    {
+        $delEstado = $unidades->where('estado', $estado->value)->whereNotNull('proximo');
+        $faltanPorServicio = [];
+
+        return [
+            'total' => $delEstado->count(),
+            'unidades' => array_values($delEstado->take(self::POR_LISTA)
+                ->map(function (array $unidad) use (&$faltanPorServicio): array {
+                    $servicioId = $unidad['proximo']['id'];
+                    $faltanPorServicio[$servicioId] ??= $this->materiales->faltanEnStock(ServicioMantenimiento::query()->whereKey($servicioId)->firstOrFail());
+
+                    return [
+                        'id' => $unidad['id'],
+                        'placa' => $unidad['placa'],
+                        'marca' => $unidad['marca'],
+                        'servicio' => $unidad['proximo']['codigo'],
+                        'faltan_km' => $unidad['proximo']['faltan_km'],
+                        'vence_el' => $unidad['proximo']['vence_el'],
+                        'faltan_en_stock' => $faltanPorServicio[$servicioId],
+                    ];
+                })
+                ->all()),
+        ];
+    }
+
+    /**
+     * Las unidades (tractos y carretas) con llantas por cambiar o revisar,
+     * las que tienen más por cambiar primero.
+     *
+     * @return array{total: int, unidades: list<array{id: int, placa: string, cambiar: int, revisar: int}>}
+     */
+    private function llantasPorAtender(): array
+    {
+        $vehiculos = Vehiculo::query()->orderBy('placa')->get(['id', 'placa', 'marca', 'tipo']);
+        $filas = collect();
+
+        foreach ($this->llantas->paraFlota($vehiculos) as $vehiculoId => $posiciones) {
+            $cambiar = count(array_filter($posiciones, fn (array $posicion): bool => $posicion['estado'] === EstadoLlanta::Cambiar));
+            $revisar = count(array_filter($posiciones, fn (array $posicion): bool => $posicion['estado'] === EstadoLlanta::Revisar));
+
+            if ($cambiar + $revisar > 0) {
+                $filas->push(['id' => $vehiculoId, 'placa' => $vehiculos->firstWhere('id', $vehiculoId)->placa, 'cambiar' => $cambiar, 'revisar' => $revisar]);
+            }
+        }
+
+        return [
+            'total' => $filas->count(),
+            'unidades' => array_values($filas->sortByDesc(fn (array $fila): int => $fila['cambiar'] * 100 + $fila['revisar'])->take(self::POR_LISTA)->all()),
+        ];
+    }
+
+    /**
+     * Las unidades a las que les falta equipamiento frente a su mínimo, o
+     * que tienen algo vencido (extintor, botiquín).
+     *
+     * @return array{total: int, unidades: list<array{id: int, placa: string, faltan: int, vencidos: int}>}
+     */
+    private function equipamientoPorAtender(): array
+    {
+        $vehiculos = Vehiculo::query()->orderBy('placa')->get(['id', 'placa', 'marca', 'tipo']);
+        $filas = collect();
+
+        foreach ($this->equipamiento->paraFlota($vehiculos) as $vehiculoId => $estado) {
+            if ($estado['faltan'] + $estado['vencidos'] > 0) {
+                $filas->push(['id' => $vehiculoId, 'placa' => $vehiculos->firstWhere('id', $vehiculoId)->placa, 'faltan' => $estado['faltan'], 'vencidos' => $estado['vencidos']]);
+            }
+        }
+
+        return [
+            'total' => $filas->count(),
+            'unidades' => array_values($filas->sortByDesc(fn (array $fila): int => $fila['vencidos'] * 100 + $fila['faltan'])->take(self::POR_LISTA)->all()),
+        ];
     }
 
     /**
@@ -215,7 +325,58 @@ class MantenimientoController extends Controller
                 ])
                 ->all(),
             'tractos' => $this->opcionesTractos(collect([$vehiculo]), [$vehiculo->id => $estado]),
+            // La ficha es el centro del trabajo de taller: el ticket que la
+            // unidad tiene abierto y sus llantas se ven acá, sin pasar por
+            // otros módulos.
+            'ticket' => ($request->user()?->can('viewAny', RevisionTaller::class) ?? false)
+                ? $this->ticketEnCurso($vehiculo, $request)
+                : null,
+            'llantas' => ($request->user()?->can('viewAny', Llanta::class) ?? false)
+                ? array_map(fn (array $posicion): array => [
+                    ...$posicion,
+                    'estado' => $posicion['estado']?->value,
+                    'estado_label' => $posicion['estado']?->label() ?? 'Vacía',
+                ], $this->llantas->paraVehiculo($vehiculo))
+                : null,
         ]);
+    }
+
+    /**
+     * El ticket abierto de la unidad (como tracto o como carreta) que
+     * todavía no volvió a la base, con su revisión de taller.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function ticketEnCurso(Vehiculo $vehiculo, Request $request): ?array
+    {
+        $vuelta = Vuelta::query()
+            ->whereIn('estado', [EstadoVuelta::Programada, EstadoVuelta::EnCurso])
+            ->where(fn (Builder $query) => $query->where('tracto_id', $vehiculo->id)->orWhere('carreta_id', $vehiculo->id))
+            ->with(['tracto:id,placa', 'conductor:id,nombres,apellidos', 'paradas.viajes:id,parada_vuelta_id,fecha_traslado', 'revisiones.usuario:id,name'])
+            ->latest('inicio')
+            ->get()
+            ->first(fn (Vuelta $vuelta): bool => $vuelta->etapa() !== 'en_base');
+
+        if ($vuelta === null) {
+            return null;
+        }
+
+        $primera = $vuelta->paradas->first();
+        $ultima = $vuelta->paradas->last();
+
+        return [
+            'id' => $vuelta->id,
+            'codigo' => $vuelta->codigo,
+            'placa' => $vuelta->tracto->placa,
+            'conductor' => $vuelta->conductor?->nombre_completo,
+            'inicio' => $vuelta->inicio?->toDateString(),
+            'etapa' => $vuelta->etapa(),
+            'ruta' => $primera && $ultima
+                ? ($primera->lugar_origen ?? $primera->zona_origen?->label() ?? '¿?').' → '.($ultima->lugar_destino ?? $ultima->zona_destino?->label() ?? '¿?')
+                : null,
+            'revision' => $vuelta->revisiones->first()?->resumen(),
+            'revisable' => $request->user()?->can('create', [RevisionTaller::class, $vuelta]) ?? false,
+        ];
     }
 
     /**

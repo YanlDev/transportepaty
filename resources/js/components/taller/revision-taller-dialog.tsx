@@ -25,6 +25,31 @@ type FormData = {
     kilometraje: string;
 };
 
+/** `datetime-local` de hoy o de mañana a esa hora, en la hora del equipo. */
+function fechaLocal(diasDespues: number, hora: number): string {
+    const fecha = new Date();
+    fecha.setDate(fecha.getDate() + diasDespues);
+    const dosCifras = (numero: number) => String(numero).padStart(2, '0');
+
+    return `${fecha.getFullYear()}-${dosCifras(fecha.getMonth() + 1)}-${dosCifras(fecha.getDate())}T${dosCifras(hora)}:00`;
+}
+
+/** Lo que casi siempre se responde a «¿cuándo estará lista?». */
+const ATAJOS_DE_FECHA = [
+    { etiqueta: 'Hoy 6 pm', valor: () => fechaLocal(0, 18) },
+    { etiqueta: 'Mañana 8 am', valor: () => fechaLocal(1, 8) },
+    { etiqueta: 'Mañana 6 pm', valor: () => fechaLocal(1, 18) },
+];
+
+/** Para no escribir en el patio; el campo sigue libre para detallar. */
+const MOTIVOS_FRECUENTES = [
+    'Llantas',
+    'Frenos',
+    'Fuga de aire',
+    'Fuga de aceite',
+    'Sistema eléctrico',
+];
+
 /**
  * El OK de salida de taller. Apto pasa el ticket a abastecimiento; no apto
  * pide cuándo estará lista la unidad, por qué y qué se le va a hacer.
@@ -34,7 +59,13 @@ export function RevisionTallerDialog({
     onCerrar,
     resultadoInicial = '',
 }: {
-    ticket: { id: number; codigo: string | null; placa: string } | null;
+    ticket: {
+        id: number;
+        codigo: string | null;
+        placa: string;
+        /** El último km conocido: se propone como km de salida. */
+        km_actual?: number | null;
+    } | null;
     onCerrar: () => void;
     /** Desde los botones grandes del celular llega ya elegido. */
     resultadoInicial?: FormData['resultado'];
@@ -45,7 +76,10 @@ export function RevisionTallerDialog({
             disponible_estimado: '',
             motivo: '',
             trabajos: '',
-            kilometraje: '',
+            // Se propone el último km anotado: en el patio casi siempre es
+            // ese o unos pocos más, y corregir dos cifras es más rápido que
+            // escribir seis.
+            kilometraje: ticket?.km_actual ? String(ticket.km_actual) : '',
         });
 
     const cerrar = () => {
@@ -136,17 +170,43 @@ export function RevisionTallerDialog({
                                 ayuda="Fecha y hora estimada."
                             >
                                 {(id) => (
-                                    <Input
-                                        id={id}
-                                        type="datetime-local"
-                                        value={data.disponible_estimado}
-                                        onChange={(evento) =>
-                                            setData(
-                                                'disponible_estimado',
-                                                evento.target.value,
-                                            )
-                                        }
-                                    />
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {ATAJOS_DE_FECHA.map((atajo) => (
+                                                <Button
+                                                    key={atajo.etiqueta}
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={
+                                                        data.disponible_estimado ===
+                                                        atajo.valor()
+                                                            ? 'default'
+                                                            : 'outline'
+                                                    }
+                                                    className="pointer-coarse:h-10"
+                                                    onClick={() =>
+                                                        setData(
+                                                            'disponible_estimado',
+                                                            atajo.valor(),
+                                                        )
+                                                    }
+                                                >
+                                                    {atajo.etiqueta}
+                                                </Button>
+                                            ))}
+                                        </div>
+                                        <Input
+                                            id={id}
+                                            type="datetime-local"
+                                            value={data.disponible_estimado}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'disponible_estimado',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
                                 )}
                             </Field>
                             <Field
@@ -155,17 +215,45 @@ export function RevisionTallerDialog({
                                 required
                             >
                                 {(id) => (
-                                    <Input
-                                        id={id}
-                                        placeholder="Ej.: fuga de aire en la carreta"
-                                        value={data.motivo}
-                                        onChange={(evento) =>
-                                            setData(
-                                                'motivo',
-                                                evento.target.value,
-                                            )
-                                        }
-                                    />
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {MOTIVOS_FRECUENTES.map(
+                                                (motivo) => (
+                                                    <Button
+                                                        key={motivo}
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={
+                                                            data.motivo ===
+                                                            motivo
+                                                                ? 'default'
+                                                                : 'outline'
+                                                        }
+                                                        className="pointer-coarse:h-10"
+                                                        onClick={() =>
+                                                            setData(
+                                                                'motivo',
+                                                                motivo,
+                                                            )
+                                                        }
+                                                    >
+                                                        {motivo}
+                                                    </Button>
+                                                ),
+                                            )}
+                                        </div>
+                                        <Input
+                                            id={id}
+                                            placeholder="Ej.: fuga de aire en la carreta"
+                                            value={data.motivo}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'motivo',
+                                                    evento.target.value,
+                                                )
+                                            }
+                                        />
+                                    </div>
                                 )}
                             </Field>
                         </>
@@ -198,7 +286,11 @@ export function RevisionTallerDialog({
                         <Field
                             label="Kilometraje de salida"
                             error={errors.kilometraje}
-                            ayuda="El odómetro con que sale: con el de llegada se calcula lo recorrido y el rendimiento."
+                            ayuda={
+                                ticket?.km_actual
+                                    ? `Propuesto: el último km anotado (${ticket.km_actual.toLocaleString('es-PE')}). Corrígelo si el tablero marca otro.`
+                                    : 'El odómetro con que sale: con el de llegada se calcula lo recorrido y el rendimiento.'
+                            }
                         >
                             {(id) => (
                                 <Input

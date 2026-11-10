@@ -61,7 +61,9 @@ enum RolBase: string
                 Permiso::ComprasVer, Permiso::ComprasSolicitar, Permiso::ComprasAprobarEmergencia,
             ],
 
-            // El OK de salida de cada ticket y el mantenimiento de la flota.
+            // El OK de salida de cada ticket, el mantenimiento de la flota y
+            // el almacén del taller: quien da el apto también supervisa lo
+            // que entra y sale. No ve costos ni anula: eso sigue aparte.
             self::Taller => [
                 Permiso::TableroVer, Permiso::ProgramacionVer,
                 Permiso::TallerVer, Permiso::TallerRevisar,
@@ -69,7 +71,8 @@ enum RolBase: string
                 Permiso::MantenimientoVer, Permiso::MantenimientoRegistrarKm, Permiso::MantenimientoGestionar,
                 Permiso::MantenimientoLlantas, Permiso::MantenimientoEquipamiento,
                 Permiso::NovedadesRegistrar, Permiso::NovedadesLevantar,
-                Permiso::AlmacenVer,
+                Permiso::AlmacenVer, Permiso::AlmacenCatalogo,
+                Permiso::AlmacenIngresar, Permiso::AlmacenDespachar, Permiso::AlmacenInventariar,
                 Permiso::ComprasVer, Permiso::ComprasSolicitar,
             ],
 

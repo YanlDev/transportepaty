@@ -84,6 +84,34 @@ type Formulario = {
     fotos_despues: File[];
 };
 
+/** Los tres momentos de una orden, en el orden en que pasan en el taller. */
+const PASOS = ['Unidad y servicio', 'Trabajo', 'Cierre'];
+
+/** En qué paso está cada campo, para llevar ahí cuando el servidor lo rechaza. */
+const PASO_DE_CAMPO: Record<string, number> = {
+    vehiculo_id: 0,
+    tipo: 0,
+    servicio_mantenimiento_id: 0,
+    fecha: 0,
+    kilometraje: 0,
+    trabajo: 1,
+    tecnico: 1,
+    fotos_antes: 1,
+    estado: 2,
+    justificacion_materiales: 2,
+    fotos_despues: 2,
+    inicio: 2,
+    termino: 2,
+    observacion: 2,
+};
+
+/** Lo que cada estado le dice al resto: taller, almacén y el OK de salida. */
+const QUE_SIGNIFICA: Record<string, string> = {
+    pendiente: 'Todavía no se empieza. La unidad no recibe el apto.',
+    en_proceso: 'Se está trabajando. La unidad no recibe el apto.',
+    finalizada: 'El trabajo terminó: la unidad puede volver a salir.',
+};
+
 /**
  * La orden de trabajo, para crear y para editar. Es el «Cuadro de trabajos de
  * taller» del Excel, ordenado para llenarse desde el celular: primero qué
@@ -104,6 +132,12 @@ export default function OrdenTrabajo({
     // Cada grupo de fotos avisa mientras comprime las suyas.
     const [preparandoAntes, setPreparandoAntes] = useState(false);
     const [preparandoDespues, setPreparandoDespues] = useState(false);
+
+    // Una orden abierta se retoma donde se trabaja: el trabajo y sus
+    // materiales. Una nueva empieza por la unidad.
+    const [paso, setPaso] = useState(
+        orden !== null && inicial.estado !== 'finalizada' ? 1 : 0,
+    );
 
     const { data, setData, post, transform, processing, progress, errors } =
         useForm<Formulario>({
@@ -140,6 +174,19 @@ export default function OrdenTrabajo({
             faltantes.length > 0 ||
             data.justificacion_materiales !== '' ||
             !!errors.justificacion_materiales);
+
+    // Sin unidad, o una preventiva sin su servicio, no se pasa del primer
+    // paso: el servidor lo rechazaría al final, cuando ya se escribió todo.
+    const pasoUnoListo =
+        data.vehiculo_id !== null &&
+        (!preventiva || data.servicio_mantenimiento_id !== null);
+
+    // Si el servidor rechaza algo, se marca el paso donde está el campo.
+    const pasosConError = PASOS.map((_, indice) =>
+        Object.keys(errors).some(
+            (campo) => PASO_DE_CAMPO[campo.split('.')[0]] === indice,
+        ),
+    );
 
     setLayoutProps({
         breadcrumbs: [
@@ -179,6 +226,16 @@ export default function OrdenTrabajo({
 
         post(editando ? update(orden.id).url : store().url, {
             preserveScroll: true,
+            // Lleva al primer paso con un campo rechazado.
+            onError: (rechazados) => {
+                const pasosRechazados = Object.keys(rechazados)
+                    .map((campo) => PASO_DE_CAMPO[campo.split('.')[0]])
+                    .filter((indice) => indice !== undefined);
+
+                if (pasosRechazados.length > 0) {
+                    setPaso(Math.min(...pasosRechazados));
+                }
+            },
         });
     };
 
@@ -201,262 +258,363 @@ export default function OrdenTrabajo({
                 )}
             </div>
 
-            <form onSubmit={guardar} className="flex flex-col gap-5">
-                <div className="grid gap-1.5">
-                    <Label htmlFor="orden-unidad">Unidad</Label>
-                    {editando ? (
-                        <p className="text-lg font-semibold">
-                            {tracto ? formatearPlaca(tracto.placa) : '—'}
-                            <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                {tracto?.marca}
-                            </span>
-                        </p>
-                    ) : (
-                        <SelectorBuscable
-                            id="orden-unidad"
-                            valor={data.vehiculo_id}
-                            onCambio={(valor) =>
-                                setData((previo) => ({
-                                    ...previo,
-                                    vehiculo_id: valor,
-                                    servicio_mantenimiento_id: null,
-                                }))
-                            }
-                            etiqueta="Placa"
-                            opciones={tractos.map((opcion) => ({
-                                valor: opcion.id,
-                                etiqueta: formatearPlaca(opcion.placa),
-                                detalle: `${opcion.placa} ${opcion.marca ?? ''}`,
-                            }))}
-                            invalido={!!errors.vehiculo_id}
-                        />
-                    )}
-                    <InputError message={errors.vehiculo_id} />
-                </div>
-
-                <Segmentado
-                    etiqueta="Tipo"
-                    opciones={tipos}
-                    valor={data.tipo}
-                    onCambio={elegirTipo}
+            <form
+                onSubmit={guardar}
+                className="flex flex-col gap-5 max-md:pb-20"
+            >
+                <Pasos
+                    pasos={PASOS}
+                    actual={paso}
+                    conError={pasosConError}
+                    onIr={setPaso}
                 />
 
-                {preventiva && (
-                    <div className="grid gap-1.5">
-                        <Label>Servicio del plan</Label>
-                        {delPlan.length === 0 ? (
-                            <p className="text-sm text-muted-foreground">
-                                {tracto
-                                    ? `La marca ${tracto.marca ?? ''} todavía no tiene plan: regístrala como correctiva.`
-                                    : 'Elige primero la unidad.'}
+                {paso === 0 && (
+                    <>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="orden-unidad">Unidad</Label>
+                            {editando ? (
+                                <p className="text-lg font-semibold">
+                                    {tracto
+                                        ? formatearPlaca(tracto.placa)
+                                        : '—'}
+                                    <span className="ml-2 text-sm font-normal text-muted-foreground">
+                                        {tracto?.marca}
+                                    </span>
+                                </p>
+                            ) : (
+                                <SelectorBuscable
+                                    id="orden-unidad"
+                                    valor={data.vehiculo_id}
+                                    onCambio={(valor) =>
+                                        setData((previo) => ({
+                                            ...previo,
+                                            vehiculo_id: valor,
+                                            servicio_mantenimiento_id: null,
+                                        }))
+                                    }
+                                    etiqueta="Placa"
+                                    opciones={tractos.map((opcion) => ({
+                                        valor: opcion.id,
+                                        etiqueta: formatearPlaca(opcion.placa),
+                                        detalle: `${opcion.placa} ${opcion.marca ?? ''}`,
+                                    }))}
+                                    invalido={!!errors.vehiculo_id}
+                                />
+                            )}
+                            <InputError message={errors.vehiculo_id} />
+                        </div>
+
+                        <Segmentado
+                            etiqueta="Tipo"
+                            opciones={tipos}
+                            valor={data.tipo}
+                            onCambio={elegirTipo}
+                        />
+
+                        {preventiva && (
+                            <div className="grid gap-1.5">
+                                <Label>Servicio del plan</Label>
+                                {delPlan.length === 0 ? (
+                                    <p className="text-sm text-muted-foreground">
+                                        {tracto
+                                            ? `La marca ${tracto.marca ?? ''} todavía no tiene plan: regístrala como correctiva.`
+                                            : 'Elige primero la unidad.'}
+                                    </p>
+                                ) : (
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {delPlan.map((servicio) => (
+                                            <button
+                                                key={servicio.id}
+                                                type="button"
+                                                onClick={() =>
+                                                    elegirServicio(servicio)
+                                                }
+                                                aria-pressed={
+                                                    data.servicio_mantenimiento_id ===
+                                                    servicio.id
+                                                }
+                                                className={cn(
+                                                    'flex h-16 flex-col items-center justify-center rounded-lg border text-sm transition-colors',
+                                                    data.servicio_mantenimiento_id ===
+                                                        servicio.id
+                                                        ? 'border-primary bg-primary text-primary-foreground'
+                                                        : 'hover:bg-accent',
+                                                )}
+                                            >
+                                                <span className="text-xl font-semibold">
+                                                    {servicio.codigo}
+                                                </span>
+                                                <span className="text-[11px] opacity-80">
+                                                    {formatearKm(
+                                                        servicio.intervalo_km,
+                                                    )}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
+                                <InputError
+                                    message={errors.servicio_mantenimiento_id}
+                                />
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="orden-fecha">Fecha</Label>
+                                <Input
+                                    id="orden-fecha"
+                                    type="date"
+                                    className="h-11"
+                                    value={data.fecha}
+                                    onChange={(evento) =>
+                                        setData('fecha', evento.target.value)
+                                    }
+                                />
+                                <InputError message={errors.fecha} />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="orden-km">Km</Label>
+                                <Input
+                                    id="orden-km"
+                                    inputMode="numeric"
+                                    pattern="[0-9]*"
+                                    className="h-11 tabular-nums"
+                                    value={data.kilometraje}
+                                    onChange={(evento) =>
+                                        setData(
+                                            'kilometraje',
+                                            evento.target.value.replace(
+                                                /\D/g,
+                                                '',
+                                            ),
+                                        )
+                                    }
+                                />
+                                <InputError message={errors.kilometraje} />
+                            </div>
+                        </div>
+                    </>
+                )}
+
+                {paso === 1 && (
+                    <>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="orden-trabajo">
+                                Trabajo realizado
+                            </Label>
+                            <Textarea
+                                id="orden-trabajo"
+                                rows={4}
+                                value={data.trabajo}
+                                onChange={(evento) =>
+                                    setData('trabajo', evento.target.value)
+                                }
+                                placeholder="Qué se hizo, qué se cambió"
+                            />
+                            <InputError message={errors.trabajo} />
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="orden-tecnico">Técnico</Label>
+                            <Input
+                                id="orden-tecnico"
+                                className="h-11"
+                                value={data.tecnico}
+                                onChange={(evento) =>
+                                    setData('tecnico', evento.target.value)
+                                }
+                            />
+                            <InputError message={errors.tecnico} />
+                        </div>
+
+                        <SelectorFotos
+                            titulo="Fotos de antes"
+                            nuevas={data.fotos_antes}
+                            onNuevas={(fotos) => setData('fotos_antes', fotos)}
+                            guardadas={fotosDe(orden, 'antes')}
+                            error={errores(errors, 'fotos_antes')}
+                            onPreparando={setPreparandoAntes}
+                        />
+
+                        {editando && materiales && (
+                            <Materiales
+                                ordenId={orden.id}
+                                materiales={materiales}
+                            />
+                        )}
+
+                        {!editando && (
+                            <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                                Los repuestos salen con vale de almacén a nombre
+                                de la orden: se sacan después de registrarla.
                             </p>
-                        ) : (
-                            <div className="grid grid-cols-4 gap-2">
-                                {delPlan.map((servicio) => (
+                        )}
+                    </>
+                )}
+
+                {paso === 2 && (
+                    <>
+                        <div className="grid gap-2">
+                            <Label>¿Cómo queda la orden?</Label>
+                            <div className="grid gap-2">
+                                {estados.map((estado) => (
                                     <button
-                                        key={servicio.id}
+                                        key={estado.value}
                                         type="button"
-                                        onClick={() => elegirServicio(servicio)}
+                                        onClick={() =>
+                                            setData('estado', estado.value)
+                                        }
                                         aria-pressed={
-                                            data.servicio_mantenimiento_id ===
-                                            servicio.id
+                                            data.estado === estado.value
                                         }
                                         className={cn(
-                                            'flex h-16 flex-col items-center justify-center rounded-lg border text-sm transition-colors',
-                                            data.servicio_mantenimiento_id ===
-                                                servicio.id
+                                            'flex min-h-14 flex-col items-start justify-center rounded-lg border px-4 py-2 text-left transition-colors',
+                                            data.estado === estado.value
                                                 ? 'border-primary bg-primary text-primary-foreground'
                                                 : 'hover:bg-accent',
                                         )}
                                     >
-                                        <span className="text-xl font-semibold">
-                                            {servicio.codigo}
+                                        <span className="font-medium">
+                                            {estado.label}
                                         </span>
-                                        <span className="text-[11px] opacity-80">
-                                            {formatearKm(servicio.intervalo_km)}
+                                        <span className="text-xs opacity-80">
+                                            {QUE_SIGNIFICA[estado.value] ?? ''}
                                         </span>
                                     </button>
                                 ))}
                             </div>
+                        </div>
+                        <InputError message={errors.estado} />
+
+                        {pideJustificacion && (
+                            <div className="grid gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                                <Label htmlFor="orden-justificacion">
+                                    ¿Por qué se cierra sin todos los repuestos
+                                    del servicio?
+                                </Label>
+                                <p className="text-xs text-muted-foreground">
+                                    {editando
+                                        ? `Todavía no salió del almacén: ${faltantes.map((f) => f.descripcion).join(', ') || '—'}.`
+                                        : 'La orden aún no tiene vales de almacén. Si el servicio pide repuestos, regístrala «En proceso», saca el vale y después finalízala; o explica acá por qué se cierra así.'}
+                                </p>
+                                <Textarea
+                                    id="orden-justificacion"
+                                    rows={2}
+                                    value={data.justificacion_materiales}
+                                    onChange={(evento) =>
+                                        setData(
+                                            'justificacion_materiales',
+                                            evento.target.value,
+                                        )
+                                    }
+                                    placeholder="No se cambió porque…"
+                                />
+                                <InputError
+                                    message={errors.justificacion_materiales}
+                                />
+                            </div>
                         )}
-                        <InputError
-                            message={errors.servicio_mantenimiento_id}
+
+                        <SelectorFotos
+                            titulo="Fotos de después"
+                            nuevas={data.fotos_despues}
+                            onNuevas={(fotos) =>
+                                setData('fotos_despues', fotos)
+                            }
+                            guardadas={fotosDe(orden, 'despues')}
+                            error={errores(errors, 'fotos_despues')}
+                            progreso={progress?.percentage ?? null}
+                            onPreparando={setPreparandoDespues}
                         />
-                    </div>
+
+                        <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="orden-inicio">Inicio</Label>
+                                <Input
+                                    id="orden-inicio"
+                                    type="datetime-local"
+                                    className="h-11"
+                                    value={data.inicio}
+                                    onChange={(evento) =>
+                                        setData('inicio', evento.target.value)
+                                    }
+                                />
+                                <InputError message={errors.inicio} />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="orden-termino">Término</Label>
+                                <Input
+                                    id="orden-termino"
+                                    type="datetime-local"
+                                    className="h-11"
+                                    value={data.termino}
+                                    onChange={(evento) =>
+                                        setData('termino', evento.target.value)
+                                    }
+                                />
+                                <InputError message={errors.termino} />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="orden-observacion">
+                                Observación (opcional)
+                            </Label>
+                            <Textarea
+                                id="orden-observacion"
+                                rows={2}
+                                value={data.observacion}
+                                onChange={(evento) =>
+                                    setData('observacion', evento.target.value)
+                                }
+                            />
+                            <InputError message={errors.observacion} />
+                        </div>
+                    </>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="orden-fecha">Fecha</Label>
-                        <Input
-                            id="orden-fecha"
-                            type="date"
-                            className="h-11"
-                            value={data.fecha}
-                            onChange={(evento) =>
-                                setData('fecha', evento.target.value)
+                {/* Atrás y adelante siempre a mano del pulgar: en el celular
+                    la barra queda fija sobre la navegación. Se guarda desde
+                    cualquier paso al editar, y al final al crear. */}
+                <div className="z-30 flex gap-2 border-t bg-background/95 py-3 backdrop-blur max-md:fixed max-md:inset-x-0 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom))] max-md:px-4 md:border-0 md:py-0">
+                    {paso > 0 && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="h-12"
+                            onClick={() => setPaso(paso - 1)}
+                        >
+                            Atrás
+                        </Button>
+                    )}
+                    {paso < PASOS.length - 1 && (
+                        <Button
+                            type="button"
+                            variant={editando ? 'outline' : 'default'}
+                            className="h-12 flex-1 text-base"
+                            disabled={paso === 0 && !pasoUnoListo}
+                            onClick={() => setPaso(paso + 1)}
+                        >
+                            Siguiente: {PASOS[paso + 1].toLowerCase()}
+                        </Button>
+                    )}
+                    {(editando || paso === PASOS.length - 1) && (
+                        <Button
+                            type="submit"
+                            className="h-12 flex-1 text-base"
+                            disabled={
+                                processing ||
+                                preparandoAntes ||
+                                preparandoDespues
                             }
-                        />
-                        <InputError message={errors.fecha} />
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="orden-km">Km</Label>
-                        <Input
-                            id="orden-km"
-                            inputMode="numeric"
-                            pattern="[0-9]*"
-                            className="h-11 tabular-nums"
-                            value={data.kilometraje}
-                            onChange={(evento) =>
-                                setData(
-                                    'kilometraje',
-                                    evento.target.value.replace(/\D/g, ''),
-                                )
-                            }
-                        />
-                        <InputError message={errors.kilometraje} />
-                    </div>
+                        >
+                            {processing && <Spinner />}
+                            {editando ? 'Guardar cambios' : 'Registrar orden'}
+                        </Button>
+                    )}
                 </div>
-
-                <div className="grid gap-1.5">
-                    <Label htmlFor="orden-trabajo">Trabajo realizado</Label>
-                    <Textarea
-                        id="orden-trabajo"
-                        rows={4}
-                        value={data.trabajo}
-                        onChange={(evento) =>
-                            setData('trabajo', evento.target.value)
-                        }
-                        placeholder="Qué se hizo, qué se cambió"
-                    />
-                    <InputError message={errors.trabajo} />
-                </div>
-
-                <SelectorFotos
-                    titulo="Fotos de antes"
-                    nuevas={data.fotos_antes}
-                    onNuevas={(fotos) => setData('fotos_antes', fotos)}
-                    guardadas={fotosDe(orden, 'antes')}
-                    error={errores(errors, 'fotos_antes')}
-                    onPreparando={setPreparandoAntes}
-                />
-
-                <SelectorFotos
-                    titulo="Fotos de después"
-                    nuevas={data.fotos_despues}
-                    onNuevas={(fotos) => setData('fotos_despues', fotos)}
-                    guardadas={fotosDe(orden, 'despues')}
-                    error={errores(errors, 'fotos_despues')}
-                    progreso={progress?.percentage ?? null}
-                    onPreparando={setPreparandoDespues}
-                />
-
-                <div className="grid gap-1.5">
-                    <Label htmlFor="orden-tecnico">Técnico</Label>
-                    <Input
-                        id="orden-tecnico"
-                        className="h-11"
-                        value={data.tecnico}
-                        onChange={(evento) =>
-                            setData('tecnico', evento.target.value)
-                        }
-                    />
-                    <InputError message={errors.tecnico} />
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="orden-inicio">Inicio</Label>
-                        <Input
-                            id="orden-inicio"
-                            type="datetime-local"
-                            className="h-11"
-                            value={data.inicio}
-                            onChange={(evento) =>
-                                setData('inicio', evento.target.value)
-                            }
-                        />
-                        <InputError message={errors.inicio} />
-                    </div>
-                    <div className="grid gap-1.5">
-                        <Label htmlFor="orden-termino">Término</Label>
-                        <Input
-                            id="orden-termino"
-                            type="datetime-local"
-                            className="h-11"
-                            value={data.termino}
-                            onChange={(evento) =>
-                                setData('termino', evento.target.value)
-                            }
-                        />
-                        <InputError message={errors.termino} />
-                    </div>
-                </div>
-
-                <div className="grid gap-1.5">
-                    <Label htmlFor="orden-observacion">
-                        Observación (opcional)
-                    </Label>
-                    <Textarea
-                        id="orden-observacion"
-                        rows={2}
-                        value={data.observacion}
-                        onChange={(evento) =>
-                            setData('observacion', evento.target.value)
-                        }
-                    />
-                    <InputError message={errors.observacion} />
-                </div>
-
-                {editando && materiales && (
-                    <Materiales ordenId={orden.id} materiales={materiales} />
-                )}
-
-                <Segmentado
-                    etiqueta="Estado"
-                    opciones={estados}
-                    valor={data.estado}
-                    onCambio={(estado) => setData('estado', estado)}
-                />
-                <InputError message={errors.estado} />
-
-                {pideJustificacion && (
-                    <div className="grid gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
-                        <Label htmlFor="orden-justificacion">
-                            ¿Por qué se cierra sin todos los repuestos del
-                            servicio?
-                        </Label>
-                        <p className="text-xs text-muted-foreground">
-                            {editando
-                                ? `Todavía no salió del almacén: ${faltantes.map((f) => f.descripcion).join(', ') || '—'}.`
-                                : 'La orden aún no tiene vales de almacén. Si el servicio pide repuestos, regístrala «En proceso», saca el vale y después finalízala; o explica acá por qué se cierra así.'}
-                        </p>
-                        <Textarea
-                            id="orden-justificacion"
-                            rows={2}
-                            value={data.justificacion_materiales}
-                            onChange={(evento) =>
-                                setData(
-                                    'justificacion_materiales',
-                                    evento.target.value,
-                                )
-                            }
-                            placeholder="No se cambió porque…"
-                        />
-                        <InputError message={errors.justificacion_materiales} />
-                    </div>
-                )}
-
-                <Button
-                    type="submit"
-                    className="h-12 text-base"
-                    disabled={
-                        processing || preparandoAntes || preparandoDespues
-                    }
-                >
-                    {processing && <Spinner />}
-                    {editando ? 'Guardar cambios' : 'Registrar orden'}
-                </Button>
             </form>
         </div>
     );
@@ -724,5 +882,60 @@ function errores(
         Object.entries(errors).find(([clave]) =>
             clave.startsWith(`${campo}.`),
         )?.[1]
+    );
+}
+
+/**
+ * Los pasos de la orden, arriba: dónde se está, qué falta y, si el servidor
+ * rechazó algo, en cuál. Se puede saltar a cualquiera: al editar no hay por
+ * qué pasar por los tres.
+ */
+function Pasos({
+    pasos,
+    actual,
+    conError,
+    onIr,
+}: {
+    pasos: string[];
+    actual: number;
+    conError: boolean[];
+    onIr: (paso: number) => void;
+}) {
+    return (
+        <ol className="grid grid-cols-3 gap-2">
+            {pasos.map((titulo, indice) => (
+                <li key={titulo}>
+                    <button
+                        type="button"
+                        onClick={() => onIr(indice)}
+                        aria-current={indice === actual ? 'step' : undefined}
+                        className="flex w-full flex-col gap-1.5 text-left"
+                    >
+                        <span
+                            className={cn(
+                                'h-1.5 rounded-full',
+                                conError[indice]
+                                    ? 'bg-destructive'
+                                    : indice <= actual
+                                      ? 'bg-primary'
+                                      : 'bg-muted',
+                            )}
+                        />
+                        <span
+                            className={cn(
+                                'text-xs leading-tight',
+                                indice === actual
+                                    ? 'font-semibold text-foreground'
+                                    : 'text-muted-foreground',
+                                conError[indice] && 'text-destructive',
+                            )}
+                        >
+                            {indice + 1}. {titulo}
+                            {conError[indice] && ' · revisar'}
+                        </span>
+                    </button>
+                </li>
+            ))}
+        </ol>
     );
 }

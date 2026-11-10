@@ -41,7 +41,7 @@ it('muestra el semáforo, la ficha y la orden en celular sin desbordarse', funct
 
     visit('/mantenimiento')
         ->on()->mobile()
-        ->assertSee('Accesos rápidos')
+        ->assertSee('La flota frente a su plan')
         ->assertSee('Llantas')
         ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
         ->assertNoJavaScriptErrors()
@@ -65,6 +65,7 @@ it('muestra el semáforo, la ficha y la orden en celular sin desbordarse', funct
     visit("/mantenimiento/ordenes/crear?vehiculo={$this->unidad->id}")
         ->on()->mobile()
         ->assertSee('Servicio del plan')
+        ->click('Siguiente: trabajo')
         ->assertSee('Tomar foto')
         ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
         ->assertNoJavaScriptErrors()
@@ -97,7 +98,10 @@ it('filtra por marca desde su tarjeta y configura su plan', function (): void {
     visit('/mantenimiento')
         ->assertSee('MERCEDES BENZ')
         ->assertSee('X 25 mil · S 75 mil · M 150 mil')
-        ->assertDontSee('TCD928')
+        // La portada es la cola de trabajo: la unidad a 1,500 km de su
+        // servicio aparece en «Viene pronto».
+        ->assertSee('Viene pronto')
+        ->assertSee('TCD928')
         ->assertNoJavaScriptErrors()
         ->screenshot(filename: 'mantenimiento-tablero')
         ->click('SCANIA')

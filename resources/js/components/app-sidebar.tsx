@@ -47,9 +47,10 @@ import { dashboard } from '@/routes';
 import type { NavItem } from '@/types';
 
 /**
- * El menú va por áreas de trabajo y no por tablas: Operación es todo lo que
- * le pasa a un ticket (programarlo, el OK de taller, el combustible, sus
- * GR); Flota, las unidades y quienes las manejan; Comercial y Finanzas, lo
+ * El menú va por áreas de trabajo y no por tablas: Operación es lo que le
+ * pasa a un ticket (programarlo, el combustible, sus GR); Taller, el OK de
+ * salida, el mantenimiento y el almacén, que son de la misma gente; Flota,
+ * las unidades y quienes las manejan; Comercial y Finanzas, lo
  * que se cobra. La configuración entera está en una sola entrada, abajo.
  *
  * Una sección cuyas entradas no le corresponden al rol no se dibuja, ni su
@@ -87,7 +88,7 @@ const almacenNavItem: NavItem = {
 
 /** El OK de salida de cada ticket: la bandeja de taller. */
 const tallerNavItem: NavItem = {
-    title: 'Taller',
+    title: 'OK de salida',
     href: taller.index(),
     icon: ClipboardCheck,
 };
@@ -195,9 +196,6 @@ export function AppSidebar() {
         ...(puede('programacion.ver')
             ? [{ ...programacionNavItem, badge: pendientesMenu.programacion }]
             : []),
-        ...(puede('taller.ver')
-            ? [{ ...tallerNavItem, badge: pendientesMenu.taller }]
-            : []),
         // Facturación entra solo a los viáticos: también ve el área.
         ...(puede('abastecimiento.ver') || puede('abastecimiento.viaticos')
             ? [
@@ -224,20 +222,29 @@ export function AppSidebar() {
                   },
               ]
             : []),
-        ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
         ...(puede('conductores.ver') ? [conductoresNavItem] : []),
         ...(puede('asistencia.ver') ? [asistenciaNavItem] : []),
     ];
 
-    // Todo lo de `/almacen` marca la entrada: el stock, los vales, las fichas.
-    const almacenItems = puede('almacen.ver')
-        ? [
-              {
-                  ...almacenNavItem,
-                  isActive: isCurrentUrl('/almacen', undefined, true),
-              },
-          ]
-        : [];
+    // Taller es un solo lugar de trabajo: el OK de salida, el mantenimiento
+    // y el almacén los lleva la misma gente, así que van juntos y no
+    // repartidos entre Operación, Flota y Almacén.
+    const tallerItems = [
+        ...(puede('taller.ver')
+            ? [{ ...tallerNavItem, badge: pendientesMenu.taller }]
+            : []),
+        ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
+        // Todo lo de `/almacen` marca la entrada: el stock, los vales, las
+        // fichas.
+        ...(puede('almacen.ver')
+            ? [
+                  {
+                      ...almacenNavItem,
+                      isActive: isCurrentUrl('/almacen', undefined, true),
+                  },
+              ]
+            : []),
+    ];
 
     // Cotizaciones antes que Clientes: es lo que se usa a diario.
     const comercial = [...gestion].reverse();
@@ -248,8 +255,8 @@ export function AppSidebar() {
     // el título solo.
     const secciones = [
         { label: 'Operación', items: operacion },
+        { label: 'Taller', items: tallerItems },
         { label: 'Flota', items: flota },
-        { label: 'Almacén', items: almacenItems },
         { label: 'Comercial', items: comercial },
         { label: 'Finanzas', items: finanzas },
     ];

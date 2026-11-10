@@ -20,14 +20,14 @@ export const colorEstado: Record<EstadoMantenimiento, string> = {
     sin_datos: 'text-muted-foreground',
 };
 
-const barraEstado: Record<EstadoMantenimiento, string> = {
+export const barraEstado: Record<EstadoMantenimiento, string> = {
     vencido: 'bg-red-500',
     proximo: 'bg-amber-500',
     al_dia: 'bg-emerald-500',
     sin_datos: 'bg-zinc-300 dark:bg-zinc-600',
 };
 
-const ordenEstados: EstadoMantenimiento[] = [
+export const ordenEstados: EstadoMantenimiento[] = [
     'vencido',
     'proximo',
     'al_dia',

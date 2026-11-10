@@ -1,7 +1,10 @@
-import { Head, Link, setLayoutProps } from '@inertiajs/react';
+import { Head, Link, router, setLayoutProps } from '@inertiajs/react';
 import {
     Ban,
     Camera,
+    ChevronRight,
+    CircleCheck,
+    CircleX,
     ClipboardPlus,
     Gauge,
     Trash2,
@@ -16,6 +19,7 @@ import {
 } from '@/actions/App/Http/Controllers/OrdenTrabajoController';
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { ConfirmarBorradoDialog } from '@/components/confirmar-borrado-dialog';
+import { EsquemaLlantas } from '@/components/llantas/esquema-llantas';
 import {
     bordeEstado,
     EstadoMantenimientoBadge,
@@ -23,6 +27,8 @@ import {
     formatearKm,
 } from '@/components/mantenimiento/estado-mantenimiento';
 import { RegistrarKmDialog } from '@/components/mantenimiento/registrar-km-dialog';
+import { EstadoTallerBadge } from '@/components/taller/estado-taller';
+import { RevisionTallerDialog } from '@/components/taller/revision-taller-dialog';
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { usePermisos } from '@/hooks/use-permisos';
@@ -34,6 +40,10 @@ import {
     formatearSoles,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import { show as verEquipamiento } from '@/routes/mantenimiento/equipamiento';
+import { show as verLlantas } from '@/routes/mantenimiento/llantas';
+import { show as verTicket } from '@/routes/vueltas';
+import type { PosicionLlanta } from '@/types/llantas';
 import type {
     LecturaResumen,
     LineaMaterial,
@@ -43,6 +53,7 @@ import type {
     TractoKm,
     UnidadMantenimiento,
 } from '@/types/mantenimiento';
+import type { RevisionTaller } from '@/types/vueltas';
 
 type Props = {
     unidad: UnidadMantenimiento & {
@@ -57,6 +68,19 @@ type Props = {
     costo_almacen: number | null;
     lecturas: LecturaResumen[];
     tractos: TractoKm[];
+    /** El ticket abierto de la unidad. Null si no tiene o no se puede ver. */
+    ticket: {
+        id: number;
+        codigo: string | null;
+        placa: string;
+        conductor: string | null;
+        inicio: string | null;
+        ruta: string | null;
+        revision: RevisionTaller | null;
+        revisable: boolean;
+    } | null;
+    /** Las llantas por posición. Null para quien no las puede ver. */
+    llantas: PosicionLlanta[] | null;
 };
 
 /**
@@ -71,11 +95,20 @@ export default function MantenimientoShow({
     costo_almacen,
     lecturas,
     tractos,
+    ticket,
+    llantas,
 }: Props) {
     const { puede } = usePermisos();
     const puedeKm = puede('mantenimiento.registrar_km');
     const puedeOrdenes = puede('mantenimiento.gestionar');
     const [kmAbierto, setKmAbierto] = useState(false);
+    const [revisando, setRevisando] = useState<'apto' | 'no_apto' | null>(null);
+    const porCambiar = (llantas ?? []).filter(
+        (posicion) => posicion.estado === 'cambiar',
+    ).length;
+    const montadas = (llantas ?? []).filter(
+        (posicion) => posicion.llanta !== null,
+    ).length;
     const placa = formatearPlaca(unidad.placa);
 
     setLayoutProps({
@@ -148,6 +181,115 @@ export default function MantenimientoShow({
                     )}
                 </div>
             </div>
+
+            {ticket && (
+                <section className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div className="flex flex-col gap-0.5 text-sm">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase">
+                                Ticket en curso
+                            </span>
+                            <span className="font-medium">
+                                {ticket.codigo} · {ticket.ruta ?? 'Sin ruta'}
+                            </span>
+                            <span className="text-muted-foreground">
+                                Sale {formatearFecha(ticket.inicio)}
+                                {ticket.conductor && ` · ${ticket.conductor}`}
+                            </span>
+                        </div>
+                        <EstadoTallerBadge revision={ticket.revision} />
+                    </div>
+                    {ticket.revisable &&
+                        ticket.revision?.resultado !== 'apto' && (
+                            <div className="grid grid-cols-2 gap-2 md:max-w-md">
+                                <Button
+                                    className="h-14 bg-emerald-600 text-base text-white hover:bg-emerald-700"
+                                    onClick={() => setRevisando('apto')}
+                                >
+                                    <CircleCheck className="size-5" />
+                                    Dar apto
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="h-14 border-red-300 text-base text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950"
+                                    onClick={() => setRevisando('no_apto')}
+                                >
+                                    <CircleX className="size-5" />
+                                    No apto
+                                </Button>
+                            </div>
+                        )}
+                    <Link
+                        href={verTicket(ticket.id).url}
+                        className="flex min-h-11 items-center justify-between rounded-lg border px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground md:max-w-md"
+                    >
+                        Ver el ticket completo
+                        <ChevronRight className="size-4" />
+                    </Link>
+                    <RevisionTallerDialog
+                        key={revisando ?? 'cerrado'}
+                        ticket={
+                            revisando
+                                ? { ...ticket, km_actual: unidad.km_actual }
+                                : null
+                        }
+                        resultadoInicial={revisando ?? undefined}
+                        onCerrar={() => setRevisando(null)}
+                    />
+                </section>
+            )}
+
+            {llantas && llantas.length > 0 && (
+                <section className="flex flex-col gap-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <h2 className="text-sm font-semibold text-muted-foreground uppercase">
+                            Llantas
+                        </h2>
+                        <span
+                            className={cn(
+                                'text-sm',
+                                porCambiar > 0
+                                    ? 'font-medium text-red-700 dark:text-red-300'
+                                    : 'text-muted-foreground',
+                            )}
+                        >
+                            {montadas} de {llantas.length} montadas
+                            {porCambiar > 0 && ` · ${porCambiar} por cambiar`}
+                        </span>
+                    </div>
+                    <div className="rounded-xl border bg-card p-4">
+                        {/* Tocar una llanta abre su pantalla ya en esa
+                            posición: ahí se mide, rota o retira. */}
+                        <EsquemaLlantas
+                            posiciones={llantas}
+                            seleccionada={null}
+                            onElegir={(codigo) =>
+                                router.visit(
+                                    verLlantas(unidad.id, {
+                                        query: { posicion: codigo },
+                                    }).url,
+                                )
+                            }
+                        />
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                        <Link
+                            href={verLlantas(unidad.id).url}
+                            className="flex min-h-11 items-center justify-between rounded-lg border px-3 text-sm font-medium hover:bg-muted"
+                        >
+                            Medir, rotar o cambiar llantas
+                            <ChevronRight className="size-4" />
+                        </Link>
+                        <Link
+                            href={verEquipamiento(unidad.id).url}
+                            className="flex min-h-11 items-center justify-between rounded-lg border px-3 text-sm font-medium hover:bg-muted"
+                        >
+                            Equipamiento de la unidad
+                            <ChevronRight className="size-4" />
+                        </Link>
+                    </div>
+                </section>
+            )}
 
             {unidad.plan === null ? (
                 <p className="rounded-xl border border-dashed p-4 text-sm text-muted-foreground">

@@ -84,7 +84,22 @@ export default function LlantasUnidad({
     const placa = formatearPlaca(unidad.placa);
 
     const [elegida, setElegida] = useState<string | null>(
-        () => posiciones.find((p) => p.estado === 'cambiar')?.codigo ?? null,
+        // Desde la ficha de la unidad se llega con la llanta ya tocada
+        // (`?posicion=5`); si no, se abre en la primera por cambiar.
+        () => {
+            const pedida =
+                typeof window === 'undefined'
+                    ? null
+                    : new URLSearchParams(window.location.search).get(
+                          'posicion',
+                      );
+
+            return (
+                posiciones.find((p) => p.codigo === pedida)?.codigo ??
+                posiciones.find((p) => p.estado === 'cambiar')?.codigo ??
+                null
+            );
+        },
     );
     const [accion, setAccion] = useState<TipoMovimiento | 'editar' | null>(
         null,

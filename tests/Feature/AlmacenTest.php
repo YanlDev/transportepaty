@@ -21,6 +21,7 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
+use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 
@@ -33,6 +34,15 @@ beforeEach(function (): void {
     Storage::fake('public');
     Storage::fake('local');
 });
+
+/** Alguien que consulta el stock y nada más: ni recibe, ni despacha, ni configura. */
+function soloVeElAlmacen(): User
+{
+    $rol = Role::findOrCreate('solo-ve-el-almacen', 'web');
+    $rol->syncPermissions(['almacen.ver']);
+
+    return User::factory()->create()->assignRole($rol);
+}
 
 function almacenero(): User
 {
@@ -510,8 +520,11 @@ it('shows the stock to the workshop without the costs', function (): void {
             ->where('articulos.data.0.valor', null)
             ->where('resumen.valor', null));
 
-    actingAs(actorConRol('taller'))->get(route('almacen.ingresos.create'))->assertForbidden();
+    // Taller lleva el mostrador (despacha y recibe), pero el kardex
+    // valorizado sigue siendo de quien ve costos.
+    actingAs(actorConRol('taller'))->get(route('almacen.ingresos.create'))->assertOk();
     actingAs(actorConRol('taller'))->get(route('almacen.articulos.kardex', $filtro))->assertForbidden();
+    actingAs(soloVeElAlmacen())->get(route('almacen.ingresos.create'))->assertForbidden();
 });
 
 it('shows the costs to the warehouse', function (): void {
@@ -662,8 +675,10 @@ it('saves the minimums of many items at once', function (): void {
 
 it('keeps the warehouse configuration to who manages the catalog', function (): void {
     actingAs(almacenero())->get(route('almacen.configuracion'))->assertOk();
-    actingAs(actorConRol('taller'))->get(route('almacen.configuracion'))->assertForbidden();
-    actingAs(actorConRol('taller'))->post(route('almacen.ubicaciones.store'), ['nombre' => 'X'])->assertForbidden();
+    // Taller supervisa el almacén: también mantiene su catálogo.
+    actingAs(actorConRol('taller'))->get(route('almacen.configuracion'))->assertOk();
+    actingAs(soloVeElAlmacen())->get(route('almacen.configuracion'))->assertForbidden();
+    actingAs(soloVeElAlmacen())->post(route('almacen.ubicaciones.store'), ['nombre' => 'X'])->assertForbidden();
 });
 
 // ─── Comprobantes ───────────────────────────────────────────────────────────
@@ -737,7 +752,7 @@ it('replaces the invoice file without touching the kardex', function (): void {
         ->and($compra->getMedia('comprobante'))->toHaveCount(1)
         ->and((float) $filtro->refresh()->stock)->toBe(2.0);
 
-    actingAs(actorConRol('taller'))
+    actingAs(soloVeElAlmacen())
         ->post(route('almacen.ingresos.comprobante.update', $compra), ['comprobante' => pdfFalso()])
         ->assertForbidden();
 });

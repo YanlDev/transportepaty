@@ -572,8 +572,9 @@ it('lets whoever asks for a purchase register a new supplier from the request', 
             fn (array $fila): bool => $fila['id'] === $proveedor->id && $fila['nombre'] === 'Llantasur' && $fila['ruc'] === '20100136741' && filled($fila['razon_social']),
         )));
 
-    // Corregir el padrón sigue siendo de quien mantiene el catálogo.
-    actingAs(actorConRol('taller'))
+    // Corregir el padrón sigue siendo de quien mantiene el catálogo:
+    // operaciones pide compras pero no lo mantiene.
+    actingAs(actorConRol('operaciones'))
         ->put(route('almacen.proveedores.update', $proveedor), ['ruc' => '20100136741', 'razon_social' => 'Otro nombre'])
         ->assertForbidden();
 
