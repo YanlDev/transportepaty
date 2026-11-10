@@ -27,7 +27,7 @@ class PatchFacturaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'numero' => ['sometimes', 'required', 'string', 'max:30', Rule::unique('facturas', 'numero')->ignore($this->factura())],
+            'numero' => ['sometimes', 'required', 'string', 'max:30', Rule::unique('facturas', 'numero')->ignore($this->factura()), $this->numeroSinRepetir(...)],
             // Corregible pero no borrable: la columna no admite null y una
             // factura sin fecha de emisión no existe.
             'fecha_emision' => ['sometimes', 'required', 'date'],
@@ -82,6 +82,19 @@ class PatchFacturaRequest extends FormRequest
             'cliente_razon_social' => ['sometimes', 'nullable', 'string', 'max:255'],
             'cliente_ruc' => ['sometimes', 'nullable', 'digits:11'],
         ];
+    }
+
+    /**
+     * El mismo número escrito de otra forma es la misma factura: corregir el
+     * número de una hasta que coincida con otra las dejaría duplicadas.
+     */
+    private function numeroSinRepetir(string $attribute, mixed $value, Closure $fail): void
+    {
+        $existente = is_string($value) ? Factura::conMismoNumero($value, $this->factura()->id) : null;
+
+        if ($existente !== null) {
+            $fail("Esa factura ya está registrada como {$existente->numero}.");
+        }
     }
 
     /**

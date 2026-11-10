@@ -31,6 +31,7 @@ import type { CuentaBancaria } from '@/types/contabilidad';
 import type { EnumOption } from '@/types/fleet';
 
 type FormData = {
+    tipo: string;
     banco: string;
     alias: string;
     numero_cuenta: string;
@@ -45,26 +46,41 @@ export function CuentaDialog({
     onOpenChange,
     cuenta,
     monedas,
+    tipos,
 }: {
     open: boolean;
     onOpenChange: (abierto: boolean) => void;
     cuenta: CuentaBancaria | null;
     monedas: EnumOption[];
+    tipos: EnumOption[];
 }) {
     // Quien llama monta este diálogo con `key` por cuenta, así que el estado
     // inicial de `useForm` —que solo se lee al montar— ya es el correcto y no
     // hace falta resembrarlo con un efecto al abrir.
-    const { data, setData, post, put, processing, errors } = useForm<FormData>({
-        banco: cuenta?.banco ?? '',
-        alias: cuenta?.alias ?? '',
-        numero_cuenta: cuenta?.numero_cuenta ?? '',
-        cci: cuenta?.cci ?? '',
-        moneda: cuenta?.moneda ?? 'PEN',
-        activa: cuenta?.activa ?? true,
-        notas: cuenta?.notas ?? '',
-    });
+    const { data, setData, transform, post, put, processing, errors } =
+        useForm<FormData>({
+            tipo: cuenta?.tipo ?? 'banco',
+            banco: cuenta?.banco ?? '',
+            alias: cuenta?.alias ?? '',
+            numero_cuenta: cuenta?.numero_cuenta ?? '',
+            cci: cuenta?.cci ?? '',
+            moneda: cuenta?.moneda ?? 'PEN',
+            activa: cuenta?.activa ?? true,
+            notas: cuenta?.notas ?? '',
+        });
 
     const activaId = useId();
+
+    // La caja es para lo que se cobra en efectivo: no tiene banco, número de
+    // cuenta ni CCI, así que esos campos no se piden.
+    const esCaja = data.tipo === 'caja';
+
+    // Lo que se haya escrito antes de cambiar el tipo a caja no viaja.
+    transform((datos) =>
+        datos.tipo === 'caja'
+            ? { ...datos, banco: 'Caja', numero_cuenta: '', cci: '' }
+            : datos,
+    );
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -96,18 +112,44 @@ export function CuentaDialog({
 
                 <form onSubmit={enviar} className="flex flex-col gap-4">
                     <div className="grid gap-4 sm:grid-cols-2">
-                        <Field label="Banco" error={errors.banco} required>
+                        <Field label="Tipo" error={errors.tipo} required>
                             {(id) => (
-                                <Input
-                                    id={id}
-                                    value={data.banco}
-                                    onChange={(e) =>
-                                        setData('banco', e.target.value)
+                                <Select
+                                    value={data.tipo}
+                                    onValueChange={(valor) =>
+                                        setData('tipo', valor)
                                     }
-                                    placeholder="BCP"
-                                />
+                                >
+                                    <SelectTrigger id={id} className="w-full">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {tipos.map((tipo) => (
+                                            <SelectItem
+                                                key={tipo.value}
+                                                value={tipo.value}
+                                            >
+                                                {tipo.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
                             )}
                         </Field>
+                        {!esCaja && (
+                            <Field label="Banco" error={errors.banco} required>
+                                {(id) => (
+                                    <Input
+                                        id={id}
+                                        value={data.banco}
+                                        onChange={(e) =>
+                                            setData('banco', e.target.value)
+                                        }
+                                        placeholder="BCP"
+                                    />
+                                )}
+                            </Field>
+                        )}
                         <Field
                             label="Alias"
                             error={errors.alias}
@@ -121,38 +163,47 @@ export function CuentaDialog({
                                     onChange={(e) =>
                                         setData('alias', e.target.value)
                                     }
-                                    placeholder="BCP Soles"
-                                />
-                            )}
-                        </Field>
-                        <Field
-                            label="N° de cuenta"
-                            error={errors.numero_cuenta}
-                            required
-                        >
-                            {(id) => (
-                                <Input
-                                    id={id}
-                                    value={data.numero_cuenta}
-                                    onChange={(e) =>
-                                        setData('numero_cuenta', e.target.value)
+                                    placeholder={
+                                        esCaja ? 'EFECTIVO' : 'BCP Soles'
                                     }
-                                    placeholder="191-1234567-0-89"
                                 />
                             )}
                         </Field>
-                        <Field label="CCI" error={errors.cci}>
-                            {(id) => (
-                                <Input
-                                    id={id}
-                                    value={data.cci}
-                                    onChange={(e) =>
-                                        setData('cci', e.target.value)
-                                    }
-                                    placeholder="00219100123456708912"
-                                />
-                            )}
-                        </Field>
+                        {!esCaja && (
+                            <>
+                                <Field
+                                    label="N° de cuenta"
+                                    error={errors.numero_cuenta}
+                                    required
+                                >
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            value={data.numero_cuenta}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'numero_cuenta',
+                                                    e.target.value,
+                                                )
+                                            }
+                                            placeholder="191-1234567-0-89"
+                                        />
+                                    )}
+                                </Field>
+                                <Field label="CCI" error={errors.cci}>
+                                    {(id) => (
+                                        <Input
+                                            id={id}
+                                            value={data.cci}
+                                            onChange={(e) =>
+                                                setData('cci', e.target.value)
+                                            }
+                                            placeholder="00219100123456708912"
+                                        />
+                                    )}
+                                </Field>
+                            </>
+                        )}
                         <Field label="Moneda" error={errors.moneda} required>
                             {(id) => (
                                 <Select

@@ -21,9 +21,10 @@ import type { EnumOption } from '@/types/fleet';
 type Props = {
     cuentas: CuentaBancaria[];
     monedas: EnumOption[];
+    tipos: EnumOption[];
 };
 
-export default function CuentasBancarias({ cuentas, monedas }: Props) {
+export default function CuentasBancarias({ cuentas, monedas, tipos }: Props) {
     const [enEdicion, setEnEdicion] = useState<CuentaBancaria | null>(null);
     const [abierto, setAbierto] = useState(false);
 
@@ -82,12 +83,14 @@ export default function CuentasBancarias({ cuentas, monedas }: Props) {
                         <p className="text-sm text-muted-foreground">
                             {cuenta.banco} · {cuenta.moneda_label}
                         </p>
-                        <div className="font-mono text-sm tabular-nums">
-                            <Copiable
-                                valor={cuenta.numero_cuenta}
-                                etiqueta="N° de cuenta"
-                            />
-                        </div>
+                        {cuenta.numero_cuenta && (
+                            <div className="font-mono text-sm tabular-nums">
+                                <Copiable
+                                    valor={cuenta.numero_cuenta}
+                                    etiqueta="N° de cuenta"
+                                />
+                            </div>
+                        )}
                         {cuenta.cci && (
                             <div className="font-mono text-xs text-muted-foreground tabular-nums">
                                 CCI{' '}
@@ -124,10 +127,16 @@ export default function CuentasBancarias({ cuentas, monedas }: Props) {
                         </TableCell>
                         <TableCell>{cuenta.banco}</TableCell>
                         <TableCell className="font-mono text-xs tabular-nums">
-                            <Copiable
-                                valor={cuenta.numero_cuenta}
-                                etiqueta="N° de cuenta"
-                            />
+                            {cuenta.numero_cuenta ? (
+                                <Copiable
+                                    valor={cuenta.numero_cuenta}
+                                    etiqueta="N° de cuenta"
+                                />
+                            ) : (
+                                <span className="font-sans text-muted-foreground">
+                                    Efectivo
+                                </span>
+                            )}
                         </TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
                             {cuenta.cci ? (
@@ -165,6 +174,7 @@ export default function CuentasBancarias({ cuentas, monedas }: Props) {
                 onOpenChange={setAbierto}
                 cuenta={enEdicion}
                 monedas={monedas}
+                tipos={tipos}
             />
         </div>
     );

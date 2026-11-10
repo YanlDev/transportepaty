@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Models\Factura;
 use App\Models\Viaje;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -33,6 +34,9 @@ class AsociarFacturaRequest extends FormRequest
             'viaje_ids.*' => ['integer', 'distinct', Rule::exists('viajes', 'id')->whereNull('anulada_at')],
             'numeros_gr' => ['present', 'array'],
             'numeros_gr.*' => ['string', 'max:30'],
+            // Sumar la factura a una GR que ya tiene otra se hace a
+            // propósito (la estadía aparte del flete), nunca sin querer.
+            'confirmar_facturadas' => ['sometimes', 'boolean'],
         ];
     }
 
@@ -70,6 +74,18 @@ class AsociarFacturaRequest extends FormRequest
 
                 if ($noFacturables->isNotEmpty()) {
                     $validator->errors()->add('viaje_ids', 'Están marcadas como «no se factura»: '.$noFacturables->join(', ').'.');
+
+                    return;
+                }
+
+                if ($this->boolean('confirmar_facturadas')) {
+                    return;
+                }
+
+                $yaFacturadas = $this->yaFacturadas();
+
+                if ($yaFacturadas !== []) {
+                    $validator->errors()->add('ya_facturadas', 'Ya tienen otra factura: '.implode(', ', $yaFacturadas).'. Si esta también las cobra, confírmalo.');
                 }
             },
         ];
@@ -87,6 +103,27 @@ class AsociarFacturaRequest extends FormRequest
             ->orWhereIn('numero_gr', $this->numerosGr())
             ->get()
             ->toBase();
+    }
+
+    /**
+     * Las GR elegidas que ya cobra otra factura, cada una con las suyas:
+     * «EG03-00012429 (E001-14411)».
+     *
+     * @return list<string>
+     */
+    private function yaFacturadas(): array
+    {
+        $factura = $this->route('factura');
+        $facturaId = $factura instanceof Factura ? $factura->id : null;
+
+        return array_values(Viaje::query()
+            ->whereKey($this->viajes()->pluck('id')->all())
+            ->whereHas('facturas', fn ($query) => $query->whereKeyNot($facturaId))
+            ->with(['facturas' => fn ($query) => $query->whereKeyNot($facturaId)->orderBy('numero')])
+            ->orderBy('numero_gr')
+            ->get()
+            ->map(fn (Viaje $viaje): string => "{$viaje->numero_gr} ({$viaje->facturas->pluck('numero')->join(', ')})")
+            ->all());
     }
 
     /**

@@ -439,3 +439,30 @@ it('lists the facturas por asociar regardless of the filters', function (): void
         ->and($hoja[1][2])->toBe('BUREAU VERITAS COMMODITIES PERÚ S.A.C.')
         ->and($hoja[1][6])->toBe('G010-00000141');
 });
+
+/**
+ * El resumen del Excel mira el mismo recorte que la pantalla: una factura con
+ * GR en dos meses entra por la parte del mes filtrado, y lo dice.
+ */
+it('splits a factura across months in the resumen and says so', function (): void {
+    $factura = Factura::factory()->create(['numero' => 'E001-14581', 'monto' => 1000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['fecha_traslado' => '2026-09-10']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['fecha_traslado' => '2026-09-20']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['fecha_traslado' => '2026-10-02']);
+
+    actingAs(actorConRol('admin'));
+
+    $resumen = fn (array $filtros) => collect(libroExportado(route('contabilidad.exportar', $filtros))->getSheetByName('Resumen')->toArray(null, true, false, false));
+    $valor = fn ($filas, string $etiqueta) => $filas->firstWhere(0, $etiqueta)[1] ?? null;
+
+    $setiembre = $resumen(['mes' => '2026-09']);
+    $octubre = $resumen(['mes' => '2026-10']);
+    $todo = $resumen([]);
+
+    expect($valor($setiembre, 'Neto por cobrar'))->toEqual(755.34)
+        ->and($valor($octubre, 'Neto por cobrar'))->toEqual(377.66)
+        ->and($valor($todo, 'Neto por cobrar'))->toEqual(1133)
+        ->and($valor($setiembre, 'Total facturado (con IGV)') + $valor($octubre, 'Total facturado (con IGV)'))->toEqual(1180)
+        ->and($setiembre[2][0])->toContain('E001-14581')
+        ->and($todo[2][0])->toBeNull();
+});

@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Enums\EstadoCobranza;
 use App\Enums\Moneda;
 use App\Models\Factura;
 use App\Models\Viaje;
@@ -144,6 +143,15 @@ class ExportadorCobranza
         'Más de 60 días' => [61, null],
     ];
 
+    /**
+     * Lo que cada factura aporta al recorte, por id: una factura con GR
+     * fuera de los filtros entra al resumen solo por la parte de las que
+     * están dentro (ver `ResumenCobranza::partes()`).
+     *
+     * @var array<int, ParteDeFactura>
+     */
+    private array $partes = [];
+
     public function __construct(private readonly ResumenCobranza $cobranza) {}
 
     /**
@@ -183,26 +191,23 @@ class ExportadorCobranza
 
     /**
      * Las facturas de los viajes que dejan los filtros: el mismo recorte que
-     * los totales de la pantalla. Una factura de varias GR aparece una vez.
+     * los totales de la pantalla. Una factura de varias GR aparece una vez, y
+     * lo que aporta al resumen queda en `$this->partes`.
      *
      * @param  FiltrosCobranza  $filtros
      * @return Collection<int, Factura>
      */
     private function facturasDelFiltro(array $filtros): Collection
     {
-        return Factura::query()
-            ->whereHas('viajes', fn ($query) => $query->whereIn(
-                'viajes.id',
-                $this->cobranza->consulta($filtros)->reorder()->select('viajes.id'),
-            ))
-            ->with([
-                'cuentaBancaria:id,alias',
-                'viajes' => fn ($query) => $query->orderBy('numero_gr'),
-                'viajes.clienteDelPadron:id,alias',
-            ])
-            ->orderBy('fecha_emision')
-            ->orderBy('numero')
-            ->get();
+        $partes = $this->cobranza->partes($filtros, [
+            'cuentaBancaria:id,alias',
+            'viajes' => fn ($query) => $query->orderBy('numero_gr'),
+            'viajes.clienteDelPadron:id,alias',
+        ]);
+
+        $this->partes = $partes->keyBy(fn (ParteDeFactura $parte): int => $parte->factura->id)->all();
+
+        return new Collection($partes->map(fn (ParteDeFactura $parte): Factura => $parte->factura)->values()->all());
     }
 
     // ─── Resumen ────────────────────────────────────────────────────────────
@@ -219,6 +224,13 @@ class ExportadorCobranza
         $hoja->getStyle('A2')->getFont()->setItalic(true)->getColor()->setRGB('6B7280');
 
         $fila = 4;
+
+        $repartidas = $facturas->reject(fn (Factura $factura): bool => $this->partes[$factura->id]->completa());
+
+        if ($repartidas->isNotEmpty()) {
+            $hoja->setCellValue('A3', 'Incluye solo una parte de '.$repartidas->pluck('numero')->join(', ').': también cobran GR fuera de estos filtros, y su monto se repartió por GR.');
+            $hoja->getStyle('A3')->getFont()->setItalic(true)->getColor()->setRGB('B45309');
+        }
 
         foreach ($this->monedasDelResumen($facturas) as $moneda) {
             $delBloque = $facturas->filter(fn (Factura $factura): bool => $this->vaEnElBloque($factura, $moneda));
@@ -635,18 +647,18 @@ class ExportadorCobranza
 
     private function netoPendiente(Factura $factura, Moneda $moneda): float
     {
-        return $factura->moneda === $moneda && $factura->fecha_pago === null ? (float) $factura->neto : 0.0;
+        return $factura->moneda === $moneda && $factura->fecha_pago === null ? $this->parte($factura, $factura->neto) : 0.0;
     }
 
     private function detraccionPendiente(Factura $factura, Moneda $moneda): float
     {
-        return $moneda === Moneda::Soles && $factura->faltaDetraccion() ? (float) $factura->detraccion : 0.0;
+        return $moneda === Moneda::Soles && $factura->faltaDetraccion() ? $this->parte($factura, $factura->detraccion) : 0.0;
     }
 
     /** No es plata por cobrar: es la que la empresa tiene que depositar. */
     private function detraccionPorDepositar(Factura $factura, Moneda $moneda): float
     {
-        return $moneda === Moneda::Soles && $factura->detraccionPorDepositar() ? (float) $factura->detraccion : 0.0;
+        return $moneda === Moneda::Soles && $factura->detraccionPorDepositar() ? $this->parte($factura, $factura->detraccion) : 0.0;
     }
 
     private function pendiente(Factura $factura, Moneda $moneda): float
@@ -656,8 +668,8 @@ class ExportadorCobranza
 
     private function cobrado(Factura $factura, Moneda $moneda): float
     {
-        return ($factura->moneda === $moneda && $factura->fecha_pago !== null ? (float) $factura->neto : 0.0)
-            + ($moneda === Moneda::Soles ? $factura->detraccionCobrada() : 0.0);
+        return ($factura->moneda === $moneda && $factura->fecha_pago !== null ? $this->parte($factura, $factura->neto) : 0.0)
+            + ($moneda === Moneda::Soles ? $this->parte($factura, $factura->detraccionCobrada()) : 0.0);
     }
 
     /**
@@ -665,7 +677,19 @@ class ExportadorCobranza
      */
     private function suma(Collection $facturas, string $campo): float
     {
-        return (float) $facturas->sum(fn (Factura $factura): float => (float) $factura->{$campo});
+        return (float) $facturas->sum(fn (Factura $factura): float => $this->parte($factura, $factura->{$campo}));
+    }
+
+    /**
+     * La parte de un monto de la factura que cae en el recorte. Las hojas
+     * «Facturas» y «Por GR» no pasan por acá: listan cada documento con sus
+     * cifras completas, que son las que dice el papel.
+     */
+    private function parte(Factura $factura, string|float|null $monto): float
+    {
+        $parte = $this->partes[$factura->id] ?? null;
+
+        return $parte === null ? (float) $monto : $parte->de($monto);
     }
 
     /**
@@ -696,13 +720,7 @@ class ExportadorCobranza
             return null;
         }
 
-        $ids = $factura->viajes->pluck('id')->sort()->values();
-        $cantidad = max($ids->count(), 1);
-        $centimos = (int) round((float) $factura->monto * 100);
-        $posicion = $ids->search($viaje->id);
-        $extra = $posicion !== false && $posicion < $centimos % $cantidad ? 1 : 0;
-
-        return (intdiv($centimos, $cantidad) + $extra) / 100;
+        return ParteDeFactura::repartir($factura->monto, $factura->viajes->pluck('id')->all(), [$viaje->id]);
     }
 
     // ─── Datos del viaje ────────────────────────────────────────────────────
@@ -743,8 +761,8 @@ class ExportadorCobranza
     private function describirFiltros(array $filtros): string
     {
         $partes = array_filter([
-            $filtros['cliente'] ? "cliente {$filtros['cliente']}" : null,
-            $filtros['estado'] ? 'estado «'.(EstadoCobranza::tryFrom($filtros['estado'])?->label() ?? $filtros['estado']).'»' : null,
+            $filtros['cliente'] ? 'cliente '.$this->cobranza->nombreDeCliente($filtros['cliente']) : null,
+            $filtros['estado'] ? 'estado «'.(collect(ResumenCobranza::opcionesDeEstado())->firstWhere('value', $filtros['estado'])['label'] ?? $filtros['estado']).'»' : null,
             $filtros['mes'] ? 'mes '.ResumenCobranza::MESES[(int) substr($filtros['mes'], 5, 2)].' '.substr($filtros['mes'], 0, 4) : null,
             $filtros['desde'] ? 'desde '.Carbon::parse($filtros['desde'])->format('d/m/Y') : null,
             $filtros['hasta'] ? 'hasta '.Carbon::parse($filtros['hasta'])->format('d/m/Y') : null,

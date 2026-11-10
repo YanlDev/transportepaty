@@ -110,6 +110,7 @@ export default function ContabilidadIndex({
                 <ResumenCobranza
                     resumen={resumen}
                     onMes={(mes) => aplicar({ mes, desde: null, hasta: null })}
+                    onSinEntidad={() => aplicar({ estado: 'sin_entidad' })}
                 />
 
                 <div className="flex flex-wrap gap-2">

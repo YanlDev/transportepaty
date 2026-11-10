@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\Moneda;
+use App\Enums\TipoCuenta;
 use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\CuentaBancariaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -16,16 +17,21 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * mismo banco termina como «BCP», «Bcp» y «Banco de Crédito», y con eso no se
  * puede filtrar ni totalizar por dónde entró la plata.
  *
+ * La caja, para lo que se cobra en efectivo, es una cuenta más de tipo
+ * `caja`: sin número ni CCI.
+ *
  * @property int $id
+ * @property TipoCuenta $tipo
  * @property string $banco
  * @property string $alias
- * @property string $numero_cuenta
+ * @property string|null $numero_cuenta
  * @property string|null $cci
  * @property Moneda $moneda
  * @property bool $activa
  * @property string|null $notas
  */
 #[Fillable([
+    'tipo',
     'banco',
     'alias',
     'numero_cuenta',
@@ -46,6 +52,11 @@ class CuentaBancaria extends Model
 
     protected $table = 'cuentas_bancarias';
 
+    public function esCaja(): bool
+    {
+        return $this->tipo === TipoCuenta::Caja;
+    }
+
     /**
      * @return HasMany<Factura, $this>
      */
@@ -60,7 +71,7 @@ class CuentaBancaria extends Model
      */
     public function descripcion(): string
     {
-        return "{$this->alias} · {$this->numero_cuenta}";
+        return $this->numero_cuenta === null ? $this->alias : "{$this->alias} · {$this->numero_cuenta}";
     }
 
     /**
@@ -69,6 +80,7 @@ class CuentaBancaria extends Model
     protected function casts(): array
     {
         return [
+            'tipo' => TipoCuenta::class,
             'moneda' => Moneda::class,
             'activa' => 'boolean',
         ];

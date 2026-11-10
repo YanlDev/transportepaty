@@ -87,7 +87,9 @@ export function CeldaEntidad({
                         >
                             {otra.alias}
                             <span className="ml-2 text-xs text-muted-foreground">
-                                {otra.numero_cuenta}
+                                {otra.tipo === 'caja'
+                                    ? 'pago en efectivo'
+                                    : otra.numero_cuenta}
                             </span>
                         </DropdownMenuItem>
                     ))

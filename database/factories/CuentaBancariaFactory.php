@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Enums\Moneda;
+use App\Enums\TipoCuenta;
 use App\Models\CuentaBancaria;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
@@ -26,6 +27,7 @@ class CuentaBancariaFactory extends Factory
         $banco = $this->faker->randomElement(self::BANCOS);
 
         return [
+            'tipo' => TipoCuenta::Banco,
             'banco' => $banco,
             'alias' => "{$banco} Soles",
             'numero_cuenta' => $this->faker->unique()->numerify('###-#########-#-##'),
@@ -34,6 +36,18 @@ class CuentaBancariaFactory extends Factory
             'activa' => true,
             'notas' => null,
         ];
+    }
+
+    /** La caja, para lo que se cobra en efectivo. */
+    public function caja(): static
+    {
+        return $this->state(fn (): array => [
+            'tipo' => TipoCuenta::Caja,
+            'banco' => 'Caja',
+            'alias' => 'EFECTIVO',
+            'numero_cuenta' => null,
+            'cci' => null,
+        ]);
     }
 
     public function dolares(): static

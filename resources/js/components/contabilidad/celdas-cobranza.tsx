@@ -308,7 +308,11 @@ export function CeldasCobranza({
                     valor={factura.numero_operacion}
                     editable={editable}
                     ancho="min-w-32"
-                    etiqueta="N° de operación del depósito"
+                    etiqueta={
+                        factura.cobro_en_efectivo
+                            ? 'N° de recibo de caja'
+                            : 'N° de operación del depósito'
+                    }
                 />
             </TableCell>
 

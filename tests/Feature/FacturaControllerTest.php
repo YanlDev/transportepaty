@@ -749,3 +749,73 @@ it('makes the neto the total when the company deposits the detraccion', function
 
     expect($factura->fresh()->neto)->toBe('8496.00');
 });
+
+/**
+ * La misma factura escrita de otra forma —con ceros, sin guion, con espacios—
+ * no entra dos veces: su monto se contaría doble en todo lo que se suma.
+ */
+it('rejects the same numero de factura written another way', function (string $escrito): void {
+    Factura::factory()->create(['numero' => 'E001-14393']);
+    $viaje = Viaje::factory()->create();
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.store'), datosFactura(['numero' => $escrito, 'viaje_ids' => [$viaje->id]]))
+        ->assertSessionHasErrors(['numero' => 'Esa factura ya está registrada como E001-14393.']);
+
+    expect(Factura::query()->count())->toBe(1);
+})->with([
+    'con ceros' => 'E001-014393',
+    'como una GR' => 'E001-00014393',
+    'sin guion' => 'e00114393',
+    'con espacios' => 'E001 - 14393',
+]);
+
+it('still takes a different numero of the same serie', function (): void {
+    Factura::factory()->create(['numero' => 'E001-14393']);
+    $viaje = Viaje::factory()->create();
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.store'), datosFactura(['numero' => 'E001-1439', 'viaje_ids' => [$viaje->id]]))
+        ->assertSessionHasNoErrors();
+
+    expect(Factura::query()->count())->toBe(2);
+});
+
+it('refuses to correct a numero into one that already exists written another way', function (): void {
+    Factura::factory()->create(['numero' => 'E001-14393']);
+    $otra = Factura::factory()->create(['numero' => 'E001-14394']);
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $otra), ['numero' => 'E001-014393'])
+        ->assertSessionHasErrors('numero');
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $otra), ['numero' => 'e001-014394'])
+        ->assertSessionHasNoErrors();
+
+    expect($otra->fresh()->numero)->toBe('E001-014394');
+});
+
+/**
+ * Cobrar en efectivo es elegir la caja como entidad: el cobro cuenta igual que
+ * uno por banco —los totales miran la fecha de pago, no por dónde entró— y la
+ * fila sabe que no hay operación de banco que pedir.
+ */
+it('records a cobro en efectivo against the caja, and counts it like any other cobro', function (): void {
+    $caja = CuentaBancaria::factory()->caja()->create();
+    $factura = Factura::factory()->create(['monto' => 1000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'))
+        ->patch(route('facturas.update', $factura), ['fecha_pago' => '2026-11-10', 'cuenta_bancaria_id' => $caja->id])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('viajes.data.0.facturas.0.cuenta', 'EFECTIVO')
+            ->where('viajes.data.0.facturas.0.cobro_en_efectivo', true)
+            ->where('resumen.montos.0.por_cobrar', 0)
+            ->where('resumen.montos.0.cobrado', 1133)
+            ->where('cuentas', fn ($cuentas) => collect($cuentas)->last()['tipo'] === 'caja'));
+});

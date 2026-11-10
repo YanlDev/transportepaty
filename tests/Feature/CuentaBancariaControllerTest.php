@@ -116,3 +116,57 @@ it('lists the cuentas with how many facturas each one cobró', function (): void
             ->where('cuentas.0.facturas_count', 2)
         );
 });
+
+/**
+ * La caja es la «cuenta» de lo que se cobra en efectivo: se registra sin
+ * banco, sin número y sin CCI, y lo que se haya escrito de más no entra.
+ */
+it('registers a caja for the cobros en efectivo, without numero de cuenta', function (): void {
+    actingAs(actorConRol('contador'))
+        ->post(route('cuentas-bancarias.store'), datosCuenta([
+            'tipo' => 'caja',
+            'banco' => '',
+            'alias' => 'EFECTIVO',
+            'numero_cuenta' => '',
+            'cci' => '',
+        ]))
+        ->assertSessionHasNoErrors();
+
+    $caja = CuentaBancaria::query()->sole();
+
+    expect($caja->esCaja())->toBeTrue()
+        ->and($caja->banco)->toBe('Caja')
+        ->and($caja->numero_cuenta)->toBeNull()
+        ->and($caja->cci)->toBeNull()
+        ->and($caja->descripcion())->toBe('EFECTIVO');
+});
+
+it('rejects a numero de cuenta on a caja', function (): void {
+    actingAs(actorConRol('contador'))
+        ->post(route('cuentas-bancarias.store'), datosCuenta(['tipo' => 'caja', 'alias' => 'EFECTIVO']))
+        ->assertSessionHasErrors(['numero_cuenta', 'cci']);
+});
+
+it('still requires the numero de cuenta of a cuenta de banco, and takes it as banco by default', function (): void {
+    actingAs(actorConRol('contador'))
+        ->post(route('cuentas-bancarias.store'), datosCuenta(['numero_cuenta' => '']))
+        ->assertSessionHasErrors('numero_cuenta');
+
+    actingAs(actorConRol('contador'))
+        ->post(route('cuentas-bancarias.store'), datosCuenta())
+        ->assertSessionHasNoErrors();
+
+    expect(CuentaBancaria::query()->sole()->esCaja())->toBeFalse();
+});
+
+it('lets two cajas exist, one per moneda', function (): void {
+    CuentaBancaria::factory()->caja()->create();
+
+    actingAs(actorConRol('contador'))
+        ->post(route('cuentas-bancarias.store'), datosCuenta([
+            'tipo' => 'caja', 'alias' => 'EFECTIVO DÓLARES', 'numero_cuenta' => '', 'cci' => '', 'moneda' => 'USD',
+        ]))
+        ->assertSessionHasNoErrors();
+
+    expect(CuentaBancaria::query()->count())->toBe(2);
+});

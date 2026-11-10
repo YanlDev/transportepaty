@@ -139,6 +139,47 @@ class Cliente extends Model
     }
 
     /**
+     * El cliente de un RUC facturado, dado de alta si todavía no estaba. Los
+     * clientes de la casa son a quienes se les factura —el «Señor(es)» y el
+     * RUC que imprime la factura—, no todo el que figura de remitente en una
+     * GR: muchas veces el que despacha no es el que paga.
+     *
+     * El alta es mínima: la razón social impresa y un alias sugerido, que se
+     * puede corregir después en el padrón. Si el RUC ya estaba, no se toca.
+     */
+    public static function darDeAltaFacturado(string $ruc, string $razonSocial): self
+    {
+        $cliente = self::query()->firstOrCreate(['ruc' => $ruc], [
+            'razon_social' => ImportadorViaje::normalizarRazonSocial($razonSocial),
+            'alias' => self::aliasSugerido($razonSocial),
+            'recurrente' => false,
+            'activo' => true,
+            'notas' => 'Alta automática: se le emitió una factura. Revisar el alias y completar el contacto.',
+        ]);
+
+        if ($cliente->wasRecentlyCreated) {
+            $cliente->enlazarViajesHuerfanos();
+        }
+
+        return $cliente;
+    }
+
+    /**
+     * Un cliente recién dado de alta suele tener viajes esperándolo: las GR se
+     * importan antes de que alguien lo registre, y quedaron con el RUC pero
+     * sin enlazar.
+     *
+     * @return int Cuántos viajes quedaron enlazados.
+     */
+    public function enlazarViajesHuerfanos(): int
+    {
+        return Viaje::query()
+            ->where('cliente_ruc', $this->ruc)
+            ->whereNull('cliente_id')
+            ->update(['cliente_id' => $this->id]);
+    }
+
+    /**
      * Un alias de arranque a partir de la razón social: le quita la forma
      * societaria y lo deja en capitalización normal, que es como se lee bien
      * en una tabla. «PORCELANATO LATINO SOCIEDAD ANONIMA CERRADA» queda como

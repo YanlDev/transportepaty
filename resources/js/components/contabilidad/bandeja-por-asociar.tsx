@@ -204,7 +204,11 @@ function AsociarDialog({ factura }: { factura: FacturaPorAsociar }) {
         errors,
         reset,
         clearErrors,
-    } = useForm({ viaje_ids: sugeridas(), numeros: '' });
+    } = useForm({
+        viaje_ids: sugeridas(),
+        numeros: '',
+        confirmar_facturadas: false,
+    });
 
     // Los números escritos llegan separados por coma, espacio o salto de
     // línea; el servidor los normaliza (`EG03-12429` → `EG03-00012429`).
@@ -214,6 +218,7 @@ function AsociarDialog({ factura }: { factura: FacturaPorAsociar }) {
             .split(/[\s,;]+/)
             .map((numero) => numero.trim())
             .filter(Boolean),
+        confirmar_facturadas: datos.confirmar_facturadas,
     }));
 
     const alternar = (id: number) =>
@@ -327,6 +332,30 @@ function AsociarDialog({ factura }: { factura: FacturaPorAsociar }) {
                                 }
                             />
                         </div>
+
+                        {/* Una GR que ya cobra otra factura no se suma sin
+                            querer: el servidor la rechaza hasta que se
+                            confirme acá. */}
+                        {(errores.ya_facturadas ||
+                            data.confirmar_facturadas) && (
+                            <div className="flex flex-col gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950">
+                                {errores.ya_facturadas && (
+                                    <p>{errores.ya_facturadas}</p>
+                                )}
+                                <label className="flex cursor-pointer items-center gap-2 font-medium">
+                                    <Checkbox
+                                        checked={data.confirmar_facturadas}
+                                        onCheckedChange={(valor) =>
+                                            setData(
+                                                'confirmar_facturadas',
+                                                valor === true,
+                                            )
+                                        }
+                                    />
+                                    Sí, esta factura también las cobra
+                                </label>
+                            </div>
+                        )}
                     </div>
 
                     <DialogFooter>

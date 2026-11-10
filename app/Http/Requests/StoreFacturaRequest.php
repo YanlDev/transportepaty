@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Enums\Moneda;
+use App\Models\Factura;
 use App\Models\Viaje;
+use Closure;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -30,7 +32,7 @@ class StoreFacturaRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'numero' => ['required', 'string', 'max:30', Rule::unique('facturas', 'numero')],
+            'numero' => ['required', 'string', 'max:30', Rule::unique('facturas', 'numero'), $this->numeroSinRepetir(...)],
             'fecha_emision' => ['nullable', 'date'],
             'monto' => ['nullable', 'numeric', 'min:0.01', 'max:99999999.99'],
             'moneda' => ['nullable', Rule::enum(Moneda::class)],
@@ -39,6 +41,19 @@ class StoreFacturaRequest extends FormRequest
             // escondida, porque la cobranza no muestra las anuladas.
             'viaje_ids.*' => ['integer', 'distinct', Rule::exists('viajes', 'id')->whereNull('anulada_at')],
         ];
+    }
+
+    /**
+     * El mismo número escrito de otra forma (`E001-014393` por `E001-14393`)
+     * es la misma factura: registrarla otra vez duplicaría su monto.
+     */
+    private function numeroSinRepetir(string $attribute, mixed $value, Closure $fail): void
+    {
+        $existente = is_string($value) ? Factura::conMismoNumero($value) : null;
+
+        if ($existente !== null) {
+            $fail("Esa factura ya está registrada como {$existente->numero}.");
+        }
     }
 
     /**

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Cliente;
 use App\Models\Factura;
 use App\Models\Viaje;
 use App\Services\LectorFactura;
@@ -318,4 +319,96 @@ it('leaves the detraccion to the client when the printed neto discounts it', fun
         ->post(route('facturas.importar'), ['archivos' => [facturaPdf('factura-crisar-dos-gr')]]);
 
     expect(Factura::query()->sole()->detraccion_por_empresa)->toBeFalse();
+});
+
+/**
+ * La factura cargada a mano con el número escrito de otra forma es la misma
+ * que trae el PDF: se actualiza, no se registra una segunda.
+ */
+it('recognizes the factura cargada a mano even when its numero was written another way', function (): void {
+    $viaje = Viaje::factory()->create(['numero_gr' => 'EG03-00012354']);
+    $factura = Factura::factory()->create(['numero' => 'E001-014372', 'monto' => 1000]);
+    $factura->viajes()->attach($viaje);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.importar'), ['archivos' => [facturaPdf('factura-socorro-una-gr')]])
+        ->assertInertiaFlash('importacion_facturas.0.nueva', false);
+
+    expect(Factura::query()->count())->toBe(1)
+        ->and($factura->fresh()->monto)->toBe('3500.00');
+});
+
+/**
+ * Dos facturas que citan la misma GR pueden ser el flete y la estadía, o una
+ * factura reemitida: al llegar la GR solo se engancha a la primera emitida y
+ * la otra la decide una persona, para no contar el cobro dos veces.
+ */
+it('links an arriving GR only to the first factura that cites it', function (): void {
+    $primera = Factura::factory()->create(['fecha_emision' => '2026-10-01', 'gr_citadas' => ['EG03-00012999']]);
+    $segunda = Factura::factory()->create(['fecha_emision' => '2026-10-05', 'gr_citadas' => ['EG03-00012999']]);
+
+    $viaje = Viaje::factory()->create(['numero_gr' => 'EG03-00012999']);
+
+    expect($viaje->facturas()->pluck('facturas.id')->all())->toBe([$primera->id])
+        ->and($segunda->viajes()->count())->toBe(0);
+});
+
+it('asks to confirm before linking by hand a GR that already has another factura', function (): void {
+    $viaje = Viaje::factory()->create(['numero_gr' => 'EG03-00012429']);
+    Factura::factory()->create(['numero' => 'E001-14444'])->viajes()->attach($viaje);
+    $factura = Factura::factory()->create();
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.asociar', $factura), ['viaje_ids' => [], 'numeros_gr' => ['EG03-12429']])
+        ->assertSessionHasErrors(['ya_facturadas' => 'Ya tienen otra factura: EG03-00012429 (E001-14444). Si esta también las cobra, confírmalo.']);
+
+    expect($factura->viajes()->count())->toBe(0);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.asociar', $factura), ['viaje_ids' => [$viaje->id], 'numeros_gr' => [], 'confirmar_facturadas' => true])
+        ->assertSessionHasNoErrors();
+
+    expect($viaje->facturas()->count())->toBe(2);
+});
+
+it('does not ask to confirm a GR the factura itself already covers', function (): void {
+    $viaje = Viaje::factory()->create();
+    $otro = Viaje::factory()->create();
+    $factura = Factura::factory()->create();
+    $factura->viajes()->attach($viaje);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.asociar', $factura), ['viaje_ids' => [$viaje->id, $otro->id], 'numeros_gr' => []])
+        ->assertSessionHasNoErrors();
+
+    expect($factura->viajes()->count())->toBe(2);
+});
+
+/**
+ * A quien se le factura es cliente de la casa: el RUC impreso en la factura
+ * entra al padrón al subirla, y las GR que ya lo nombraban quedan enlazadas.
+ */
+it('adds the cliente facturado to the padrón when the factura is uploaded', function (): void {
+    $campos = (new LectorFactura)->extraerDesdeArchivo(base_path('tests/Fixtures/facturas/factura-crisar-dos-gr.pdf'));
+    $gr = Viaje::factory()->create(['cliente_ruc' => $campos['cliente_ruc'], 'cliente_id' => null]);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.importar'), ['archivos' => [facturaPdf('factura-crisar-dos-gr')]]);
+
+    $cliente = Cliente::query()->sole();
+
+    expect($cliente->ruc)->toBe($campos['cliente_ruc'])
+        ->and($cliente->alias)->toBe(Cliente::aliasSugerido($campos['cliente_razon_social']))
+        ->and($cliente->notas)->toContain('Alta automática')
+        ->and($gr->fresh()->cliente_id)->toBe($cliente->id);
+});
+
+it('leaves a cliente that was already in the padrón as it was', function (): void {
+    $campos = (new LectorFactura)->extraerDesdeArchivo(base_path('tests/Fixtures/facturas/factura-crisar-dos-gr.pdf'));
+    Cliente::factory()->create(['ruc' => $campos['cliente_ruc'], 'alias' => 'Crisar', 'notas' => 'Paga a 30 días']);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.importar'), ['archivos' => [facturaPdf('factura-crisar-dos-gr')]]);
+
+    expect(Cliente::query()->sole()->only(['alias', 'notas']))->toBe(['alias' => 'Crisar', 'notas' => 'Paga a 30 días']);
 });

@@ -10,9 +10,11 @@ import type { ResumenCobranza as Resumen } from '@/types/contabilidad';
 export function ResumenCobranza({
     resumen,
     onMes,
+    onSinEntidad,
 }: {
     resumen: Resumen;
     onMes: (mes: string) => void;
+    onSinEntidad: () => void;
 }) {
     const cifra = (valor: number) =>
         valor.toLocaleString('es-PE', {
@@ -69,6 +71,41 @@ export function ResumenCobranza({
             ))}
 
             <PorFacturar meses={resumen.por_facturar} onMes={onMes} />
+
+            {/* Una factura con GR dentro y fuera del filtro entra solo por
+                la parte de las de adentro: se avisa para que el total no se
+                lea como la suma exacta de esas facturas. */}
+            {resumen.repartidas > 0 && (
+                <p className="basis-full text-xs text-muted-foreground">
+                    Incluye solo una parte de {resumen.repartidas}{' '}
+                    {resumen.repartidas === 1
+                        ? 'factura que también cobra'
+                        : 'facturas que también cobran'}{' '}
+                    GR fuera de este filtro: su monto se repartió por GR.
+                </p>
+            )}
+
+            {/* Cobradas sin entidad: mientras no digan si entraron por un
+                banco o en efectivo, no se pueden cruzar con el estado de
+                cuenta. El número filtra la tabla por ellas. */}
+            {resumen.sin_entidad > 0 && (
+                <button
+                    type="button"
+                    onClick={onSinEntidad}
+                    className="cursor-pointer rounded-md text-left hover:bg-accent"
+                    title="Ver las facturas cobradas sin entidad"
+                >
+                    <p className="text-xs text-muted-foreground">
+                        Cobradas sin entidad
+                    </p>
+                    <p className="text-xl font-semibold text-amber-700 tabular-nums dark:text-amber-500">
+                        {resumen.sin_entidad}{' '}
+                        <span className="text-sm font-normal text-muted-foreground">
+                            {resumen.sin_entidad === 1 ? 'factura' : 'facturas'}
+                        </span>
+                    </p>
+                </button>
+            )}
 
             {/* Una factura sin monto suma cero y desaparecería del total sin
                 que nadie lo note. */}

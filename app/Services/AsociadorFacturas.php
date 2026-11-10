@@ -87,6 +87,11 @@ class AsociadorFacturas
      * la asocia sola. Solo si la GR no tiene otra factura: si ya la tiene, la
      * decisión vuelve a ser de una persona.
      *
+     * Si la citan varias facturas, se asocia solo a la primera emitida, igual
+     * que en `asociarCitadas()`: la segunda puede ser la estadía del mismo
+     * viaje, pero también una factura reemitida, y asociarlas todas contaría
+     * el cobro dos veces. Las demás las decide una persona.
+     *
      * @return Collection<int, Factura> Las facturas a las que se asoció.
      */
     public function alLlegarViaje(Viaje $viaje): Collection
@@ -95,15 +100,19 @@ class AsociadorFacturas
             return new Collection;
         }
 
-        $facturas = Factura::query()
+        $primera = Factura::query()
             ->whereJsonContains('gr_citadas', $viaje->numero_gr)
-            ->get();
+            ->orderBy('fecha_emision')
+            ->orderBy('id')
+            ->first();
 
-        foreach ($facturas as $factura) {
-            $factura->viajes()->syncWithoutDetaching([$viaje->id]);
+        if ($primera === null) {
+            return new Collection;
         }
 
-        return $facturas;
+        $primera->viajes()->syncWithoutDetaching([$viaje->id]);
+
+        return new Collection([$primera]);
     }
 
     /**

@@ -266,6 +266,41 @@ class Factura extends Model implements HasMedia
     }
 
     /**
+     * El número sin lo que cambia según quién lo escribe: mayúsculas, espacios,
+     * el guion y los ceros a la izquierda del correlativo. `E001-14393`,
+     * `e001 - 014393` y `E00114393` son la misma factura. Un número que no
+     * tiene la forma serie-correlativo queda tal cual, sin espacios.
+     */
+    public static function claveDeNumero(string $numero): string
+    {
+        $compacto = mb_strtoupper((string) preg_replace('/\s+/u', '', $numero));
+
+        return preg_match('/^([A-Z][A-Z0-9]{3})-?0*(\d+)$/', $compacto, $partes) === 1
+            ? "{$partes[1]}-{$partes[2]}"
+            : $compacto;
+    }
+
+    /**
+     * La factura ya registrada con ese número, aunque se haya escrito de otra
+     * forma. Registrar la misma factura dos veces es contar su plata dos veces.
+     *
+     * Se compara en PHP y no en SQL: no hay una expresión portable entre el
+     * Postgres de producción y el SQLite de los tests. Solo se traen los
+     * números de la misma serie.
+     */
+    public static function conMismoNumero(string $numero, ?int $exceptoId = null): ?self
+    {
+        $clave = self::claveDeNumero($numero);
+        $serie = mb_substr($clave, 0, 4);
+
+        return self::query()
+            ->when($exceptoId !== null, fn ($query) => $query->whereKeyNot($exceptoId))
+            ->whereLike('numero', "%{$serie}%", caseSensitive: false)
+            ->get(['id', 'numero'])
+            ->first(fn (self $factura): bool => self::claveDeNumero($factura->numero) === $clave);
+    }
+
+    /**
      * @return BelongsToMany<Viaje, $this>
      */
     public function viajes(): BelongsToMany

@@ -6,6 +6,7 @@ use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
+use App\Models\Factura;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
 use App\Models\Vehiculo;
@@ -128,7 +129,7 @@ it('shows billing the GR without invoice and the tickets to settle', function ()
 
     $pendientes = pendientesDe('contador');
 
-    expect(array_keys($pendientes))->toBe(['por_cerrar', 'sin_facturar'])
+    expect(array_keys($pendientes))->toBe(['por_cerrar', 'sin_facturar', 'cobros_sin_entidad'])
         ->and($pendientes['sin_facturar']['cantidad'])->toBe(2)
         ->and($pendientes['sin_facturar']['href'])->toContain('estado=sin_facturar');
 });
@@ -145,4 +146,21 @@ it('puts the count of each area next to its menu entry', function (): void {
     actingAs(actorConRol('taller'))
         ->get(route('taller.index'))
         ->assertInertia(fn (Assert $page) => $page->where('pendientesMenu', ['taller' => 1]));
+});
+
+/**
+ * Una factura cobrada que no dice por dónde entró la plata no se puede cruzar
+ * con el banco: se avisa en el inicio hasta que alguien le ponga la entidad.
+ */
+it('warns billing about the cobros that do not say where the money came in', function (): void {
+    Factura::factory()->create(['numero' => 'E001-14363', 'fecha_pago' => '2026-09-16', 'cuenta_bancaria_id' => null]);
+    Factura::factory()->pagada()->create();
+    Factura::factory()->create(['fecha_pago' => null]);
+
+    $pendiente = pendientesDe('contador')['cobros_sin_entidad'];
+
+    expect($pendiente['cantidad'])->toBe(1)
+        ->and($pendiente['tono'])->toBe('aviso')
+        ->and($pendiente['items'][0]['texto'])->toBe('E001-14363')
+        ->and($pendiente['href'])->toContain('estado=sin_entidad');
 });

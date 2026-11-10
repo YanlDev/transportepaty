@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TipoCarga;
+use App\Models\Cliente;
 use App\Models\Factura;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -58,7 +59,10 @@ class ImportadorFactura
         }
 
         return DB::transaction(function () use ($archivo, $campos, $nombre): array {
-            $factura = Factura::query()->firstOrNew(['numero' => $campos['numero']]);
+            // La que se cargó a mano puede tener el número escrito de otra
+            // forma (`E001-014393`): es la misma, no una segunda factura.
+            $factura = Factura::conMismoNumero($campos['numero'])?->fresh()
+                ?? new Factura(['numero' => $campos['numero']]);
             $nueva = ! $factura->exists;
 
             $factura->fill([
@@ -97,6 +101,12 @@ class ImportadorFactura
             }
 
             $factura->save();
+
+            // A quien se le factura es cliente de la casa: si el RUC impreso
+            // no estaba en el padrón, entra ahora.
+            if ($factura->cliente_ruc !== null && $factura->cliente_razon_social !== null) {
+                Cliente::darDeAltaFacturado($factura->cliente_ruc, $factura->cliente_razon_social);
+            }
 
             $this->subidas->guardar($factura, $archivo, 'archivo', 'archivos');
 

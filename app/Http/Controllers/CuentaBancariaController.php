@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Moneda;
+use App\Enums\TipoCuenta;
 use App\Http\Requests\StoreCuentaBancariaRequest;
 use App\Http\Requests\UpdateCuentaBancariaRequest;
 use App\Models\CuentaBancaria;
@@ -34,6 +35,7 @@ class CuentaBancariaController extends Controller
             ->get()
             ->map(fn (CuentaBancaria $cuenta): array => [
                 'id' => $cuenta->id,
+                'tipo' => $cuenta->tipo->value,
                 'banco' => $cuenta->banco,
                 'alias' => $cuenta->alias,
                 'numero_cuenta' => $cuenta->numero_cuenta,
@@ -48,6 +50,7 @@ class CuentaBancariaController extends Controller
         return Inertia::render('contabilidad/cuentas', [
             'cuentas' => $cuentas,
             'monedas' => Moneda::options(),
+            'tipos' => TipoCuenta::options(),
         ]);
     }
 

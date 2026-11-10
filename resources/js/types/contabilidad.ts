@@ -55,7 +55,9 @@ export type FacturaResumen = {
     cuenta_bancaria_id: number | null;
     /** Alias de la cuenta por la que entró el neto. Null si aún no se cobró. */
     cuenta: string | null;
-    /** N° de operación del depósito del neto, para ubicarlo en el banco. */
+    /** El neto se cobró en efectivo: entró a la caja, no a un banco. */
+    cobro_en_efectivo: boolean;
+    /** N° de operación del depósito del neto, para ubicarlo en el banco; en efectivo, el recibo de caja. */
     numero_operacion: string | null;
     /** Cuándo depositó el cliente la detracción en el Banco de la Nación. */
     fecha_detraccion: string | null;
@@ -133,6 +135,13 @@ export type ResumenCobranza = {
     por_facturar: MesPorFacturar[];
     /** Facturas distintas alcanzadas por los filtros. */
     facturas: number;
+    /**
+     * De esas, las que también cobran GR fuera de los filtros: entran a los
+     * totales solo por la parte de las GR que están dentro.
+     */
+    repartidas: number;
+    /** Facturas cobradas que no dicen por dónde entró la plata (banco o efectivo). */
+    sin_entidad: number;
     /** Facturas registradas cuyo monto todavía no se cargó. */
     sin_monto: number;
 };
@@ -149,17 +158,23 @@ export type FiltrosContabilidad = {
 
 export type CuentaOpcion = {
     id: number;
+    /** `banco` | `caja` (efectivo). */
+    tipo: string;
     alias: string;
     banco: string;
-    numero_cuenta: string;
+    /** Null en la caja. */
+    numero_cuenta: string | null;
     moneda: string;
 };
 
 export type CuentaBancaria = {
     id: number;
+    /** `banco` | `caja` (efectivo). */
+    tipo: string;
     banco: string;
     alias: string;
-    numero_cuenta: string;
+    /** Null en la caja. */
+    numero_cuenta: string | null;
     cci: string | null;
     moneda: string;
     moneda_label: string;

@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
@@ -563,4 +564,216 @@ it('filters by the client billed even when the GR names another one', function (
             ->where('viajes.data.0.numero_gr', 'EG03-SUPERPLAST')
             ->where('clientes', fn ($clientes) => collect($clientes)->pluck('value')->contains('CASAS CERAMICOS HATUN WASI E.I.R.L.'))
         );
+});
+
+/**
+ * Una factura con GR en dos meses es una sola plata: contarla entera en cada
+ * mes la suma dos veces. Cada mes lleva la parte de sus GR, y los meses
+ * vuelven a sumar el total.
+ */
+it('splits a factura across months by GR, so the months add up to the total', function (): void {
+    // Valor 1000 → total 1180, detracción 47, neto 1133.
+    $factura = Factura::factory()->create(['monto' => 1000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['fecha_traslado' => '2026-09-10']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['fecha_traslado' => '2026-09-20']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['fecha_traslado' => '2026-10-02']);
+
+    actingAs(actorConRol('contador'));
+
+    $this->get(route('contabilidad.index'))->assertInertia(fn ($page) => $page
+        ->where('resumen.montos.0.por_cobrar', 1133)
+        ->where('resumen.montos.0.detraccion_por_cobrar', 47)
+        ->where('resumen.facturas', 1)
+        ->where('resumen.repartidas', 0));
+
+    $this->get(route('contabilidad.index', ['mes' => '2026-09']))->assertInertia(fn ($page) => $page
+        ->where('resumen.montos.0.por_cobrar', 755.34)
+        ->where('resumen.montos.0.detraccion_por_cobrar', 31.34)
+        ->where('resumen.facturas', 1)
+        ->where('resumen.repartidas', 1));
+
+    $this->get(route('contabilidad.index', ['mes' => '2026-10']))->assertInertia(fn ($page) => $page
+        ->where('resumen.montos.0.por_cobrar', 377.66)
+        ->where('resumen.montos.0.detraccion_por_cobrar', 15.66)
+        ->where('resumen.repartidas', 1));
+});
+
+it('splits what was already cobrado the same way', function (): void {
+    $factura = Factura::factory()->pagada()->create(['monto' => 1000]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['fecha_traslado' => '2026-09-10']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['fecha_traslado' => '2026-10-02']);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['mes' => '2026-09']))
+        ->assertInertia(fn ($page) => $page
+            ->where('resumen.montos.0.por_cobrar', 0)
+            // La mitad de 1133 de neto más la mitad de 47 de detracción.
+            ->where('resumen.montos.0.cobrado', 590));
+});
+
+/**
+ * Por cliente no se reparte: la deuda es de a quien se le facturó, aunque una
+ * de las GR nombre a otro. Se resuelve por RUC, porque el nombre de la GR y
+ * el del PDF de la factura no siempre se escriben igual.
+ */
+it('counts a factura whole for the cliente it was billed to, and not for the other cliente of its GR', function (): void {
+    $factura = Factura::factory()->create([
+        'monto' => 1000,
+        'cliente_ruc' => '20100000001',
+        'cliente_razon_social' => 'ALFA S. A. C.',
+    ]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['cliente' => 'ALFA S.A.C.', 'cliente_ruc' => '20100000001']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['cliente' => 'BETA S.A.C.', 'cliente_ruc' => '20200000002']);
+
+    actingAs(actorConRol('contador'));
+
+    $this->get(route('contabilidad.index', ['cliente' => 'ALFA S.A.C.']))->assertInertia(fn ($page) => $page
+        ->where('resumen.montos.0.por_cobrar', 1133)
+        ->where('resumen.facturas', 1)
+        ->where('resumen.repartidas', 0));
+
+    $this->get(route('contabilidad.index', ['cliente' => 'BETA S.A.C.']))->assertInertia(fn ($page) => $page
+        ->where('resumen.montos', [])
+        ->where('resumen.facturas', 0)
+        // Ese viaje ya no es de Beta: se le facturó a Alfa.
+        ->has('viajes.data', 0));
+});
+
+it('falls back to the cliente of the GR for a factura that does not say who was billed', function (): void {
+    $factura = Factura::factory()->create(['monto' => 1000, 'cliente_ruc' => null, 'cliente_razon_social' => null]);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['cliente' => 'ALFA S.A.C.']);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['cliente' => 'ALFA S.A.C.']))
+        ->assertInertia(fn ($page) => $page->where('resumen.montos.0.por_cobrar', 1133));
+});
+
+/**
+ * El cliente es el RUC, no el nombre: «MINSUR S.A.» en la GR y «MINSUR S. A.»
+ * en el PDF de la factura son la misma empresa y salen una sola vez.
+ */
+it('offers one cliente per RUC, named by its alias del padrón', function (): void {
+    Cliente::factory()->create(['ruc' => '20100136741', 'alias' => 'Minsur']);
+    $factura = Factura::factory()->create(['cliente_ruc' => '20100136741', 'cliente_razon_social' => 'MINSUR S. A.']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['cliente' => 'MINSUR S.A.', 'cliente_ruc' => '20100136741']);
+    Viaje::factory()->create(['cliente' => 'MINSUR SA', 'cliente_ruc' => '20100136741']);
+    // Remitente de una GR sin facturar y fuera del padrón: sale con su nombre.
+    Viaje::factory()->create(['cliente' => 'BETA S.A.C.', 'cliente_ruc' => '20200000002']);
+    // Sin RUC no hay con qué unificar: queda por nombre.
+    Viaje::factory()->create(['cliente' => 'SIN RUC E.I.R.L.', 'cliente_ruc' => null]);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page->where('clientes', [
+            ['value' => '20200000002', 'label' => 'BETA S.A.C.'],
+            ['value' => '20100136741', 'label' => 'Minsur'],
+            ['value' => 'SIN RUC E.I.R.L.', 'label' => 'SIN RUC E.I.R.L.'],
+        ]));
+});
+
+it('filters by RUC whatever way the cliente was written', function (): void {
+    $factura = Factura::factory()->create(['monto' => 1000, 'cliente_ruc' => '20100136741', 'cliente_razon_social' => 'MINSUR S. A.']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['cliente' => 'MINSUR S.A.', 'cliente_ruc' => '20100136741']);
+    Viaje::factory()->create(['cliente' => 'MINSUR SA', 'cliente_ruc' => '20100136741']);
+    Viaje::factory()->create(['cliente' => 'BETA S.A.C.', 'cliente_ruc' => '20200000002']);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['cliente' => '20100136741']))
+        ->assertInertia(fn ($page) => $page
+            ->has('viajes.data', 2)
+            ->where('resumen.montos.0.por_cobrar', 1133)
+            ->where('resumen.facturas', 1));
+});
+
+it('counts a factura whole for the RUC it was billed to, and not for the RUC of its GR', function (): void {
+    $factura = Factura::factory()->create(['monto' => 1000, 'cliente_ruc' => '20100000001', 'cliente_razon_social' => 'ALFA S.A.C.']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['cliente' => 'BETA S.A.C.', 'cliente_ruc' => '20200000002']);
+
+    actingAs(actorConRol('contador'));
+
+    $this->get(route('contabilidad.index', ['cliente' => '20100000001']))->assertInertia(fn ($page) => $page
+        ->where('resumen.montos.0.por_cobrar', 1133)
+        ->has('viajes.data', 1));
+
+    $this->get(route('contabilidad.index', ['cliente' => '20200000002']))->assertInertia(fn ($page) => $page
+        ->where('resumen.montos', [])
+        ->has('viajes.data', 0));
+});
+
+/**
+ * Los clientes son a quienes se les factura: la migración da de alta los RUC
+ * facturados que faltaban en el padrón, sin tocar los que ya estaban ni sumar
+ * a los que solo figuran de remitente en una GR.
+ */
+it('adds to the padrón the clientes facturados that were missing', function (): void {
+    $yaEstaba = Cliente::factory()->create(['ruc' => '20100136741', 'alias' => 'Minsur']);
+    Factura::factory()->create(['cliente_ruc' => '20100136741', 'cliente_razon_social' => 'MINSUR S. A.']);
+    Factura::factory()->create(['cliente_ruc' => '20607784966', 'cliente_razon_social' => 'MOLINORTE TRADING SAC', 'fecha_emision' => '2026-09-01']);
+    Factura::factory()->create(['cliente_ruc' => '20607784966', 'cliente_razon_social' => 'MOLINORTE TRADING S.A.C.', 'fecha_emision' => '2026-10-01']);
+    $gr = Viaje::factory()->create(['cliente' => 'MOLINORTE TRADING S.A.C.', 'cliente_ruc' => '20607784966', 'cliente_id' => null]);
+    Viaje::factory()->create(['cliente' => 'SOLO REMITENTE S.A.C.', 'cliente_ruc' => '20999999999', 'cliente_id' => null]);
+
+    (require database_path('migrations/2026_11_10_163247_da_de_alta_en_el_padron_a_los_clientes_facturados.php'))->up();
+
+    $nuevo = Cliente::query()->where('ruc', '20607784966')->sole();
+
+    expect(Cliente::query()->count())->toBe(2)
+        ->and($nuevo->razon_social)->toBe('MOLINORTE TRADING S.A.C.')
+        ->and($nuevo->alias)->toBe('Molinorte Trading')
+        ->and($gr->fresh()->cliente_id)->toBe($nuevo->id)
+        ->and($yaEstaba->fresh()->alias)->toBe('Minsur')
+        ->and(Cliente::query()->where('ruc', '20999999999')->exists())->toBeFalse();
+});
+
+/**
+ * Naturex despacha la carga, pero el flete se le factura a la tienda que la
+ * recibe: el cliente de ese viaje es la tienda. Naturex queda como dato del
+ * viaje (quién despachó), no como cliente, y deja de salir en el filtro.
+ */
+it('takes the cliente facturado as the cliente of the viaje, and drops who only dispatched', function (): void {
+    Cliente::factory()->create(['ruc' => '10024024194', 'alias' => 'Paredes Tipo']);
+    $factura = Factura::factory()->create(['cliente_ruc' => '10024024194', 'cliente_razon_social' => 'PAREDES TIPO DE OLIVERA LETICIA AURORA']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create(['cliente' => 'NATUREX COMPANY SAC', 'cliente_ruc' => '20600000001']);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page
+            ->where('viajes.data.0.cliente', 'Paredes Tipo')
+            ->where('viajes.data.0.remitente', 'NATUREX COMPANY SAC')
+            ->where('clientes', [['value' => '10024024194', 'label' => 'Paredes Tipo']]));
+});
+
+it('keeps the cliente of the GR while the viaje has no factura', function (): void {
+    Viaje::factory()->create(['cliente' => 'NATUREX COMPANY SAC', 'cliente_ruc' => '20600000001']);
+
+    actingAs(actorConRol('contador'))
+        ->get(route('contabilidad.index', ['cliente' => '20600000001']))
+        ->assertInertia(fn ($page) => $page
+            ->has('viajes.data', 1)
+            ->where('viajes.data.0.cliente', 'NATUREX COMPANY SAC')
+            ->where('viajes.data.0.remitente', null)
+            ->where('clientes', [['value' => '20600000001', 'label' => 'NATUREX COMPANY SAC']]));
+});
+
+/**
+ * Cobrada sin entidad: el resumen las cuenta y el filtro las trae, para
+ * completarles el banco o marcar que fue en efectivo.
+ */
+it('counts and filters the facturas cobradas sin entidad', function (): void {
+    $sinEntidad = Factura::factory()->create(['fecha_pago' => '2026-09-16', 'cuenta_bancaria_id' => null]);
+    Viaje::factory()->hasAttached($sinEntidad, relationship: 'facturas')->create(['numero_gr' => 'EG03-00000001']);
+    Viaje::factory()->hasAttached(Factura::factory()->pagada()->create(), relationship: 'facturas')->create();
+    Viaje::factory()->hasAttached(Factura::factory()->pagada()->create(['cuenta_bancaria_id' => CuentaBancaria::factory()->caja()]), relationship: 'facturas')->create();
+    Viaje::factory()->hasAttached(Factura::factory()->create(), relationship: 'facturas')->create();
+
+    actingAs(actorConRol('contador'));
+
+    $this->get(route('contabilidad.index'))->assertInertia(fn ($page) => $page
+        ->where('resumen.sin_entidad', 1)
+        ->where('estados', fn ($estados) => collect($estados)->contains('value', 'sin_entidad')));
+
+    $this->get(route('contabilidad.index', ['estado' => 'sin_entidad']))->assertInertia(fn ($page) => $page
+        ->has('viajes.data', 1)
+        ->where('viajes.data.0.numero_gr', 'EG03-00000001')
+        ->where('resumen.sin_entidad', 1));
 });

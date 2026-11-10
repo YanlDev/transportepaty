@@ -202,7 +202,7 @@ class ClienteController extends Controller
 
         $cliente = Cliente::create($request->validated());
 
-        $enlazados = $this->enlazarViajesHuerfanos($cliente);
+        $enlazados = $cliente->enlazarViajesHuerfanos();
 
         return to_route('clientes.index')->with('toast', [
             'type' => 'success',
@@ -230,7 +230,7 @@ class ClienteController extends Controller
             'activo' => true,
         ]);
 
-        $enlazados = $this->enlazarViajesHuerfanos($cliente);
+        $enlazados = $cliente->enlazarViajesHuerfanos();
 
         return back()->with('toast', [
             'type' => 'success',
@@ -238,21 +238,6 @@ class ClienteController extends Controller
                 ? "{$cliente->alias} registrado y {$enlazados} viaje(s) enlazado(s)."
                 : "{$cliente->alias} registrado correctamente.",
         ]);
-    }
-
-    /**
-     * Un cliente recién dado de alta suele tener viajes esperándolo: las GR se
-     * importan antes de que alguien lo registre, y quedaron con el RUC pero
-     * sin enlazar.
-     *
-     * @return int Cuántos viajes quedaron enlazados.
-     */
-    private function enlazarViajesHuerfanos(Cliente $cliente): int
-    {
-        return Viaje::query()
-            ->where('cliente_ruc', $cliente->ruc)
-            ->whereNull('cliente_id')
-            ->update(['cliente_id' => $cliente->id]);
     }
 
     public function edit(Cliente $cliente): Response

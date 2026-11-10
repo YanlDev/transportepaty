@@ -6,6 +6,7 @@ use App\Enums\EstadoVuelta;
 use App\Enums\Permiso;
 use App\Enums\ResultadoTaller;
 use App\Enums\SentidoTramo;
+use App\Models\Factura;
 use App\Models\User;
 use App\Models\Viaje;
 use App\Models\Vuelta;
@@ -94,6 +95,7 @@ class PendientesDelInicio
 
         if ($puede(Permiso::CobranzaGestionar)) {
             $pendientes[] = $this->sinFacturar();
+            $pendientes[] = $this->cobrosSinEntidad();
         }
 
         return $pendientes;
@@ -363,6 +365,39 @@ class PendientesDelInicio
             'tono' => 'info',
             'href' => route('contabilidad.index', ['estado' => 'sin_facturar']),
             'items' => [],
+        ];
+    }
+
+    /**
+     * Facturas marcadas como cobradas sin decir por dónde entró la plata. Sin
+     * la entidad no se pueden cruzar con el estado de cuenta del banco ni con
+     * la caja.
+     *
+     * @return Pendiente
+     */
+    private function cobrosSinEntidad(): array
+    {
+        $facturas = app(ResumenCobranza::class)
+            ->cobradasSinEntidad(Factura::query())
+            ->orderBy('fecha_pago')
+            ->get(['id', 'numero', 'cliente_razon_social', 'fecha_pago']);
+
+        return [
+            'area' => 'Facturación',
+            'clave' => 'cobros_sin_entidad',
+            'titulo' => 'Cobros sin entidad',
+            'ayuda' => 'Facturas cobradas que no dicen si entraron por un banco o en efectivo.',
+            'cantidad' => $facturas->count(),
+            'tono' => 'aviso',
+            'href' => route('contabilidad.index', ['estado' => ResumenCobranza::SIN_ENTIDAD]),
+            'items' => array_values($facturas
+                ->take(self::MOSTRADOS)
+                ->map(fn (Factura $factura): array => [
+                    'texto' => $factura->numero,
+                    'detalle' => 'Cobrada el '.$factura->fecha_pago?->format('d/m'),
+                    'href' => route('contabilidad.index', ['buscar' => $factura->numero]),
+                ])
+                ->all()),
         ];
     }
 

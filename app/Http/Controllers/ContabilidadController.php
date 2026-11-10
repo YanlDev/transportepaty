@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Enums\EstadoCobranza;
 use App\Enums\Moneda;
 use App\Http\Requests\MarcarGrFisicaRequest;
 use App\Http\Requests\MarcarNoFacturableRequest;
@@ -61,7 +60,8 @@ class ContabilidadController extends Controller
                 'clienteDelPadron:id,alias',
                 'media',
                 'facturas' => fn ($query) => $query->orderBy('fecha_emision')->orderBy('facturas.id'),
-                'facturas.cuentaBancaria:id,alias,banco',
+                'facturas.cuentaBancaria:id,tipo,alias,banco',
+                'facturas.clienteDelPadron:id,ruc,alias',
                 'facturas.viajes:viajes.id',
                 'facturas.media',
             ])
@@ -77,9 +77,9 @@ class ContabilidadController extends Controller
             'resumen' => $this->cobranza->totales($filtros),
             // Los catálogos de los selectores no dependen de los filtros: van
             // en closures para que una búsqueda que no los pide no los arme.
-            'estados' => fn (): array => EstadoCobranza::options(),
+            'estados' => fn (): array => ResumenCobranza::opcionesDeEstado(),
             'monedas' => fn (): array => Moneda::options(),
-            'clientes' => fn (): array => $this->opcionesCliente(),
+            'clientes' => fn (): array => $this->cobranza->opcionesDeCliente(),
             'meses' => fn (): array => $this->cobranza->opcionesDeMes(),
             'cuentas' => fn (): array => $this->opcionesCuentas(),
             // No dependen de los filtros: una factura sin GR no cae en ningún
@@ -181,6 +181,10 @@ class ContabilidadController extends Controller
             // Las columnas de operación son las mismas de `/viajes`: acá no se
             // factura contra un resumen, se factura contra el viaje entero.
             ...$viaje->datosDeListado(),
+            // En la cobranza el cliente es a quién se le facturó; el de la GR
+            // baja a la segunda línea cuando es otro (quien despachó la carga).
+            'cliente' => $viaje->nombreClienteComercial(),
+            'remitente' => $this->remitenteSiNoEsElCliente($viaje),
             'gr_fisica_recibida_at' => $viaje->gr_fisica_recibida_at?->toIso8601String(),
             'estado' => $viaje->estadoCobranza()->value,
             'estado_label' => $viaje->estadoCobranza()->label(),
@@ -192,6 +196,26 @@ class ContabilidadController extends Controller
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Quién despachó la carga, solo si no es a quien se le cobra: el cliente
+     * de la GR cuando la factura salió a nombre de otro, o el remitente que
+     * ya distinguía el listado de viajes.
+     */
+    private function remitenteSiNoEsElCliente(Viaje $viaje): ?string
+    {
+        $facturada = $viaje->facturas
+            ->sortBy(fn (Factura $factura): string => $factura->fecha_emision->toDateString().'#'.$factura->id)
+            ->first();
+
+        if ($facturada?->cliente_ruc !== null && $facturada->cliente_ruc !== $viaje->cliente_ruc) {
+            return $viaje->nombreCliente();
+        }
+
+        return $viaje->remitente_ruc !== null && $viaje->remitente_ruc !== $viaje->cliente_ruc
+            ? $viaje->remitente
+            : null;
     }
 
     /**
@@ -227,6 +251,9 @@ class ContabilidadController extends Controller
             'dias_vencida' => $factura->diasVencida(),
             'cuenta_bancaria_id' => $factura->cuenta_bancaria_id,
             'cuenta' => $factura->cuentaBancaria?->alias,
+            // En efectivo no hay operación de banco: lo que se anota es el
+            // recibo de caja.
+            'cobro_en_efectivo' => $factura->cuentaBancaria?->esCaja() ?? false,
             'numero_operacion' => $factura->numero_operacion,
             'fecha_detraccion' => $factura->fecha_detraccion?->toDateString(),
             'constancia_detraccion' => $factura->constancia_detraccion,
@@ -322,43 +349,24 @@ class ContabilidadController extends Controller
     }
 
     /**
-     * Los clientes de las GR más a quienes se facturó: la tienda de Juliaca a
-     * la que se le cobra no siempre es el cliente que figura en la GR.
-     *
-     * @return array<int, array{value: string, label: string}>
-     */
-    private function opcionesCliente(): array
-    {
-        $facturados = Factura::query()
-            ->whereNotNull('cliente_razon_social')
-            ->whereHas('viajes')
-            ->distinct()
-            ->pluck('cliente_razon_social');
-
-        return collect(Viaje::opcionesDeCliente())
-            ->pluck('value')
-            ->merge($facturados)
-            ->unique()
-            ->sort()
-            ->map(fn (string $cliente): array => ['value' => $cliente, 'label' => $cliente])
-            ->values()
-            ->all();
-    }
-
-    /**
      * Solo las cuentas activas: las cerradas siguen apareciendo en las
      * facturas viejas, pero no deben ofrecerse para un cobro nuevo.
      *
-     * @return array<int, array{id: int, alias: string, banco: string, numero_cuenta: string, moneda: string}>
+     * La caja va al final: es la excepción, no por dónde entra casi todo.
+     *
+     * @return array<int, array{id: int, tipo: string, alias: string, banco: string, numero_cuenta: string|null, moneda: string}>
      */
     private function opcionesCuentas(): array
     {
         return CuentaBancaria::query()
             ->where('activa', true)
             ->orderBy('alias')
-            ->get(['id', 'alias', 'banco', 'numero_cuenta', 'moneda'])
+            ->get(['id', 'tipo', 'alias', 'banco', 'numero_cuenta', 'moneda'])
+            ->sortBy(fn (CuentaBancaria $cuenta): int => $cuenta->esCaja() ? 1 : 0)
+            ->values()
             ->map(fn (CuentaBancaria $cuenta): array => [
                 'id' => $cuenta->id,
+                'tipo' => $cuenta->tipo->value,
                 'alias' => $cuenta->alias,
                 'banco' => $cuenta->banco,
                 'numero_cuenta' => $cuenta->numero_cuenta,
