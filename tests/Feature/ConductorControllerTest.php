@@ -432,6 +432,36 @@ it('marks a conductor as externo', function (): void {
     expect($conductor->fresh()->externo)->toBeTrue();
 });
 
+it('marks a conductor as inscribed in the IQBF registry with its alta date', function (): void {
+    $conductor = Conductor::factory()->create();
+
+    actingAs(actorConRol('admin'))
+        ->put(route('conductores.update', $conductor), datosConductor([
+            'iqbf' => true,
+            'iqbf_desde' => '2023-10-19',
+        ]))
+        ->assertSessionHasNoErrors();
+
+    expect($conductor->fresh())
+        ->iqbf->toBeTrue()
+        ->iqbf_desde->toDateString()->toBe('2023-10-19');
+});
+
+it('drops the IQBF alta date when the conductor leaves the registry', function (): void {
+    $conductor = Conductor::factory()->create(['iqbf' => true, 'iqbf_desde' => '2023-10-19']);
+
+    actingAs(actorConRol('admin'))
+        ->put(route('conductores.update', $conductor), datosConductor([
+            'iqbf' => false,
+            'iqbf_desde' => '2023-10-19',
+        ]))
+        ->assertSessionHasNoErrors();
+
+    expect($conductor->fresh())
+        ->iqbf->toBeFalse()
+        ->iqbf_desde->toBeNull();
+});
+
 it('keeps its own documento when updating', function (): void {
     $conductor = Conductor::factory()->create(['documento' => '87654321']);
 

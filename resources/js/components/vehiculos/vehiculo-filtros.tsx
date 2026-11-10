@@ -4,6 +4,11 @@ import { useVehiculoFiltros } from '@/hooks/use-vehiculo-filtros';
 import type { FiltrosVehiculo } from '@/hooks/use-vehiculo-filtros';
 import type { EnumOption } from '@/types/fleet';
 
+const OPCIONES_BF: EnumOption[] = [
+    { value: 'si', label: 'Puede llevar BF' },
+    { value: 'no', label: 'No puede llevar BF' },
+];
+
 type Props = {
     filtros: FiltrosVehiculo;
     url: string;
@@ -27,6 +32,7 @@ export function VehiculoFiltros({
         filtros.marca,
         mostrarCaja ? filtros.caja : null,
         filtros.estado,
+        filtros.bf,
     ].filter(Boolean).length;
 
     return (
@@ -36,7 +42,9 @@ export function VehiculoFiltros({
             placeholder="Buscar por placa, marca o modelo..."
             etiquetaBusqueda="Buscar vehículos"
             activos={activos}
-            onLimpiar={() => aplicar({ marca: null, caja: null, estado: null })}
+            onLimpiar={() =>
+                aplicar({ marca: null, caja: null, estado: null, bf: null })
+            }
         >
             <FiltroSelect
                 valor={filtros.marca}
@@ -54,6 +62,13 @@ export function VehiculoFiltros({
                     opciones={cajas}
                 />
             )}
+            <FiltroSelect
+                valor={filtros.bf}
+                onCambio={(bf) => aplicar({ bf })}
+                todos="Bienes fiscalizados"
+                etiqueta="Bienes fiscalizados"
+                opciones={OPCIONES_BF}
+            />
             <FiltroSelect
                 valor={filtros.estado}
                 onCambio={(estado) => aplicar({ estado })}

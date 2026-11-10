@@ -328,6 +328,19 @@ it('rejects a duplicate placa', function (): void {
         ->assertSessionHasErrors('placa');
 });
 
+it('marks a vehicle as inscribed in the IQBF registry', function (): void {
+    $vehiculo = Vehiculo::factory()->create();
+
+    actingAs(usuarioCon('admin'))
+        ->put(route('vehiculos.update', $vehiculo), datosVehiculo([
+            'placa' => $vehiculo->placa,
+            'iqbf' => true,
+        ]))
+        ->assertSessionHasNoErrors();
+
+    expect($vehiculo->refresh()->iqbf)->toBeTrue();
+});
+
 it('allows an admin to update a vehicle', function (): void {
     $vehiculo = Vehiculo::factory()->create();
 

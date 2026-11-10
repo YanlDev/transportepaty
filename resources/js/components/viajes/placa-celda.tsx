@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { AlertTriangle } from 'lucide-react';
 import { show as mostrarVehiculo } from '@/actions/App/Http/Controllers/VehiculoController';
+import { MarcaBf } from '@/components/marca-bf';
 import {
     Tooltip,
     TooltipContent,
@@ -17,18 +18,24 @@ import { formatearPlaca } from '@/lib/format';
 export function PlacaCelda({
     placa,
     vehiculoId,
+    bf,
 }: {
     placa: string;
     vehiculoId: number | null;
+    /** Figura en el registro de bienes fiscalizados: muestra la marca «BF». */
+    bf?: boolean;
 }) {
     if (vehiculoId !== null) {
         return (
-            <Link
-                href={mostrarVehiculo(vehiculoId)}
-                className="hover:underline"
-            >
-                {formatearPlaca(placa)}
-            </Link>
+            <span className="inline-flex items-center gap-1">
+                <Link
+                    href={mostrarVehiculo(vehiculoId)}
+                    className="hover:underline"
+                >
+                    {formatearPlaca(placa)}
+                </Link>
+                <MarcaBf inscrito={bf} />
+            </span>
         );
     }
 

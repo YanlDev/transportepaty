@@ -22,6 +22,10 @@ export type Conductor = {
     activo: boolean;
     /** No es de la casa: se le exigen DNI y licencias, no el PIC. */
     externo: boolean;
+    /** Figura en el Registro de Bienes Fiscalizados (IQBF) de SUNAT. */
+    iqbf: boolean;
+    /** Fecha de alta en ese registro, según SUNAT. */
+    iqbf_desde: string | null;
     fecha_baja: string | null;
     motivo_baja: string | null;
     nombre_completo: string;
@@ -40,6 +44,8 @@ export type ConductorListItem = {
     email: string | null;
     procedencia: string | null;
     activo: boolean;
+    /** Inscrito en el registro de bienes fiscalizados (IQBF). */
+    iqbf: boolean;
     fecha_baja: string | null;
     motivo_baja: string | null;
     documentacion: EstadoDocumental;
@@ -109,6 +115,8 @@ export type VehiculoListItem = {
     ejes: number | null;
     /** Número de la habilitación MTC (TUC); null si no está cargado. */
     tuc_numero: string | null;
+    /** Inscrita en el registro de bienes fiscalizados (IQBF). */
+    iqbf: boolean;
     documentacion: EstadoDocumental;
 };
 
@@ -117,6 +125,8 @@ export type Vehiculo = {
     placa: string;
     /** Certificado de habilitación vehicular, obligatorio para emitir la GRE. */
     tuc: string | null;
+    /** Figura en el Registro de Bienes Fiscalizados (IQBF) de SUNAT. */
+    iqbf: boolean;
     marca: string | null;
     modelo: string | null;
     anio: number | null;
@@ -269,6 +279,13 @@ export type ViajeListItem = {
     conductor_nombre: string;
     /** Null cuando el DNI no matcheó contra el padrón. */
     conductor_id: number | null;
+    /**
+     * Si el tracto, la carreta y el chofer figuran en el registro de bienes
+     * fiscalizados. Solo los manda el listado de GR.
+     */
+    tracto_iqbf?: boolean;
+    carreta_iqbf?: boolean;
+    conductor_iqbf?: boolean;
     cliente: string;
     destinatario: string;
     /** Dirección completa; para la tabla usa `origen_ciudad`. */

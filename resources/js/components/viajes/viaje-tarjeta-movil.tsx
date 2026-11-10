@@ -1,5 +1,6 @@
 import { ArrowRight, Trash2 } from 'lucide-react';
 import { Copiable } from '@/components/copiable';
+import { MarcaBf } from '@/components/marca-bf';
 import { Button } from '@/components/ui/button';
 import { AccionAnulacion } from '@/components/viajes/anulacion-viaje';
 import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
@@ -75,12 +76,14 @@ export function ViajeTarjetaMovil({
                     <span className="font-mono">
                         {formatearPlaca(viaje.placa_tracto)}
                     </span>
+                    <MarcaBf inscrito={viaje.tracto_iqbf} className="ml-1" />
                     {viaje.placa_carreta && (
                         <span className="font-mono">
                             {' / '}
                             {formatearPlaca(viaje.placa_carreta)}
                         </span>
                     )}
+                    <MarcaBf inscrito={viaje.carreta_iqbf} className="ml-1" />
                     <span className="mx-1.5">·</span>
                     <span
                         className={cn(
@@ -91,6 +94,7 @@ export function ViajeTarjetaMovil({
                     >
                         {viaje.conductor_nombre}
                     </span>
+                    <MarcaBf inscrito={viaje.conductor_iqbf} className="ml-1" />
                 </p>
             </button>
 

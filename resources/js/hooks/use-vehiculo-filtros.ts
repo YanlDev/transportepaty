@@ -5,6 +5,8 @@ export type FiltrosVehiculo = {
     estado: string | null;
     marca: string | null;
     caja: string | null;
+    /** `si`/`no`: inscrita en el registro de bienes fiscalizados. */
+    bf: string | null;
 };
 
 /**

@@ -120,6 +120,7 @@ export function TablaViajes({
                                 <PlacaCelda
                                     placa={viaje.placa_tracto}
                                     vehiculoId={viaje.tracto_id}
+                                    bf={viaje.tracto_iqbf}
                                 />
                             </TableCell>
                             <TableCell className="text-xs whitespace-nowrap">
@@ -127,6 +128,7 @@ export function TablaViajes({
                                     <PlacaCelda
                                         placa={viaje.placa_carreta}
                                         vehiculoId={viaje.carreta_id}
+                                        bf={viaje.carreta_iqbf}
                                     />
                                 ) : (
                                     '—'
@@ -136,6 +138,7 @@ export function TablaViajes({
                                 <ConductorCelda
                                     nombre={viaje.conductor_nombre}
                                     conductorId={viaje.conductor_id}
+                                    bf={viaje.conductor_iqbf}
                                 />
                             </TableCell>
                             <TableCell className="max-w-[160px] overflow-hidden">

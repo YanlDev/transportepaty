@@ -36,6 +36,10 @@ abstract class ConductorRequest extends FormRequest
             'activo' => ['required', 'boolean'],
             // No es de la casa: no se le exige el PIC de la mina.
             'externo' => ['sometimes', 'boolean'],
+            // Inscrito en el Registro de Bienes Fiscalizados de SUNAT; la fecha
+            // de alta es la que figura en la consulta del registro.
+            'iqbf' => ['sometimes', 'boolean'],
+            'iqbf_desde' => ['nullable', 'date'],
             'fecha_baja' => ['nullable', 'date'],
             'motivo_baja' => ['nullable', 'string', 'max:255', 'required_if:activo,false'],
         ];

@@ -34,6 +34,8 @@ abstract class VehiculoRequest extends FormRequest
             // unidades que no lo tienen cargado todavía— pero sin él la guía de
             // remisión de esa placa no se puede emitir.
             'tuc' => ['nullable', 'string', 'max:30'],
+            // Inscrita en el Registro de Bienes Fiscalizados de SUNAT.
+            'iqbf' => ['sometimes', 'boolean'],
             'marca' => ['nullable', 'string', 'max:100'],
             'modelo' => ['nullable', 'string', 'max:100'],
             'anio' => ['nullable', 'integer', 'min:1950', 'max:'.(now()->year + 1)],

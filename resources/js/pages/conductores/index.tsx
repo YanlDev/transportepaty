@@ -10,6 +10,7 @@ import { ConductorTarjetaMovil } from '@/components/conductores/conductor-tarjet
 import { DeleteConductorDialog } from '@/components/conductores/delete-conductor-dialog';
 import { EmptyState } from '@/components/empty-state';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
+import { MarcaBf } from '@/components/marca-bf';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -155,6 +156,10 @@ export default function ConductoresIndex({
                                             >
                                                 {`${conductor.apellidos} ${conductor.nombres}`.toUpperCase()}
                                             </Link>
+                                            <MarcaBf
+                                                inscrito={conductor.iqbf}
+                                                className="ml-1.5"
+                                            />
                                         </TableCell>
                                         <TableCell className="font-mono text-xs text-muted-foreground">
                                             {conductor.documento}

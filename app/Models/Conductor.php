@@ -41,6 +41,8 @@ use Illuminate\Support\Carbon;
  * @property CarbonInterface|null $fecha_baja
  * @property string|null $motivo_baja
  * @property bool $externo No es de la casa: se le exigen DNI y licencias, no el PIC.
+ * @property bool $iqbf Figura en el Registro de Bienes Fiscalizados de SUNAT.
+ * @property Carbon|null $iqbf_desde Fecha de alta en ese registro, según SUNAT.
  * @property-read string $nombre_completo
  */
 #[Fillable([
@@ -58,6 +60,8 @@ use Illuminate\Support\Carbon;
     'procedencia',
     'activo',
     'externo',
+    'iqbf',
+    'iqbf_desde',
     'fecha_baja',
     'motivo_baja',
 ])]
@@ -89,6 +93,11 @@ class Conductor extends Model
                 $conductor->motivo_baja = null;
             } elseif ($conductor->isDirty('activo') && $conductor->fecha_baja === null) {
                 $conductor->fecha_baja = RelojOperativo::fechaDeHoy();
+            }
+
+            // Fuera del registro IQBF no queda una fecha de alta suelta.
+            if (! $conductor->iqbf) {
+                $conductor->iqbf_desde = null;
             }
         });
     }
@@ -350,6 +359,8 @@ class Conductor extends Model
             'fecha_baja' => 'date:Y-m-d',
             'activo' => 'boolean',
             'externo' => 'boolean',
+            'iqbf' => 'boolean',
+            'iqbf_desde' => 'date:Y-m-d',
         ];
     }
 }

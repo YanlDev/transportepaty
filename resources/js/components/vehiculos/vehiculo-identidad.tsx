@@ -41,6 +41,14 @@ export function VehiculoIdentidad({
                     <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium">
                         {tipoLabels[vehiculo.tipo] ?? vehiculo.tipo}
                     </span>
+                    {vehiculo.iqbf && (
+                        <span
+                            className="rounded-md bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-700 ring-1 ring-sky-600/20 dark:bg-sky-950 dark:text-sky-300"
+                            title="Inscrita en el registro IQBF de SUNAT"
+                        >
+                            Bienes fiscalizados
+                        </span>
+                    )}
                     {vehiculo.anio && (
                         <span className="rounded-md bg-muted px-2 py-0.5 text-xs font-medium tabular-nums">
                             {vehiculo.anio}

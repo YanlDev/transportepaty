@@ -48,12 +48,14 @@ class VehiculoController extends Controller
             'estado' => $request->string('estado')->value(),
             'marca' => $request->string('marca')->value(),
             'caja' => $esTracto ? $request->string('caja')->value() : '',
+            // `si`/`no`: inscrita o no en el registro de bienes fiscalizados.
+            'bf' => $request->string('bf')->value(),
         ];
 
         $vehiculos = Vehiculo::query()
             ->select([
                 'id', 'placa', 'marca', 'modelo', 'anio', 'tipo',
-                'estado', 'caja', 'color', 'ejes',
+                'estado', 'caja', 'color', 'ejes', 'iqbf',
             ])
             ->where('tipo', $tipo->value)
             // El semáforo documental de cada fila se calcula sobre esta única
@@ -69,6 +71,7 @@ class VehiculoController extends Controller
             ->when($filtros['estado'], fn ($query, string $estado) => $query->where('estado', $estado))
             ->when($filtros['marca'], fn ($query, string $marca) => $query->where('marca', $marca))
             ->when($filtros['caja'], fn ($query, string $caja) => $query->where('caja', $caja))
+            ->when(in_array($filtros['bf'], ['si', 'no'], true), fn ($query) => $query->where('iqbf', $filtros['bf'] === 'si'))
             ->orderBy('placa')
             ->paginate(25)
             ->withQueryString()
@@ -85,6 +88,7 @@ class VehiculoController extends Controller
                 'color' => $vehiculo->color,
                 'ejes' => $vehiculo->ejes,
                 'tuc_numero' => $vehiculo->tuc()?->numero,
+                'iqbf' => $vehiculo->iqbf,
                 'documentacion' => $vehiculo->estadoDocumental(),
             ]);
 

@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { AlertTriangle } from 'lucide-react';
 import { show as mostrarConductor } from '@/actions/App/Http/Controllers/ConductorController';
+import { MarcaBf } from '@/components/marca-bf';
 import {
     Tooltip,
     TooltipContent,
@@ -15,18 +16,24 @@ import {
 export function ConductorCelda({
     nombre,
     conductorId,
+    bf,
 }: {
     nombre: string;
     conductorId: number | null;
+    /** Figura en el registro de bienes fiscalizados: muestra la marca «BF». */
+    bf?: boolean;
 }) {
     if (conductorId !== null) {
         return (
-            <Link
-                href={mostrarConductor(conductorId)}
-                className="hover:underline"
-            >
-                {nombre}
-            </Link>
+            <span className="inline-flex items-center gap-1">
+                <Link
+                    href={mostrarConductor(conductorId)}
+                    className="hover:underline"
+                >
+                    {nombre}
+                </Link>
+                <MarcaBf inscrito={bf} />
+            </span>
         );
     }
 

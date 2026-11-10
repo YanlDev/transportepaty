@@ -63,6 +63,13 @@ export function ConductorIdentidad({
                                     dot={false}
                                 />
                             )}
+                            {conductor.iqbf && (
+                                <StatusBadge
+                                    label="Bienes fiscalizados"
+                                    tone="info"
+                                    dot={false}
+                                />
+                            )}
                         </p>
                     </div>
 

@@ -8,6 +8,7 @@ import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { Copiable } from '@/components/copiable';
 import { EmptyState } from '@/components/empty-state';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
+import { MarcaBf } from '@/components/marca-bf';
 import {
     filaSemaforo,
     LeyendaSemaforo,
@@ -238,21 +239,26 @@ export default function VehiculosIndex({
                                         }`}
                                     >
                                         <TableCell className="font-medium">
-                                            <Copiable
-                                                valor={formatearPlaca(
-                                                    vehiculo.placa,
-                                                )}
-                                                etiqueta="placa"
-                                            >
-                                                <Link
-                                                    href={show(vehiculo.id)}
-                                                    className="hover:underline"
-                                                >
-                                                    {formatearPlaca(
+                                            <span className="flex items-center gap-1.5">
+                                                <Copiable
+                                                    valor={formatearPlaca(
                                                         vehiculo.placa,
                                                     )}
-                                                </Link>
-                                            </Copiable>
+                                                    etiqueta="placa"
+                                                >
+                                                    <Link
+                                                        href={show(vehiculo.id)}
+                                                        className="hover:underline"
+                                                    >
+                                                        {formatearPlaca(
+                                                            vehiculo.placa,
+                                                        )}
+                                                    </Link>
+                                                </Copiable>
+                                                <MarcaBf
+                                                    inscrito={vehiculo.iqbf}
+                                                />
+                                            </span>
                                         </TableCell>
                                         <TableCell className="text-muted-foreground tabular-nums">
                                             <Copiable

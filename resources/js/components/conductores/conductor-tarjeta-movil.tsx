@@ -3,6 +3,7 @@ import { Pencil, Trash2 } from 'lucide-react';
 import { edit, show } from '@/actions/App/Http/Controllers/ConductorController';
 import { DeleteConductorDialog } from '@/components/conductores/delete-conductor-dialog';
 import { Copiable } from '@/components/copiable';
+import { MarcaBf } from '@/components/marca-bf';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { ConductorListItem } from '@/types/fleet';
@@ -31,12 +32,15 @@ export function ConductorTarjetaMovil({
             )}
         >
             <div className="flex items-start justify-between gap-2">
-                <Link
-                    href={show(conductor.id)}
-                    className="text-sm font-semibold underline-offset-2 hover:underline"
-                >
-                    {conductor.nombre_completo}
-                </Link>
+                <span>
+                    <Link
+                        href={show(conductor.id)}
+                        className="text-sm font-semibold underline-offset-2 hover:underline"
+                    >
+                        {conductor.nombre_completo}
+                    </Link>
+                    <MarcaBf inscrito={conductor.iqbf} className="ml-1.5" />
+                </span>
 
                 <span
                     className={

@@ -37,10 +37,12 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $fecha_adquisicion
  * @property string|null $observaciones
  * @property string|null $tuc
+ * @property bool $iqbf Figura en el Registro de Bienes Fiscalizados de SUNAT.
  */
 #[Fillable([
     'placa',
     'tuc',
+    'iqbf',
     'marca',
     'modelo',
     'anio',
@@ -270,6 +272,7 @@ class Vehiculo extends Model
             'peso_bruto' => 'integer',
             'carga_util' => 'integer',
             'fecha_adquisicion' => 'date:Y-m-d',
+            'iqbf' => 'boolean',
         ];
     }
 }

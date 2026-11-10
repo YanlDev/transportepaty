@@ -1,4 +1,5 @@
 import { Link, useForm } from '@inertiajs/react';
+import { useId } from 'react';
 import vehiculos, {
     show,
     store,
@@ -6,8 +7,10 @@ import vehiculos, {
 } from '@/actions/App/Http/Controllers/VehiculoController';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
@@ -32,6 +35,7 @@ type Props = {
 type FormData = {
     placa: string;
     tuc: string;
+    iqbf: boolean;
     marca: string;
     modelo: string;
     anio: number | '';
@@ -60,6 +64,7 @@ export function VehiculoForm({
     const { data, setData, post, put, processing, errors } = useForm<FormData>({
         placa: vehiculo?.placa ?? '',
         tuc: vehiculo?.tuc ?? '',
+        iqbf: vehiculo?.iqbf ?? false,
         marca: vehiculo?.marca ?? '',
         modelo: vehiculo?.modelo ?? '',
         anio: vehiculo?.anio ?? '',
@@ -76,6 +81,8 @@ export function VehiculoForm({
         fecha_adquisicion: vehiculo?.fecha_adquisicion ?? '',
         observaciones: vehiculo?.observaciones ?? '',
     });
+
+    const iqbfId = useId();
 
     // La carreta es remolcada: no tiene transmisión ni motor propio.
     const esTracto = data.tipo === 'tracto';
@@ -134,6 +141,26 @@ export function VehiculoForm({
                         />
                     )}
                 </Field>
+                <div className="flex items-start gap-2 sm:col-span-2">
+                    <Checkbox
+                        id={iqbfId}
+                        checked={data.iqbf}
+                        onCheckedChange={(value) =>
+                            setData('iqbf', value === true)
+                        }
+                    />
+                    <Label
+                        htmlFor={iqbfId}
+                        className="flex flex-col items-start gap-0.5 font-normal"
+                    >
+                        Inscrita en el registro IQBF
+                        <span className="text-xs text-muted-foreground">
+                            Figura en el Registro de Bienes Fiscalizados de
+                            SUNAT: puede ir en una GR de insumos químicos.
+                        </span>
+                    </Label>
+                    <InputError message={errors.iqbf} />
+                </div>
                 <Field label="Tipo" error={errors.tipo} required>
                     {(id) => (
                         <SelectField

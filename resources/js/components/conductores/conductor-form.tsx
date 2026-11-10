@@ -47,6 +47,8 @@ type FormData = {
     procedencia: string;
     activo: boolean;
     externo: boolean;
+    iqbf: boolean;
+    iqbf_desde: string;
     fecha_baja: string;
     motivo_baja: string;
 };
@@ -67,12 +69,15 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
         procedencia: conductor?.procedencia ?? '',
         activo: conductor?.activo ?? true,
         externo: conductor?.externo ?? false,
+        iqbf: conductor?.iqbf ?? false,
+        iqbf_desde: conductor?.iqbf_desde ?? '',
         fecha_baja: conductor?.fecha_baja ?? '',
         motivo_baja: conductor?.motivo_baja ?? '',
     });
 
     const activoId = useId();
     const externoId = useId();
+    const iqbfId = useId();
 
     // El listado agrega su página y búsqueda actuales a la URL de edición
     // (?page=2&buscar=...) para poder volver ahí mismo tras guardar, en vez
@@ -338,6 +343,45 @@ export function ConductorForm({ mode, conductor, usuarios }: Props) {
                         </Label>
                     </div>
                     <InputError message={errors.externo} />
+
+                    <div className="flex items-start gap-2 sm:col-span-2">
+                        <Checkbox
+                            id={iqbfId}
+                            checked={data.iqbf}
+                            onCheckedChange={(value) =>
+                                setData('iqbf', value === true)
+                            }
+                        />
+                        <Label
+                            htmlFor={iqbfId}
+                            className="flex flex-col items-start gap-0.5 font-normal"
+                        >
+                            Inscrito en el registro IQBF
+                            <span className="text-xs text-muted-foreground">
+                                Figura en el Registro de Bienes Fiscalizados de
+                                SUNAT: puede manejar con insumos químicos.
+                            </span>
+                        </Label>
+                    </div>
+                    <InputError message={errors.iqbf} />
+
+                    {data.iqbf && (
+                        <Field
+                            label="Alta en el registro IQBF"
+                            error={errors.iqbf_desde}
+                        >
+                            {(id) => (
+                                <Input
+                                    id={id}
+                                    type="date"
+                                    value={data.iqbf_desde}
+                                    onChange={(e) =>
+                                        setData('iqbf_desde', e.target.value)
+                                    }
+                                />
+                            )}
+                        </Field>
+                    )}
 
                     {!data.activo && (
                         <Field

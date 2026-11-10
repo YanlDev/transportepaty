@@ -1,6 +1,7 @@
 import { Link } from '@inertiajs/react';
 import { show } from '@/actions/App/Http/Controllers/VehiculoController';
 import { Copiable } from '@/components/copiable';
+import { MarcaBf } from '@/components/marca-bf';
 import {
     filaSemaforo,
     ResumenProblemas,
@@ -27,14 +28,17 @@ export function VehiculoTarjetaMovil({
             className={`group/fila flex flex-col gap-2 border p-3 ${filaSemaforo[vehiculo.documentacion.semaforo]}`}
         >
             <div className="flex items-start justify-between gap-2">
-                <Copiable valor={vehiculo.placa} etiqueta="placa">
-                    <Link
-                        href={show(vehiculo.id)}
-                        className="text-base font-semibold underline-offset-2 hover:underline"
-                    >
-                        {vehiculo.placa}
-                    </Link>
-                </Copiable>
+                <span className="flex items-center gap-1.5">
+                    <Copiable valor={vehiculo.placa} etiqueta="placa">
+                        <Link
+                            href={show(vehiculo.id)}
+                            className="text-base font-semibold underline-offset-2 hover:underline"
+                        >
+                            {vehiculo.placa}
+                        </Link>
+                    </Copiable>
+                    <MarcaBf inscrito={vehiculo.iqbf} />
+                </span>
                 <EstadoBadge estado={vehiculo.estado} />
             </div>
 

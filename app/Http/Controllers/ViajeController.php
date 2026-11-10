@@ -51,9 +51,9 @@ class ViajeController extends Controller
             // `media` va acá también: sin precargarla, `getFirstMediaUrl()` de
             // más abajo dispara una consulta por viaje de la página (N+1).
             ->with([
-                'tracto:id,placa',
-                'carreta:id,placa',
-                'conductor:id,nombres,apellidos',
+                'tracto:id,placa,iqbf',
+                'carreta:id,placa,iqbf',
+                'conductor:id,nombres,apellidos,iqbf',
                 'clienteDelPadron:id,alias',
                 'media',
                 'anuladaPor:id,name',
@@ -101,6 +101,10 @@ class ViajeController extends Controller
             ->withQueryString()
             ->through(fn (Viaje $viaje): array => [
                 ...$viaje->datosDeListado(),
+                // Quién de la GR figura en el registro de bienes fiscalizados.
+                'tracto_iqbf' => (bool) $viaje->tracto?->iqbf,
+                'carreta_iqbf' => (bool) $viaje->carreta?->iqbf,
+                'conductor_iqbf' => (bool) $viaje->conductor?->iqbf,
                 // Una anulada no se agrupa con la GR que la reemplazó: tiene
                 // su propia clave, así no comparten el borde de «mismo viaje».
                 'grupo_viaje' => $viaje->estaAnulada() ? "anulada:{$viaje->id}" : $viaje->claveGrupoViaje(),
