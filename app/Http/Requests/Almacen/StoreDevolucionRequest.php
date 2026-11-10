@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Almacen;
 
 use App\Models\DetalleSalida;
+use App\Models\Llanta;
 use App\Models\SalidaAlmacen;
 use App\Rules\FechaDelAlmacen;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -62,10 +63,12 @@ class StoreDevolucionRequest extends FormRequest
                         continue;
                     }
 
-                    $pendiente = round((float) $detalle->cantidad - $detalle->cantidadDevuelta(), 3);
+                    // Una llanta ya montada no puede volver al almacén.
+                    $montadas = Llanta::query()->where('detalle_salida_id', $detalle->id)->count();
+                    $pendiente = round((float) $detalle->cantidad - $detalle->cantidadDevuelta() - $montadas, 3);
 
                     if ((float) $linea['cantidad'] - $pendiente > 0.0005) {
-                        $validator->errors()->add("detalles.{$i}.cantidad", "Solo pueden volver {$pendiente}.");
+                        $validator->errors()->add("detalles.{$i}.cantidad", $montadas > 0 ? "Solo pueden volver {$pendiente}: {$montadas} ya están montadas." : "Solo pueden volver {$pendiente}.");
                     }
                 }
             },

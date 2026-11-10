@@ -3,10 +3,13 @@
 namespace App\Http\Requests\Almacen;
 
 use App\Enums\DestinoSalida;
+use App\Enums\EstadoOrdenTrabajo;
+use App\Models\OrdenTrabajo;
 use App\Rules\FechaDelAlmacen;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 /**
  * El vale de salida: qué sale, a dónde va y qué técnico lo recibe (siempre:
@@ -35,6 +38,31 @@ class StoreSalidaRequest extends FormRequest
             'detalles' => ['required', 'array', 'min:1', 'max:100'],
             'detalles.*.articulo_id' => ['required', 'integer', 'distinct', Rule::exists('articulos', 'id')],
             'detalles.*.cantidad' => ['required', 'numeric', 'gt:0', 'max:9999999'],
+        ];
+    }
+
+    /**
+     * A una orden finalizada o anulada ya no le sale nada del almacén: lo
+     * que consumió quedó fijado al cerrarla. Si faltó algo, se reabre.
+     *
+     * @return array<int, callable(Validator): void>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if ($validator->errors()->isNotEmpty() || $this->input('destino') !== DestinoSalida::OrdenTrabajo->value) {
+                    return;
+                }
+
+                $orden = OrdenTrabajo::query()->find($this->integer('orden_trabajo_id'));
+
+                if ($orden?->estaAnulado()) {
+                    $validator->errors()->add('orden_trabajo_id', "La {$orden->numero()} está anulada: no puede recibir repuestos.");
+                } elseif ($orden?->estado === EstadoOrdenTrabajo::Finalizada) {
+                    $validator->errors()->add('orden_trabajo_id', "La {$orden->numero()} ya está finalizada: reábrela en Mantenimiento para cargarle más repuestos.");
+                }
+            },
         ];
     }
 

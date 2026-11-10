@@ -275,6 +275,8 @@ it('registers a preventiva with its photos and restarts the plan from it', funct
             'fecha' => '2026-10-14',
             'kilometraje' => 340000,
             'trabajo' => 'Servicio S completo',
+            // El plan Scania todavía no está ligado al catálogo del almacén.
+            'justificacion_materiales' => 'Repuestos comprados antes de tener el almacén en el sistema.',
             'fotos_antes' => [UploadedFile::fake()->image('antes.jpg')],
             'fotos_despues' => [UploadedFile::fake()->image('despues-1.jpg'), UploadedFile::fake()->image('despues-2.jpg')],
         ])

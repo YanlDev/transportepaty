@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Illuminate\Support\Carbon;
 
 /**
  * Una línea del ingreso. Una bonificación es lo que el proveedor regala: su
@@ -26,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
  * @property string $cantidad_base
  * @property string $costo_unitario
  * @property string $costo_total
+ * @property Carbon|null $vence_el
  * @property-read IngresoAlmacen $ingreso
  * @property-read Articulo $articulo
  * @property-read DetalleSalida|null $detalleSalida
@@ -34,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\MorphOne;
     'ingreso_almacen_id',
     'articulo_id',
     'detalle_salida_id',
+    'vence_el',
     'bonificacion',
     'cantidad',
     'precio_unitario',
@@ -91,6 +94,7 @@ class DetalleIngreso extends Model
             'cantidad_base' => 'decimal:3',
             'costo_unitario' => 'decimal:4',
             'costo_total' => 'decimal:2',
+            'vence_el' => 'date:Y-m-d',
         ];
     }
 }

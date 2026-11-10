@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\ResultadoTaller;
+use App\Models\OrdenTrabajo;
 use App\Models\Vuelta;
 use App\Services\OdometroDeUnidad;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -46,12 +48,21 @@ class RevisarSalidaRequest extends FormRequest
     {
         return [
             function (Validator $validator): void {
-                if ($validator->errors()->isNotEmpty() || ! $this->filled('kilometraje')) {
+                if ($validator->errors()->isNotEmpty()) {
                     return;
                 }
 
                 /** @var Vuelta $vuelta */
                 $vuelta = $this->route('vuelta');
+
+                if ($this->input('resultado') === ResultadoTaller::Apto->value && $this->tieneOrdenAbierta($validator, $vuelta)) {
+                    return;
+                }
+
+                if (! $this->filled('kilometraje')) {
+                    return;
+                }
+
                 $error = app(OdometroDeUnidad::class)->error($vuelta->tracto, $this->integer('kilometraje'), OdometroDeUnidad::deSalida($vuelta->id));
 
                 if ($error !== null) {
@@ -59,6 +70,36 @@ class RevisarSalidaRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    /**
+     * Una unidad con un trabajo de taller sin terminar no sale: primero se
+     * finaliza (o se anula) su orden, o el ticket queda como no apto.
+     */
+    private function tieneOrdenAbierta(Validator $validator, Vuelta $vuelta): bool
+    {
+        $abiertas = OrdenTrabajo::query()
+            ->vigentes()
+            ->with('vehiculo:id,placa')
+            ->whereIn('vehiculo_id', array_filter([$vuelta->tracto_id, $vuelta->carreta_id]))
+            ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
+            ->orderBy('id')
+            ->get();
+
+        if ($abiertas->isEmpty()) {
+            return false;
+        }
+
+        $validator->errors()->add(
+            'resultado',
+            'No se puede dar el apto: '
+                .$abiertas
+                    ->map(fn (OrdenTrabajo $orden): string => "la {$orden->numero()} de {$orden->vehiculo->placa} está ".mb_strtolower($orden->estado->label()))
+                    ->implode('; ')
+                .'. Finaliza la orden o marca la unidad como no apta.',
+        );
+
+        return true;
     }
 
     /**

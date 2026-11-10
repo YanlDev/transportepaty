@@ -5,11 +5,13 @@ namespace App\Models;
 use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\TipoOrdenTrabajo;
 use App\Models\Concerns\RegistraHistorial;
+use App\Models\Concerns\SeAnula;
 use Database\Factories\OrdenTrabajoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
@@ -23,6 +25,10 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * los menores. No se escribe en ningún contador: `ProximoMantenimiento` lo
  * deduce de las órdenes cada vez.
  *
+ * Tampoco guarda materiales: lo que consumió son las líneas de los vales de
+ * salida del almacén que la nombran (ver `MaterialesDeOrden`). Y no se borra:
+ * se anula, y una anulada no cuenta para el plan.
+ *
  * @property int $id
  * @property int $vehiculo_id
  * @property TipoOrdenTrabajo $tipo
@@ -35,7 +41,11 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $trabajo
  * @property string|null $tecnico
  * @property string|null $observacion
+ * @property string|null $justificacion_materiales
  * @property int|null $user_id
+ * @property Carbon|null $anulado_at
+ * @property int|null $anulado_por
+ * @property string|null $motivo_anulacion
  * @property-read Vehiculo $vehiculo
  * @property-read ServicioMantenimiento|null $servicio
  */
@@ -51,12 +61,16 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'trabajo',
     'tecnico',
     'observacion',
+    'justificacion_materiales',
     'user_id',
+    'anulado_at',
+    'anulado_por',
+    'motivo_anulacion',
 ])]
 class OrdenTrabajo extends Model implements HasMedia
 {
     /** @use HasFactory<OrdenTrabajoFactory> */
-    use HasFactory, RegistraHistorial;
+    use HasFactory, RegistraHistorial, SeAnula;
 
     use InteractsWithMedia;
 
@@ -76,6 +90,21 @@ class OrdenTrabajo extends Model implements HasMedia
     public function servicio(): BelongsTo
     {
         return $this->belongsTo(ServicioMantenimiento::class, 'servicio_mantenimiento_id');
+    }
+
+    /**
+     * Los vales de salida del almacén que nombran esta orden.
+     *
+     * @return HasMany<SalidaAlmacen, $this>
+     */
+    public function salidas(): HasMany
+    {
+        return $this->hasMany(SalidaAlmacen::class);
+    }
+
+    public function numero(): string
+    {
+        return sprintf('OT-%05d', $this->id);
     }
 
     /**
@@ -101,6 +130,7 @@ class OrdenTrabajo extends Model implements HasMedia
             'kilometraje' => 'integer',
             'inicio' => 'datetime',
             'termino' => 'datetime',
+            'anulado_at' => 'datetime',
         ];
     }
 }

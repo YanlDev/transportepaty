@@ -37,6 +37,8 @@ type Props = {
         orden_trabajo_id: number | null;
         vehiculo_id: number | null;
         entregado_a: string | null;
+        /** Lo que le falta salir a la preventiva y hay en stock. */
+        detalles: { articulo_id: number; cantidad: number }[];
     };
     hoy: string;
     inicioPeriodo: string;
@@ -80,7 +82,13 @@ export default function SalidaCreate({
         vehiculo_id: inicial.vehiculo_id,
         entregado_a: inicial.entregado_a ?? '',
         observacion: '',
-        detalles: [{ articulo_id: null, cantidad: '' }],
+        detalles:
+            inicial.detalles.length > 0
+                ? inicial.detalles.map((linea) => ({
+                      articulo_id: linea.articulo_id,
+                      cantidad: String(linea.cantidad),
+                  }))
+                : [{ articulo_id: null, cantidad: '' }],
     });
     const errores = errors as Record<string, string | undefined>;
 

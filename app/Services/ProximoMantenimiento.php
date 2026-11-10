@@ -82,6 +82,7 @@ class ProximoMantenimiento
             ->keyBy('vehiculo_id');
 
         $ordenes = OrdenTrabajo::query()
+            ->vigentes()
             ->whereIn('vehiculo_id', $ids)
             ->whereNotNull('kilometraje')
             ->groupBy('vehiculo_id')
@@ -90,6 +91,7 @@ class ProximoMantenimiento
             ->keyBy('vehiculo_id');
 
         $preventivas = OrdenTrabajo::query()
+            ->vigentes()
             ->whereIn('vehiculo_id', $ids)
             ->where('tipo', TipoOrdenTrabajo::Preventiva)
             ->where('estado', EstadoOrdenTrabajo::Finalizada)

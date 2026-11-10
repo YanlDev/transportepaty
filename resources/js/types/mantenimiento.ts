@@ -1,3 +1,5 @@
+import type { ServicioTercero } from '@/types/compras';
+
 /** `vencido` | `proximo` | `al_dia` | `sin_datos`. */
 export type EstadoMantenimiento =
     | 'vencido'
@@ -42,6 +44,8 @@ export type UnidadMantenimiento = {
     estado: EstadoMantenimiento;
     estado_label: string;
     proximo: ServicioUnidad | null;
+    /** Ítems del próximo servicio que no alcanzan en el almacén. Solo en el semáforo. */
+    faltan_repuestos?: number;
 };
 
 export type ResumenMantenimiento = {
@@ -64,6 +68,47 @@ export type RepuestoAPreparar = {
     descripcion: string;
     cantidad: number | null;
     unidad: string | null;
+    /** Una calibración, la mano de obra: no sale del almacén. */
+    es_servicio: boolean;
+    /** El artículo del almacén que lo cubre; null si falta ligarlo en el plan. */
+    articulo_id: number | null;
+    articulo: string | null;
+    stock: number | null;
+    /** Lo que ya salió del almacén para la orden. */
+    despachado: number;
+    /** Todavía no salió para la orden lo que pide el plan. */
+    falta: boolean;
+    /** El almacén no tiene lo que pide el plan. */
+    falta_stock: boolean;
+};
+
+/** Una línea de vale de salida: lo que el almacén le puso a una orden o unidad. */
+export type LineaMaterial = {
+    id: number;
+    salida_id: number;
+    vale: string;
+    fecha: string;
+    orden_trabajo_id: number | null;
+    articulo_id: number;
+    codigo: string;
+    nombre: string;
+    unidad: string;
+    cantidad: number;
+    devuelto: number;
+    /** Neto de devoluciones. Null para quien no ve costos. */
+    costo: number | null;
+};
+
+/** Lo que una orden consumió del almacén y lo que su nivel le pide. */
+export type MaterialesOrden = {
+    lineas: LineaMaterial[];
+    costo: number | null;
+    requeridos: RepuestoAPreparar[];
+    /** Servicios de terceros pedidos para la orden, con su vale de compra. */
+    terceros: ServicioTercero[];
+    puede_pedir_compra: boolean;
+    puede_despachar: boolean;
+    ve_almacen: boolean;
 };
 
 export type OrdenResumen = {
@@ -79,6 +124,12 @@ export type OrdenResumen = {
     trabajo: string;
     tecnico: string | null;
     fotos: number;
+    numero: string;
+    /** Lo que salió del almacén para la orden. Null para quien no ve costos. */
+    costo: number | null;
+    anulada: boolean;
+    motivo_anulacion: string | null;
+    justificacion_materiales: string | null;
 };
 
 export type LecturaResumen = {
@@ -125,6 +176,17 @@ export type RepuestoPlan = {
     codigo: string | null;
     cantidad: number | null;
     unidad: string | null;
+    articulo_id: number | null;
+    es_servicio: boolean;
+};
+
+/** Un artículo del almacén, para ligarlo a un ítem del plan. */
+export type ArticuloDelPlan = {
+    id: number;
+    codigo: string;
+    nombre: string;
+    numero_parte: string | null;
+    unidad: string;
 };
 
 /** Un nivel del plan tal como se edita. */

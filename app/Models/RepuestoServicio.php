@@ -15,13 +15,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *
  * @property int $id
  * @property int $servicio_mantenimiento_id
+ * @property int|null $articulo_id
+ * @property bool $es_servicio
  * @property string $descripcion
  * @property string|null $codigo
  * @property string|null $cantidad
  * @property string|null $unidad
  * @property int $orden
+ * @property-read Articulo|null $articulo
  */
-#[Fillable(['servicio_mantenimiento_id', 'descripcion', 'codigo', 'cantidad', 'unidad', 'orden'])]
+#[Fillable(['servicio_mantenimiento_id', 'articulo_id', 'es_servicio', 'descripcion', 'codigo', 'cantidad', 'unidad', 'orden'])]
 class RepuestoServicio extends Model
 {
     /** @use HasFactory<RepuestoServicioFactory> */
@@ -38,12 +41,24 @@ class RepuestoServicio extends Model
     }
 
     /**
+     * El artículo del almacén que cubre este ítem. Sin él no se puede
+     * comprobar que salió con vale.
+     *
+     * @return BelongsTo<Articulo, $this>
+     */
+    public function articulo(): BelongsTo
+    {
+        return $this->belongsTo(Articulo::class);
+    }
+
+    /**
      * @return array<string, string>
      */
     protected function casts(): array
     {
         return [
             'cantidad' => 'decimal:2',
+            'es_servicio' => 'boolean',
         ];
     }
 }

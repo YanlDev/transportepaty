@@ -6,7 +6,7 @@ use App\Enums\Concerns\HasLabel;
 
 /**
  * Cómo está el equipamiento de una carreta según su último conteo. No es una
- * columna: se deriva (ver `EstadoEquipamientoCarretas`).
+ * columna: se deriva (ver `EquipamientoDeUnidades`).
  *
  * `Contado` es la carreta contada cuando ningún ítem tiene mínimo: se sabe
  * qué lleva, pero no hay contra qué compararlo.

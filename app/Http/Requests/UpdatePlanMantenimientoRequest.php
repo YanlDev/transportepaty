@@ -43,6 +43,8 @@ class UpdatePlanMantenimientoRequest extends FormRequest
             'servicios.*.repuestos.*.codigo' => ['nullable', 'string', 'max:255'],
             'servicios.*.repuestos.*.cantidad' => ['nullable', 'numeric', 'min:0', 'max:999999'],
             'servicios.*.repuestos.*.unidad' => ['nullable', 'string', 'max:20'],
+            'servicios.*.repuestos.*.articulo_id' => ['nullable', 'integer', Rule::exists('articulos', 'id'), 'prohibited_if:servicios.*.repuestos.*.es_servicio,true'],
+            'servicios.*.repuestos.*.es_servicio' => ['nullable', 'boolean'],
         ];
     }
 
@@ -71,6 +73,7 @@ class UpdatePlanMantenimientoRequest extends FormRequest
         return [
             'servicios.*.intervalo_km.min' => 'El intervalo tiene que ser de al menos 1,000 km.',
             'servicios.*.repuestos.*.descripcion.required' => 'Cada ítem necesita su descripción.',
+            'servicios.*.repuestos.*.articulo_id.prohibited_if' => 'Un servicio no sale del almacén: quítale el artículo o desmarca «servicio».',
         ];
     }
 

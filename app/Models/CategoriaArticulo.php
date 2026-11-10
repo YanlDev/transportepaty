@@ -14,8 +14,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  *
  * @property int $id
  * @property string $nombre
+ * @property string|null $clave
  */
-#[Fillable(['nombre'])]
+#[Fillable(['nombre', 'clave'])]
 class CategoriaArticulo extends Model
 {
     /** @use HasFactory<CategoriaArticuloFactory> */

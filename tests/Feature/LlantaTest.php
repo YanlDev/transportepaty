@@ -14,11 +14,15 @@ use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
 
-/** El llantero: ve mantenimiento y registra llantas, nada más. */
+/**
+ * El llantero: ve mantenimiento y registra llantas. En estas pruebas también
+ * carga las que ya estaban montadas; que una llanta nueva sale del almacén
+ * con su vale se prueba en `LlantasYEquipamientoDeAlmacenTest`.
+ */
 function llantero(): User
 {
     $rol = Role::findOrCreate('llantero', 'web');
-    $rol->syncPermissions([Permiso::MantenimientoVer->value, Permiso::MantenimientoLlantas->value]);
+    $rol->syncPermissions([Permiso::MantenimientoVer->value, Permiso::MantenimientoLlantas->value, Permiso::MantenimientoCargaInicial->value]);
 
     return User::factory()->create()->assignRole($rol);
 }
@@ -64,7 +68,7 @@ it('colours each position from its last measurement, and leaves empty ones witho
 
 it('installs a tire on an empty position, never on an occupied one', function (): void {
     $carreta = Vehiculo::factory()->carreta()->create();
-    $datos = ['tipo' => 'instalacion', 'fecha' => now()->toDateString(), 'condicion' => 'reencauchada', 'marca' => 'Bridgestone', 'medida' => '295/80R22.5', 'profundidad_mm' => 14];
+    $datos = ['tipo' => 'instalacion', 'origen' => 'previa', 'fecha' => now()->toDateString(), 'condicion' => 'reencauchada', 'marca' => 'Bridgestone', 'medida' => '295/80R22.5', 'profundidad_mm' => 14];
 
     actingAs(llantero())
         ->post(route('mantenimiento.llantas.store', $carreta), [...$datos, 'posicion' => 'R1'])

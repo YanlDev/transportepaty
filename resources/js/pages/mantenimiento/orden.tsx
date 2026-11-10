@@ -1,14 +1,19 @@
-import { Head, setLayoutProps, useForm } from '@inertiajs/react';
-import { Trash2 } from 'lucide-react';
+import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
+import { PackageOpen } from 'lucide-react';
 import { useState } from 'react';
+import {
+    create as crearVale,
+    show as verVale,
+} from '@/actions/App/Http/Controllers/Almacen/SalidaAlmacenController';
+import compras from '@/actions/App/Http/Controllers/Almacen/ValeCompraController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import {
-    destroy,
+    anular,
     eliminarFoto,
     store,
     update,
 } from '@/actions/App/Http/Controllers/OrdenTrabajoController';
-import { ConfirmarBorradoDialog } from '@/components/confirmar-borrado-dialog';
+import { AnularDialog } from '@/components/almacen/anular-dialog';
 import InputError from '@/components/input-error';
 import { formatearKm } from '@/components/mantenimiento/estado-mantenimiento';
 import { SelectorFotos } from '@/components/mantenimiento/selector-fotos';
@@ -18,10 +23,15 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import { formatearPlaca } from '@/lib/format';
+import { formatearCantidad } from '@/lib/almacen';
+import { formatearFecha, formatearPlaca, formatearSoles } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption } from '@/types/fleet';
-import type { FotoOrden, ServicioPlan } from '@/types/mantenimiento';
+import type {
+    FotoOrden,
+    MaterialesOrden,
+    ServicioPlan,
+} from '@/types/mantenimiento';
 
 type Inicial = {
     vehiculo_id: number | null;
@@ -35,11 +45,20 @@ type Inicial = {
     trabajo?: string;
     tecnico?: string | null;
     observacion?: string | null;
+    justificacion_materiales?: string | null;
 };
 
 type Props = {
     /** Null al crear. */
-    orden: { id: number; vehiculo_id: number; fotos: FotoOrden[] } | null;
+    orden: {
+        id: number;
+        numero: string;
+        vehiculo_id: number;
+        puede_anular: boolean;
+        fotos: FotoOrden[];
+    } | null;
+    /** Lo que salió del almacén para la orden; solo al editar. */
+    materiales?: MaterialesOrden;
     inicial: Inicial;
     tractos: { id: number; placa: string; marca: string | null }[];
     /** Los servicios del plan de cada marca, por marca en mayúsculas. */
@@ -60,6 +79,7 @@ type Formulario = {
     trabajo: string;
     tecnico: string;
     observacion: string;
+    justificacion_materiales: string;
     fotos_antes: File[];
     fotos_despues: File[];
 };
@@ -72,6 +92,7 @@ type Formulario = {
  */
 export default function OrdenTrabajo({
     orden,
+    materiales,
     inicial,
     tractos,
     servicios,
@@ -98,6 +119,7 @@ export default function OrdenTrabajo({
             trabajo: inicial.trabajo ?? '',
             tecnico: inicial.tecnico ?? '',
             observacion: inicial.observacion ?? '',
+            justificacion_materiales: inicial.justificacion_materiales ?? '',
             fotos_antes: [],
             fotos_despues: [],
         });
@@ -105,6 +127,19 @@ export default function OrdenTrabajo({
     const tracto = tractos.find((opcion) => opcion.id === data.vehiculo_id);
     const delPlan = tracto?.marca ? (servicios[tracto.marca] ?? []) : [];
     const preventiva = data.tipo === 'preventiva';
+
+    // Lo que el nivel pide y todavía no salió del almacén. Al crear no hay
+    // vales todavía: si se registra ya finalizada, hay que decir por qué.
+    const faltantes = (materiales?.requeridos ?? []).filter(
+        (requerido) => requerido.falta,
+    );
+    const pideJustificacion =
+        preventiva &&
+        data.estado === 'finalizada' &&
+        (!editando ||
+            faltantes.length > 0 ||
+            data.justificacion_materiales !== '' ||
+            !!errors.justificacion_materiales);
 
     setLayoutProps({
         breadcrumbs: [
@@ -154,23 +189,14 @@ export default function OrdenTrabajo({
             <div className="flex items-center justify-between gap-2">
                 <h1 className="text-xl font-semibold">
                     {editando
-                        ? 'Editar orden de trabajo'
+                        ? `Orden de trabajo ${orden.numero}`
                         : 'Nueva orden de trabajo'}
                 </h1>
-                {editando && (
-                    <ConfirmarBorradoDialog
-                        url={destroy(orden.id).url}
-                        titulo="¿Eliminar esta orden?"
-                        descripcion="Se borra con sus fotos. Si era una preventiva, el plan vuelve a contar desde el servicio anterior."
-                        trigger={
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label="Eliminar la orden"
-                            >
-                                <Trash2 className="size-4" />
-                            </Button>
-                        }
+                {editando && orden.puede_anular && (
+                    <AnularDialog
+                        url={anular(orden.id).url}
+                        titulo={`¿Anular la ${orden.numero}?`}
+                        descripcion="No se borra: queda a la vista con el motivo. Si era una preventiva, el plan vuelve a contar desde el servicio anterior. Con vales de almacén vigentes no se puede anular."
                     />
                 )}
             </div>
@@ -382,6 +408,10 @@ export default function OrdenTrabajo({
                     <InputError message={errors.observacion} />
                 </div>
 
+                {editando && materiales && (
+                    <Materiales ordenId={orden.id} materiales={materiales} />
+                )}
+
                 <Segmentado
                     etiqueta="Estado"
                     opciones={estados}
@@ -389,6 +419,33 @@ export default function OrdenTrabajo({
                     onCambio={(estado) => setData('estado', estado)}
                 />
                 <InputError message={errors.estado} />
+
+                {pideJustificacion && (
+                    <div className="grid gap-1.5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-3">
+                        <Label htmlFor="orden-justificacion">
+                            ¿Por qué se cierra sin todos los repuestos del
+                            servicio?
+                        </Label>
+                        <p className="text-xs text-muted-foreground">
+                            {editando
+                                ? `Todavía no salió del almacén: ${faltantes.map((f) => f.descripcion).join(', ') || '—'}.`
+                                : 'La orden aún no tiene vales de almacén. Si el servicio pide repuestos, regístrala «En proceso», saca el vale y después finalízala; o explica acá por qué se cierra así.'}
+                        </p>
+                        <Textarea
+                            id="orden-justificacion"
+                            rows={2}
+                            value={data.justificacion_materiales}
+                            onChange={(evento) =>
+                                setData(
+                                    'justificacion_materiales',
+                                    evento.target.value,
+                                )
+                            }
+                            placeholder="No se cambió porque…"
+                        />
+                        <InputError message={errors.justificacion_materiales} />
+                    </div>
+                )}
 
                 <Button
                     type="submit"
@@ -402,6 +459,200 @@ export default function OrdenTrabajo({
                 </Button>
             </form>
         </div>
+    );
+}
+
+/**
+ * Lo que la orden consumió del almacén. No se escribe acá: cada línea es de
+ * un vale de salida a nombre de la orden, y de ahí sale el costo.
+ */
+function Materiales({
+    ordenId,
+    materiales,
+}: {
+    ordenId: number;
+    materiales: MaterialesOrden;
+}) {
+    const { lineas, requeridos, costo } = materiales;
+
+    return (
+        <section className="flex flex-col gap-3 rounded-xl border bg-card p-4">
+            <div className="flex items-center justify-between gap-2">
+                <h2 className="flex items-center gap-2 text-sm font-semibold">
+                    <PackageOpen className="size-4 text-muted-foreground" />
+                    Repuestos del almacén
+                </h2>
+                {costo !== null && (
+                    <span className="text-sm font-semibold tabular-nums">
+                        {formatearSoles(costo)}
+                    </span>
+                )}
+            </div>
+
+            {requeridos.length > 0 && (
+                <ul className="divide-y text-sm">
+                    {requeridos.map((requerido, indice) => (
+                        <li
+                            key={indice}
+                            className="flex items-start justify-between gap-3 py-2"
+                        >
+                            <span className="flex flex-col">
+                                <span>
+                                    <span className="mr-2 font-mono text-xs text-muted-foreground">
+                                        {requerido.servicio}
+                                    </span>
+                                    {requerido.descripcion}
+                                </span>
+                                {!requerido.es_servicio &&
+                                    requerido.articulo === null && (
+                                        <span className="text-xs text-amber-600 dark:text-amber-400">
+                                            Sin artículo de almacén ligado en el
+                                            plan
+                                        </span>
+                                    )}
+                            </span>
+                            <span
+                                className={cn(
+                                    'shrink-0 text-right text-xs tabular-nums',
+                                    requerido.es_servicio
+                                        ? 'text-muted-foreground'
+                                        : requerido.falta
+                                          ? 'text-amber-600 dark:text-amber-400'
+                                          : 'text-emerald-600 dark:text-emerald-400',
+                                )}
+                            >
+                                {requerido.es_servicio
+                                    ? 'Servicio'
+                                    : `${formatearCantidad(requerido.despachado)} de ${requerido.cantidad === null ? '—' : formatearCantidad(requerido.cantidad)} ${requerido.unidad ?? ''}`}
+                                {!requerido.es_servicio &&
+                                    requerido.falta &&
+                                    requerido.stock !== null && (
+                                        <span className="block text-muted-foreground">
+                                            Stock:{' '}
+                                            {formatearCantidad(requerido.stock)}
+                                        </span>
+                                    )}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {lineas.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                    Todavía no salió nada del almacén para esta orden.
+                </p>
+            ) : (
+                <ul className="divide-y border-t text-sm">
+                    {lineas.map((linea) => (
+                        <li
+                            key={linea.id}
+                            className="flex items-start justify-between gap-3 py-2"
+                        >
+                            <span className="flex flex-col">
+                                <span>{linea.nombre}</span>
+                                <span className="text-xs text-muted-foreground">
+                                    {materiales.ve_almacen ? (
+                                        <Link
+                                            href={verVale(linea.salida_id)}
+                                            className="underline underline-offset-2"
+                                        >
+                                            {linea.vale}
+                                        </Link>
+                                    ) : (
+                                        linea.vale
+                                    )}
+                                    {' · '}
+                                    {formatearFecha(linea.fecha)}
+                                    {linea.devuelto > 0 &&
+                                        ` · devuelto ${formatearCantidad(linea.devuelto)}`}
+                                </span>
+                            </span>
+                            <span className="shrink-0 text-right tabular-nums">
+                                {formatearCantidad(
+                                    linea.cantidad - linea.devuelto,
+                                )}{' '}
+                                {linea.unidad}
+                                {linea.costo !== null && (
+                                    <span className="block text-xs text-muted-foreground">
+                                        {formatearSoles(linea.costo)}
+                                    </span>
+                                )}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            {materiales.terceros.length > 0 && (
+                <ul className="divide-y border-t text-sm">
+                    {materiales.terceros.map((servicio) => (
+                        <li
+                            key={servicio.id}
+                            className="flex items-start justify-between gap-3 py-2"
+                        >
+                            <span className="flex flex-col">
+                                <span>{servicio.descripcion}</span>
+                                <span className="text-xs text-muted-foreground">
+                                    Tercero: {servicio.proveedor} ·{' '}
+                                    <Link
+                                        href={compras.show(servicio.vale_id)}
+                                        className="underline underline-offset-2"
+                                    >
+                                        {servicio.vale}
+                                    </Link>
+                                </span>
+                            </span>
+                            <span className="shrink-0 text-right text-xs tabular-nums">
+                                {servicio.total !== null &&
+                                    formatearSoles(servicio.total)}
+                                <span
+                                    className={cn(
+                                        'block',
+                                        servicio.atendido
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : 'text-amber-600 dark:text-amber-400',
+                                    )}
+                                >
+                                    {servicio.atendido
+                                        ? 'Atendido'
+                                        : 'Por confirmar: aún no es costo'}
+                                </span>
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+                {materiales.puede_despachar && (
+                    <Button variant="outline" asChild>
+                        <Link
+                            href={crearVale.url({ query: { orden: ordenId } })}
+                        >
+                            Sacar repuestos del almacén
+                        </Link>
+                    </Button>
+                )}
+                {materiales.puede_pedir_compra && (
+                    <Button variant="outline" asChild>
+                        <Link
+                            href={compras.create.url({
+                                query: { orden: ordenId },
+                            })}
+                        >
+                            Pedir compra o servicio de un tercero
+                        </Link>
+                    </Button>
+                )}
+            </div>
+            {!materiales.puede_despachar && (
+                <p className="text-xs text-muted-foreground">
+                    Los repuestos los entrega el almacén con un vale a nombre de
+                    esta orden. Lo que no se use se devuelve desde el vale.
+                </p>
+            )}
+        </section>
     );
 }
 

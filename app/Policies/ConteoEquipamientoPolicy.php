@@ -37,4 +37,12 @@ class ConteoEquipamientoPolicy
     {
         return $user->checkPermissionTo(Permiso::MantenimientoConfigurar);
     }
+
+    /**
+     * Anular un traslado o una baja de equipamiento.
+     */
+    public function anularMovimiento(User $user): bool
+    {
+        return $user->checkPermissionTo(Permiso::MantenimientoAnular);
+    }
 }

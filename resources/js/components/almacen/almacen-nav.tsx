@@ -4,6 +4,7 @@ import {
     ArrowUpFromLine,
     ClipboardList,
     Package,
+    ShoppingCart,
     Truck,
 } from 'lucide-react';
 import almacen from '@/actions/App/Http/Controllers/Almacen/AlmacenController';
@@ -11,10 +12,12 @@ import ingresos from '@/actions/App/Http/Controllers/Almacen/IngresoAlmacenContr
 import inventarios from '@/actions/App/Http/Controllers/Almacen/InventarioAlmacenController';
 import proveedores from '@/actions/App/Http/Controllers/Almacen/ProveedorController';
 import salidas from '@/actions/App/Http/Controllers/Almacen/SalidaAlmacenController';
+import compras from '@/actions/App/Http/Controllers/Almacen/ValeCompraController';
 import { cn } from '@/lib/utils';
 
 export type SeccionAlmacen =
     | 'stock'
+    | 'compras'
     | 'ingresos'
     | 'salidas'
     | 'inventarios'
@@ -31,6 +34,12 @@ const SECCIONES: {
         titulo: 'Stock',
         href: almacen.index().url,
         icono: Package,
+    },
+    {
+        clave: 'compras',
+        titulo: 'Compras',
+        href: compras.index().url,
+        icono: ShoppingCart,
     },
     {
         clave: 'ingresos',

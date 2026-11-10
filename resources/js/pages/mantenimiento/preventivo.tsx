@@ -302,6 +302,7 @@ export default function MantenimientoPreventivo({
                             )}
                         </div>
                         <KmActual unidad={unidad} />
+                        <FaltanRepuestos cantidad={unidad.faltan_repuestos} />
                     </Link>
                 )}
                 encabezado={
@@ -334,7 +335,12 @@ export default function MantenimientoPreventivo({
                         <TableCell className="text-right">
                             <KmActual unidad={unidad} alineado />
                         </TableCell>
-                        <TableCell>{unidad.proximo?.nombre ?? '—'}</TableCell>
+                        <TableCell>
+                            {unidad.proximo?.nombre ?? '—'}
+                            <FaltanRepuestos
+                                cantidad={unidad.faltan_repuestos}
+                            />
+                        </TableCell>
                         <TableCell className="text-right text-muted-foreground tabular-nums">
                             {formatearKm(unidad.proximo?.proximo_km)}
                         </TableCell>
@@ -412,6 +418,24 @@ function KmActual({
                 {unidad.km_desactualizado ? 'Desactualizado · ' : ''}
                 {formatearFecha(unidad.km_fecha)}
             </span>
+        </span>
+    );
+}
+
+/**
+ * El almacén no tiene todo lo que pide el próximo servicio de una unidad a
+ * la que ya le toca: hay que comprar antes de que entre al taller.
+ */
+function FaltanRepuestos({ cantidad }: { cantidad?: number }) {
+    if (!cantidad) {
+        return null;
+    }
+
+    return (
+        <span className="block text-xs text-amber-600 dark:text-amber-400">
+            {cantidad === 1
+                ? 'Falta 1 repuesto en almacén'
+                : `Faltan ${cantidad} repuestos en almacén`}
         </span>
     );
 }

@@ -9,6 +9,7 @@ import {
     bordeEquipamiento,
     EstadoEquipamientoBadge,
 } from '@/components/equipamiento/estado-equipamiento';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
@@ -37,8 +38,11 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
     });
 
     const texto = buscar.replace(/[\s-]/g, '').toUpperCase();
-    const visibles = carretas.filter((carreta) =>
-        carreta.placa.replace(/[\s-]/g, '').toUpperCase().includes(texto),
+    const [tipo, setTipo] = useState<'todas' | 'carreta' | 'tracto'>('todas');
+    const visibles = carretas.filter(
+        (carreta) =>
+            (tipo === 'todas' || carreta.tipo === tipo) &&
+            carreta.placa.replace(/[\s-]/g, '').toUpperCase().includes(texto),
     );
 
     const conFalta = carretas.filter((c) => c.estado === 'falta').length;
@@ -48,7 +52,7 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
-            <Head title="Equipamiento de carretas" />
+            <Head title="Equipamiento de unidades" />
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-muted-foreground">
@@ -67,7 +71,10 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                     {puede('mantenimiento.configurar') && (
                         <CatalogoDialog
                             key={catalogo
-                                .map((item) => `${item.id}:${item.minimo}`)
+                                .map(
+                                    (item) =>
+                                        `${item.id}:${item.minimo}:${item.aplica_a}:${item.lleva_vencimiento}:${item.articulo}`,
+                                )
                                 .join()}
                             catalogo={catalogo}
                         />
@@ -77,7 +84,7 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
 
             {!conMinimo && (
                 <p className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                    Todavía no hay mínimos: las carretas se cuentan, pero no
+                    Todavía no hay mínimos: las unidades se cuentan, pero no
                     avisa a cuáles les falta.
                     {puede('mantenimiento.configurar') &&
                         ' Cárgalos en «Ítems y mínimos».'}
@@ -102,10 +109,29 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                 />
             </div>
 
+            <div className="flex gap-1.5">
+                {(
+                    [
+                        ['todas', 'Todas'],
+                        ['carreta', 'Carretas'],
+                        ['tracto', 'Tractos'],
+                    ] as const
+                ).map(([valor, etiqueta]) => (
+                    <Button
+                        key={valor}
+                        size="sm"
+                        variant={tipo === valor ? 'default' : 'outline'}
+                        onClick={() => setTipo(valor)}
+                    >
+                        {etiqueta}
+                    </Button>
+                ))}
+            </div>
+
             {visibles.length === 0 ? (
                 <EmptyState
                     icono={<Package className="size-7" />}
-                    titulo="Ninguna carreta con esa placa"
+                    titulo="Ninguna unidad con esa placa"
                     descripcion="Revisa la placa."
                 />
             ) : (
@@ -140,7 +166,17 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                                                             `${i.faltan} ${i.nombre.toLowerCase()}`,
                                                     )
                                                     .join(' · ')
-                                              : `Contada el ${formatearFecha(carreta.conteo_fecha)}`}
+                                              : carreta.vencidos > 0
+                                                ? carreta.items
+                                                      .filter((i) => i.vencido)
+                                                      .map(
+                                                          (i) =>
+                                                              `${i.nombre.toLowerCase()} vencido`,
+                                                      )
+                                                      .join(' · ')
+                                                : carreta.conteo_fecha
+                                                  ? `Contada el ${formatearFecha(carreta.conteo_fecha)}`
+                                                  : 'Con equipamiento del almacén, sin contar'}
                                     </span>
                                 </div>
                                 <ChevronRight className="size-4 shrink-0 text-muted-foreground" />

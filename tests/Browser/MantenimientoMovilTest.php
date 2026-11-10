@@ -6,9 +6,11 @@ use App\Models\ConteoEquipamiento;
 use App\Models\ItemEquipamiento;
 use App\Models\LecturaKilometraje;
 use App\Models\Llanta;
+use App\Models\MovimientoEquipamiento;
 use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\Vehiculo;
+use App\Models\VencimientoEquipamiento;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -137,6 +139,10 @@ it('instala y mide una llanta desde el esquema en el celular', function (): void
         ->click('[aria-label^="Posición 3:"]')
         ->assertSee('Eje 2, exterior izquierda')
         ->click('Instalar llanta')
+        // Sin vale de almacén para la unidad, el formulario lo dice; el admin
+        // puede cargar una que ya estaba puesta.
+        ->assertSee('No hay llantas por montar en esta unidad')
+        ->click('Ya estaba puesta')
         ->type('#llanta-marca', 'Michelin')
         ->type('#llanta-mm', '15')
         ->screenshot(filename: 'movil-llantas-instalar')
@@ -234,4 +240,54 @@ it('achica en el navegador la foto elegida y muestra el peso antes y después', 
     expect($fila)->toContain('tablero.jpg')->toContain(' → ');
 
     $pagina->assertNoJavaScriptErrors();
+});
+
+it('muestra en la orden lo que salió del almacén y lo que todavía le falta', function (): void {
+    actingAs(actorConRol('admin'));
+
+    // El plan Scania todavía no está ligado al catálogo: todo figura sin ligar.
+    $orden = OrdenTrabajo::factory()->create([
+        'vehiculo_id' => $this->unidad->id,
+        'tipo' => TipoOrdenTrabajo::Preventiva,
+        'servicio_mantenimiento_id' => PlanMantenimiento::deMarca('SCANIA')->servicios()->where('codigo', 'X')->value('id'),
+        'estado' => EstadoOrdenTrabajo::EnProceso,
+        'kilometraje' => 320000,
+        'trabajo' => 'Servicio X',
+    ]);
+
+    visit("/mantenimiento/ordenes/{$orden->id}/editar")
+        ->on()->mobile()
+        ->assertSee($orden->numero())
+        ->assertSee('Repuestos del almacén')
+        ->assertSee('Sin artículo de almacén ligado')
+        ->assertSee('Sacar repuestos del almacén')
+        ->assertSee('Anular')
+        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-mantenimiento-orden-materiales');
+});
+
+it('muestra el equipamiento de un tracto con su extintor vencido y deja pasarlo a otra unidad', function (): void {
+    actingAs(actorConRol('admin'));
+
+    $extintor = ItemEquipamiento::query()->where('nombre', 'Extintor')->sole();
+    MovimientoEquipamiento::create([
+        'vehiculo_id' => $this->unidad->id,
+        'item_equipamiento_id' => $extintor->id,
+        'tipo' => 'saldo_inicial',
+        'cantidad' => 1,
+        'fecha' => now()->toDateString(),
+    ]);
+    VencimientoEquipamiento::create(['vehiculo_id' => $this->unidad->id, 'item_equipamiento_id' => $extintor->id, 'vence_el' => now()->subMonth()->toDateString()]);
+
+    visit("/mantenimiento/equipamiento/{$this->unidad->id}")
+        ->on()->mobile()
+        ->assertSee('Extintor')
+        ->assertSee('Venció el')
+        ->assertSee('Le falta')
+        ->click('Pasar a otra unidad')
+        ->assertSee('A qué unidad pasa')
+        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-equipamiento-tracto');
 });

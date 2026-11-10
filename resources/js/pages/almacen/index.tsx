@@ -47,7 +47,7 @@ import {
 import { useFiltros } from '@/hooks/use-filtros';
 import { usePermisos } from '@/hooks/use-permisos';
 import { formatearCantidad, formatearUnitario } from '@/lib/almacen';
-import { formatearSoles } from '@/lib/format';
+import { formatearFecha, formatearSoles } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { ArticuloStock, Opcion } from '@/types/almacen';
 import type { Paginator } from '@/types/fleet';
@@ -74,6 +74,15 @@ type Props = {
         baja_con_stock: number;
         salidas_mes: number;
     };
+    /** Lo que entró con vencimiento y vence pronto (o ya venció), con stock. */
+    porVencer: {
+        id: number;
+        articulo_id: number;
+        nombre: string;
+        ingreso: string;
+        vence_el: string;
+        vencido: boolean;
+    }[];
 };
 
 const ESTADOS = [
@@ -93,6 +102,7 @@ export default function AlmacenIndex({
     categorias,
     ubicaciones,
     resumen,
+    porVencer,
 }: Props) {
     const { puede } = usePermisos();
     const veCostos = puede('almacen.ver_costos');
@@ -146,6 +156,39 @@ export default function AlmacenIndex({
             />
 
             <AlmacenNav actual="stock" />
+
+            {porVencer.length > 0 && (
+                <section className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+                    <h2 className="font-semibold">Por vencer</h2>
+                    <ul className="mt-2 flex flex-col gap-1">
+                        {porVencer.map((linea) => (
+                            <li
+                                key={linea.id}
+                                className="flex flex-wrap items-baseline justify-between gap-x-3"
+                            >
+                                <Link
+                                    href={articulos.show(linea.articulo_id)}
+                                    className="underline underline-offset-2"
+                                >
+                                    {linea.nombre}
+                                </Link>
+                                <span
+                                    className={cn(
+                                        'text-xs',
+                                        linea.vencido
+                                            ? 'font-medium text-destructive'
+                                            : 'text-muted-foreground',
+                                    )}
+                                >
+                                    {linea.vencido ? 'Venció' : 'Vence'} el{' '}
+                                    {formatearFecha(linea.vence_el)} ·{' '}
+                                    {linea.ingreso}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                </section>
+            )}
 
             <div
                 className={cn(

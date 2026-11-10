@@ -4,17 +4,20 @@ import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoControlle
 import { update } from '@/actions/App/Http/Controllers/PlanMantenimientoController';
 import InputError from '@/components/input-error';
 import { kmCorto, MarcaLogo } from '@/components/mantenimiento/marca-logo';
+import { SelectorBuscable } from '@/components/selector-buscable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import type { EnumOption } from '@/types/fleet';
-import type { PlanEditable } from '@/types/mantenimiento';
+import type { ArticuloDelPlan, PlanEditable } from '@/types/mantenimiento';
 
 type Props = {
     plan: PlanEditable;
     /** X, S, M y L, en orden. */
     niveles: EnumOption[];
+    /** El catálogo del almacén. */
+    articulos: ArticuloDelPlan[];
 };
 
 type RepuestoForm = {
@@ -22,6 +25,8 @@ type RepuestoForm = {
     codigo: string;
     cantidad: string;
     unidad: string;
+    articulo_id: number | null;
+    es_servicio: boolean;
 };
 
 type ServicioForm = {
@@ -43,6 +48,8 @@ const repuestoVacio: RepuestoForm = {
     codigo: '',
     cantidad: '',
     unidad: '',
+    articulo_id: null,
+    es_servicio: false,
 };
 
 /**
@@ -50,7 +57,7 @@ const repuestoVacio: RepuestoForm = {
  * L; acá se decide a cuántos km (y meses) va cada uno y qué lleva. Cada
  * nivel incluye a los anteriores, así que solo se anota lo que suma.
  */
-export default function PlanMantenimiento({ plan, niveles }: Props) {
+export default function PlanMantenimiento({ plan, niveles, articulos }: Props) {
     const { data, setData, put, transform, processing, errors, isDirty } =
         useForm<Formulario>({
             nombre: plan.nombre,
@@ -71,6 +78,8 @@ export default function PlanMantenimiento({ plan, niveles }: Props) {
                             ? ''
                             : String(repuesto.cantidad),
                     unidad: repuesto.unidad ?? '',
+                    articulo_id: repuesto.articulo_id,
+                    es_servicio: repuesto.es_servicio,
                 })),
             })),
         });
@@ -165,6 +174,10 @@ export default function PlanMantenimiento({ plan, niveles }: Props) {
                                 ? null
                                 : Number(repuesto.cantidad.replace(',', '.')),
                         unidad: repuesto.unidad || null,
+                        articulo_id: repuesto.es_servicio
+                            ? null
+                            : repuesto.articulo_id,
+                        es_servicio: repuesto.es_servicio,
                     })),
             })),
         }));
@@ -398,9 +411,91 @@ export default function PlanMantenimiento({ plan, niveles }: Props) {
                                     >
                                         <Trash2 className="size-4" />
                                     </Button>
+                                    <div className="col-span-full flex flex-wrap items-center gap-x-4 gap-y-2 pb-1">
+                                        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <input
+                                                type="checkbox"
+                                                className="size-4"
+                                                checked={repuesto.es_servicio}
+                                                onChange={(e) =>
+                                                    cambiarRepuesto(
+                                                        indice,
+                                                        fila,
+                                                        {
+                                                            es_servicio:
+                                                                e.target
+                                                                    .checked,
+                                                            articulo_id: null,
+                                                        },
+                                                    )
+                                                }
+                                            />
+                                            Es un servicio (no sale del almacén)
+                                        </label>
+                                        {!repuesto.es_servicio && (
+                                            <div className="min-w-56 flex-1">
+                                                <SelectorBuscable
+                                                    valor={repuesto.articulo_id}
+                                                    onCambio={(valor) =>
+                                                        cambiarRepuesto(
+                                                            indice,
+                                                            fila,
+                                                            {
+                                                                articulo_id:
+                                                                    valor,
+                                                                unidad:
+                                                                    articulos.find(
+                                                                        (a) =>
+                                                                            a.id ===
+                                                                            valor,
+                                                                    )?.unidad ??
+                                                                    repuesto.unidad,
+                                                            },
+                                                        )
+                                                    }
+                                                    etiqueta="Artículo del almacén (sin ligar)"
+                                                    opciones={articulos.map(
+                                                        (articulo) => ({
+                                                            valor: articulo.id,
+                                                            etiqueta: `${articulo.codigo} · ${articulo.nombre}`,
+                                                            detalle: `${articulo.codigo} ${articulo.nombre} ${articulo.numero_parte ?? ''}`,
+                                                        }),
+                                                    )}
+                                                    invalido={
+                                                        !!errors[
+                                                            `servicios.${indice}.repuestos.${fila}.articulo_id`
+                                                        ]
+                                                    }
+                                                />
+                                            </div>
+                                        )}
+                                        {!repuesto.es_servicio &&
+                                            repuesto.articulo_id !== null && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        cambiarRepuesto(
+                                                            indice,
+                                                            fila,
+                                                            {
+                                                                articulo_id:
+                                                                    null,
+                                                            },
+                                                        )
+                                                    }
+                                                >
+                                                    Desligar
+                                                </Button>
+                                            )}
+                                    </div>
                                     <InputError
                                         className="col-span-full"
                                         message={
+                                            errors[
+                                                `servicios.${indice}.repuestos.${fila}.articulo_id`
+                                            ] ??
                                             errors[
                                                 `servicios.${indice}.repuestos.${fila}.descripcion`
                                             ] ??

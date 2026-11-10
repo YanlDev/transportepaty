@@ -10,6 +10,7 @@ use App\Http\Controllers\Almacen\IngresoAlmacenController;
 use App\Http\Controllers\Almacen\InventarioAlmacenController;
 use App\Http\Controllers\Almacen\ProveedorController;
 use App\Http\Controllers\Almacen\SalidaAlmacenController;
+use App\Http\Controllers\Almacen\ValeCompraController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\ClienteController;
@@ -43,6 +44,7 @@ use App\Http\Controllers\TallerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
+use App\Http\Controllers\VerificarValeController;
 use App\Http\Controllers\ViajeController;
 use App\Http\Controllers\ViaticoController;
 use App\Http\Controllers\VueltaController;
@@ -59,6 +61,15 @@ Route::redirect('/', '/login')->name('home');
 Route::post('whatsapp/recibos', ReciboWhatsappController::class)
     ->withoutMiddleware(PreventRequestForgery::class)
     ->name('whatsapp.recibos');
+
+// Verificación pública de un vale de compra: el proveedor llega por el QR o
+// escribe el código impreso. Sin sesión, y con tope de intentos para que no
+// se puedan probar códigos al azar.
+Route::middleware('throttle:30,1')->group(function () {
+    Route::get('verificar-vale', [VerificarValeController::class, 'formulario'])->name('vales.verificar.formulario');
+    Route::post('verificar-vale', [VerificarValeController::class, 'buscar'])->name('vales.verificar.buscar');
+    Route::get('verificar-vale/{codigo}', [VerificarValeController::class, 'show'])->name('vales.verificar');
+});
 
 Route::middleware('auth')->group(function () {
     Route::get('dashboard', [DashboardController::class, 'index'])->name('dashboard');
@@ -276,8 +287,8 @@ Route::middleware('auth')->group(function () {
     // archivos de un PUT multipart.
     Route::put('mantenimiento/ordenes/{orden}', [OrdenTrabajoController::class, 'update'])
         ->name('mantenimiento.ordenes.update');
-    Route::delete('mantenimiento/ordenes/{orden}', [OrdenTrabajoController::class, 'destroy'])
-        ->name('mantenimiento.ordenes.destroy');
+    Route::post('mantenimiento/ordenes/{orden}/anular', [OrdenTrabajoController::class, 'anular'])
+        ->name('mantenimiento.ordenes.anular');
     Route::delete('mantenimiento/ordenes/{orden}/fotos/{foto}', [OrdenTrabajoController::class, 'eliminarFoto'])
         ->name('mantenimiento.ordenes.fotos.destroy');
     Route::get('mantenimiento/llantas', [LlantaController::class, 'index'])
@@ -306,6 +317,14 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.equipamiento.store');
     Route::delete('mantenimiento/equipamiento/conteos/{conteo}', [EquipamientoCarretaController::class, 'destroy'])
         ->name('mantenimiento.equipamiento.destroy');
+    Route::post('mantenimiento/equipamiento/{vehiculo}/traslados', [EquipamientoCarretaController::class, 'trasladar'])
+        ->name('mantenimiento.equipamiento.traslados.store');
+    Route::post('mantenimiento/equipamiento/{vehiculo}/bajas', [EquipamientoCarretaController::class, 'darDeBaja'])
+        ->name('mantenimiento.equipamiento.bajas.store');
+    Route::put('mantenimiento/equipamiento/{vehiculo}/vencimientos', [EquipamientoCarretaController::class, 'vencimiento'])
+        ->name('mantenimiento.equipamiento.vencimientos.update');
+    Route::post('mantenimiento/equipamiento/movimientos/{movimiento}/anular', [EquipamientoCarretaController::class, 'anularMovimiento'])
+        ->name('mantenimiento.equipamiento.movimientos.anular');
     Route::get('mantenimiento/planes/{plan}/editar', [PlanMantenimientoController::class, 'edit'])
         ->name('mantenimiento.planes.edit');
     Route::put('mantenimiento/planes/{plan}', [PlanMantenimientoController::class, 'update'])
@@ -353,6 +372,23 @@ Route::middleware('auth')->group(function () {
         Route::get('salidas/{salida}', [SalidaAlmacenController::class, 'show'])->name('salidas.show');
         Route::post('salidas/{salida}/devolver', [SalidaAlmacenController::class, 'devolver'])->name('salidas.devolver');
         Route::post('salidas/{salida}/anular', [SalidaAlmacenController::class, 'anular'])->name('salidas.anular');
+
+        // Vales de compra: se piden, gerencia los aprueba y la compra entra
+        // al almacén nombrando su vale.
+        Route::get('compras', [ValeCompraController::class, 'index'])->name('compras.index');
+        Route::get('compras/crear', [ValeCompraController::class, 'create'])->name('compras.create');
+        Route::post('compras', [ValeCompraController::class, 'store'])->name('compras.store');
+        Route::get('compras/{vale}', [ValeCompraController::class, 'show'])->name('compras.show');
+        Route::get('compras/{vale}/editar', [ValeCompraController::class, 'edit'])->name('compras.edit');
+        // PUT con cotizaciones adjuntas: llega como POST con `_method`.
+        Route::put('compras/{vale}', [ValeCompraController::class, 'update'])->name('compras.update');
+        Route::post('compras/{vale}/aprobar', [ValeCompraController::class, 'aprobar'])->name('compras.aprobar');
+        Route::post('compras/{vale}/rechazar', [ValeCompraController::class, 'rechazar'])->name('compras.rechazar');
+        Route::post('compras/{vale}/anular', [ValeCompraController::class, 'anular'])->name('compras.anular');
+        Route::post('compras/{vale}/parciales', [ValeCompraController::class, 'parciales'])->name('compras.parciales');
+        Route::post('compras/{vale}/servicios/{detalle}', [ValeCompraController::class, 'confirmarServicio'])->name('compras.servicios.confirmar');
+        Route::get('compras/{vale}/pdf', [ValeCompraController::class, 'pdf'])->name('compras.pdf');
+        Route::get('compras/{vale}/archivos/{archivo}', [ValeCompraController::class, 'archivo'])->name('compras.archivo');
 
         Route::get('inventarios', [InventarioAlmacenController::class, 'index'])->name('inventarios.index');
         Route::post('inventarios', [InventarioAlmacenController::class, 'store'])->name('inventarios.store');

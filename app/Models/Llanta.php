@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\CondicionLlanta;
 use App\Enums\MotivoRetiroLlanta;
+use App\Enums\OrigenLlanta;
 use App\Models\Concerns\RegistraHistorial;
 use Database\Factories\LlantaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -21,6 +22,9 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property int $vehiculo_id
+ * @property int|null $articulo_id
+ * @property int|null $detalle_salida_id
+ * @property OrigenLlanta $origen
  * @property string $posicion
  * @property string|null $marca
  * @property string|null $medida
@@ -35,7 +39,7 @@ use Illuminate\Support\Carbon;
  * @property-read Collection<int, MovimientoLlanta> $movimientos
  */
 #[Fillable([
-    'vehiculo_id', 'posicion', 'marca', 'medida', 'codigo', 'condicion',
+    'vehiculo_id', 'articulo_id', 'detalle_salida_id', 'origen', 'posicion', 'marca', 'medida', 'codigo', 'condicion',
     'instalada_el', 'km_instalacion', 'retirada_el', 'km_retiro', 'motivo_retiro',
 ])]
 class Llanta extends Model
@@ -54,6 +58,26 @@ class Llanta extends Model
     public function vehiculo(): BelongsTo
     {
         return $this->belongsTo(Vehiculo::class)->withTrashed();
+    }
+
+    /**
+     * El artículo del almacén del que es esta llanta.
+     *
+     * @return BelongsTo<Articulo, $this>
+     */
+    public function articulo(): BelongsTo
+    {
+        return $this->belongsTo(Articulo::class);
+    }
+
+    /**
+     * La línea del vale de salida con que salió del almacén.
+     *
+     * @return BelongsTo<DetalleSalida, $this>
+     */
+    public function detalleSalida(): BelongsTo
+    {
+        return $this->belongsTo(DetalleSalida::class);
     }
 
     /**
@@ -80,6 +104,7 @@ class Llanta extends Model
     protected function casts(): array
     {
         return [
+            'origen' => OrigenLlanta::class,
             'condicion' => CondicionLlanta::class,
             'instalada_el' => 'date',
             'km_instalacion' => 'integer',

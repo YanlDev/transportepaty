@@ -144,6 +144,29 @@ return [
         'km_desactualizado_dias' => (int) env('TRANSPATY_MANTENIMIENTO_KM_DESACTUALIZADO_DIAS', 7),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Compras
+    |--------------------------------------------------------------------------
+    |
+    | Toda compra entra al almacén con un vale de compra aprobado. Un vale
+    | aprobado vale `vigencia_dias` días: el comprobante tiene que ser de esos
+    | días. Los comprobantes emitidos antes de `vale_obligatorio_desde` son de
+    | antes de que existiera el circuito y entran sin vale.
+    |
+    | `clave_firma` es la clave privada (Ed25519, en base64) con que el
+    | servidor firma cada vale aprobado. Se genera con
+    | `php artisan vales:generar-clave` y vive solo en el `.env`: quien la
+    | tenga puede fabricar vales que validan.
+    |
+    */
+
+    'compras' => [
+        'vigencia_dias' => (int) env('TRANSPATY_VALE_VIGENCIA_DIAS', 5),
+        'vale_obligatorio_desde' => env('TRANSPATY_VALE_OBLIGATORIO_DESDE', '2026-11-10'),
+        'clave_firma' => env('TRANSPATY_VALES_CLAVE_FIRMA'),
+    ],
+
     'respaldos' => [
         'ruta' => env('TRANSPATY_RESPALDOS_RUTA', storage_path('respaldos')),
         'cantidad' => (int) env('TRANSPATY_RESPALDOS_CANTIDAD', 30),

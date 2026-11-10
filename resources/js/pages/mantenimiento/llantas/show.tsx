@@ -31,9 +31,11 @@ import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption } from '@/types/fleet';
 import type {
+    LlantaRetirada,
     MovimientoLlanta,
     PosicionLlanta,
     UmbralesLlanta,
+    ValeDeLlantas,
 } from '@/types/llantas';
 
 type Props = {
@@ -52,6 +54,11 @@ type Props = {
     condiciones: EnumOption[];
     motivos: EnumOption[];
     umbrales: UmbralesLlanta;
+    /** Los vales de almacén con llantas por montar en esta unidad. */
+    valesDeAlmacen: ValeDeLlantas[];
+    /** Las llantas retiradas que se pueden volver a montar. */
+    retiradas: LlantaRetirada[];
+    puedeCargaInicial: boolean;
 };
 
 /**
@@ -67,6 +74,9 @@ export default function LlantasUnidad({
     condiciones,
     motivos,
     umbrales,
+    valesDeAlmacen,
+    retiradas,
+    puedeCargaInicial,
 }: Props) {
     const { puede } = usePermisos();
     const puedeRegistrar = puede('mantenimiento.llantas');
@@ -226,6 +236,9 @@ export default function LlantasUnidad({
                     posiciones={posiciones}
                     condiciones={condiciones}
                     motivos={motivos}
+                    valesDeAlmacen={valesDeAlmacen}
+                    retiradas={retiradas}
+                    puedeCargaInicial={puedeCargaInicial}
                     abierto
                     onAbiertoChange={(abierto) => !abierto && setAccion(null)}
                 />
@@ -419,6 +432,11 @@ function FilaMovimiento({
                         .filter(Boolean)
                         .join(' · ')}
                 </span>
+                {movimiento.viene_de && (
+                    <span className="text-xs">
+                        Viene de {formatearPlaca(movimiento.viene_de)}
+                    </span>
+                )}
                 {movimiento.observacion && (
                     <span className="text-xs">{movimiento.observacion}</span>
                 )}

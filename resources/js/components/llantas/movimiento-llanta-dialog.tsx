@@ -14,9 +14,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption } from '@/types/fleet';
-import type { PosicionLlanta } from '@/types/llantas';
+import type {
+    LlantaRetirada,
+    PosicionLlanta,
+    ValeDeLlantas,
+} from '@/types/llantas';
 
 export type TipoMovimiento =
     | 'instalacion'
@@ -35,6 +40,9 @@ type Formulario = {
     medida: string;
     codigo: string;
     condicion: string;
+    origen: 'almacen' | 'retirada' | 'previa';
+    detalle_salida_id: number | null;
+    llanta_id: number | null;
     motivo_retiro: string;
     observacion: string;
 };
@@ -61,6 +69,9 @@ export function MovimientoLlantaDialog({
     posiciones,
     condiciones,
     motivos,
+    valesDeAlmacen = [],
+    retiradas = [],
+    puedeCargaInicial = false,
     abierto,
     onAbiertoChange,
 }: {
@@ -74,6 +85,12 @@ export function MovimientoLlantaDialog({
     posiciones: PosicionLlanta[];
     condiciones: EnumOption[];
     motivos: EnumOption[];
+    /** Los vales de almacén con llantas por montar en esta unidad. */
+    valesDeAlmacen?: ValeDeLlantas[];
+    /** Las llantas retiradas que se pueden volver a montar. */
+    retiradas?: LlantaRetirada[];
+    /** Solo el administrador carga las que ya estaban puestas. */
+    puedeCargaInicial?: boolean;
     abierto: boolean;
     onAbiertoChange: (abierto: boolean) => void;
 }) {
@@ -89,9 +106,17 @@ export function MovimientoLlantaDialog({
             medida: '',
             codigo: '',
             condicion: 'nueva',
+            origen: 'almacen',
+            detalle_salida_id:
+                valesDeAlmacen.length === 1
+                    ? valesDeAlmacen[0].detalle_salida_id
+                    : null,
+            llanta_id: null,
             motivo_retiro: '',
             observacion: '',
         });
+
+    const errores = errors as Record<string, string | undefined>;
 
     const guardar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -113,10 +138,21 @@ export function MovimientoLlantaDialog({
                 posicion_destino: datos.posicion_destino,
             }),
             ...(datos.tipo === 'instalacion' && {
-                marca: datos.marca || null,
-                medida: datos.medida || null,
+                origen: datos.origen,
                 codigo: datos.codigo || null,
                 condicion: datos.condicion,
+                // La marca y la medida de una del almacén salen del artículo;
+                // una retirada ya las tiene.
+                ...(datos.origen === 'previa' && {
+                    marca: datos.marca || null,
+                    medida: datos.medida || null,
+                }),
+                ...(datos.origen === 'almacen' && {
+                    detalle_salida_id: datos.detalle_salida_id,
+                }),
+                ...(datos.origen === 'retirada' && {
+                    llanta_id: datos.llanta_id,
+                }),
             }),
             ...(datos.tipo === 'retiro' && {
                 motivo_retiro: datos.motivo_retiro,
@@ -150,6 +186,147 @@ export function MovimientoLlantaDialog({
                     {tipo === 'instalacion' && (
                         <>
                             <Opciones
+                                etiqueta="De dónde sale"
+                                opciones={[
+                                    { value: 'almacen', label: 'Del almacén' },
+                                    {
+                                        value: 'retirada',
+                                        label: 'De otra unidad',
+                                    },
+                                    ...(puedeCargaInicial
+                                        ? [
+                                              {
+                                                  value: 'previa',
+                                                  label: 'Ya estaba puesta',
+                                              },
+                                          ]
+                                        : []),
+                                ]}
+                                valor={data.origen}
+                                onCambio={(valor) =>
+                                    setData((previo) => ({
+                                        ...previo,
+                                        origen: valor as Formulario['origen'],
+                                        condicion:
+                                            valor === 'almacen'
+                                                ? 'nueva'
+                                                : 'usada',
+                                    }))
+                                }
+                            />
+                            <InputError message={errores.origen} />
+
+                            {data.origen === 'almacen' && (
+                                <div className="grid gap-1.5">
+                                    <Label>Vale de almacén</Label>
+                                    {valesDeAlmacen.length === 0 ? (
+                                        <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+                                            No hay llantas por montar en esta
+                                            unidad. Pide que el almacén emita el
+                                            vale de salida a nombre de la
+                                            unidad; si no hay stock, pide la
+                                            compra.
+                                        </p>
+                                    ) : (
+                                        <div className="grid gap-1.5">
+                                            {valesDeAlmacen.map((vale) => (
+                                                <button
+                                                    key={vale.detalle_salida_id}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setData(
+                                                            'detalle_salida_id',
+                                                            vale.detalle_salida_id,
+                                                        )
+                                                    }
+                                                    aria-pressed={
+                                                        data.detalle_salida_id ===
+                                                        vale.detalle_salida_id
+                                                    }
+                                                    className={cn(
+                                                        'rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                                                        data.detalle_salida_id ===
+                                                            vale.detalle_salida_id
+                                                            ? 'border-primary bg-primary/10'
+                                                            : 'hover:bg-accent',
+                                                    )}
+                                                >
+                                                    <span className="font-medium">
+                                                        {vale.nombre}
+                                                    </span>
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        {vale.vale} ·{' '}
+                                                        {formatearFecha(
+                                                            vale.fecha,
+                                                        )}{' '}
+                                                        · {vale.disponibles} por
+                                                        montar
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <InputError
+                                        message={errores.detalle_salida_id}
+                                    />
+                                </div>
+                            )}
+
+                            {data.origen === 'retirada' && (
+                                <div className="grid gap-1.5">
+                                    <Label>Llanta retirada</Label>
+                                    {retiradas.length === 0 ? (
+                                        <p className="text-sm text-muted-foreground">
+                                            No hay llantas retiradas que se
+                                            puedan volver a montar.
+                                        </p>
+                                    ) : (
+                                        <div className="grid max-h-48 gap-1.5 overflow-y-auto">
+                                            {retiradas.map((llanta) => (
+                                                <button
+                                                    key={llanta.id}
+                                                    type="button"
+                                                    onClick={() =>
+                                                        setData(
+                                                            'llanta_id',
+                                                            llanta.id,
+                                                        )
+                                                    }
+                                                    aria-pressed={
+                                                        data.llanta_id ===
+                                                        llanta.id
+                                                    }
+                                                    className={cn(
+                                                        'rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                                                        data.llanta_id ===
+                                                            llanta.id
+                                                            ? 'border-primary bg-primary/10'
+                                                            : 'hover:bg-accent',
+                                                    )}
+                                                >
+                                                    <span className="font-medium">
+                                                        {llanta.descripcion}
+                                                    </span>
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        Estaba en{' '}
+                                                        {formatearPlaca(
+                                                            llanta.placa,
+                                                        )}{' '}
+                                                        · retirada el{' '}
+                                                        {formatearFecha(
+                                                            llanta.retirada_el,
+                                                        )}{' '}
+                                                        · {llanta.motivo}
+                                                    </span>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                    <InputError message={errores.llanta_id} />
+                                </div>
+                            )}
+
+                            <Opciones
                                 etiqueta="La llanta es"
                                 opciones={condiciones}
                                 valor={data.condicion}
@@ -158,49 +335,56 @@ export function MovimientoLlantaDialog({
                                 }
                             />
                             <InputError message={errors.condicion} />
-                            <div className="grid grid-cols-2 gap-3">
-                                <Campo
-                                    id="llanta-marca"
-                                    etiqueta="Marca"
-                                    error={errors.marca}
-                                >
-                                    <Input
+                            {data.origen === 'previa' && (
+                                <div className="grid grid-cols-2 gap-3">
+                                    <Campo
                                         id="llanta-marca"
-                                        placeholder="Michelin"
-                                        value={data.marca}
-                                        onChange={(e) =>
-                                            setData('marca', e.target.value)
-                                        }
-                                    />
-                                </Campo>
+                                        etiqueta="Marca"
+                                        error={errors.marca}
+                                    >
+                                        <Input
+                                            id="llanta-marca"
+                                            placeholder="Michelin"
+                                            value={data.marca}
+                                            onChange={(e) =>
+                                                setData('marca', e.target.value)
+                                            }
+                                        />
+                                    </Campo>
+                                    <Campo
+                                        id="llanta-medida"
+                                        etiqueta="Medida"
+                                        error={errors.medida}
+                                    >
+                                        <Input
+                                            id="llanta-medida"
+                                            placeholder="295/80R22.5"
+                                            value={data.medida}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'medida',
+                                                    e.target.value,
+                                                )
+                                            }
+                                        />
+                                    </Campo>
+                                </div>
+                            )}
+                            {data.origen !== 'retirada' && (
                                 <Campo
-                                    id="llanta-medida"
-                                    etiqueta="Medida"
-                                    error={errors.medida}
+                                    id="llanta-codigo"
+                                    etiqueta="Código o serie (opcional)"
+                                    error={errors.codigo}
                                 >
                                     <Input
-                                        id="llanta-medida"
-                                        placeholder="295/80R22.5"
-                                        value={data.medida}
+                                        id="llanta-codigo"
+                                        value={data.codigo}
                                         onChange={(e) =>
-                                            setData('medida', e.target.value)
+                                            setData('codigo', e.target.value)
                                         }
                                     />
                                 </Campo>
-                            </div>
-                            <Campo
-                                id="llanta-codigo"
-                                etiqueta="Código o serie (opcional)"
-                                error={errors.codigo}
-                            >
-                                <Input
-                                    id="llanta-codigo"
-                                    value={data.codigo}
-                                    onChange={(e) =>
-                                        setData('codigo', e.target.value)
-                                    }
-                                />
-                            </Campo>
+                            )}
                         </>
                     )}
 

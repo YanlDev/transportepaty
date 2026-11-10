@@ -20,11 +20,16 @@ class UpdateOrdenTrabajoRequest extends StoreOrdenTrabajoRequest
         return $this->reglasComunes();
     }
 
-    protected function vehiculo(): Vehiculo
+    protected function orden(): OrdenTrabajo
     {
         /** @var OrdenTrabajo $orden */
         $orden = $this->route('orden');
 
-        return $orden->vehiculo;
+        return $orden;
+    }
+
+    protected function vehiculo(): Vehiculo
+    {
+        return $this->orden()->vehiculo;
     }
 }

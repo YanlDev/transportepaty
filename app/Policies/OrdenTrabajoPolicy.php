@@ -23,11 +23,15 @@ class OrdenTrabajoPolicy
 
     public function update(User $user, OrdenTrabajo $orden): bool
     {
-        return $user->checkPermissionTo(Permiso::MantenimientoGestionar);
+        return ! $orden->estaAnulado() && $user->checkPermissionTo(Permiso::MantenimientoGestionar);
     }
 
-    public function delete(User $user, OrdenTrabajo $orden): bool
+    /**
+     * Una orden no se borra: se anula, y eso deja un hueco en el plan de la
+     * unidad, así que tiene su propio permiso.
+     */
+    public function anular(User $user, OrdenTrabajo $orden): bool
     {
-        return $user->checkPermissionTo(Permiso::MantenimientoGestionar);
+        return ! $orden->estaAnulado() && $user->checkPermissionTo(Permiso::MantenimientoAnular);
     }
 }

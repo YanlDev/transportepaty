@@ -17,12 +17,20 @@ import { Input } from '@/components/ui/input';
 import { Spinner } from '@/components/ui/spinner';
 import type { ItemCatalogo } from '@/types/equipamiento';
 
-type Fila = { id: number | null; nombre: string; minimo: string };
+type Fila = {
+    id: number | null;
+    nombre: string;
+    minimo: string;
+    aplica_a: ItemCatalogo['aplica_a'];
+    lleva_vencimiento: boolean;
+    articulo: string | null;
+};
 
 /**
- * Qué se cuenta en cada carreta y cuántas debe llevar como mínimo. El mínimo
- * es igual para todas; en blanco, el ítem se cuenta pero no avisa faltantes.
- * Quitar un ítem no borra los conteos anteriores.
+ * Qué lleva cada unidad y cuántas debe llevar como mínimo. Cada ítem dice a
+ * qué unidades aplica y si tiene fecha de vencimiento. El mínimo en blanco
+ * se cuenta pero no avisa faltantes. Quitar un ítem no borra su historial.
+ * Al guardar, cada ítem queda con su artículo en el almacén.
  */
 export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
     const [abierto, setAbierto] = useState(false);
@@ -34,6 +42,9 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
             id: item.id,
             nombre: item.nombre,
             minimo: item.minimo === null ? '' : String(item.minimo),
+            aplica_a: item.aplica_a,
+            lleva_vencimiento: item.lleva_vencimiento,
+            articulo: item.articulo,
         })),
     });
 
@@ -53,6 +64,8 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
                 id: fila.id,
                 nombre: fila.nombre,
                 minimo: fila.minimo === '' ? null : Number(fila.minimo),
+                aplica_a: fila.aplica_a,
+                lleva_vencimiento: fila.lleva_vencimiento,
             })),
         }));
 
@@ -78,10 +91,11 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
             <DialogContent className="sm:max-w-lg">
                 <form onSubmit={guardar} className="grid gap-4">
                     <DialogHeader>
-                        <DialogTitle>Equipamiento de las carretas</DialogTitle>
+                        <DialogTitle>Equipamiento de las unidades</DialogTitle>
                         <DialogDescription>
-                            Lo que se cuenta y el mínimo que debe llevar cada
-                            carreta. Sin mínimo, se cuenta pero no avisa.
+                            Lo que lleva cada unidad y su mínimo. Sin mínimo, se
+                            cuenta pero no avisa. Cada ítem tiene su artículo en
+                            el almacén: de ahí sale con vale.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -136,6 +150,46 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
                                 >
                                     <Trash2 className="size-4" />
                                 </Button>
+                                <div className="col-span-full flex flex-wrap items-center gap-x-4 gap-y-1 pb-1 text-xs text-muted-foreground">
+                                    <select
+                                        aria-label={`A qué unidades aplica ${fila.nombre}`}
+                                        value={fila.aplica_a}
+                                        onChange={(e) =>
+                                            cambiar(indice, {
+                                                aplica_a: e.target
+                                                    .value as Fila['aplica_a'],
+                                            })
+                                        }
+                                        className="h-8 rounded-md border bg-background px-2 text-xs text-foreground"
+                                    >
+                                        <option value="carreta">
+                                            Carretas
+                                        </option>
+                                        <option value="tracto">Tractos</option>
+                                        <option value="todas">
+                                            Todas las unidades
+                                        </option>
+                                    </select>
+                                    <label className="flex items-center gap-1.5">
+                                        <input
+                                            type="checkbox"
+                                            className="size-4"
+                                            checked={fila.lleva_vencimiento}
+                                            onChange={(e) =>
+                                                cambiar(indice, {
+                                                    lleva_vencimiento:
+                                                        e.target.checked,
+                                                })
+                                            }
+                                        />
+                                        Tiene vencimiento
+                                    </label>
+                                    <span>
+                                        {fila.articulo
+                                            ? `Almacén: ${fila.articulo}`
+                                            : 'Se crea en el almacén al guardar'}
+                                    </span>
+                                </div>
                                 <InputError
                                     className="col-span-full"
                                     message={
@@ -154,7 +208,14 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
                         onClick={() =>
                             setData('items', [
                                 ...data.items,
-                                { id: null, nombre: '', minimo: '' },
+                                {
+                                    id: null,
+                                    nombre: '',
+                                    minimo: '',
+                                    aplica_a: 'carreta',
+                                    lleva_vencimiento: false,
+                                    articulo: null,
+                                },
                             ])
                         }
                     >

@@ -178,6 +178,7 @@ export type IngresoDetalle = IngresoCabecera & {
         unidad: string;
         unidad_compra: string | null;
         bonificacion: boolean;
+        vence_el: string | null;
         cantidad: number;
         cantidad_base: number;
         precio_unitario: number | null;

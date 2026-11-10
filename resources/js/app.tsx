@@ -14,6 +14,10 @@ createInertiaApp({
         switch (true) {
             case name.startsWith('auth/'):
                 return AuthLayout;
+            // Páginas que abre alguien sin cuenta (verificar un vale): sin
+            // menú ni nada del sistema alrededor.
+            case name.startsWith('publico/'):
+                return undefined;
             // Usuarios, roles, WhatsApp e historial son del sistema: van
             // dentro de Configuración, junto a la cuenta propia.
             case name.startsWith('settings/'):

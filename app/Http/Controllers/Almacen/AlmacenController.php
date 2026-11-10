@@ -6,6 +6,7 @@ use App\Http\Controllers\Almacen\Concerns\CatalogosAlmacen;
 use App\Http\Controllers\Controller;
 use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
+use App\Models\DetalleIngreso;
 use App\Models\IngresoAlmacen;
 use App\Models\SalidaAlmacen;
 use App\Models\UbicacionAlmacen;
@@ -61,6 +62,28 @@ class AlmacenController extends Controller
             'filtros' => $filtros,
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
             'ubicaciones' => UbicacionAlmacen::query()->orderBy('nombre')->get(['id', 'nombre']),
+            // Lo que entró con fecha de vencimiento y vence en los próximos
+            // 30 días (o ya venció), de artículos que todavía tienen stock. No
+            // hay lotes: es un aviso para ir a mirar, no un saldo por fecha.
+            'porVencer' => DetalleIngreso::query()
+                ->whereNotNull('vence_el')
+                ->whereDate('vence_el', '<=', RelojOperativo::fechaDeHoy()->addDays(30)->toDateString())
+                ->whereIn('ingreso_almacen_id', IngresoAlmacen::query()->vigentes()->select('id'))
+                ->whereIn('articulo_id', Articulo::query()->where('stock', '>', 0)->select('id'))
+                ->with(['articulo:id,codigo,nombre', 'ingreso:id'])
+                ->orderBy('vence_el')
+                ->limit(20)
+                ->get()
+                ->map(fn (DetalleIngreso $detalle): array => [
+                    'id' => $detalle->id,
+                    'articulo_id' => $detalle->articulo_id,
+                    'nombre' => $detalle->articulo->nombre,
+                    'ingreso' => $detalle->ingreso->numero(),
+                    'vence_el' => (string) $detalle->vence_el?->toDateString(),
+                    'vencido' => $detalle->vence_el?->lt(RelojOperativo::fechaDeHoy()) ?? false,
+                ])
+                ->values()
+                ->all(),
             'resumen' => [
                 'articulos' => (clone $activos)->count(),
                 'bajo_minimo' => (clone $activos)->bajoMinimo()->count(),

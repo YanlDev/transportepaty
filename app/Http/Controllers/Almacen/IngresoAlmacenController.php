@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Almacen;
 
+use App\Enums\EstadoValeCompra;
 use App\Enums\Moneda;
 use App\Enums\TipoComprobante;
 use App\Enums\TipoIngreso;
@@ -13,18 +14,22 @@ use App\Http\Requests\Almacen\StoreIngresoRequest;
 use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
 use App\Models\DetalleIngreso;
+use App\Models\DetalleValeCompra;
 use App\Models\IngresoAlmacen;
 use App\Models\Proveedor;
 use App\Models\UbicacionAlmacen;
+use App\Models\ValeCompra;
 use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\CostoDeCompra;
 use App\Services\FileUploadService;
 use App\Services\Kardex;
 use App\Services\PeriodoAlmacen;
 use App\Services\RelojOperativo;
+use App\Services\UsoDeVale;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -42,6 +47,7 @@ class IngresoAlmacenController extends Controller
         private readonly Kardex $kardex,
         private readonly CostoDeCompra $costoDeCompra,
         private readonly FileUploadService $subidas,
+        private readonly UsoDeVale $usoDeVale,
     ) {}
 
     public function index(Request $request): Response
@@ -95,6 +101,11 @@ class IngresoAlmacenController extends Controller
             'comprobantes' => TipoComprobante::options(),
             'monedas' => Moneda::options(),
             'hoy' => RelojOperativo::hoy(),
+            // Los vales con que todavía se puede comprar, y desde qué fecha
+            // de comprobante el vale es obligatorio.
+            'vales' => $this->valesParaElegir(),
+            'valeInicial' => $request->integer('vale') ?: null,
+            'valeObligatorioDesde' => UsoDeVale::obligatorioDesde()?->toDateString(),
             'tasaIgv' => CostoDeCompra::TASA_IGV,
             'toleranciaTotal' => StoreIngresoRequest::TOLERANCIA_TOTAL,
             'inicioPeriodo' => PeriodoAlmacen::inicio()->toDateString(),
@@ -141,11 +152,23 @@ class IngresoAlmacenController extends Controller
         $total = round((float) $datos['total_comprobante'], 2);
 
         $ingreso = DB::transaction(function () use ($request, $datos, $comprobante, $moneda, $lineas, $calculo, $total): IngresoAlmacen {
+            // El vale se bloquea y se vuelve a comprobar acá adentro: dos
+            // compras a la vez con el mismo vale no pueden entrar las dos.
+            if (isset($datos['vale_compra_id'])) {
+                $vale = ValeCompra::query()->lockForUpdate()->with(['detalles', 'proveedor'])->findOrFail((int) $datos['vale_compra_id']);
+                $error = $this->usoDeVale->error($vale, (int) $datos['proveedor_id'], $moneda, $datos['fecha_emision'], $total, $request->lineasParaElVale());
+
+                if ($error !== null) {
+                    throw ValidationException::withMessages(['vale_compra_id' => $error]);
+                }
+            }
+
             $ingreso = IngresoAlmacen::create([
                 'tipo' => TipoIngreso::Compra,
                 'fecha' => $datos['fecha'],
                 'fecha_emision' => $datos['fecha_emision'],
                 'proveedor_id' => $datos['proveedor_id'],
+                'vale_compra_id' => $datos['vale_compra_id'] ?? null,
                 'tipo_comprobante' => $comprobante,
                 'serie_numero' => $datos['serie_numero'] ?? null,
                 'comprobante_clave' => IngresoAlmacen::claveComprobante($datos['serie_numero'] ?? null),
@@ -169,6 +192,7 @@ class IngresoAlmacenController extends Controller
                     'cantidad' => $lineas[$i]['cantidad'],
                     'precio_unitario' => $lineas[$i]['precio_unitario'],
                     'factor' => $lineas[$i]['factor'],
+                    'vence_el' => $linea['vence_el'] ?? null,
                     ...$calculo['lineas'][$i],
                 ]);
             }
@@ -183,6 +207,39 @@ class IngresoAlmacenController extends Controller
 
         return to_route('almacen.ingresos.show', $ingreso)
             ->with('toast', ['type' => 'success', 'message' => "Ingreso {$ingreso->numero()} registrado: el stock ya se actualizó."]);
+    }
+
+    /**
+     * Los vales aprobados que todavía sirven para comprar, con sus líneas
+     * para precargar el ingreso.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function valesParaElegir(): array
+    {
+        return array_values(ValeCompra::query()
+            ->vigentes()
+            ->where('estado', EstadoValeCompra::Aprobado)
+            ->with(['detalles', 'proveedor'])
+            ->orderByDesc('id')
+            ->limit(200)
+            ->get()
+            ->filter(fn (ValeCompra $vale): bool => $vale->situacion()->sirveParaComprar() && $vale->totalArticulos() > 0)
+            ->map(fn (ValeCompra $vale): array => [
+                'id' => $vale->id,
+                'numero' => $vale->numero(),
+                'proveedor_id' => $vale->proveedor_id,
+                'proveedor' => $vale->proveedor->nombre(),
+                'moneda' => $vale->moneda->value,
+                'total' => $vale->totalArticulos(),
+                'vence_el' => $vale->vence_el?->toDateString(),
+                'detalles' => $vale->detalles->where('es_servicio', false)->map(fn (DetalleValeCompra $detalle): array => [
+                    'articulo_id' => $detalle->articulo_id,
+                    'cantidad' => (float) $detalle->cantidad,
+                    'precio_unitario' => (float) $detalle->precio_unitario,
+                ])->values()->all(),
+            ])
+            ->all());
     }
 
     /**
@@ -242,6 +299,7 @@ class IngresoAlmacenController extends Controller
                     'unidad' => $detalle->articulo->unidad->abreviatura(),
                     'unidad_compra' => (float) $detalle->factor !== 1.0 ? $detalle->articulo->unidad_compra?->abreviatura() : null,
                     'bonificacion' => $detalle->bonificacion,
+                    'vence_el' => $detalle->vence_el?->toDateString(),
                     'cantidad' => (float) $detalle->cantidad,
                     'cantidad_base' => (float) $detalle->cantidad_base,
                     'precio_unitario' => $this->costo($veCostos, $detalle->precio_unitario),
@@ -300,6 +358,8 @@ class IngresoAlmacenController extends Controller
             'fecha' => $ingreso->fecha->toDateString(),
             'proveedor' => $ingreso->proveedor?->nombre(),
             'proveedor_id' => $ingreso->proveedor_id,
+            'vale_compra_id' => $ingreso->vale_compra_id,
+            'vale_compra' => $ingreso->vale_compra_id === null ? null : sprintf('VC-%06d', $ingreso->vale_compra_id),
             'comprobante_tipo' => $ingreso->tipo_comprobante?->label(),
             'serie_numero' => $ingreso->serie_numero,
             'documento' => $ingreso->documento(),

@@ -5,9 +5,11 @@ namespace App\Http\Requests\Almacen;
 use App\Enums\Moneda;
 use App\Enums\TipoComprobante;
 use App\Models\IngresoAlmacen;
+use App\Models\ValeCompra;
 use App\Rules\FechaDelAlmacen;
 use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\CostoDeCompra;
+use App\Services\UsoDeVale;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -44,6 +46,7 @@ class StoreIngresoRequest extends FormRequest
             'fecha' => ['required', 'date', new FechaDelAlmacen],
             'fecha_emision' => ['required', 'date', 'before_or_equal:fecha'],
             'proveedor_id' => ['required', 'integer', Rule::exists('proveedores', 'id')],
+            'vale_compra_id' => ['nullable', 'integer', Rule::exists('vales_compra', 'id')],
             'tipo_comprobante' => ['required', Rule::enum(TipoComprobante::class)],
             'serie_numero' => [
                 'nullable',
@@ -64,6 +67,7 @@ class StoreIngresoRequest extends FormRequest
             'detalles.*.cantidad' => ['required', 'numeric', 'gt:0', 'max:9999999'],
             'detalles.*.precio_unitario' => ['required', 'numeric', 'gt:0', 'max:99999999'],
             'detalles.*.bonificacion' => ['boolean'],
+            'detalles.*.vence_el' => ['nullable', 'date'],
         ];
     }
 
@@ -80,6 +84,10 @@ class StoreIngresoRequest extends FormRequest
 
                 $this->noRepetido($validator);
                 $this->cuadra($validator);
+
+                if ($validator->errors()->isEmpty()) {
+                    $this->conVale($validator);
+                }
             },
         ];
     }
@@ -105,6 +113,47 @@ class StoreIngresoRequest extends FormRequest
             (float) $this->input('descuento', 0),
             (float) $this->input('flete', 0),
         );
+    }
+
+    /**
+     * Toda compra entra con un vale de compra aprobado, y tiene que ser lo
+     * que el vale autorizó (ver `UsoDeVale`). Solo los comprobantes de antes
+     * de que existiera el circuito entran sin vale.
+     */
+    private function conVale(Validator $validator): void
+    {
+        if (! $this->filled('vale_compra_id')) {
+            if (UsoDeVale::esObligatorio((string) $this->input('fecha_emision'))) {
+                $validator->errors()->add('vale_compra_id', 'Toda compra necesita un vale de compra aprobado: elige con cuál se compró.');
+            }
+
+            return;
+        }
+
+        $error = app(UsoDeVale::class)->error(
+            ValeCompra::query()->with(['detalles', 'proveedor'])->findOrFail($this->integer('vale_compra_id')),
+            $this->integer('proveedor_id'),
+            Moneda::from((string) $this->input('moneda')),
+            (string) $this->input('fecha_emision'),
+            round((float) $this->input('total_comprobante'), 2),
+            $this->lineasParaElVale(),
+        );
+
+        if ($error !== null) {
+            $validator->errors()->add('vale_compra_id', $error);
+        }
+    }
+
+    /**
+     * @return list<array{articulo_id: int, cantidad: float, bonificacion: bool}>
+     */
+    public function lineasParaElVale(): array
+    {
+        return array_values(array_map(fn (array $linea): array => [
+            'articulo_id' => (int) $linea['articulo_id'],
+            'cantidad' => (float) $linea['cantidad'],
+            'bonificacion' => filter_var($linea['bonificacion'] ?? false, FILTER_VALIDATE_BOOLEAN),
+        ], (array) $this->input('detalles', [])));
     }
 
     private function noRepetido(Validator $validator): void

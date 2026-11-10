@@ -88,7 +88,11 @@ export function ConteoDialog({
 
                     <InputError
                         message={
-                            (errors as Record<string, string | undefined>).items
+                            (errors as Record<string, string | undefined>)
+                                .items ??
+                            Object.entries(errors).find(([clave]) =>
+                                clave.startsWith('items.'),
+                            )?.[1]
                         }
                     />
 

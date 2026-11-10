@@ -1,10 +1,12 @@
 <?php
 
+use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\EstadoVuelta;
 use App\Enums\ResultadoTaller;
 use App\Enums\TipoVehiculo;
 use App\Models\Abastecimiento;
 use App\Models\LecturaKilometraje;
+use App\Models\OrdenTrabajo;
 use App\Models\RevisionTaller;
 use App\Models\RutaVuelta;
 use App\Models\Vehiculo;
@@ -159,4 +161,33 @@ it('does not review a closed ticket', function (): void {
     actingAs(actorConRol('taller'))
         ->post(route('taller.store', $this->vuelta), ['resultado' => 'apto'])
         ->assertForbidden();
+});
+
+it('does not give the OK while the unit has an open work order', function (): void {
+    $orden = OrdenTrabajo::factory()->create(['vehiculo_id' => $this->tracto->id, 'estado' => EstadoOrdenTrabajo::EnProceso]);
+
+    actingAs(actorConRol('taller'))
+        ->post(route('taller.store', $this->vuelta), ['resultado' => 'apto'])
+        ->assertSessionHasErrors('resultado');
+
+    expect(RevisionTaller::query()->count())->toBe(0)
+        ->and(session('errors')->first('resultado'))->toContain($orden->numero());
+
+    // No apto sí se puede registrar: es justo lo que pasa.
+    actingAs(actorConRol('taller'))
+        ->post(route('taller.store', $this->vuelta), [
+            'resultado' => 'no_apto',
+            'disponible_estimado' => now()->addDay()->format('Y-m-d H:i'),
+            'motivo' => 'Cambio de módulo en curso',
+        ])
+        ->assertSessionHasNoErrors();
+
+    // Finalizada la orden (o anulada), el apto pasa.
+    $orden->update(['estado' => EstadoOrdenTrabajo::Finalizada]);
+
+    actingAs(actorConRol('taller'))
+        ->post(route('taller.store', $this->vuelta), ['resultado' => 'apto'])
+        ->assertSessionHasNoErrors();
+
+    expect($this->vuelta->revisiones()->latest('id')->first()->esApta())->toBeTrue();
 });

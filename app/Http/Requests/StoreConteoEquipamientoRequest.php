@@ -2,16 +2,20 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\TipoVehiculo;
+use App\Models\ItemEquipamiento;
 use App\Models\Vehiculo;
+use App\Services\EquipamientoDeUnidades;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
 
 /**
- * Un conteo en base: de cada ítem del catálogo, cuántas buenas y cuántas
- * dañadas. Solo carretas.
+ * Contar el equipamiento de una unidad en base.
+ *
+ * El primer conteo de un ítem es su saldo inicial: lo que la unidad ya
+ * tenía. Desde ahí el conteo comprueba, no agrega: no puede haber más de lo
+ * asignado, porque lo nuevo sale del almacén con vale o llega de otra unidad.
  */
 class StoreConteoEquipamientoRequest extends FormRequest
 {
@@ -44,8 +48,30 @@ class StoreConteoEquipamientoRequest extends FormRequest
             function (Validator $validator): void {
                 $vehiculo = $this->route('vehiculo');
 
-                if ($vehiculo instanceof Vehiculo && $vehiculo->tipo !== TipoVehiculo::Carreta) {
-                    $validator->errors()->add('items', 'El equipamiento se cuenta solo en carretas.');
+                if (! $vehiculo instanceof Vehiculo || $validator->errors()->isNotEmpty()) {
+                    return;
+                }
+
+                $filas = collect(app(EquipamientoDeUnidades::class)->paraVehiculo($vehiculo)['items'])->keyBy('id');
+                $nombres = ItemEquipamiento::query()->pluck('nombre', 'id');
+
+                foreach ((array) $this->input('items', []) as $indice => $item) {
+                    $fila = $filas->get((int) $item['id']);
+
+                    if ($fila === null) {
+                        $validator->errors()->add("items.{$indice}.id", "{$nombres->get((int) $item['id'])} no es equipamiento de esta unidad.");
+
+                        continue;
+                    }
+
+                    $contado = (int) $item['buenas'] + (int) $item['danadas'];
+
+                    if ($fila['con_historial'] && $contado > $fila['asignado']) {
+                        $validator->errors()->add(
+                            "items.{$indice}.buenas",
+                            "{$fila['nombre']}: la unidad tiene asignadas {$fila['asignado']} y se contaron {$contado}. Lo que se agrega sale del almacén con vale o llega de otra unidad con un traslado.",
+                        );
+                    }
                 }
             },
         ];

@@ -33,6 +33,8 @@ enum Permiso: string
     case MantenimientoVer = 'mantenimiento.ver';
     case MantenimientoRegistrarKm = 'mantenimiento.registrar_km';
     case MantenimientoGestionar = 'mantenimiento.gestionar';
+    case MantenimientoAnular = 'mantenimiento.anular';
+    case MantenimientoCargaInicial = 'mantenimiento.carga_inicial';
     case MantenimientoConfigurar = 'mantenimiento.configurar';
     case MantenimientoLlantas = 'mantenimiento.llantas';
     case MantenimientoEquipamiento = 'mantenimiento.equipamiento';
@@ -44,6 +46,13 @@ enum Permiso: string
     case AlmacenDespachar = 'almacen.despachar';
     case AlmacenInventariar = 'almacen.inventariar';
     case AlmacenAnular = 'almacen.anular';
+
+    case ComprasVer = 'compras.ver';
+    case ComprasSolicitar = 'compras.solicitar';
+    case ComprasAprobar = 'compras.aprobar';
+    case ComprasAprobarEmergencia = 'compras.aprobar_emergencia';
+    case ComprasParciales = 'compras.parciales';
+    case ComprasAnular = 'compras.anular';
 
     case TallerVer = 'taller.ver';
     case TallerRevisar = 'taller.revisar';
@@ -120,6 +129,7 @@ enum Permiso: string
         'conductores' => 'Conductores',
         'asistencia' => 'Asistencia',
         'almacen' => 'Almacén',
+        'compras' => 'Compras (vales de compra)',
         'cotizaciones' => 'Cotizaciones',
         'clientes' => 'Clientes',
         'costos' => 'Parámetros de costo',
@@ -143,7 +153,7 @@ enum Permiso: string
         'general' => ['nombre' => 'General', 'modulos' => ['tablero']],
         'operacion' => ['nombre' => 'Operación', 'modulos' => ['programacion', 'taller', 'abastecimiento', 'viajes']],
         'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades', 'conductores', 'asistencia']],
-        'almacen' => ['nombre' => 'Almacén', 'modulos' => ['almacen']],
+        'almacen' => ['nombre' => 'Almacén', 'modulos' => ['almacen', 'compras']],
         'comercial' => ['nombre' => 'Comercial', 'modulos' => ['cotizaciones', 'clientes', 'costos']],
         'finanzas' => ['nombre' => 'Finanzas', 'modulos' => ['cobranza', 'cuentas']],
         'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp', 'alertas', 'historial']],
@@ -183,6 +193,8 @@ enum Permiso: string
             self::MantenimientoVer => 'Ver el mantenimiento de la flota',
             self::MantenimientoRegistrarKm => 'Registrar kilometrajes',
             self::MantenimientoGestionar => 'Registrar y editar órdenes de trabajo',
+            self::MantenimientoAnular => 'Anular órdenes de trabajo y movimientos de equipamiento',
+            self::MantenimientoCargaInicial => 'Cargar llantas que ya estaban montadas antes del almacén',
             self::MantenimientoConfigurar => 'Configurar el plan de cada marca',
             self::MantenimientoLlantas => 'Registrar instalaciones, mediciones y cambios de llantas',
             self::MantenimientoEquipamiento => 'Contar el equipamiento de las carretas',
@@ -193,6 +205,12 @@ enum Permiso: string
             self::AlmacenDespachar => 'Emitir vales de salida',
             self::AlmacenInventariar => 'Hacer y cerrar los conteos de inventario',
             self::AlmacenAnular => 'Anular ingresos, vales y conteos',
+            self::ComprasVer => 'Ver los vales de compra',
+            self::ComprasSolicitar => 'Pedir compras y confirmar servicios de terceros',
+            self::ComprasAprobar => 'Aprobar y rechazar compras',
+            self::ComprasAprobarEmergencia => 'Aprobar compras de emergencia en ruta',
+            self::ComprasParciales => 'Ver y activar las entregas parciales de un vale',
+            self::ComprasAnular => 'Anular vales de compra',
             self::TallerVer => 'Ver los tickets por revisar',
             self::TallerRevisar => 'Dar el apto o no apto de salida',
             self::NovedadesRegistrar => 'Registrar novedades',

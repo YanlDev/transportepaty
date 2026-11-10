@@ -236,6 +236,12 @@ export default function IngresoShow({
                                     <span className="block text-xs text-muted-foreground">
                                         {detalle.codigo}
                                     </span>
+                                    {detalle.vence_el && (
+                                        <span className="block text-xs text-muted-foreground">
+                                            Vence el{' '}
+                                            {formatearFecha(detalle.vence_el)}
+                                        </span>
+                                    )}
                                     {detalle.bonificacion && (
                                         <span className="mt-0.5 inline-flex items-center gap-1 text-xs text-emerald-700 dark:text-emerald-400">
                                             <Gift className="size-3" />

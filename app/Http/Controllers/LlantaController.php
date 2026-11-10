@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Enums\CondicionLlanta;
 use App\Enums\EstadoLlanta;
 use App\Enums\MotivoRetiroLlanta;
+use App\Enums\OrigenLlanta;
+use App\Enums\Permiso;
 use App\Enums\TipoMovimientoLlanta;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\StoreMedicionLlantasRequest;
@@ -12,17 +14,21 @@ use App\Http\Requests\StoreMovimientoLlantaRequest;
 use App\Http\Requests\UpdateLlantaRequest;
 use App\Http\Requests\UpdateMovimientoLlantaRequest;
 use App\Http\Requests\UpdateParametrosLlantasRequest;
+use App\Models\DetalleSalida;
 use App\Models\Llanta;
 use App\Models\MovimientoLlanta;
 use App\Models\ParametroMantenimiento;
 use App\Models\Vehiculo;
 use App\Services\EstadoLlantas;
 use App\Services\HistorialLlantas;
+use App\Services\LlantasDeAlmacen;
 use App\Services\ProximoMantenimiento;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -39,6 +45,7 @@ class LlantaController extends Controller
     public function __construct(
         private readonly EstadoLlantas $llantas,
         private readonly HistorialLlantas $historial,
+        private readonly LlantasDeAlmacen $deAlmacen,
     ) {}
 
     public function index(): Response
@@ -71,13 +78,13 @@ class LlantaController extends Controller
         ]);
     }
 
-    public function show(Vehiculo $vehiculo, ProximoMantenimiento $mantenimiento): Response
+    public function show(Request $request, Vehiculo $vehiculo, ProximoMantenimiento $mantenimiento): Response
     {
         $this->authorize('viewAny', Llanta::class);
 
         $movimientos = MovimientoLlanta::query()
             ->where('vehiculo_id', $vehiculo->id)
-            ->with(['llanta:id,marca,medida,codigo', 'user:id,name'])
+            ->with(['llanta:id,marca,medida,codigo', 'user:id,name', 'origen:id,placa'])
             ->orderByDesc('fecha')
             ->orderByDesc('id')
             ->limit(80)
@@ -112,12 +119,18 @@ class LlantaController extends Controller
                 'kilometraje' => $movimiento->kilometraje,
                 'profundidad_mm' => $movimiento->profundidad_mm === null ? null : (float) $movimiento->profundidad_mm,
                 'observacion' => $movimiento->observacion,
+                // De qué unidad vino, cuando se volvió a montar acá.
+                'viene_de' => $movimiento->origen?->placa,
                 'llanta' => trim(implode(' ', array_filter([$movimiento->llanta->marca, $movimiento->llanta->medida]))) ?: null,
                 'usuario' => $movimiento->user?->name,
                 'eliminable' => $eliminables[$movimiento->id] ?? false,
             ])
                 ->all(),
             'hoy' => RelojOperativo::hoy(),
+            // De dónde puede salir una llanta para montarla acá.
+            'valesDeAlmacen' => $this->deAlmacen->lineasPara($vehiculo),
+            'retiradas' => $this->deAlmacen->retiradas(),
+            'puedeCargaInicial' => $request->user()?->checkPermissionTo(Permiso::MantenimientoCargaInicial) ?? false,
             'condiciones' => CondicionLlanta::options(),
             'motivos' => MotivoRetiroLlanta::options(),
             'umbrales' => $this->umbrales(),
@@ -141,24 +154,7 @@ class LlantaController extends Controller
 
         $mensaje = DB::transaction(function () use ($vehiculo, $datos, $tipo, $comun): string {
             if ($tipo === TipoMovimientoLlanta::Instalacion) {
-                $llanta = Llanta::create([
-                    'vehiculo_id' => $vehiculo->id,
-                    'posicion' => $datos['posicion'],
-                    'marca' => $datos['marca'] ?? null,
-                    'medida' => $datos['medida'] ?? null,
-                    'codigo' => $datos['codigo'] ?? null,
-                    'condicion' => $datos['condicion'],
-                    'instalada_el' => $datos['fecha'],
-                    'km_instalacion' => $datos['kilometraje'] ?? null,
-                ]);
-
-                $llanta->movimientos()->create([
-                    ...$comun,
-                    'posicion' => $datos['posicion'],
-                    'profundidad_mm' => $datos['profundidad_mm'] ?? null,
-                ]);
-
-                return "Llanta instalada en la posición {$datos['posicion']}.";
+                return $this->instalar($vehiculo, $datos, $comun);
             }
 
             $llanta = $this->montadaEn($vehiculo, $datos['posicion']);
@@ -292,6 +288,72 @@ class LlantaController extends Controller
         $parametros->update($request->validated());
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Cortes del semáforo de llantas guardados.']);
+    }
+
+    /**
+     * Monta una llanta en una posición libre. Según de dónde sale:
+     *
+     * - del almacén: es una llanta nueva en el sistema, ligada a la línea
+     *   del vale con que salió; su marca sale del artículo;
+     * - retirada de otra unidad: es la misma llanta, que cambia de unidad y
+     *   sigue con su historial;
+     * - previa: ya estaba puesta antes del almacén, sin vale.
+     *
+     * @param  array<string, mixed>  $datos
+     * @param  array<string, mixed>  $comun
+     */
+    private function instalar(Vehiculo $vehiculo, array $datos, array $comun): string
+    {
+        $origen = OrigenLlanta::from($datos['origen']);
+        $montaje = [
+            'vehiculo_id' => $vehiculo->id,
+            'posicion' => $datos['posicion'],
+            'condicion' => $datos['condicion'],
+            'instalada_el' => $datos['fecha'],
+            'km_instalacion' => $datos['kilometraje'] ?? null,
+        ];
+        $desde = null;
+
+        if ($origen === OrigenLlanta::Retirada) {
+            $llanta = Llanta::query()->lockForUpdate()->findOrFail((int) $datos['llanta_id']);
+            $desde = $llanta->vehiculo_id;
+
+            $llanta->update([...$montaje, 'retirada_el' => null, 'km_retiro' => null, 'motivo_retiro' => null]);
+        } elseif ($origen === OrigenLlanta::Almacen) {
+            $detalle = DetalleSalida::query()->lockForUpdate()->with('articulo')->findOrFail((int) $datos['detalle_salida_id']);
+
+            // Con la línea bloqueada: dos montajes a la vez no usan la misma llanta.
+            if ($this->deAlmacen->disponibles($detalle) < 1) {
+                throw ValidationException::withMessages(['detalle_salida_id' => 'Las llantas de ese vale ya están todas montadas.']);
+            }
+
+            $llanta = Llanta::create([
+                ...$montaje,
+                'origen' => $origen,
+                'articulo_id' => $detalle->articulo_id,
+                'detalle_salida_id' => $detalle->id,
+                'marca' => $detalle->articulo->marca,
+                'medida' => $datos['medida'] ?? $detalle->articulo->nombre,
+                'codigo' => $datos['codigo'] ?? null,
+            ]);
+        } else {
+            $llanta = Llanta::create([
+                ...$montaje,
+                'origen' => $origen,
+                'marca' => $datos['marca'] ?? null,
+                'medida' => $datos['medida'] ?? null,
+                'codigo' => $datos['codigo'] ?? null,
+            ]);
+        }
+
+        $llanta->movimientos()->create([
+            ...$comun,
+            'vehiculo_origen_id' => $desde !== $vehiculo->id ? $desde : null,
+            'posicion' => $datos['posicion'],
+            'profundidad_mm' => $datos['profundidad_mm'] ?? null,
+        ]);
+
+        return "Llanta instalada en la posición {$datos['posicion']}.";
     }
 
     /**

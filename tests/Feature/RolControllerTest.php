@@ -73,14 +73,17 @@ it('shows the roles with their permissions and the catalog grouped by module', f
 });
 
 /**
- * Gerencia ve todo (también lo que vale el almacén) y solo aprueba las
- * excepciones; RRHH maneja conductores y
+ * Gerencia ve todo (también lo que vale el almacén) y solo aprueba: las
+ * compras y las excepciones; RRHH maneja conductores y
  * asistencia, y entra por el tablero como todos.
  */
 it('creates the gerencia and rrhh roles by area', function (): void {
     $permisosDe = fn (string $rol): array => Role::findByName($rol, 'web')->permissions->pluck('name')->sort()->values()->all();
 
-    $todosLosVer = collect(Permiso::valores())->filter(fn (string $permiso): bool => str_ends_with($permiso, '.ver'))->push('abastecimiento.exceder_tope', 'almacen.ver_costos')->sort()->values()->all();
+    $todosLosVer = collect(Permiso::valores())
+        ->filter(fn (string $permiso): bool => str_ends_with($permiso, '.ver'))
+        ->push('abastecimiento.exceder_tope', 'almacen.ver_costos', 'compras.aprobar', 'compras.aprobar_emergencia', 'compras.parciales')
+        ->sort()->values()->all();
 
     expect($permisosDe('gerencia'))->toBe($todosLosVer)
         ->and($permisosDe('rrhh'))->toBe(collect([

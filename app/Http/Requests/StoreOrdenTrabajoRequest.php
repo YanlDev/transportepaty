@@ -4,10 +4,12 @@ namespace App\Http\Requests;
 
 use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\TipoOrdenTrabajo;
+use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\ServicioMantenimiento;
 use App\Models\Vehiculo;
 use App\Services\Archivos\ReglasDeArchivo;
+use App\Services\MaterialesDeOrden;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -62,6 +64,7 @@ class StoreOrdenTrabajoRequest extends FormRequest
             'trabajo' => ['required', 'string', 'max:5000'],
             'tecnico' => ['nullable', 'string', 'max:150'],
             'observacion' => ['nullable', 'string', 'max:2000'],
+            'justificacion_materiales' => ['nullable', 'string', 'min:10', 'max:1000'],
             'fotos_antes' => ['nullable', 'array', 'max:'.self::MAXIMO_FOTOS],
             'fotos_antes.*' => ReglasDeArchivo::imagen(),
             'fotos_despues' => ['nullable', 'array', 'max:'.self::MAXIMO_FOTOS],
@@ -73,6 +76,10 @@ class StoreOrdenTrabajoRequest extends FormRequest
      * El servicio tiene que ser del plan de la marca de la unidad, y una
      * preventiva que se da por finalizada necesita su km: es desde ahí que
      * se cuenta el próximo servicio.
+     *
+     * Además, para finalizarla tiene que haber salido del almacén todo lo
+     * que pide su nivel. Si algo no salió (no se cambió, no había), se
+     * finaliza igual pero diciendo por qué: queda escrito en la orden.
      *
      * @return array<int, callable(Validator): void>
      */
@@ -99,8 +106,24 @@ class StoreOrdenTrabajoRequest extends FormRequest
                     return;
                 }
 
-                if ($this->input('estado') === EstadoOrdenTrabajo::Finalizada->value && ! $this->filled('kilometraje')) {
+                if ($this->input('estado') !== EstadoOrdenTrabajo::Finalizada->value) {
+                    return;
+                }
+
+                if (! $this->filled('kilometraje')) {
                     $validator->errors()->add('kilometraje', 'Anota el km: el próximo servicio se cuenta desde acá.');
+                }
+
+                $faltantes = app(MaterialesDeOrden::class)->faltantes($servicio, $this->orden());
+
+                if ($faltantes !== [] && ! $this->filled('justificacion_materiales')) {
+                    $validator->errors()->add(
+                        'justificacion_materiales',
+                        'No salió del almacén todo lo que pide el servicio '.$servicio->codigo.': '
+                            .implode('; ', array_slice($faltantes, 0, 8))
+                            .(count($faltantes) > 8 ? '; y '.(count($faltantes) - 8).' más' : '')
+                            .'. Saca el vale o explica por qué se cierra así.',
+                    );
                 }
             },
         ];
@@ -113,6 +136,7 @@ class StoreOrdenTrabajoRequest extends FormRequest
     {
         return [
             'servicio_mantenimiento_id.required_if' => 'Elige el servicio del plan.',
+            'justificacion_materiales.min' => 'Explica un poco más por qué se cierra sin esos repuestos.',
             'fotos_antes.max' => 'Hasta :max fotos por grupo.',
             'fotos_despues.max' => 'Hasta :max fotos por grupo.',
             'fotos_antes.*.max' => 'Cada foto debe pesar menos de 10 MB.',
@@ -121,6 +145,14 @@ class StoreOrdenTrabajoRequest extends FormRequest
             'fotos_despues.*.mimetypes' => 'Cada foto debe ser JPG, PNG, WEBP o HEIC.',
             'termino.after_or_equal' => 'El término no puede ser antes del inicio.',
         ];
+    }
+
+    /**
+     * La orden que se edita; al registrar una nueva todavía no hay.
+     */
+    protected function orden(): ?OrdenTrabajo
+    {
+        return null;
     }
 
     protected function vehiculo(): Vehiculo

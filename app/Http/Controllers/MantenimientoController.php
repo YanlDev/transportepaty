@@ -4,11 +4,13 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoMantenimiento;
 use App\Enums\TipoVehiculo;
+use App\Models\Articulo;
 use App\Models\LecturaKilometraje;
 use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\ServicioMantenimiento;
 use App\Models\Vehiculo;
+use App\Services\MaterialesDeOrden;
 use App\Services\ProximoMantenimiento;
 use App\Services\RelojOperativo;
 use Carbon\CarbonImmutable;
@@ -24,10 +26,14 @@ use Inertia\Response;
  *
  * @phpstan-import-type EstadoUnidad from ProximoMantenimiento
  * @phpstan-import-type EstadoServicio from ProximoMantenimiento
+ * @phpstan-import-type Requerido from MaterialesDeOrden
  */
 class MantenimientoController extends Controller
 {
-    public function __construct(private readonly ProximoMantenimiento $mantenimiento) {}
+    public function __construct(
+        private readonly ProximoMantenimiento $mantenimiento,
+        private readonly MaterialesDeOrden $materiales,
+    ) {}
 
     /**
      * La portada del módulo: cómo está la flota de un vistazo y los accesos
@@ -65,9 +71,25 @@ class MantenimientoController extends Controller
         $estados = $this->mantenimiento->paraFlota($tractos);
         $unidades = $this->unidadesConPlan($tractos, $estados);
 
+        // A las que ya les toca o les falta poco se les avisa si el almacén
+        // no tiene lo que pide su próximo servicio. Varias unidades comparten
+        // servicio: se calcula una vez por cada uno.
+        $resumen = $this->resumen($unidades);
+        $faltanPorServicio = [];
+        $unidades = $unidades->map(function (array $unidad) use (&$faltanPorServicio): array {
+            $servicioId = $unidad['proximo']['id'] ?? null;
+            $avisa = in_array($unidad['estado'], [EstadoMantenimiento::Vencido->value, EstadoMantenimiento::Proximo->value], true);
+
+            if ($servicioId !== null && $avisa) {
+                $faltanPorServicio[$servicioId] ??= $this->materiales->faltanEnStock(ServicioMantenimiento::query()->whereKey($servicioId)->sole());
+            }
+
+            return [...$unidad, 'faltan_repuestos' => $servicioId !== null && $avisa ? $faltanPorServicio[$servicioId] : 0];
+        });
+
         return Inertia::render('mantenimiento/preventivo', [
             'unidades' => $unidades->all(),
-            'resumen' => $this->resumen($unidades),
+            'resumen' => $resumen,
             'marcas' => $this->marcas(),
             'filtros' => [
                 'marca' => $request->string('marca')->upper()->trim()->value() ?: null,
@@ -126,11 +148,21 @@ class MantenimientoController extends Controller
         return $conteo;
     }
 
-    public function show(Vehiculo $vehiculo): Response
+    public function show(Request $request, Vehiculo $vehiculo): Response
     {
         $this->authorize('viewAny', OrdenTrabajo::class);
 
         $estado = $this->mantenimiento->paraVehiculo($vehiculo);
+        $veCostos = $request->user()?->can('verCostos', Articulo::class) ?? false;
+
+        $ordenes = OrdenTrabajo::query()
+            ->where('vehiculo_id', $vehiculo->id)
+            ->with(['servicio:id,codigo,nombre', 'media'])
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get();
+        $costos = $veCostos ? $this->materiales->costos(array_values($ordenes->pluck('id')->all())) : [];
 
         return Inertia::render('mantenimiento/show', [
             'unidad' => [
@@ -141,13 +173,7 @@ class MantenimientoController extends Controller
             // Lo que hay que preparar para el próximo servicio: el suyo y el
             // de los niveles que incluye.
             'repuestos' => $estado['proximo'] === null ? [] : $this->repuestosHasta($estado['proximo']),
-            'ordenes' => OrdenTrabajo::query()
-                ->where('vehiculo_id', $vehiculo->id)
-                ->with(['servicio:id,codigo,nombre', 'media'])
-                ->orderByDesc('fecha')
-                ->orderByDesc('id')
-                ->limit(50)
-                ->get()
+            'ordenes' => $ordenes
                 ->map(fn (OrdenTrabajo $orden): array => [
                     'id' => $orden->id,
                     'fecha' => $orden->fecha->toDateString(),
@@ -160,8 +186,19 @@ class MantenimientoController extends Controller
                     'trabajo' => $orden->trabajo,
                     'tecnico' => $orden->tecnico,
                     'fotos' => $orden->media->count(),
+                    'numero' => $orden->numero(),
+                    'costo' => $costos[$orden->id] ?? null,
+                    'anulada' => $orden->estaAnulado(),
+                    'motivo_anulacion' => $orden->motivo_anulacion,
+                    'justificacion_materiales' => $orden->justificacion_materiales,
                 ])
                 ->all(),
+            // Lo que se le puso: cada línea de vale de almacén a su nombre.
+            'consumos' => array_map(
+                fn (array $linea): array => [...$linea, 'costo' => $veCostos ? $linea['costo'] : null],
+                $this->materiales->lineasDeUnidad($vehiculo),
+            ),
+            'costo_almacen' => $veCostos ? $this->materiales->costoDeUnidad($vehiculo) : null,
             'lecturas' => LecturaKilometraje::query()
                 ->where('vehiculo_id', $vehiculo->id)
                 ->with(['user:id,name', 'media'])
@@ -272,33 +309,11 @@ class MantenimientoController extends Controller
 
     /**
      * @param  EstadoServicio  $proximo
-     * @return list<array{servicio: string, descripcion: string, cantidad: float|null, unidad: string|null}>
+     * @return list<Requerido>
      */
     private function repuestosHasta(array $proximo): array
     {
-        $servicio = ServicioMantenimiento::query()->findOrFail($proximo['id']);
-
-        $niveles = ServicioMantenimiento::query()
-            ->where('plan_mantenimiento_id', $servicio->plan_mantenimiento_id)
-            ->where('nivel', '<=', $servicio->nivel)
-            ->with('repuestos')
-            ->orderBy('nivel')
-            ->get();
-
-        $repuestos = [];
-
-        foreach ($niveles as $nivel) {
-            foreach ($nivel->repuestos as $repuesto) {
-                $repuestos[] = [
-                    'servicio' => $nivel->codigo,
-                    'descripcion' => $repuesto->descripcion,
-                    'cantidad' => $repuesto->cantidad === null ? null : (float) $repuesto->cantidad,
-                    'unidad' => $repuesto->unidad,
-                ];
-            }
-        }
-
-        return $repuestos;
+        return $this->materiales->requeridos(ServicioMantenimiento::query()->findOrFail($proximo['id']));
     }
 
     /**

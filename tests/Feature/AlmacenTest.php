@@ -399,7 +399,7 @@ it('does not close an empty count', function (): void {
 it('charges an issue to the unit of its work order', function (): void {
     $filtro = Articulo::factory()->create();
     comprar([[$filtro, 5, 10]]);
-    $orden = OrdenTrabajo::factory()->create();
+    $orden = OrdenTrabajo::factory()->create(['estado' => 'en_proceso']);
 
     actingAs(almacenero())
         ->post(route('almacen.salidas.store'), [

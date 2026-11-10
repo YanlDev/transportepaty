@@ -8,7 +8,6 @@ use App\Models\OrdenTrabajo;
 use App\Models\Proveedor;
 use App\Models\User;
 use App\Models\Vehiculo;
-use App\Services\RelojOperativo;
 
 /**
  * Las listas para elegir en los formularios del almacén y la regla de los
@@ -82,27 +81,24 @@ trait CatalogosAlmacen
     }
 
     /**
-     * Las órdenes a las que todavía tiene sentido cargarles repuestos: las
-     * abiertas y las cerradas en el último mes.
+     * Las órdenes a las que se les puede cargar repuestos: las abiertas. A
+     * una finalizada o anulada ya no le sale nada; si faltó algo, se reabre.
      *
      * @return list<array{id: int, etiqueta: string, vehiculo_id: int, placa: string}>
      */
     protected function ordenesParaElegir(): array
     {
-        $desde = RelojOperativo::fechaDeHoy()->subDays(30)->toDateString();
-
         return array_values(OrdenTrabajo::query()
             ->with('vehiculo:id,placa')
-            ->where(fn ($query) => $query
-                ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
-                ->orWhereDate('fecha', '>=', $desde))
+            ->vigentes()
+            ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
             ->orderByDesc('fecha')
             ->orderByDesc('id')
             ->limit(200)
             ->get()
             ->map(fn (OrdenTrabajo $orden): array => [
                 'id' => $orden->id,
-                'etiqueta' => sprintf('OT-%05d · %s · %s', $orden->id, $orden->vehiculo->placa, mb_strimwidth($orden->trabajo, 0, 60, '…')),
+                'etiqueta' => sprintf('%s · %s · %s', $orden->numero(), $orden->vehiculo->placa, mb_strimwidth($orden->trabajo, 0, 60, '…')),
                 'vehiculo_id' => $orden->vehiculo_id,
                 'placa' => $orden->vehiculo->placa,
             ])

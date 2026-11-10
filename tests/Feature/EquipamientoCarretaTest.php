@@ -6,7 +6,7 @@ use App\Models\ConteoEquipamiento;
 use App\Models\ItemEquipamiento;
 use App\Models\User;
 use App\Models\Vehiculo;
-use App\Services\EstadoEquipamientoCarretas;
+use App\Services\EquipamientoDeUnidades;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -42,11 +42,19 @@ function contar(Vehiculo $carreta, array $cantidades, string $fecha = '2026-10-1
 }
 
 it('loads the straps of 4" and 2", with and without chicharra, without a minimum yet', function (): void {
-    expect(ItemEquipamiento::query()->vigentes()->pluck('minimo', 'nombre')->all())->toBe([
+    expect(ItemEquipamiento::query()->vigentes()->where('aplica_a', 'carreta')->pluck('minimo', 'nombre')->all())->toBe([
         'Faja de 4" con chicharra' => null,
         'Faja de 4" sin chicharra' => null,
         'Faja de 2" con chicharra' => null,
         'Faja de 2" sin chicharra' => null,
+    ])->and(ItemEquipamiento::query()->vigentes()->where('aplica_a', 'tracto')->pluck('lleva_vencimiento', 'nombre')->all())->toBe([
+        'Extintor' => true,
+        'Botiquín' => true,
+        'Conos de seguridad' => false,
+        'Kit antiderrame' => false,
+        'Pico' => false,
+        'Pala' => false,
+        'Caja de herramientas' => false,
     ]);
 });
 
@@ -58,13 +66,15 @@ it('compares the last count with the minimum, without counting the damaged ones'
     $nunca = Vehiculo::factory()->carreta()->create();
 
     contar($carreta, ['Faja de 4" con chicharra' => [8, 0], 'Faja de 2" con chicharra' => [4, 0]], '2026-10-01');
-    contar($carreta, ['Faja de 4" con chicharra' => [6, 2], 'Faja de 2" con chicharra' => [4, 1]], '2026-10-15');
+    // El primer conteo es su saldo inicial (8 y 4). El segundo comprueba:
+    // encuentra dañadas, que no cuentan para el mínimo.
+    contar($carreta, ['Faja de 4" con chicharra' => [6, 2], 'Faja de 2" con chicharra' => [3, 1]], '2026-10-15');
 
-    $estados = app(EstadoEquipamientoCarretas::class)->paraFlota(collect([$carreta, $nunca]));
+    $estados = app(EquipamientoDeUnidades::class)->paraFlota(collect([$carreta, $nunca]));
     $items = collect($estados[$carreta->id]['items'])->keyBy('nombre');
 
     expect($estados[$carreta->id]['estado'])->toBe(EstadoEquipamiento::Falta)
-        ->and($estados[$carreta->id]['faltan'])->toBe(2)
+        ->and($estados[$carreta->id]['faltan'])->toBe(3)
         ->and($items['Faja de 4" con chicharra'])->toMatchArray(['buenas' => 6, 'danadas' => 2, 'faltan' => 2])
         ->and($items['Faja de 4" sin chicharra'])->toMatchArray(['buenas' => 0, 'faltan' => 0])
         ->and($estados[$nunca->id]['estado'])->toBe(EstadoEquipamiento::SinContar);
@@ -74,25 +84,31 @@ it('compares the last count with the minimum, without counting the damaged ones'
         ->delete(route('mantenimiento.equipamiento.destroy', ConteoEquipamiento::query()->latest('fecha')->first()))
         ->assertSessionHasNoErrors();
 
-    expect(app(EstadoEquipamientoCarretas::class)->paraVehiculo($carreta)['estado'])->toBe(EstadoEquipamiento::Completo);
+    expect(app(EquipamientoDeUnidades::class)->paraVehiculo($carreta)['estado'])->toBe(EstadoEquipamiento::Completo);
 });
 
 it('says counted, not complete, while no item has a minimum', function (): void {
     $carreta = Vehiculo::factory()->carreta()->create();
     contar($carreta, ['Faja de 4" con chicharra' => [3, 0]]);
 
-    expect(app(EstadoEquipamientoCarretas::class)->paraVehiculo($carreta)['estado'])->toBe(EstadoEquipamiento::Contado);
+    expect(app(EquipamientoDeUnidades::class)->paraVehiculo($carreta)['estado'])->toBe(EstadoEquipamiento::Contado);
 });
 
-it('counts only carretas', function (): void {
+it('counts on each unit only the equipment that applies to it', function (): void {
+    $tracto = Vehiculo::factory()->create();
+
+    // Las fajas son de la carreta: en un tracto no se cuentan.
     actingAs(contador())
-        ->post(route('mantenimiento.equipamiento.store', Vehiculo::factory()->create()), [
+        ->post(route('mantenimiento.equipamiento.store', $tracto), [
             'fecha' => '2026-10-15',
             'items' => [['id' => faja('Faja de 4" con chicharra')->id, 'buenas' => 1, 'danadas' => 0]],
         ])
-        ->assertSessionHasErrors('items');
+        ->assertSessionHasErrors('items.0.id');
 
-    actingAs(contador())->get(route('mantenimiento.equipamiento.show', Vehiculo::factory()->create()))->assertNotFound();
+    // El tracto tiene lo suyo: extintor, botiquín, conos y herramientas.
+    actingAs(contador())
+        ->get(route('mantenimiento.equipamiento.show', $tracto))
+        ->assertInertia(fn ($page) => $page->has('carreta.items', 7)->where('carreta.items.0.nombre', 'Extintor'));
 });
 
 it('lists the carretas missing something first, and shows each one with its counts', function (): void {
@@ -102,17 +118,20 @@ it('lists the carretas missing something first, and shows each one with its coun
     contar($completa, ['Faja de 4" con chicharra' => [8, 0]]);
     $incompleta = Vehiculo::factory()->carreta()->create(['placa' => 'ZZZ-999']);
     contar($incompleta, ['Faja de 4" con chicharra' => [5, 0]]);
-    Vehiculo::factory()->create();
+    $tracto = Vehiculo::factory()->create();
 
     actingAs(contador())
         ->get(route('mantenimiento.equipamiento.index'))
         ->assertInertia(fn ($page) => $page
             ->component('mantenimiento/equipamiento/index')
-            ->has('carretas', 2)
+            // Las dos carretas y el tracto, que tiene su propio equipamiento.
+            ->has('carretas', 3)
             ->where('carretas.0.id', $incompleta->id)
             ->where('carretas.0.faltan', 3)
-            ->where('carretas.1.estado', 'completo')
-            ->has('catalogo', 4)
+            ->where('carretas.1.id', $tracto->id)
+            ->where('carretas.1.estado', 'sin_contar')
+            ->where('carretas.2.estado', 'completo')
+            ->has('catalogo', 11)
         );
 
     actingAs(contador())
@@ -148,7 +167,7 @@ it('lets whoever configures the plans edit the items and their minimums', functi
         'Faja de 4" con chicharra' => 10,
         'Faja de 2" con chicharra' => 4,
         'Cadena de amarre' => 2,
-    ])->and(ItemEquipamiento::query()->count())->toBe(5);
+    ])->and(ItemEquipamiento::query()->count())->toBe(12);
 });
 
 it('keeps counting for whoever has its permission', function (): void {

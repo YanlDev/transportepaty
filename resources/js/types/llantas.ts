@@ -39,6 +39,8 @@ export type MovimientoLlanta = {
     kilometraje: number | null;
     profundidad_mm: number | null;
     observacion: string | null;
+    /** La placa de la unidad de la que vino, si se volvió a montar acá. */
+    viene_de: string | null;
     /** «Michelin 295/80R22.5». */
     llanta: string | null;
     usuario: string | null;
@@ -62,4 +64,24 @@ export type UnidadLlantas = {
 export type UmbralesLlanta = {
     revisar_mm: number;
     cambiar_mm: number;
+};
+
+/** Una línea de vale de almacén con llantas todavía por montar en la unidad. */
+export type ValeDeLlantas = {
+    detalle_salida_id: number;
+    vale: string;
+    fecha: string;
+    articulo_id: number;
+    nombre: string;
+    marca: string | null;
+    disponibles: number;
+};
+
+/** Una llanta retirada de una unidad, que se puede volver a montar. */
+export type LlantaRetirada = {
+    id: number;
+    descripcion: string;
+    placa: string;
+    retirada_el: string;
+    motivo: string;
 };

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\NivelMantenimiento;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\UpdatePlanMantenimientoRequest;
+use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\RepuestoServicio;
@@ -52,6 +53,8 @@ class PlanMantenimientoController extends Controller
                                 'codigo' => $repuesto->codigo,
                                 'cantidad' => $repuesto->cantidad === null ? null : (float) $repuesto->cantidad,
                                 'unidad' => $repuesto->unidad,
+                                'articulo_id' => $repuesto->articulo_id,
+                                'es_servicio' => $repuesto->es_servicio,
                             ])
                             ->values()
                             ->all(),
@@ -60,6 +63,19 @@ class PlanMantenimientoController extends Controller
                     ->all(),
             ],
             'niveles' => NivelMantenimiento::options(),
+            // El catálogo del almacén, para ligar cada ítem a su artículo.
+            'articulos' => Articulo::query()
+                ->orderBy('nombre')
+                ->get()
+                ->map(fn (Articulo $articulo): array => [
+                    'id' => $articulo->id,
+                    'codigo' => $articulo->codigo,
+                    'nombre' => $articulo->nombre,
+                    'numero_parte' => $articulo->numero_parte,
+                    'unidad' => $articulo->unidad->abreviatura(),
+                ])
+                ->values()
+                ->all(),
         ]);
     }
 
@@ -71,7 +87,7 @@ class PlanMantenimientoController extends Controller
     {
         $this->authorize('update', $plan);
 
-        /** @var list<array{codigo: string, nombre: string, intervalo_km: int, intervalo_meses: int|null, repuestos: list<array{descripcion: string, codigo: string|null, cantidad: float|null, unidad: string|null}>}> $servicios */
+        /** @var list<array{codigo: string, nombre: string, intervalo_km: int, intervalo_meses: int|null, repuestos: list<array{descripcion: string, codigo: string|null, cantidad: float|null, unidad: string|null, articulo_id?: int|null, es_servicio?: bool|null}>}> $servicios */
         $servicios = $request->validated('servicios');
 
         DB::transaction(function () use ($request, $plan, $servicios): void {
@@ -98,6 +114,8 @@ class PlanMantenimientoController extends Controller
                         'codigo' => $repuesto['codigo'] ?? null,
                         'cantidad' => $repuesto['cantidad'] ?? null,
                         'unidad' => $repuesto['unidad'] ?? null,
+                        'articulo_id' => $repuesto['articulo_id'] ?? null,
+                        'es_servicio' => (bool) ($repuesto['es_servicio'] ?? false),
                         'orden' => $orden,
                     ]);
                 }

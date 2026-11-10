@@ -48,10 +48,17 @@ import type {
     Opcion,
     ProveedorElegible,
 } from '@/types/almacen';
+import type { ValeParaIngreso } from '@/types/compras';
 import type { EnumOption } from '@/types/fleet';
 
 type Props = {
     proveedores: ProveedorElegible[];
+    /** Los vales de compra aprobados con que todavía se puede comprar. */
+    vales: ValeParaIngreso[];
+    /** El vale desde el que se llegó, si se llegó desde uno. */
+    valeInicial: number | null;
+    /** Desde qué fecha de comprobante el vale es obligatorio. */
+    valeObligatorioDesde: string | null;
     articulos: ArticuloElegible[];
     comprobantes: EnumOption[];
     monedas: EnumOption[];
@@ -73,6 +80,8 @@ type Linea = {
     cantidad: string;
     precio_unitario: string;
     bonificacion: boolean;
+    /** Opcional: extintores, botiquines, lo que caduca. */
+    vence_el: string;
 };
 
 const lineaVacia = (): Linea => ({
@@ -80,7 +89,18 @@ const lineaVacia = (): Linea => ({
     cantidad: '',
     precio_unitario: '',
     bonificacion: false,
+    vence_el: '',
 });
+
+/** Lo que el vale autorizó, como líneas de la compra. */
+const lineasDelVale = (vale: ValeParaIngreso): Linea[] =>
+    vale.detalles.map((linea) => ({
+        articulo_id: linea.articulo_id,
+        cantidad: String(linea.cantidad),
+        precio_unitario: String(linea.precio_unitario),
+        bonificacion: false,
+        vence_el: '',
+    }));
 
 /**
  * Registrar una compra tal como dice el comprobante: el proveedor, la serie
@@ -91,6 +111,9 @@ const lineaVacia = (): Linea => ({
  */
 export default function IngresoCreate({
     proveedores,
+    vales,
+    valeInicial,
+    valeObligatorioDesde,
     articulos,
     comprobantes,
     monedas,
@@ -117,6 +140,7 @@ export default function IngresoCreate({
         fecha: string;
         fecha_emision: string;
         proveedor_id: number | null;
+        vale_compra_id: number | null;
         tipo_comprobante: string;
         serie_numero: string;
         moneda: string;
@@ -128,23 +152,50 @@ export default function IngresoCreate({
         observacion: string;
         comprobante: File | null;
         detalles: Linea[];
-    }>({
-        fecha: hoy,
-        fecha_emision: hoy,
-        proveedor_id: null,
-        tipo_comprobante: 'factura',
-        serie_numero: '',
-        moneda: 'PEN',
-        tipo_cambio: '',
-        precios_con_igv: false,
-        descuento: '',
-        flete: '',
-        total_comprobante: '',
-        observacion: '',
-        comprobante: null,
-        detalles: [lineaVacia()],
+    }>(() => {
+        const vale = vales.find((v) => v.id === valeInicial);
+
+        return {
+            fecha: hoy,
+            fecha_emision: hoy,
+            proveedor_id: vale?.proveedor_id ?? null,
+            vale_compra_id: vale?.id ?? null,
+            tipo_comprobante: 'factura',
+            serie_numero: '',
+            moneda: vale?.moneda ?? 'PEN',
+            tipo_cambio: '',
+            // El vale se aprobó con precios finales.
+            precios_con_igv: vale !== undefined,
+            descuento: '',
+            flete: '',
+            total_comprobante: vale ? vale.total.toFixed(2) : '',
+            observacion: '',
+            comprobante: null,
+            detalles: vale ? lineasDelVale(vale) : [lineaVacia()],
+        };
     });
     const errores = errors as Record<string, string | undefined>;
+
+    // Elegir el vale trae lo que se aprobó: proveedor, moneda, líneas y total.
+    const elegirVale = (id: number | null) => {
+        const vale = vales.find((v) => v.id === id);
+
+        if (!vale) {
+            setData('vale_compra_id', null);
+
+            return;
+        }
+
+        setData((previo) => ({
+            ...previo,
+            vale_compra_id: vale.id,
+            proveedor_id: vale.proveedor_id,
+            moneda: vale.moneda,
+            precios_con_igv: true,
+            total_comprobante: vale.total.toFixed(2),
+            detalles: lineasDelVale(vale),
+        }));
+    };
 
     const cambiarLinea = (indice: number, cambios: Partial<Linea>) =>
         setData(
@@ -194,6 +245,48 @@ export default function IngresoCreate({
             />
 
             <form onSubmit={guardar} className="flex flex-col gap-6">
+                <section className="flex flex-col gap-2 rounded-xl border bg-card p-5">
+                    <Label htmlFor="ingreso-vale">Vale de compra</Label>
+                    <div className="flex gap-2">
+                        <div className="min-w-0 flex-1">
+                            <SelectorBuscable
+                                id="ingreso-vale"
+                                valor={data.vale_compra_id}
+                                onCambio={elegirVale}
+                                etiqueta={
+                                    vales.length === 0
+                                        ? 'No hay vales aprobados vigentes'
+                                        : 'Elige el vale con que se compró'
+                                }
+                                opciones={vales.map((vale) => ({
+                                    valor: vale.id,
+                                    etiqueta: `${vale.numero} · ${vale.proveedor} · ${vale.moneda === 'USD' ? 'US$' : 'S/'} ${vale.total.toFixed(2)}`,
+                                    detalle: vale.proveedor,
+                                }))}
+                                invalido={!!errores.vale_compra_id}
+                            />
+                        </div>
+                        {data.vale_compra_id !== null && (
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => elegirVale(null)}
+                            >
+                                Quitar
+                            </Button>
+                        )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                        Toda compra entra con un vale aprobado, por el mismo
+                        proveedor y el mismo total. Si el comprobante salió por
+                        otro monto, corrige el vale para que vuelva a
+                        aprobación.
+                        {valeObligatorioDesde &&
+                            ` Solo los comprobantes anteriores al ${valeObligatorioDesde.split('-').reverse().join('/')} entran sin vale.`}
+                    </p>
+                    <InputError message={errores.vale_compra_id} />
+                </section>
+
                 <section className="grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-2 lg:grid-cols-4">
                     <div className="sm:col-span-2">
                         <Label htmlFor="ingreso-proveedor">
@@ -503,6 +596,21 @@ export default function IngresoCreate({
                                             />
                                             <Gift className="size-3.5 text-emerald-700 dark:text-emerald-400" />
                                             Bonificación (vino de regalo)
+                                        </label>
+                                        <label className="mt-1.5 flex w-fit items-center gap-1.5 text-xs text-muted-foreground">
+                                            Vence el (si caduca)
+                                            <input
+                                                type="date"
+                                                value={linea.vence_el}
+                                                onChange={(e) =>
+                                                    cambiarLinea(indice, {
+                                                        vence_el:
+                                                            e.target.value,
+                                                    })
+                                                }
+                                                aria-label="Fecha de vencimiento"
+                                                className="h-7 rounded-md border bg-background px-1.5 text-xs text-foreground"
+                                            />
                                         </label>
                                         <InputError
                                             message={errorDeLinea(

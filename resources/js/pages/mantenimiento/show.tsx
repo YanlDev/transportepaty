@@ -1,5 +1,12 @@
 import { Head, Link, setLayoutProps } from '@inertiajs/react';
-import { Camera, ClipboardPlus, Gauge, Trash2, Wrench } from 'lucide-react';
+import {
+    Ban,
+    Camera,
+    ClipboardPlus,
+    Gauge,
+    Trash2,
+    Wrench,
+} from 'lucide-react';
 import { useState } from 'react';
 import { destroy as borrarLectura } from '@/actions/App/Http/Controllers/LecturaKilometrajeController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
@@ -19,14 +26,17 @@ import { RegistrarKmDialog } from '@/components/mantenimiento/registrar-km-dialo
 import { Button } from '@/components/ui/button';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { usePermisos } from '@/hooks/use-permisos';
+import { formatearCantidad } from '@/lib/almacen';
 import {
     formatearFecha,
     formatearFechaHora,
     formatearPlaca,
+    formatearSoles,
 } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type {
     LecturaResumen,
+    LineaMaterial,
     OrdenResumen,
     RepuestoAPreparar,
     ServicioUnidad,
@@ -41,6 +51,10 @@ type Props = {
     };
     repuestos: RepuestoAPreparar[];
     ordenes: OrdenResumen[];
+    /** Lo que el almacén le puso a la unidad, con orden o sin ella. */
+    consumos: LineaMaterial[];
+    /** Todo lo gastado del almacén en la unidad. Null para quien no ve costos. */
+    costo_almacen: number | null;
     lecturas: LecturaResumen[];
     tractos: TractoKm[];
 };
@@ -53,6 +67,8 @@ export default function MantenimientoShow({
     unidad,
     repuestos,
     ordenes,
+    consumos,
+    costo_almacen,
     lecturas,
     tractos,
 }: Props) {
@@ -173,19 +189,77 @@ export default function MantenimientoShow({
                                     </span>
                                     {repuesto.descripcion}
                                 </span>
-                                {repuesto.cantidad !== null && (
-                                    <span className="shrink-0 text-muted-foreground tabular-nums">
-                                        {repuesto.cantidad.toLocaleString(
-                                            'es-PE',
-                                        )}{' '}
-                                        {repuesto.unidad}
-                                    </span>
-                                )}
+                                <span className="shrink-0 text-right text-muted-foreground tabular-nums">
+                                    {repuesto.cantidad !== null &&
+                                        `${repuesto.cantidad.toLocaleString('es-PE')} ${repuesto.unidad ?? ''}`}
+                                    {!repuesto.es_servicio && (
+                                        <span
+                                            className={cn(
+                                                'block text-xs',
+                                                repuesto.falta_stock
+                                                    ? 'text-amber-600 dark:text-amber-400'
+                                                    : 'text-emerald-600 dark:text-emerald-400',
+                                            )}
+                                        >
+                                            {repuesto.articulo === null
+                                                ? 'Sin ligar al almacén'
+                                                : `Stock: ${formatearCantidad(repuesto.stock ?? 0)}`}
+                                        </span>
+                                    )}
+                                </span>
                             </li>
                         ))}
                     </ul>
                 </section>
             )}
+
+            <section className="flex flex-col gap-3">
+                <div className="flex items-baseline justify-between gap-2">
+                    <h2 className="text-sm font-semibold text-muted-foreground uppercase">
+                        Lo que se le puso
+                    </h2>
+                    {costo_almacen !== null && (
+                        <span className="text-sm font-semibold tabular-nums">
+                            {formatearSoles(costo_almacen)}
+                        </span>
+                    )}
+                </div>
+                {consumos.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                        Todavía no salió nada del almacén para esta unidad.
+                    </p>
+                ) : (
+                    <ul className="divide-y rounded-xl border bg-card">
+                        {consumos.map((linea) => (
+                            <li
+                                key={linea.id}
+                                className="flex items-start justify-between gap-3 px-4 py-2.5 text-sm"
+                            >
+                                <span className="flex flex-col">
+                                    <span>{linea.nombre}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        {formatearFecha(linea.fecha)} ·{' '}
+                                        {linea.vale}
+                                        {linea.orden_trabajo_id !== null &&
+                                            ` · OT-${String(linea.orden_trabajo_id).padStart(5, '0')}`}
+                                    </span>
+                                </span>
+                                <span className="shrink-0 text-right tabular-nums">
+                                    {formatearCantidad(
+                                        linea.cantidad - linea.devuelto,
+                                    )}{' '}
+                                    {linea.unidad}
+                                    {linea.costo !== null && (
+                                        <span className="block text-xs text-muted-foreground">
+                                            {formatearSoles(linea.costo)}
+                                        </span>
+                                    )}
+                                </span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
+            </section>
 
             <section className="flex flex-col gap-3">
                 <h2 className="text-sm font-semibold text-muted-foreground uppercase">
@@ -366,22 +440,46 @@ function FilaOrden({
                         ? `Servicio ${orden.servicio}`
                         : orden.tipo_label}
                 </span>
-                <StatusBadge
-                    label={orden.estado_label}
-                    tone={
-                        orden.estado === 'finalizada'
-                            ? 'success'
-                            : orden.estado === 'en_proceso'
-                              ? 'info'
-                              : 'warning'
-                    }
-                />
+                {orden.anulada ? (
+                    <StatusBadge label="Anulada" tone="danger" />
+                ) : (
+                    <StatusBadge
+                        label={orden.estado_label}
+                        tone={
+                            orden.estado === 'finalizada'
+                                ? 'success'
+                                : orden.estado === 'en_proceso'
+                                  ? 'info'
+                                  : 'warning'
+                        }
+                    />
+                )}
             </div>
-            <p className="line-clamp-2 text-muted-foreground">
+            <p
+                className={cn(
+                    'line-clamp-2 text-muted-foreground',
+                    orden.anulada && 'line-through',
+                )}
+            >
                 {orden.trabajo}
             </p>
+            {orden.anulada && orden.motivo_anulacion && (
+                <p className="flex items-center gap-1.5 text-xs text-destructive">
+                    <Ban className="size-3.5" />
+                    {orden.motivo_anulacion}
+                </p>
+            )}
+            {!orden.anulada && orden.justificacion_materiales && (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Cerrada sin todos los repuestos:{' '}
+                    {orden.justificacion_materiales}
+                </p>
+            )}
             <p className="text-xs text-muted-foreground">
-                {formatearFecha(orden.fecha)}
+                {orden.numero} · {formatearFecha(orden.fecha)}
+                {orden.costo !== null &&
+                    orden.costo > 0 &&
+                    ` · ${formatearSoles(orden.costo)}`}
                 {orden.kilometraje !== null &&
                     ` · ${formatearKm(orden.kilometraje)}`}
                 {orden.tecnico && ` · ${orden.tecnico}`}
@@ -391,7 +489,7 @@ function FilaOrden({
         </div>
     );
 
-    return editable ? (
+    return editable && !orden.anulada ? (
         <Link
             href={editarOrden(orden.id)}
             className="block rounded-xl hover:bg-accent/30"

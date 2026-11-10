@@ -34,12 +34,13 @@ enum RolBase: string
         return match ($this) {
             self::Admin => Permiso::cases(),
 
-            // Ve todo y no modifica nada, salvo aprobar las excepciones:
-            // autorizar combustible por encima del tope.
+            // Ve todo y no modifica nada, salvo aprobar: las compras y el
+            // combustible por encima del tope.
             self::Gerencia => [
                 ...array_values(array_filter(Permiso::cases(), fn (Permiso $permiso): bool => str_ends_with($permiso->value, '.ver'))),
                 Permiso::AbastecimientoExcederTope,
                 Permiso::AlmacenVerCostos,
+                Permiso::ComprasAprobar, Permiso::ComprasAprobarEmergencia, Permiso::ComprasParciales,
             ],
 
             // Programa los tickets, sube y asigna las GR, registra la llegada
@@ -55,6 +56,9 @@ enum RolBase: string
                 Permiso::ConductoresVer,
                 Permiso::NovedadesRegistrar, Permiso::NovedadesLevantar,
                 Permiso::ClientesVer, Permiso::CotizacionesVer,
+                // El jefe de operaciones pide y aprueba lo de una unidad
+                // parada en ruta.
+                Permiso::ComprasVer, Permiso::ComprasSolicitar, Permiso::ComprasAprobarEmergencia,
             ],
 
             // El OK de salida de cada ticket y el mantenimiento de la flota.
@@ -66,6 +70,7 @@ enum RolBase: string
                 Permiso::MantenimientoLlantas, Permiso::MantenimientoEquipamiento,
                 Permiso::NovedadesRegistrar, Permiso::NovedadesLevantar,
                 Permiso::AlmacenVer,
+                Permiso::ComprasVer, Permiso::ComprasSolicitar,
             ],
 
             // Autoriza el combustible, registra los vouchers, deposita los
@@ -101,6 +106,7 @@ enum RolBase: string
                 Permiso::AlmacenVer, Permiso::AlmacenVerCostos, Permiso::AlmacenCatalogo,
                 Permiso::AlmacenIngresar, Permiso::AlmacenDespachar,
                 Permiso::AlmacenInventariar, Permiso::AlmacenAnular,
+                Permiso::ComprasVer, Permiso::ComprasSolicitar,
             ],
         };
     }

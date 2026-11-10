@@ -10,6 +10,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -97,6 +98,11 @@ class ConfiguracionAlmacenController extends Controller
     public function quitarCategoria(Request $request, CategoriaArticulo $categoria): RedirectResponse
     {
         $this->authorize('create', Articulo::class);
+
+        // Las llantas y el equipamiento se reconocen por su categoría.
+        if ($categoria->clave !== null) {
+            throw ValidationException::withMessages(['mover_a' => "«{$categoria->nombre}» la usa Mantenimiento para reconocer sus artículos: se puede renombrar, no quitar."]);
+        }
 
         $destino = $request->validate([
             'mover_a' => ['nullable', 'integer', Rule::exists('categorias_articulo', 'id'), Rule::notIn([$categoria->id])],

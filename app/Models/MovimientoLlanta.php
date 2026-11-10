@@ -18,6 +18,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $llanta_id
  * @property int $vehiculo_id
+ * @property int|null $vehiculo_origen_id
  * @property TipoMovimientoLlanta $tipo
  * @property Carbon $fecha
  * @property string $posicion
@@ -27,10 +28,11 @@ use Illuminate\Support\Carbon;
  * @property string|null $observacion
  * @property int|null $user_id
  * @property-read Llanta $llanta
+ * @property-read Vehiculo|null $origen
  * @property-read User|null $user
  */
 #[Fillable([
-    'llanta_id', 'vehiculo_id', 'tipo', 'fecha', 'posicion', 'posicion_destino',
+    'llanta_id', 'vehiculo_id', 'vehiculo_origen_id', 'tipo', 'fecha', 'posicion', 'posicion_destino',
     'kilometraje', 'profundidad_mm', 'observacion', 'user_id',
 ])]
 class MovimientoLlanta extends Model
@@ -46,6 +48,16 @@ class MovimientoLlanta extends Model
     public function llanta(): BelongsTo
     {
         return $this->belongsTo(Llanta::class);
+    }
+
+    /**
+     * La unidad de la que viene la llanta, cuando se vuelve a montar en otra.
+     *
+     * @return BelongsTo<Vehiculo, $this>
+     */
+    public function origen(): BelongsTo
+    {
+        return $this->belongsTo(Vehiculo::class, 'vehiculo_origen_id')->withTrashed();
     }
 
     /**

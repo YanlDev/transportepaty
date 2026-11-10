@@ -28,6 +28,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property Carbon $fecha
  * @property Carbon|null $fecha_emision
  * @property int|null $proveedor_id
+ * @property int|null $vale_compra_id
  * @property TipoComprobante|null $tipo_comprobante
  * @property string|null $serie_numero
  * @property string|null $comprobante_clave
@@ -54,6 +55,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'fecha',
     'fecha_emision',
     'proveedor_id',
+    'vale_compra_id',
     'tipo_comprobante',
     'serie_numero',
     'comprobante_clave',
@@ -136,6 +138,16 @@ class IngresoAlmacen extends Model implements HasMedia
     public function proveedor(): BelongsTo
     {
         return $this->belongsTo(Proveedor::class);
+    }
+
+    /**
+     * El vale de compra con que se compró.
+     *
+     * @return BelongsTo<ValeCompra, $this>
+     */
+    public function valeCompra(): BelongsTo
+    {
+        return $this->belongsTo(ValeCompra::class);
     }
 
     /**

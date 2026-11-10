@@ -45,7 +45,7 @@ class OdometroDeUnidad
                 ->where('vehiculo_id', $vehiculo->id)
                 ->when($origen !== null, fn ($query) => $query->where(fn ($query) => $query->whereNull('origen')->orWhere('origen', '!=', $origen)))
                 ->max('kilometraje'),
-            (int) OrdenTrabajo::query()->where('vehiculo_id', $vehiculo->id)->max('kilometraje'),
+            (int) OrdenTrabajo::query()->vigentes()->where('vehiculo_id', $vehiculo->id)->max('kilometraje'),
         );
 
         return $ultimo > 0 && $kilometraje < $ultimo
