@@ -180,14 +180,14 @@ class DotacionVuelta
         $previsto = $vuelta->topeDe($sentido);
         $puntos = [];
 
-        foreach ($rutas as $ruta) {
-            foreach ($ruta->lineasDeCombustible() as $linea) {
-                $clave = $linea['punto_id'] ?? 'linea:'.($linea['punto'] ?? '');
-                $puntos[$clave] ??= ['punto' => $linea['punto'] ?? 'Total del tramo', 'previsto' => 0.0];
-                $puntos[$clave]['previsto'] = $puntos[$clave]['previsto'] === null || $linea['galones'] === null
-                    ? null
-                    : $puntos[$clave]['previsto'] + (float) $linea['galones'];
-            }
+        $lineas = $rutas->flatMap(fn (RutaVuelta $ruta): array => $ruta->lineasDeCombustible())->all();
+
+        foreach ($lineas as $linea) {
+            $clave = $linea['punto_id'] ?? 'linea:'.($linea['punto'] ?? '');
+            $puntos[$clave] ??= ['punto' => $linea['punto'] ?? self::sinGrifo($lineas), 'previsto' => 0.0];
+            $puntos[$clave]['previsto'] = $puntos[$clave]['previsto'] === null || $linea['galones'] === null
+                ? null
+                : $puntos[$clave]['previsto'] + (float) $linea['galones'];
         }
 
         $principal = $rutas->first(fn (RutaVuelta $ruta): bool => ! $ruta->es_complemento) ?? $rutas->first();
@@ -257,7 +257,7 @@ class DotacionVuelta
      * autorizado en un punto que la ruta no nombra también se muestra, con
      * lo previsto vacío.
      *
-     * @param  list<array{punto_id: int|null, punto: string|null, galones: float|null}>  $lineas
+     * @param  list<array{punto_id: int|null, punto: string|null, concepto: string, galones: float|null}>  $lineas
      * @param  Collection<int, Abastecimiento>  $vigentes
      * @return list<FilaCombustible>
      */
@@ -267,7 +267,7 @@ class DotacionVuelta
 
         foreach ($lineas as $linea) {
             $clave = $linea['punto_id'] ?? 'linea:'.($linea['punto'] ?? '');
-            $porPunto[$clave] ??= ['punto_id' => $linea['punto_id'], 'punto' => $linea['punto'] ?? 'Total del tramo', 'previsto' => 0.0];
+            $porPunto[$clave] ??= ['punto_id' => $linea['punto_id'], 'punto' => $linea['punto'] ?? self::sinGrifo($lineas), 'previsto' => 0.0];
             $porPunto[$clave]['previsto'] = $porPunto[$clave]['previsto'] === null || $linea['galones'] === null
                 ? null
                 : $porPunto[$clave]['previsto'] + (float) $linea['galones'];
@@ -296,6 +296,23 @@ class DotacionVuelta
         }
 
         return $filas;
+    }
+
+    /**
+     * Cómo se llama la fila de las líneas sin grifo: por su nombre («Hasta
+     * Juliaca», «Uraca»), unidas si son varias; «Total del tramo» si solo
+     * dicen «Combustible».
+     *
+     * @param  list<array{punto_id: int|null, concepto?: string|null}>  $lineas
+     */
+    private static function sinGrifo(array $lineas): string
+    {
+        $nombres = array_values(array_unique(array_filter(
+            array_map(fn (array $linea): ?string => $linea['punto_id'] === null ? trim((string) ($linea['concepto'] ?? '')) : null, $lineas),
+            fn (?string $nombre): bool => $nombre !== null && $nombre !== '' && mb_strtolower($nombre) !== 'combustible',
+        )));
+
+        return $nombres === [] ? 'Total del tramo' : implode(' + ', $nombres);
     }
 
     /**

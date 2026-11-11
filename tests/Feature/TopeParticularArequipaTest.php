@@ -49,6 +49,11 @@ function corregirParticularArequipa(): void
     (require database_path('migrations/2026_11_11_180342_corrige_el_tope_de_particular_a_arequipa.php'))->up();
 }
 
+function pasarRutasConFullAHastaJuliaca(): void
+{
+    (require database_path('migrations/2026_11_11_195026_pasa_las_rutas_con_full_a_hasta_juliaca.php'))->up();
+}
+
 it('gives Particular a Arequipa a 190 gal tope that the Kio full tank deducts from', function (): void {
     rompeParticularArequipa();
     $alca = ticketDeAlca('Ida y vuelta Huaral', 'Uraca (Corire)');
@@ -81,4 +86,31 @@ it('leaves alone the tickets that already have fuel in that leg', function (): v
     corregirParticularArequipa();
 
     expect($conCombustible->rutas()->first()->lineas)->toBe($antes);
+});
+
+it('says the full-tank routes tope as «Hasta Juliaca», without a grifo', function (): void {
+    rompeParticularArequipa();
+    $alca = ticketDeAlca('Ida y vuelta Huaral', 'Uraca (Corire)');
+
+    corregirParticularArequipa();
+    pasarRutasConFullAHastaJuliaca();
+
+    foreach (['Particular a Juliaca' => 190.0, 'Particular a Arequipa' => 190.0, 'Particular a Cusco' => 200.0, 'Particular a Moquegua – Ilo' => 190.0] as $nombre => $tope) {
+        $ruta = rutaDelCatalogo($nombre)->load('lineas.punto');
+        $combustible = $ruta->lineas->where('tipo.value', 'combustible');
+
+        expect($ruta->topePara(null))->toBe($tope)
+            ->and($combustible->firstWhere('tanque_lleno', true)?->punto?->nombre)->toBe('Kio')
+            ->and($combustible->where('tanque_lleno', false)->map(fn ($linea) => [$linea->concepto, $linea->punto_abastecimiento_id])->values()->all())
+            ->toBe([['Hasta Juliaca', null]]);
+    }
+
+    // El ticket de Alca: mismo tope, y la fila sin grifo dice qué es.
+    Abastecimiento::factory()->paraVuelta($alca, SentidoTramo::Regreso)->create(['galones' => 20, 'tanque_lleno' => false, 'punto_abastecimiento_id' => PuntoAbastecimiento::query()->where('nombre', 'Lima')->value('id')]);
+    $full = Abastecimiento::factory()->paraVuelta($alca, SentidoTramo::Regreso)->create(['galones' => 0, 'tanque_lleno' => true]);
+    $full->update(['galones_despachados' => 144, 'despachado_el' => now()]);
+
+    $tramo = vueltaDe($alca);
+    expect($tramo)->toMatchArray(['previsto' => 250.0, 'registrado' => 164.0, 'falta' => 86.0])
+        ->and(collect($tramo['puntos'])->pluck('punto')->all())->toContain('Hasta Juliaca + Uraca', 'Lima');
 });

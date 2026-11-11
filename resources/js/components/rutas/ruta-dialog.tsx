@@ -688,7 +688,7 @@ export function RutaDialog({
                                             opciones={[
                                                 {
                                                     value: NINGUNO,
-                                                    label: 'Total del tramo',
+                                                    label: 'Sin grifo (todo el tramo)',
                                                 },
                                                 ...opciones.puntos,
                                             ]}
