@@ -91,7 +91,8 @@ class RutaVuelta extends Model
     }
 
     /**
-     * Dónde se llena el tanque (Kio): sin galones fijos, va aparte del tope.
+     * Dónde se llena el tanque (Kio): sin galones fijos; lo que dice su
+     * voucher descuenta del tope que dan las otras líneas.
      *
      * @return list<LineaCopiada>
      */

@@ -500,9 +500,10 @@ export function RegistrarAbastecimientoDialog({
                                                 .join(' o ')}
                                         </span>
                                         <span className="text-xs text-muted-foreground">
-                                            No suma al tope. Los galones los
-                                            dice el voucher: se regulariza con
-                                            su foto y el kilometraje.
+                                            Va sin galones: los dice el voucher,
+                                            y descuentan del tope del tramo.
+                                            Hasta registrar el voucher no se
+                                            autoriza nada más.
                                         </span>
                                     </span>
                                 </label>

@@ -28,7 +28,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property int|null $conductor_id
  * @property Carbon $fecha
  * @property string $galones Los autorizados (0 en el tanque full: lo dice el voucher).
- * @property bool $tanque_lleno Se llenó el tanque (Kio): no suma al tope del tramo y se regulariza con el voucher.
+ * @property bool $tanque_lleno Se llenó el tanque (Kio): se autoriza sin galones; los del voucher descuentan del tope del tramo.
  * @property string|null $precio_autorizado Soles por galón con que se autorizó: el costo estimado hasta el voucher.
  * @property string|null $precio_galon Soles por galón en ese grifo, según el voucher.
  * @property string|null $importe Galones despachados × precio, en soles.

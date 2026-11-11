@@ -129,7 +129,7 @@ export type TramoCombustible = {
     despachado: number;
     falta: number | null;
     puntos: { punto: string; previsto: number | null }[];
-    /** El tanque full de sus rutas (Kio): va aparte del tope. */
+    /** El tanque full de sus rutas (Kio): sin galones fijos; los del voucher descuentan del tope. */
     tanque_lleno: {
         puntos: { punto_id: number | null; punto: string }[];
         usado: boolean;
@@ -207,7 +207,7 @@ export type LineaRuta = {
     punto?: string | null;
     /** null: galones por definir (o tanque full). */
     galones: number | null;
-    /** Se llena el tanque (Kio): sin galones, va aparte del tope. */
+    /** Se llena el tanque (Kio): sin galones; los del voucher descuentan del tope. */
     tanque_lleno: boolean;
     monto: number | null;
 };

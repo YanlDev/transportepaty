@@ -112,7 +112,8 @@ class Ruta extends Model
             return null;
         }
 
-        // El tanque full no tiene galones fijos: no suma al tope.
+        // El tanque full no tiene galones fijos: no arma el tope; lo que dice
+        // su voucher descuenta de él.
         $galones = array_column(array_filter(
             $this->lineasPara($variante),
             fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value && ! $linea['tanque_lleno'],

@@ -19,7 +19,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string $concepto
  * @property int|null $punto_abastecimiento_id
  * @property string|null $galones Null: por definir (o tanque full).
- * @property bool $tanque_lleno Se llena el tanque (Kio): sin galones fijos, lo dice el voucher; no suma al tope.
+ * @property bool $tanque_lleno Se llena el tanque (Kio): sin galones fijos; no arma el tope (lo arman las otras líneas) y lo que dice el voucher descuenta de él.
  * @property string|null $monto
  * @property int $orden
  * @property-read PuntoAbastecimiento|null $punto

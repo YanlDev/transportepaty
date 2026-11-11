@@ -91,6 +91,32 @@ const numeroONulo = (valor: string): number | null =>
  * depende del peso, sus variantes. Una línea sin variante vale para toda la
  * ruta. Los tickets que ya la tienen no cambian al guardar.
  */
+
+/**
+ * Con tanque full, el tope del recorrido tiene que estar en otra línea: el
+ * full no tiene galones y descuenta de ese tope con su voucher. Sin ella el
+ * tramo queda en 0 (solo se autoriza el full) o sin tope.
+ */
+function avisoDelFull(lineas: LineaRuta[]): string | null {
+    const combustible = lineas.filter((linea) => linea.tipo === 'combustible');
+
+    if (!combustible.some((linea) => linea.tanque_lleno)) {
+        return null;
+    }
+
+    const otras = combustible.filter((linea) => !linea.tanque_lleno);
+
+    if (otras.some((linea) => linea.galones === null)) {
+        return 'Pon en la línea sin galones el tope de todo el recorrido (p. ej. Arequipa 190): el full descuenta de ahí con su voucher. Mientras falte, el tramo queda sin tope y no se autoriza nada.';
+    }
+
+    if (otras.every((linea) => Number(linea.galones ?? 0) === 0)) {
+        return 'Con tanque full, el tope del recorrido va en otra línea de combustible (p. ej. Arequipa 190). Sin ella el tope queda en 0 y solo se puede autorizar el full.';
+    }
+
+    return null;
+}
+
 export function RutaDialog({
     ruta,
     opciones,
@@ -593,8 +619,11 @@ export function RutaDialog({
                             <span className="block text-xs font-normal text-muted-foreground">
                                 Combustible sin galones = «por definir»: el
                                 tramo no tiene tope hasta completarlo. «Tanque
-                                full» (Kio): sin galones, va aparte del tope y
-                                lo dice el voucher.
+                                full» (Kio) va sin galones: cuando llega su
+                                voucher, lo que cargó descuenta del tope. Por
+                                eso el tope de todo el recorrido va en las otras
+                                líneas (Kio full + Arequipa 190 = 190 de Lima a
+                                Juliaca).
                             </span>
                         </span>
                         {data.lineas.map((linea, indice) => {
@@ -730,7 +759,7 @@ export function RutaDialog({
                                         {combustible && (
                                             <label
                                                 className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                                                title="Se llena el tanque: sin galones fijos, lo dice el voucher; no suma al tope"
+                                                title="Se llena el tanque: sin galones fijos; lo que dice el voucher descuenta del tope"
                                             >
                                                 <Checkbox
                                                     checked={linea.tanque_lleno}
@@ -771,6 +800,11 @@ export function RutaDialog({
                                 </div>
                             );
                         })}
+                        {avisoDelFull(data.lineas) && (
+                            <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                                {avisoDelFull(data.lineas)}
+                            </p>
+                        )}
                         {Object.entries(errores).find(([clave]) =>
                             clave.startsWith('lineas.'),
                         ) && (

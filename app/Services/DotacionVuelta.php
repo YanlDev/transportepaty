@@ -218,7 +218,7 @@ class DotacionVuelta
             'puntos' => array_values($puntos),
             'tanque_lleno' => [
                 'puntos' => array_values(array_map(
-                    fn (array $linea): array => ['punto_id' => $linea['punto_id'], 'punto' => $linea['punto'] ?? $linea['concepto']],
+                    fn (array $linea): array => ['punto_id' => $linea['punto_id'], 'punto' => $linea['punto'] ?? 'el grifo que se elija'],
                     $rutas->flatMap(fn (RutaVuelta $ruta): array => $ruta->lineasDeTanqueLleno())->all(),
                 )),
                 'usado' => $llenos->isNotEmpty(),
