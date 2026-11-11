@@ -7,7 +7,6 @@ use App\Enums\EstadoVuelta;
 use App\Enums\OrigenVuelta;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
-use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Http\Requests\GuardarVueltaRequest;
@@ -15,13 +14,11 @@ use App\Http\Requests\RegistrarLlegadaRequest;
 use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
-use App\Models\DestinoParticular;
 use App\Models\EnvioWhatsapp;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
 use App\Models\Ruta;
 use App\Models\RutaVuelta;
-use App\Models\VarianteRuta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
 use App\Models\Vuelta;
@@ -32,6 +29,7 @@ use App\Services\AvisosPorWhatsapp;
 use App\Services\GastosDelTicket;
 use App\Services\LiquidacionTicket;
 use App\Services\OdometroDeUnidad;
+use App\Services\OpcionesDeTramo;
 use App\Services\PasosDelTicket;
 use App\Services\ProgramadorVueltas;
 use App\Services\RelojOperativo;
@@ -292,7 +290,8 @@ class VueltaController extends Controller
             ->map(fn (Vuelta $vuelta): array => ['vuelta' => $vuelta, 'etapa' => $this->etapa($vuelta)])
             ->reject(fn (array $fila): bool => $fila['etapa'] === 'en_base'
                 && in_array($fila['vuelta']->tracto_id, $conSiguiente, true))
-            ->sortBy(fn (array $fila): string => $fila['vuelta']->inicio?->toDateString().'|'.$fila['vuelta']->tracto->placa)
+            // El ticket más nuevo arriba (el código sale del id).
+            ->sortByDesc(fn (array $fila): int => $fila['vuelta']->id)
             ->map(fn (array $fila): array => [
                 ...$this->fila($fila['vuelta'], $fila['etapa'], $request),
                 // Lo próximo que le toca desde donde va, y lo que quedó
@@ -449,7 +448,7 @@ class VueltaController extends Controller
     private function opcionesDelFormulario(): array
     {
         return [
-            'tramos' => fn (): array => $this->opcionesDeTramo(),
+            'tramos' => fn (): array => app(OpcionesDeTramo::class)->todas(),
             'zonas' => fn (): array => ZonaRuta::options(),
             'cargas' => fn (): array => array_values(array_filter(
                 TipoCarga::options(),
@@ -471,75 +470,6 @@ class VueltaController extends Controller
                 ->map(fn (Cliente $cliente): array => ['id' => $cliente->id, 'alias' => $cliente->alias, 'ruc' => $cliente->ruc])
                 ->all(),
         ];
-    }
-
-    /**
-     * Las rutas activas del catálogo para cada tramo (principales y
-     * complementos), con su dotación resumida y sus variantes, y los destinos
-     * de la carga particular a otro destino.
-     *
-     * @return array{ida: list<array<string, mixed>>, regreso: list<array<string, mixed>>, destinos: list<array{lugar: string, zona: string}>}
-     */
-    private function opcionesDeTramo(): array
-    {
-        $opciones = ['ida' => [], 'regreso' => []];
-        $rutas = Ruta::query()->where('activa', true)->enOrden()->with(['lineas.punto:id,nombre', 'variantes'])->get();
-
-        foreach ($rutas as $ruta) {
-            foreach (SentidoTramo::cases() as $sentido) {
-                if (! $ruta->sirvePara($sentido)) {
-                    continue;
-                }
-
-                $opciones[$sentido->value][] = [
-                    'value' => (string) $ruta->id,
-                    'label' => $ruta->nombre,
-                    'descripcion' => $ruta->descripcion ?? '',
-                    'es_complemento' => $ruta->es_complemento,
-                    'sube_con' => $ruta->sube_con?->value,
-                    'pide_destino' => $ruta->pide_destino,
-                    'paradas' => $ruta->paradas,
-                    'tope' => $ruta->topePara(null),
-                    'dotacion' => $this->resumenDeDotacion($ruta->lineasPara(null)),
-                    'variantes' => $ruta->variantes->map(fn (VarianteRuta $variante): array => [
-                        'id' => $variante->id,
-                        'nombre' => $variante->nombre,
-                        'tope' => $ruta->topePara($variante),
-                    ])->values()->all(),
-                ];
-            }
-        }
-
-        return [
-            ...$opciones,
-            'destinos' => array_values(DestinoParticular::query()
-                ->where('activo', true)
-                ->enOrden()
-                ->get()
-                ->map(fn (DestinoParticular $destino): array => ['lugar' => $destino->lugar, 'zona' => $destino->zona->value])
-                ->all()),
-        ];
-    }
-
-    /**
-     * La dotación en una línea: «Mina 100 gal · Arequipa 120 gal · viáticos
-     * S/ 843».
-     *
-     * @param  list<array{tipo: string, punto: string|null, concepto: string, galones: float|null, tanque_lleno: bool, monto: float|null}>  $lineas
-     */
-    private function resumenDeDotacion(array $lineas): string
-    {
-        $combustible = array_map(
-            fn (array $linea): string => ($linea['punto'] ?? $linea['concepto']).' '.match (true) {
-                $linea['tanque_lleno'] => 'tanque full',
-                $linea['galones'] === null => '¿? gal',
-                default => rtrim(rtrim(number_format($linea['galones'], 1, '.', ''), '0'), '.').' gal',
-            },
-            array_values(array_filter($lineas, fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value)),
-        );
-        $viaticos = array_sum(array_column(array_filter($lineas, fn (array $linea): bool => $linea['tipo'] !== TipoLineaAbastecimiento::Combustible->value), 'monto'));
-
-        return implode(' · ', array_filter([...$combustible, $viaticos > 0 ? 'viáticos S/ '.number_format($viaticos, 0) : null]));
     }
 
     /**

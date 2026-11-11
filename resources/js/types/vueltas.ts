@@ -228,6 +228,8 @@ export type TarjetaVuelta = Vuelta & {
     siguiente?: PasoTicket | null;
     /** Pasos que quedaron atrás sin hacer (salió sin el OK de taller). */
     saltados?: string[];
+    /** Todos los pasos del circuito, sin detalle: la barra de avance. */
+    avance?: PasoAvance[];
 };
 
 export type DiaDeSemana = { fecha: string; programadas: number };
@@ -251,6 +253,9 @@ export type PasoTicket = {
     fecha: string | null;
     por: string | null;
 };
+
+/** Un paso del circuito sin detalle, para la barra de avance. */
+export type PasoAvance = Pick<PasoTicket, 'clave' | 'titulo' | 'estado'>;
 
 /** Una GR del ticket, con el tramo en que cayó. */
 export type GuiaTicket = {

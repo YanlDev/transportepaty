@@ -505,3 +505,14 @@ it('programs a parada with a cliente written by hand, without registering it', f
         ->and($parada->cliente_id)->toBeNull()
         ->and(Cliente::query()->count())->toBe(0);
 });
+
+it('has the Uraca (Corire) rice detour as a 40 gal add-on for any leg', function (): void {
+    $ruta = rutaDelCatalogo('Uraca (Corire)');
+
+    expect($ruta->es_complemento)->toBeTrue()
+        ->and($ruta->activa)->toBeTrue()
+        ->and($ruta->sirvePara(SentidoTramo::Ida))->toBeTrue()
+        ->and($ruta->sirvePara(SentidoTramo::Regreso))->toBeTrue()
+        ->and($ruta->paradas)->toBe([])
+        ->and($ruta->topePara(null))->toBe(40.0);
+});

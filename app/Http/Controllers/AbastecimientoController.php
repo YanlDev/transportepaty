@@ -58,9 +58,9 @@ class AbastecimientoController extends Controller
                 'revision.usuario:id,name',
                 'rutas.ruta.variantes',
             ])
-            ->get()
-            ->sortBy(fn (Vuelta $vuelta): string => $vuelta->tracto->placa.'|'.$vuelta->inicio?->toDateString())
-            ->values();
+            // El ticket más nuevo arriba (el código sale del id).
+            ->latest('id')
+            ->get();
 
         $gastos = $this->gastos->de($vueltas);
         $ultimosKm = $this->ultimosKm($vueltas->pluck('tracto_id')->unique()->all());

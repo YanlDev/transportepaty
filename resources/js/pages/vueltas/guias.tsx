@@ -1,6 +1,6 @@
 import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/react';
 import { FileStack, Undo2, UserRound } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import vueltasRutas from '@/actions/App/Http/Controllers/VueltaController';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
@@ -25,6 +25,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { AdicionalDialog } from '@/components/vueltas/adicionales-vuelta';
 import { formatearFecha } from '@/lib/format';
 
 type Sentido = 'ida' | 'regreso';
@@ -55,6 +56,8 @@ type TicketAbierto = {
         carga: string;
         guias: number;
         no_programada: boolean;
+        /** Iba vacía en ese trayecto: esta GR la reemplaza. */
+        vacio: boolean;
     }[];
 };
 
@@ -71,6 +74,15 @@ type SinTicket = DatosGuia & {
     motivo: string | null;
     por: string | null;
     en: string | null;
+};
+
+/** Lo que avisa el servidor al asignar una carga fuera del programa. */
+type CargaSinProgramar = {
+    vuelta_id: number;
+    codigo: string | null;
+    sentido: Sentido;
+    numero_gr: string;
+    trayecto: string;
 };
 
 type Props = {
@@ -266,7 +278,9 @@ function FilaGuia({
                                                                 )}
                                                             >
                                                                 {parada.texto} ·{' '}
-                                                                {parada.carga}
+                                                                {parada.vacio
+                                                                    ? 'iba vacía: pasa a llevar esta carga'
+                                                                    : parada.carga}
                                                                 {parada.guias >
                                                                     0 &&
                                                                     ` · ${parada.guias} GR`}
@@ -385,6 +399,24 @@ export default function GuiasPorAsignar({
     puedeAsignar,
 }: Props) {
     const [marcando, setMarcando] = useState<Pendiente | null>(null);
+    const [sinProgramar, setSinProgramar] = useState<CargaSinProgramar | null>(
+        null,
+    );
+
+    // Al asignar una carga que no estaba programada, el servidor avisa: se
+    // ofrece sumar ahí mismo el combustible de su desvío.
+    useEffect(
+        () =>
+            router.on('flash', (evento) => {
+                const carga = (evento as CustomEvent).detail?.flash
+                    ?.carga_sin_programar as CargaSinProgramar | undefined;
+
+                if (carga) {
+                    setSinProgramar(carga);
+                }
+            }),
+        [],
+    );
 
     setLayoutProps({
         breadcrumbs: [
@@ -466,6 +498,19 @@ export default function GuiasPorAsignar({
                         ))}
                     </ul>
                 </section>
+            )}
+
+            {sinProgramar && (
+                <AdicionalDialog
+                    key={`${sinProgramar.vuelta_id}-${sinProgramar.numero_gr}`}
+                    vueltaId={sinProgramar.vuelta_id}
+                    sentidoInicial={sinProgramar.sentido}
+                    motivoInicial={`Carga ${sinProgramar.trayecto} (GR ${sinProgramar.numero_gr})`}
+                    titulo="¿Sumar combustible por esta carga?"
+                    descripcion={`${sinProgramar.trayecto} no estaba programada en el ticket ${sinProgramar.codigo ?? ''}. Si la unidad se desvía para cargarla, suma aquí su ruta de la tabla o los galones: sube el tope del tramo. Si no gasta más, cierra esta ventana.`}
+                    textoCerrar="No hace falta"
+                    onCerrar={() => setSinProgramar(null)}
+                />
             )}
 
             {marcando && (

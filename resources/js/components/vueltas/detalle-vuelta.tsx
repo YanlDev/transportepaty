@@ -24,10 +24,16 @@ import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
 import { LlegadaDialog } from '@/components/vueltas/llegada-dialog';
 import {
+    AvanceTicket,
+    BotonSiguiente,
+    tareaSiguiente,
+} from '@/components/vueltas/siguiente-ticket';
+import {
     EstadoVueltaBadge,
     TramosVuelta,
 } from '@/components/vueltas/tramos-vuelta';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type { TarjetaVuelta, Vuelta } from '@/types/vueltas';
 
 /**
@@ -159,6 +165,52 @@ export function DetalleVuelta({
                         </SheetHeader>
 
                         <div className="flex flex-col gap-5 p-4">
+                            {/* Lo que sigue, arriba y con su botón. */}
+                            {vuelta.siguiente && (
+                                <div className="flex flex-col gap-3 rounded-xl border border-primary/30 bg-primary/5 p-4">
+                                    <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                            <p className="text-xs font-semibold tracking-wide text-primary uppercase">
+                                                Sigue
+                                            </p>
+                                            <p
+                                                className={cn(
+                                                    'mt-1 font-semibold',
+                                                    vuelta.siguiente.estado ===
+                                                        'alerta' &&
+                                                        'text-red-700 dark:text-red-400',
+                                                )}
+                                            >
+                                                {tareaSiguiente(
+                                                    vuelta.siguiente,
+                                                )}
+                                            </p>
+                                            {vuelta.siguiente.detalle && (
+                                                <p className="text-sm text-muted-foreground">
+                                                    {vuelta.siguiente.detalle}
+                                                </p>
+                                            )}
+                                            {(vuelta.saltados ?? []).length >
+                                                0 && (
+                                                <p className="text-xs text-amber-700 dark:text-amber-400">
+                                                    Sin:{' '}
+                                                    {(
+                                                        vuelta.saltados ?? []
+                                                    ).join(' · ')}
+                                                </p>
+                                            )}
+                                        </div>
+                                        <BotonSiguiente
+                                            vuelta={vuelta}
+                                            onAbrir={() => setLlegando(true)}
+                                            onEditar={onEditar}
+                                            ocultarVer
+                                            className="shrink-0 bg-background"
+                                        />
+                                    </div>
+                                    <AvanceTicket vuelta={vuelta} />
+                                </div>
+                            )}
                             <div className="rounded-xl bg-muted/40 p-4">
                                 <ItinerarioVuelta
                                     paradas={[

@@ -45,15 +45,21 @@ class PasosDelTicket
      * tablero sería una consulta por ticket.
      *
      * @param  array{tramos: list<array{sentido: string, confirmada: bool, pendiente: string|null, previsto: float|null, registrado: float, falta: float|null, tanque_lleno?: array{puntos: list<array{punto_id: int|null, punto: string}>, usado: bool, sin_voucher: bool, galones: float}}>, viatico_depositado: float, viatico_pendiente: float}  $gastos
-     * @return array{siguiente: Paso|null, saltados: list<string>}
+     * @return array{siguiente: Paso|null, saltados: list<string>, avance: list<array{clave: string, titulo: string, estado: string}>}
      */
     public function seguimiento(Vuelta $vuelta, array $gastos): array
     {
         $pasos = $this->pasos($vuelta, $gastos, conAutor: false);
         $actual = $this->indiceActual($vuelta, $pasos);
 
+        // Todos los pasos, sin detalle: la barra de avance de la lista.
+        $avance = array_map(
+            fn (array $paso): array => ['clave' => $paso['clave'], 'titulo' => $paso['titulo'], 'estado' => $paso['estado']],
+            $pasos,
+        );
+
         if ($actual === null) {
-            return ['siguiente' => null, 'saltados' => []];
+            return ['siguiente' => null, 'saltados' => [], 'avance' => $avance];
         }
 
         $saltados = [];
@@ -64,7 +70,7 @@ class PasosDelTicket
             }
         }
 
-        return ['siguiente' => $pasos[$actual], 'saltados' => $saltados];
+        return ['siguiente' => $pasos[$actual], 'saltados' => $saltados, 'avance' => $avance];
     }
 
     /**

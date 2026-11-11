@@ -245,3 +245,86 @@ it('only lets whoever has the permission assign GR', function (): void {
         ->post(route('viajes.ticket.asignar', $guia), ['vuelta_id' => $vuelta->id, 'parada_vuelta_id' => paradaDe($vuelta, 1)->id])
         ->assertForbidden();
 });
+
+/**
+ * Caso V-00007: bajó con gaseosa a Arequipa, se programó vacía a Juliaca y
+ * consiguió arroz en Uraca.
+ */
+function vueltaConRegresoVacio(Vehiculo $tracto): Vuelta
+{
+    $vuelta = Vuelta::factory()->programada()->create(['tracto_id' => $tracto->id, 'inicio' => '2026-11-06']);
+
+    foreach ([
+        [ZonaRuta::Lima, ZonaRuta::Arequipa, TipoCarga::Particular, 'Huaral', 'Arequipa'],
+        [ZonaRuta::Arequipa, ZonaRuta::Juliaca, TipoCarga::Vacio, 'Arequipa', 'Juliaca'],
+    ] as $orden => [$origen, $destino, $carga, $lugarOrigen, $lugarDestino]) {
+        ParadaVuelta::factory()->create([
+            'vuelta_id' => $vuelta->id, 'sentido' => SentidoTramo::Regreso, 'orden' => $orden + 1,
+            'zona_origen' => $origen, 'zona_destino' => $destino, 'tipo_carga' => $carga,
+            'lugar_origen' => $lugarOrigen, 'lugar_destino' => $lugarDestino, 'cliente' => null, 'cliente_id' => null, 'fecha' => null,
+        ]);
+    }
+
+    return $vuelta;
+}
+
+const DIR_URACA = 'FUNDO SAN VICENTE KM 3 SN - URACA - CASTILLA - AREQUIPA';
+
+it('suggests the empty run of the same route and the GR takes its place', function (): void {
+    $vuelta = vueltaConRegresoVacio($this->tracto);
+    $vacio = paradaDe($vuelta, 2);
+    $guia = registrarGuia($this->tracto, '2026-11-10', DIR_URACA, DIR_JULIACA, TipoCarga::Particular);
+
+    actingAs($this->admin)
+        ->get(route('vueltas.guias'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('pendientes.0.sugerencia.parada_id', $vacio->id)
+            ->has('pendientes.0.tickets.0.paradas', 2)
+            ->where('pendientes.0.tickets.0.paradas.1.vacio', true)
+            ->has('tramos.regreso'));
+
+    actingAs($this->admin)
+        ->post(route('viajes.ticket.asignar', $guia), ['vuelta_id' => $vuelta->id, 'parada_vuelta_id' => $vacio->id])
+        ->assertSessionHasNoErrors()
+        ->assertInertiaFlash('carga_sin_programar.vuelta_id', $vuelta->id)
+        ->assertInertiaFlash('carga_sin_programar.sentido', 'regreso')
+        ->assertInertiaFlash('carga_sin_programar.trayecto', 'Uraca → Juliaca');
+
+    $vacio->refresh();
+    expect($guia->fresh()->parada_vuelta_id)->toBe($vacio->id)
+        ->and($vacio->tipo_carga)->toBe(TipoCarga::Particular)
+        // El lugar real de la GR manda sobre el que puso la ruta.
+        ->and($vacio->lugar_origen)->toBe('Uraca')
+        ->and($vacio->cliente)->toBe($guia->cliente)
+        ->and($vacio->fuera_de_programa)->toBeFalse()
+        ->and($vuelta->paradas()->count())->toBe(2);
+});
+
+it('keeps the place of the first GR when a second one arrives at the same stop', function (): void {
+    $vuelta = vueltaConRegresoVacio($this->tracto);
+    $bajada = paradaDe($vuelta, 1);
+    $primera = registrarGuia($this->tracto, '2026-11-07', DIR_HUARAL, 'MZ. 5 LT. 1 - CERRO COLORADO - AREQUIPA - AREQUIPA', TipoCarga::Particular);
+    $segunda = registrarGuia($this->tracto, '2026-11-07', DIR_HUARAL, 'ZONA 19 - YURA - AREQUIPA - AREQUIPA', TipoCarga::Particular);
+
+    foreach ([$primera, $segunda] as $guia) {
+        actingAs($this->admin)
+            ->post(route('viajes.ticket.asignar', $guia), ['vuelta_id' => $vuelta->id, 'parada_vuelta_id' => $bajada->id])
+            ->assertSessionHasNoErrors()
+            // Estaba programada: no se ofrece sumar combustible.
+            ->assertInertiaFlashMissing('carga_sin_programar');
+    }
+
+    expect($bajada->fresh()->lugar_destino)->toBe('Cerro Colorado');
+});
+
+it('offers the fuel of an unplanned load only to whoever can edit the ticket', function (): void {
+    $vuelta = programarVuelta($this->tracto, '2026-11-05');
+    $guia = registrarGuia($this->tracto, '2026-11-07', DIR_PISCO, DIR_CALLAO, TipoCarga::Metalico);
+    $soloAsigna = actorConRol('visor');
+    $soloAsigna->givePermissionTo('programacion.asignar_gr');
+
+    actingAs($soloAsigna)
+        ->post(route('viajes.ticket.asignar', $guia), ['vuelta_id' => $vuelta->id, 'sentido' => 'ida'])
+        ->assertSessionHasNoErrors()
+        ->assertInertiaFlashMissing('carga_sin_programar');
+});

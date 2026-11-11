@@ -6,6 +6,7 @@ use App\Enums\SentidoTramo;
 use App\Models\ParadaVuelta;
 use App\Models\Viaje;
 use App\Models\Vuelta;
+use App\Services\AsignadorVueltas;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -77,8 +78,10 @@ class AsignarGuiaRequest extends FormRequest
 
                 if ($parada !== null && $parada->vuelta_id !== $vuelta->id) {
                     $validator->errors()->add('parada_vuelta_id', "Esa parada no es del ticket {$vuelta->codigo}.");
-                } elseif ($parada?->esVacio()) {
-                    $validator->errors()->add('parada_vuelta_id', 'Un tramo vacío no lleva GR: elige una parada con carga.');
+                } elseif ($parada?->esVacio() && ! app(AsignadorVueltas::class)->esVacioReemplazable($parada, $guia)) {
+                    // Un vacío solo recibe la GR del mismo trayecto: la
+                    // unidad consiguió carga y esa parada pasa a llevarla.
+                    $validator->errors()->add('parada_vuelta_id', 'Ese tramo vacío es de otro trayecto o ya tiene GR: elige una parada con carga.');
                 }
             },
         ];

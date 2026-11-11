@@ -9,11 +9,9 @@ import {
     MapPin,
     Mountain,
     Package,
-    Plus,
     Sparkles,
     Tag,
     Truck,
-    X,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
@@ -35,17 +33,10 @@ import {
 } from '@/components/ui/dialogo-responsivo';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+import { CargasDelRecorrido } from '@/components/vueltas/cargas-del-recorrido';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
 import { cn } from '@/lib/utils';
 import type {
-    Opcion,
     OpcionesVuelta,
     OpcionTramo,
     ParadaVuelta,
@@ -53,7 +44,9 @@ import type {
     Vuelta,
 } from '@/types/vueltas';
 
-type ParadaForm = {
+export type ParadaForm = {
+    /** Para seguirla en pantalla aunque cambie de lugar en la lista. */
+    clave: string;
     /** Solo las que ya existen. */
     id: number | null;
     sentido: Sentido;
@@ -84,6 +77,8 @@ type FormData = {
 type Eligiendo =
     | { campo: 'tracto_id' | 'carreta_id' | 'conductor_id' }
     | { campo: 'cliente'; sentido: Sentido }
+    /** El cliente de una sola carga, por su clave. */
+    | { campo: 'cliente_carga'; clave: string }
     | null;
 
 /** El regreso todavía sin decidir: se programa cuando se sabe. */
@@ -137,6 +132,7 @@ function iconoDe(paradas: { tipo_carga: string }[]): ReactNode {
 
 function desdeParada(parada: ParadaVuelta): ParadaForm {
     return {
+        clave: `e${parada.id}`,
         id: parada.id,
         sentido: parada.sentido,
         zona_origen: parada.zona_origen ?? '',
@@ -151,11 +147,14 @@ function desdeParada(parada: ParadaVuelta): ParadaForm {
     };
 }
 
+let clavesDadas = 0;
+
 function nuevaParada(
     sentido: Sentido,
     datos: Partial<ParadaForm> = {},
 ): ParadaForm {
     return {
+        clave: `n${++clavesDadas}`,
         id: null,
         sentido,
         zona_origen: '',
@@ -171,6 +170,88 @@ function nuevaParada(
     };
 }
 
+/** Una parada armada desde la plantilla de una ruta del catálogo. */
+function desdePlantilla(
+    sentido: Sentido,
+    plantilla: OpcionTramo['paradas'][number],
+    destino: { zona: string; lugar: string } | null = null,
+): ParadaForm {
+    return nuevaParada(sentido, {
+        zona_origen: plantilla.zona_origen,
+        zona_destino: plantilla.zona_destino ?? destino?.zona ?? '',
+        lugar_origen: plantilla.lugar_origen ?? null,
+        lugar_destino:
+            plantilla.zona_destino === null
+                ? (destino?.lugar ?? null)
+                : (plantilla.lugar_destino ?? null),
+        tipo_carga: plantilla.tipo_carga,
+    });
+}
+
+/**
+ * Lo que falta recorrer de una ruta cuando el tramo ya tiene GR: la parte
+ * que esas GR ya cubren no se vuelve a agregar. «Particular a Arequipa» con
+ * Huaral → Arequipa hecho deja solo Arequipa → Juliaca.
+ */
+function desdeDondeQuedo(
+    nuevas: ParadaForm[],
+    hechas: ParadaForm[],
+): ParadaForm[] {
+    const dondeQuedo = hechas.at(-1)?.zona_destino;
+
+    if (!dondeQuedo) {
+        return nuevas;
+    }
+
+    const sigue = nuevas.findIndex(
+        (parada) => parada.zona_origen === dondeQuedo,
+    );
+
+    if (sigue !== -1) {
+        return nuevas.slice(sigue);
+    }
+
+    const llega = nuevas.findLastIndex(
+        (parada) => parada.zona_destino === dondeQuedo,
+    );
+
+    return llega !== -1 ? nuevas.slice(llega + 1) : nuevas;
+}
+
+/**
+ * Pone una parada donde encadena con el tramo: si llega a donde arranca
+ * otra que todavía no tiene GR, va justo antes (el retorno vacío de Kio a
+ * Pisco, antes de la escoria que sale de Pisco); si no, al final.
+ */
+function encadenar(tramo: ParadaForm[], nueva: ParadaForm): ParadaForm[] {
+    const sigue =
+        nueva.zona_destino === ''
+            ? -1
+            : tramo.findIndex(
+                  (parada) =>
+                      !parada.bloqueada &&
+                      !parada.auto &&
+                      parada.zona_origen === nueva.zona_destino,
+              );
+
+    return sigue === -1
+        ? [...tramo, nueva]
+        : [...tramo.slice(0, sigue), nueva, ...tramo.slice(sigue)];
+}
+
+/** Si la parada es la que puso esa plantilla (sin cambios a mano). */
+function esDeLaPlantilla(
+    parada: ParadaForm,
+    plantilla: OpcionTramo['paradas'][number],
+): boolean {
+    return (
+        !parada.bloqueada &&
+        parada.zona_origen === plantilla.zona_origen &&
+        parada.zona_destino === plantilla.zona_destino &&
+        parada.tipo_carga === plantilla.tipo_carga
+    );
+}
+
 function hoy(): string {
     const ahora = new Date();
     const mes = String(ahora.getMonth() + 1).padStart(2, '0');
@@ -183,7 +264,9 @@ function hoy(): string {
  * Une lo elegido en un recorrido continuo: si la ida arranca en la mina,
  * antepone la subida desde Juliaca (vacía, con la carga que trae o con
  * carga nueva, según se eligió); si la ida termina donde no arranca el
- * regreso, une los dos con un vacío. Lo que agregó antes se rehace cada vez.
+ * regreso, une los dos con un vacío. Dentro de cada tramo une las paradas
+ * que no se tocan y cierra la vuelta en Juliaca. Lo que agregó antes se
+ * rehace cada vez: los vacíos se deducen, no se escriben.
  */
 function normalizar(
     paradas: ParadaForm[],
@@ -230,15 +313,17 @@ function normalizar(
         );
     }
 
-    const ultimaIda = ida.at(-1);
-    const primeraRegreso = regreso[0];
+    const idaUnida = unirTramo(sinVaciosRepetidos(ida));
+    const regresoUnido = unirTramo(sinVaciosRepetidos(regreso));
+    const ultimaIda = idaUnida.at(-1);
+    const primeraRegreso = regresoUnido[0];
 
     if (
         ultimaIda?.zona_destino &&
         primeraRegreso?.zona_origen &&
         ultimaIda.zona_destino !== primeraRegreso.zona_origen
     ) {
-        ida.push(
+        idaUnida.push(
             nuevaParada('ida', {
                 zona_origen: ultimaIda.zona_destino,
                 zona_destino: primeraRegreso.zona_origen,
@@ -248,39 +333,113 @@ function normalizar(
         );
     }
 
-    return [...ida, ...regreso];
+    // La vuelta termina en la base: si lo último no llega a Juliaca (ni
+    // sube a la mina), de ahí sigue vacía. Nadie lo escribe.
+    const ultimaRegreso = regresoUnido.at(-1);
+
+    if (ultimaRegreso?.zona_destino && !regresoUnido.some(llegaALaBase)) {
+        regresoUnido.push(
+            nuevaParada('regreso', {
+                zona_origen: ultimaRegreso.zona_destino,
+                lugar_origen: ultimaRegreso.lugar_destino,
+                zona_destino: 'juliaca',
+                tipo_carga: 'vacio',
+                auto: true,
+            }),
+        );
+    }
+
+    return [...idaUnida, ...regresoUnido];
 }
 
-function SelectOpciones({
-    valor,
-    opciones,
-    placeholder,
-    invalido,
-    onCambiar,
-}: {
-    valor: string;
-    opciones: Opcion[];
-    placeholder: string;
-    invalido?: boolean;
-    onCambiar: (valor: string) => void;
-}) {
+/** La vuelta termina ahí: en Juliaca o subiendo a la mina. */
+function llegaALaBase(parada: ParadaForm): boolean {
     return (
-        <Select value={valor || undefined} onValueChange={onCambiar}>
-            <SelectTrigger
-                className="w-full min-w-0"
-                aria-invalid={invalido || undefined}
-            >
-                <SelectValue placeholder={placeholder} />
-            </SelectTrigger>
-            <SelectContent>
-                {opciones.map((opcion) => (
-                    <SelectItem key={opcion.value} value={opcion.value}>
-                        {opcion.label}
-                    </SelectItem>
-                ))}
-            </SelectContent>
-        </Select>
+        parada.sentido === 'regreso' &&
+        ['juliaca', 'mina'].includes(parada.zona_destino)
     );
+}
+
+/** Un vacío que todavía se puede cambiar: sin GR y sin carga que continúe. */
+function esVacioLibre(parada: ParadaForm): boolean {
+    return (
+        parada.tipo_carga === 'vacio' &&
+        !parada.bloqueada &&
+        parada.viaje_continuado_id === null
+    );
+}
+
+/**
+ * Un vacío deja de serlo cuando después aparece una carga que llega al
+ * mismo sitio: la unidad ya no va vacía hasta ahí. Si la carga sale del
+ * mismo lugar, el vacío sobra; si sale de otro, el vacío llega solo hasta
+ * donde carga (Cusco ⇢ Juliaca pasa a Cusco ⇢ Moquegua si carga en Ilo).
+ */
+function sinVaciosRepetidos(tramo: ParadaForm[]): ParadaForm[] {
+    const resultado: ParadaForm[] = [];
+
+    tramo.forEach((parada, indice) => {
+        const carga = esVacioLibre(parada)
+            ? tramo
+                  .slice(indice + 1)
+                  .find(
+                      (otra) =>
+                          otra.tipo_carga !== 'vacio' &&
+                          otra.zona_origen !== '' &&
+                          otra.zona_destino === parada.zona_destino,
+                  )
+            : undefined;
+
+        if (!carga) {
+            resultado.push(parada);
+
+            return;
+        }
+
+        if (carga.zona_origen !== parada.zona_origen) {
+            resultado.push({
+                ...parada,
+                zona_destino: carga.zona_origen,
+                lugar_destino: carga.lugar_origen,
+            });
+        }
+    });
+
+    return resultado;
+}
+
+/**
+ * Une las paradas de un tramo: si una no arranca donde terminó la
+ * anterior, entre las dos va un vacío. Entre dos con GR no se agrega nada:
+ * eso ya pasó como dicen las GR.
+ */
+function unirTramo(tramo: ParadaForm[]): ParadaForm[] {
+    return tramo.flatMap((parada, indice) => {
+        const anterior = tramo[indice - 1];
+        const hayHueco =
+            anterior !== undefined &&
+            anterior.zona_destino !== '' &&
+            parada.zona_origen !== '' &&
+            anterior.zona_destino !== parada.zona_origen &&
+            !(anterior.bloqueada && parada.bloqueada) &&
+            // Lo que quede después de llegar a la base está fuera de
+            // orden: no se le inventa un vacío de regreso a la costa.
+            !llegaALaBase(anterior);
+
+        return hayHueco
+            ? [
+                  nuevaParada(parada.sentido, {
+                      zona_origen: anterior.zona_destino,
+                      lugar_origen: anterior.lugar_destino,
+                      zona_destino: parada.zona_origen,
+                      lugar_destino: parada.lugar_origen,
+                      tipo_carga: 'vacio',
+                      auto: true,
+                  }),
+                  parada,
+              ]
+            : [parada];
+    });
 }
 
 /** Una opción de tramo como tarjeta elegible. */
@@ -509,7 +668,10 @@ export function ProgramarVueltaDialog({
 
         return primeraGuardada.tipo_carga === 'vacio' ? 'vacia' : 'cargada';
     });
-    const [aMano, setAMano] = useState(false);
+    // Las cargas una por una: abiertas al corregir un ticket en camino, que
+    // es cuando aparece lo que no estaba en la ruta.
+    const [verCargas, setVerCargas] = useState(vuelta !== null);
+    const [cargaEditada, setCargaEditada] = useState<string | null>(null);
     const [confirmandoQuitar, setConfirmandoQuitar] = useState(false);
 
     const errores = errors as Record<string, string | undefined>;
@@ -699,20 +861,11 @@ export function ProgramarVueltaDialog({
             return;
         }
 
-        const desdePlantilla = (plantilla: OpcionTramo['paradas'][number]) =>
-            nuevaParada(sentido, {
-                zona_origen: plantilla.zona_origen,
-                zona_destino:
-                    plantilla.zona_destino ?? elegidoDestino?.zona ?? '',
-                lugar_origen: plantilla.lugar_origen ?? null,
-                lugar_destino:
-                    plantilla.zona_destino === null
-                        ? (elegidoDestino?.lugar ?? null)
-                        : (plantilla.lugar_destino ?? null),
-                tipo_carga: plantilla.tipo_carga,
-            });
+        const deLaRuta = (plantilla: OpcionTramo['paradas'][number]) =>
+            desdePlantilla(sentido, plantilla, elegidoDestino ?? null);
+        const hechas = fijas.filter((parada) => parada.sentido === sentido);
 
-        const nuevas = opcion.paradas.map(desdePlantilla);
+        let nuevas = desdeDondeQuedo(opcion.paradas.map(deLaRuta), hechas);
 
         if (
             opcion.pide_destino &&
@@ -734,7 +887,19 @@ export function ProgramarVueltaDialog({
                 (candidata) => candidata.value === extra,
             );
 
-            nuevas.push(...(complemento?.paradas ?? []).map(desdePlantilla));
+            // Lo del complemento que ya tiene su GR no se repite; lo demás
+            // va donde encadena con la ruta.
+            nuevas = (complemento?.paradas ?? [])
+                .filter(
+                    (plantilla) =>
+                        !hechas.some(
+                            (hecha) =>
+                                hecha.zona_origen === plantilla.zona_origen &&
+                                hecha.zona_destino === plantilla.zona_destino,
+                        ),
+                )
+                .map(deLaRuta)
+                .reduce(encadenar, nuevas);
         }
 
         const ida =
@@ -760,6 +925,18 @@ export function ProgramarVueltaDialog({
         valor: string,
         lugar: string | null = destino,
     ) => {
+        // La ruta que el tramo ya tiene, con GR encima: volver a tocarla no
+        // rearma nada (se llevaría las cargas agregadas a mano).
+        if (
+            valor === elegida[sentido] &&
+            lugar === destino &&
+            data.paradas.some(
+                (parada) => parada.sentido === sentido && parada.bloqueada,
+            )
+        ) {
+            return;
+        }
+
         setElegida((anterior) => ({ ...anterior, [sentido]: valor }));
 
         // Sin ruta principal no hay complementos. En la ida, el que se suma
@@ -781,13 +958,67 @@ export function ProgramarVueltaDialog({
         armarTramo(sentido, valor, extras, lugar);
     };
 
+    /**
+     * Sumar o quitar un complemento toca solo sus paradas: la ruta principal
+     * no se vuelve a armar, así no se repite lo que ya tiene GR ni se pierde
+     * lo ajustado a mano.
+     */
     const alternarComplemento = (sentido: Sentido, valor: string) => {
-        const extras = complementos[sentido].includes(valor)
+        const quitando = complementos[sentido].includes(valor);
+        const extras = quitando
             ? complementos[sentido].filter((otro) => otro !== valor)
             : [...complementos[sentido], valor];
+        const plantillas =
+            opciones.tramos[sentido].find(
+                (candidata) => candidata.value === valor,
+            )?.paradas ?? [];
 
         setComplementos((anterior) => ({ ...anterior, [sentido]: extras }));
-        armarTramo(sentido, elegida[sentido], extras);
+
+        if (plantillas.length === 0) {
+            return;
+        }
+
+        const delTramo = data.paradas.filter(
+            (parada) => parada.sentido === sentido && !parada.auto,
+        );
+        // Las que unió el formulario van igual: `normalizar` las rehace
+        // conservando el id de la subida.
+        const otras = data.paradas.filter(
+            (parada) => parada.sentido !== sentido || parada.auto,
+        );
+        let tramo: ParadaForm[];
+
+        if (quitando) {
+            tramo = [...delTramo];
+
+            for (const plantilla of plantillas) {
+                const indice = tramo.findLastIndex((parada) =>
+                    esDeLaPlantilla(parada, plantilla),
+                );
+
+                if (indice !== -1) {
+                    tramo.splice(indice, 1);
+                }
+            }
+        } else {
+            tramo = plantillas
+                .filter(
+                    (plantilla) =>
+                        !delTramo.some(
+                            (parada) =>
+                                parada.bloqueada &&
+                                parada.zona_origen === plantilla.zona_origen &&
+                                parada.zona_destino === plantilla.zona_destino,
+                        ),
+                )
+                .map((plantilla) => desdePlantilla(sentido, plantilla))
+                .reduce(encadenar, delTramo);
+        }
+
+        fijarParadas(
+            sentido === 'ida' ? [...tramo, ...otras] : [...otras, ...tramo],
+        );
     };
 
     const elegirVariante = (
@@ -871,39 +1102,53 @@ export function ProgramarVueltaDialog({
             ),
         );
 
-    const cambiarParada = (indice: number, cambios: Partial<ParadaForm>) =>
-        setData(
-            'paradas',
-            data.paradas.map((parada, i) =>
-                i === indice ? { ...parada, ...cambios, auto: false } : parada,
+    const cambiarCarga = (clave: string, cambios: Partial<ParadaForm>) =>
+        fijarParadas(
+            data.paradas.map((parada) =>
+                parada.clave === clave
+                    ? { ...parada, ...cambios, auto: false }
+                    : parada,
             ),
         );
 
-    const agregarAMano = (sentido: Sentido) => {
-        const ultima =
-            data.paradas
-                .filter((parada) => parada.sentido === sentido)
-                .at(-1) ?? data.paradas.at(-1);
-        const nueva = nuevaParada(sentido, {
-            zona_origen: ultima?.zona_destino ?? '',
-        });
-        const corte =
-            sentido === 'ida'
-                ? data.paradas.findIndex(
-                      (parada) => parada.sentido === 'regreso',
-                  )
-                : -1;
+    const quitarCarga = (clave: string) =>
+        fijarParadas(data.paradas.filter((parada) => parada.clave !== clave));
 
-        setData(
-            'paradas',
-            corte === -1
-                ? [...data.paradas, nueva]
-                : [
-                      ...data.paradas.slice(0, corte),
-                      nueva,
-                      ...data.paradas.slice(corte),
-                  ],
+    /**
+     * Una carga que no sale de la ruta elegida (consiguió arroz en Uraca):
+     * arranca donde quedó la unidad en ese tramo y, en la vuelta, va a
+     * Juliaca. El vacío que ocupaba ese trayecto se va solo.
+     */
+    const agregarCarga = (sentido: Sentido) => {
+        const delTramo = data.paradas.filter(
+            (parada) => parada.sentido === sentido && !parada.auto,
         );
+        const dondeQuedo =
+            delTramo.findLast(
+                (parada) => parada.bloqueada || parada.tipo_carga !== 'vacio',
+            )?.zona_destino ??
+            (sentido === 'ida'
+                ? 'juliaca'
+                : (data.paradas.findLast((parada) => parada.sentido === 'ida')
+                      ?.zona_destino ?? ''));
+        const nueva = nuevaParada(sentido, {
+            zona_origen: dondeQuedo,
+            zona_destino:
+                sentido === 'regreso' && dondeQuedo !== 'juliaca'
+                    ? 'juliaca'
+                    : '',
+        });
+        const ida = data.paradas.filter((parada) => parada.sentido === 'ida');
+        const regreso = data.paradas.filter(
+            (parada) => parada.sentido === 'regreso',
+        );
+
+        fijarParadas(
+            sentido === 'ida'
+                ? [...ida, nueva, ...regreso]
+                : [...ida, ...regreso, nueva],
+        );
+        setCargaEditada(nueva.clave);
     };
 
     const enviar = (evento: React.FormEvent) => {
@@ -968,7 +1213,21 @@ export function ProgramarVueltaDialog({
                     onElegir: (valor: number) =>
                         fijarCliente(eligiendo.sentido, valor),
                 }
-              : buscadores[eligiendo.campo];
+              : eligiendo.campo === 'cliente_carga'
+                ? {
+                      titulo: 'Cliente',
+                      opciones: opcionesClientes,
+                      valor:
+                          data.paradas.find(
+                              (parada) => parada.clave === eligiendo.clave,
+                          )?.cliente_id ?? null,
+                      onElegir: (valor: number) =>
+                          cambiarCarga(eligiendo.clave, {
+                              cliente_id: valor,
+                              cliente: null,
+                          }),
+                  }
+                : buscadores[eligiendo.campo];
 
     // Sin lugar propio, una parada arranca donde terminó la anterior si es la
     // misma zona: de Paracas (la GR) sigue a Lima, no de «Pisco».
@@ -1057,6 +1316,19 @@ export function ProgramarVueltaDialog({
                 ? `Se agrega cuando la ida llegue a ${etiquetaZona(arranca)}`
                 : null;
         };
+        // Con GR en el tramo, las rutas que ya no aplican no se listan: solo
+        // la del tramo y las que siguen desde donde quedó la unidad.
+        const visibles =
+            fijas.length > 0
+                ? lista.filter(
+                      (opcion) =>
+                          elegida[sentido] === opcion.value ||
+                          bloqueoDe(
+                              'paradas' in opcion ? opcion.paradas : [],
+                          ) === null,
+                  )
+                : lista;
+        const ocultas = lista.length - visibles.length;
         // Una ida que arranca en la mina, sin GR todavía: se pregunta cómo
         // llega la unidad hasta ahí (casi siempre sube desde Juliaca).
         const arrancaEnMina = (opcion: { value: string }) =>
@@ -1168,12 +1440,15 @@ export function ProgramarVueltaDialog({
                 </div>
             </div>
         );
-        const conParticular = data.paradas.some(
-            (parada) =>
-                parada.sentido === sentido &&
-                !parada.bloqueada &&
-                parada.tipo_carga === 'particular',
-        );
+        // Con las cargas abiertas abajo, el cliente se pone en cada una.
+        const conParticular =
+            !verCargas &&
+            data.paradas.some(
+                (parada) =>
+                    parada.sentido === sentido &&
+                    !parada.bloqueada &&
+                    parada.tipo_carga === 'particular',
+            );
 
         return (
             <section className="flex flex-col gap-3 rounded-xl border p-4">
@@ -1202,7 +1477,7 @@ export function ProgramarVueltaDialog({
                 )}
 
                 <div className="grid gap-2">
-                    {lista.map((opcion) => (
+                    {visibles.map((opcion) => (
                         <TarjetaOpcion
                             key={opcion.value}
                             icono={
@@ -1227,9 +1502,17 @@ export function ProgramarVueltaDialog({
                             }
                             sentido={sentido}
                             elegida={elegida[sentido] === opcion.value}
-                            bloqueo={bloqueoDe(
-                                'paradas' in opcion ? opcion.paradas : [],
-                            )}
+                            // La ruta del tramo se queda como está: el
+                            // candado es para las que ya no aplican.
+                            bloqueo={
+                                elegida[sentido] === opcion.value
+                                    ? null
+                                    : bloqueoDe(
+                                          'paradas' in opcion
+                                              ? opcion.paradas
+                                              : [],
+                                      )
+                            }
                             onElegir={() => elegirOpcion(sentido, opcion.value)}
                         >
                             {(arrancaEnMina(opcion) ||
@@ -1244,6 +1527,16 @@ export function ProgramarVueltaDialog({
                         </TarjetaOpcion>
                     ))}
                 </div>
+
+                {ocultas > 0 && (
+                    <p className="text-[11px] text-muted-foreground">
+                        {ocultas === 1
+                            ? 'Hay 1 ruta más que ya no aplica'
+                            : `Hay ${ocultas} rutas más que ya no aplican`}
+                        : la unidad ya llegó a {etiquetaZona(dondeQuedo)}. Para
+                        otra carga usa «Agregar carga», abajo.
+                    </p>
+                )}
 
                 {conVariantes.map((ruta) => {
                     const clave = `${sentido}:${ruta.value}`;
@@ -1523,169 +1816,43 @@ export function ProgramarVueltaDialog({
                             <div className="flex flex-col gap-3">
                                 <button
                                     type="button"
-                                    onClick={() => setAMano(!aMano)}
-                                    className="flex items-center gap-1 self-start text-xs text-muted-foreground hover:text-foreground"
+                                    onClick={() => setVerCargas(!verCargas)}
+                                    aria-expanded={verCargas}
+                                    className="flex items-center gap-1 self-start text-sm font-medium hover:text-foreground"
                                 >
                                     <ChevronDown
                                         className={cn(
-                                            'size-3.5 transition',
-                                            aMano && 'rotate-180',
+                                            'size-4 transition',
+                                            verCargas && 'rotate-180',
                                         )}
                                     />
-                                    Ajustar las paradas a mano
+                                    Cargas del recorrido
+                                    <span className="font-normal text-muted-foreground">
+                                        · para lo que no sale de una ruta de la
+                                        tabla
+                                    </span>
                                 </button>
 
-                                {aMano && (
-                                    <div className="flex flex-col gap-2">
-                                        {data.paradas.map((parada, indice) =>
-                                            parada.bloqueada ? (
-                                                <div
-                                                    key={
-                                                        parada.id ??
-                                                        `n${indice}`
-                                                    }
-                                                    className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
-                                                >
-                                                    <Lock className="size-3.5" />
-                                                    {itinerario[indice].desde} →{' '}
-                                                    {itinerario[indice].hasta} ·{' '}
-                                                    {itinerario[indice].carga}
-                                                </div>
-                                            ) : (
-                                                <div
-                                                    key={
-                                                        parada.id ??
-                                                        `n${indice}`
-                                                    }
-                                                    className="grid grid-cols-[5rem_1fr_1fr_1fr_auto] items-center gap-2"
-                                                >
-                                                    <span
-                                                        className={cn(
-                                                            'text-xs font-medium',
-                                                            parada.sentido ===
-                                                                'ida'
-                                                                ? 'text-amber-700 dark:text-amber-400'
-                                                                : 'text-violet-700 dark:text-violet-400',
-                                                        )}
-                                                    >
-                                                        {parada.sentido ===
-                                                        'ida'
-                                                            ? 'Ida'
-                                                            : 'Regreso'}
-                                                    </span>
-                                                    <SelectOpciones
-                                                        valor={
-                                                            parada.zona_origen
-                                                        }
-                                                        opciones={
-                                                            opciones.zonas
-                                                        }
-                                                        placeholder="Desde"
-                                                        invalido={Boolean(
-                                                            errores[
-                                                                `paradas.${indice}.zona_origen`
-                                                            ],
-                                                        )}
-                                                        onCambiar={(valor) =>
-                                                            cambiarParada(
-                                                                indice,
-                                                                {
-                                                                    zona_origen:
-                                                                        valor,
-                                                                    lugar_origen:
-                                                                        null,
-                                                                },
-                                                            )
-                                                        }
-                                                    />
-                                                    <SelectOpciones
-                                                        valor={
-                                                            parada.zona_destino
-                                                        }
-                                                        opciones={
-                                                            opciones.zonas
-                                                        }
-                                                        placeholder="Hasta"
-                                                        invalido={Boolean(
-                                                            errores[
-                                                                `paradas.${indice}.zona_destino`
-                                                            ],
-                                                        )}
-                                                        onCambiar={(valor) =>
-                                                            cambiarParada(
-                                                                indice,
-                                                                {
-                                                                    zona_destino:
-                                                                        valor,
-                                                                    lugar_destino:
-                                                                        null,
-                                                                },
-                                                            )
-                                                        }
-                                                    />
-                                                    <SelectOpciones
-                                                        valor={
-                                                            parada.tipo_carga
-                                                        }
-                                                        opciones={
-                                                            opciones.cargas
-                                                        }
-                                                        placeholder="Carga"
-                                                        onCambiar={(valor) =>
-                                                            cambiarParada(
-                                                                indice,
-                                                                {
-                                                                    tipo_carga:
-                                                                        valor,
-                                                                },
-                                                            )
-                                                        }
-                                                    />
-                                                    <Button
-                                                        type="button"
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        aria-label="Quitar parada"
-                                                        onClick={() =>
-                                                            setData(
-                                                                'paradas',
-                                                                data.paradas.filter(
-                                                                    (_, i) =>
-                                                                        i !==
-                                                                        indice,
-                                                                ),
-                                                            )
-                                                        }
-                                                    >
-                                                        <X className="size-4" />
-                                                    </Button>
-                                                </div>
-                                            ),
-                                        )}
-                                        <div className="flex gap-2">
-                                            {(['ida', 'regreso'] as const).map(
-                                                (sentido) => (
-                                                    <Button
-                                                        key={sentido}
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            agregarAMano(
-                                                                sentido,
-                                                            )
-                                                        }
-                                                    >
-                                                        <Plus className="size-4" />
-                                                        Parada de{' '}
-                                                        {sentido === 'ida'
-                                                            ? 'ida'
-                                                            : 'regreso'}
-                                                    </Button>
-                                                ),
-                                            )}
-                                        </div>
-                                    </div>
+                                {verCargas && (
+                                    <CargasDelRecorrido
+                                        paradas={data.paradas}
+                                        textos={itinerario}
+                                        zonas={opciones.zonas}
+                                        cargas={opciones.cargas}
+                                        clientes={opcionesClientes}
+                                        errores={errores}
+                                        editando={cargaEditada}
+                                        onEditar={setCargaEditada}
+                                        onCambiar={cambiarCarga}
+                                        onQuitar={quitarCarga}
+                                        onAgregar={agregarCarga}
+                                        onElegirCliente={(clave) =>
+                                            setEligiendo({
+                                                campo: 'cliente_carga',
+                                                clave,
+                                            })
+                                        }
+                                    />
                                 )}
                             </div>
                         </form>

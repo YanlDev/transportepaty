@@ -74,13 +74,15 @@ class AsignadorVueltas
 
         $delTrayecto = $vuelta->paradas
             // La subida con la carga del ticket anterior ya tiene su GR.
-            ->filter(fn (ParadaVuelta $parada): bool => ! $parada->esVacio()
-                && ! $parada->esContinuacion()
+            ->filter(fn (ParadaVuelta $parada): bool => ! $parada->esContinuacion()
                 && $parada->zona_origen === $origen
                 && $parada->zona_destino === $destino);
+        $conCarga = $delTrayecto->reject(fn (ParadaVuelta $parada): bool => $parada->esVacio());
 
-        $parada = $delTrayecto->first(fn (ParadaVuelta $parada): bool => $parada->tipo_carga === $guia->tipo_carga)
-            ?? $delTrayecto->first(fn (ParadaVuelta $parada): bool => (int) $parada->viajes_count === 0);
+        $parada = $conCarga->first(fn (ParadaVuelta $parada): bool => $parada->tipo_carga === $guia->tipo_carga)
+            ?? $conCarga->first(fn (ParadaVuelta $parada): bool => (int) $parada->viajes_count === 0)
+            // Se programó vacía y consiguió carga: la GR reemplaza ese vacío.
+            ?? $delTrayecto->first(fn (ParadaVuelta $parada): bool => $this->esVacioReemplazable($parada, $guia));
 
         $yaEmpezoElRegreso = $vuelta->paradas
             ->contains(fn (ParadaVuelta $parada): bool => $parada->sentido === SentidoTramo::Regreso && (int) $parada->viajes_count > 0);
@@ -104,9 +106,12 @@ class AsignadorVueltas
                 $parada = $this->paradaNoProgramada($vuelta, $guia, $sentido);
             } elseif ($parada->tipo_carga !== $guia->tipo_carga && ! $parada->viajes()->exists()) {
                 // Se programó «con carga» sin saber cuál (la subida cargada
-                // de Juliaca a la mina): manda la que dice la GR.
+                // de Juliaca a la mina) o vacía y consiguió carga: manda la
+                // que dice la GR.
                 $parada->update(['tipo_carga' => $guia->tipo_carga]);
             }
+
+            $esLaPrimera = ! $parada->viajes()->exists();
 
             $guia->forceFill([
                 'parada_vuelta_id' => $parada->id,
@@ -117,7 +122,7 @@ class AsignadorVueltas
                 'motivo_sin_ticket' => null,
             ])->save();
 
-            $this->alLlegarLaGuia($parada, $vuelta, $guia);
+            $this->alLlegarLaGuia($parada, $vuelta, $guia, $esLaPrimera);
 
             return $parada;
         });
@@ -205,14 +210,32 @@ class AsignadorVueltas
     }
 
     /**
-     * Lo que la GR le dice a la parada y al ticket: el lugar real, la fecha
-     * y que la unidad ya salió.
+     * Un tramo vacío del mismo trayecto que la GR, todavía sin GR: la unidad
+     * consiguió carga y esa parada pasa a llevarla.
      */
-    private function alLlegarLaGuia(ParadaVuelta $parada, Vuelta $vuelta, Viaje $guia): void
+    public function esVacioReemplazable(ParadaVuelta $parada, Viaje $guia): bool
     {
+        return $parada->esVacio()
+            && ! $parada->esContinuacion()
+            && $parada->zona_origen === ZonaRuta::desdeDireccion($guia->origen)
+            && $parada->zona_destino === ZonaRuta::desdeDireccion($guia->destino)
+            && (int) ($parada->viajes_count ?? $parada->viajes()->count()) === 0;
+    }
+
+    /**
+     * Lo que la GR le dice a la parada y al ticket: el lugar real, la fecha
+     * y que la unidad ya salió. El lugar de la primera GR manda sobre el que
+     * puso la ruta al programar («Arequipa» pasa a ser «Uraca»); las
+     * siguientes ya no lo cambian.
+     */
+    private function alLlegarLaGuia(ParadaVuelta $parada, Vuelta $vuelta, Viaje $guia, bool $esLaPrimera): void
+    {
+        $origen = $this->lugar($guia->origen);
+        $destino = $this->lugar($guia->destino);
+
         $parada->update([
-            'lugar_origen' => $parada->lugar_origen ?? $this->lugar($guia->origen),
-            'lugar_destino' => $parada->lugar_destino ?? $this->lugar($guia->destino),
+            'lugar_origen' => $esLaPrimera ? ($origen ?? $parada->lugar_origen) : ($parada->lugar_origen ?? $origen),
+            'lugar_destino' => $esLaPrimera ? ($destino ?? $parada->lugar_destino) : ($parada->lugar_destino ?? $destino),
             'cliente_id' => $parada->cliente_id ?? $guia->cliente_id,
             'cliente' => $parada->cliente ?? $guia->cliente,
             'fecha' => $parada->fecha ?? $guia->fecha_traslado,

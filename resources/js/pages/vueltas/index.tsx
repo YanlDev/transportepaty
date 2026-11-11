@@ -15,9 +15,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DetalleVuelta } from '@/components/vueltas/detalle-vuelta';
 import { GanttVueltas } from '@/components/vueltas/gantt-vueltas';
+import { ListaProgramacion } from '@/components/vueltas/lista-programacion';
+import { ParaAtender, pendienteDe } from '@/components/vueltas/para-atender';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
-import { SeguimientoVueltas } from '@/components/vueltas/seguimiento-vueltas';
-import { TablaVueltas } from '@/components/vueltas/tabla-vueltas';
 import { usePermisos } from '@/hooks/use-permisos';
 import { CLASES, clasesDeTicket } from '@/lib/clase-carga';
 import type { ClaseCarga } from '@/lib/clase-carga';
@@ -39,7 +39,7 @@ type Props = OpcionesVuelta & {
     guiasPorAsignar: number;
 };
 
-type Vista = 'seguimiento' | 'tablero' | 'gantt';
+type Vista = 'lista' | 'gantt';
 
 /** El diálogo abierto: para un ticket nuevo o para editar uno. */
 type Dialogo = { vuelta: Vuelta | null } | null;
@@ -62,9 +62,9 @@ function filtrar(lista: TarjetaVuelta[], buscar: string): TarjetaVuelta[] {
 }
 
 /**
- * La programación: todo nace acá. El tablero lista cada unidad en su etapa
- * —por salir, en ida, en vuelta, en base— como Gantt o como lista. Clic en
- * un ticket abre su detalle.
+ * La programación: todo nace acá. Abre con lo que hay que atender; debajo,
+ * cada ticket por etapa —por salir, en ida, en vuelta, en base— como lista
+ * (el más nuevo arriba) o como calendario. Clic en un ticket abre su detalle.
  */
 export default function Programacion({
     fecha,
@@ -73,9 +73,11 @@ export default function Programacion({
     ...opciones
 }: Props) {
     const { puede } = usePermisos();
-    const [vista, setVista] = useState<Vista>('seguimiento');
+    const [vista, setVista] = useState<Vista>('lista');
     const [etapa, setEtapa] = useState<EtapaVuelta | null>(null);
     const [clase, setClase] = useState<ClaseCarga | null>(null);
+    // Un grupo de «Para atender»: deja solo los tickets que esperan eso.
+    const [pendiente, setPendiente] = useState<string | null>(null);
     const [buscar, setBuscar] = useState('');
     const [dialogo, setDialogo] = useState<Dialogo>(null);
     const [abiertaId, setAbiertaId] = useState<number | null>(null);
@@ -94,10 +96,13 @@ export default function Programacion({
     );
     const deClase = (vuelta: TarjetaVuelta, buscada: ClaseCarga) =>
         clasesDeTicket([...vuelta.ida, ...vuelta.regreso]).includes(buscada);
-    const visibles = filtradas.filter(
+    const deLaClase = filtradas.filter(
+        (vuelta) => clase === null || deClase(vuelta, clase),
+    );
+    const visibles = deLaClase.filter(
         (vuelta) =>
             (etapa === null || vuelta.etapa === etapa) &&
-            (clase === null || deClase(vuelta, clase)),
+            (pendiente === null || pendienteDe(vuelta) === pendiente),
     );
 
     // Se busca por id en lo último que llegó: si el ticket cambia con el
@@ -112,17 +117,152 @@ export default function Programacion({
 
             <EncabezadoPantalla
                 titulo="Programación"
-                descripcion="Cada viaje es un ticket: aquí se programa la ida y la vuelta de cada unidad y se ve en qué etapa va."
+                descripcion="Cada viaje es un ticket: aquí se programa y se ve qué le falta a cada uno."
                 icono={CalendarCheck}
+                acciones={
+                    <>
+                        <div className="relative flex-1 sm:w-64 sm:flex-none">
+                            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={buscar}
+                                onChange={(evento) =>
+                                    setBuscar(evento.target.value)
+                                }
+                                placeholder="Placa, ticket o conductor"
+                                className="pl-8"
+                            />
+                        </div>
+                        <Button variant="outline" asChild>
+                            <Link href={guiasRutas.index().url}>
+                                <FileStack className="size-4" />
+                                <span className="max-sm:hidden">
+                                    GR por asignar
+                                </span>
+                                {guiasPorAsignar > 0 && (
+                                    <span className="rounded-full bg-foreground px-1.5 text-xs font-semibold text-background tabular-nums">
+                                        {guiasPorAsignar}
+                                    </span>
+                                )}
+                            </Link>
+                        </Button>
+                        {puede('programacion.configurar') && (
+                            <Button variant="outline" size="icon" asChild>
+                                <Link
+                                    href={configuracion.index().url}
+                                    aria-label="Configurar la programación"
+                                >
+                                    <Settings className="size-4" />
+                                </Link>
+                            </Button>
+                        )}
+                        {puede('programacion.crear') && (
+                            <Button
+                                onClick={() => setDialogo({ vuelta: null })}
+                            >
+                                <CalendarPlus className="size-4" />
+                                <span className="max-sm:hidden">
+                                    Nuevo ticket
+                                </span>
+                            </Button>
+                        )}
+                    </>
+                }
+            />
+
+            <ParaAtender
+                vueltas={deLaClase}
+                guiasPorAsignar={guiasPorAsignar}
+                filtro={pendiente}
+                onFiltrar={(clave) => {
+                    setPendiente(clave);
+                    setEtapa(null);
+                }}
             />
 
             <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-wrap items-center gap-3">
+                {/* Las etapas como pestañas, igual que la ida y la vuelta de
+                    abastecimiento. */}
+                <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
                     <div className="inline-flex rounded-lg border p-0.5">
+                        {[
+                            { etapa: null, titulo: 'Todos', punto: null },
+                            ...ETAPAS,
+                        ].map((opcion) => {
+                            const activa = etapa === opcion.etapa;
+
+                            return (
+                                <button
+                                    key={opcion.etapa ?? 'todos'}
+                                    type="button"
+                                    onClick={() => {
+                                        setEtapa(opcion.etapa);
+                                        setPendiente(null);
+                                    }}
+                                    aria-pressed={activa}
+                                    className={cn(
+                                        'flex min-h-9 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium whitespace-nowrap transition pointer-coarse:min-h-11',
+                                        activa
+                                            ? 'bg-primary text-primary-foreground'
+                                            : 'text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    {opcion.punto && (
+                                        <span
+                                            className={cn(
+                                                'size-2 rounded-full',
+                                                opcion.punto,
+                                            )}
+                                        />
+                                    )}
+                                    {opcion.titulo} ·{' '}
+                                    {
+                                        deLaClase.filter(
+                                            (vuelta) =>
+                                                opcion.etapa === null ||
+                                                vuelta.etapa === opcion.etapa,
+                                        ).length
+                                    }
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2">
+                    {/* Mina o particular: un ticket con las dos cuenta en
+                        las dos. Se combina con la etapa. */}
+                    {CLASES.map((opcion) => {
+                        const activa = clase === opcion.clase;
+
+                        return (
+                            <button
+                                key={opcion.clase}
+                                type="button"
+                                onClick={() =>
+                                    setClase(activa ? null : opcion.clase)
+                                }
+                                aria-pressed={activa}
+                                data-filtro-clase={opcion.clase}
+                                className={cn(
+                                    'min-h-9 rounded-full border px-3 text-sm transition pointer-coarse:min-h-11',
+                                    activa
+                                        ? 'border-primary bg-accent font-medium text-accent-foreground'
+                                        : 'text-muted-foreground hover:text-foreground',
+                                )}
+                            >
+                                {opcion.titulo} ·{' '}
+                                {
+                                    filtradas.filter((vuelta) =>
+                                        deClase(vuelta, opcion.clase),
+                                    ).length
+                                }
+                            </button>
+                        );
+                    })}
+                    <div className="inline-flex rounded-lg border p-0.5 max-md:hidden">
                         {(
                             [
-                                ['seguimiento', 'Seguimiento'],
-                                ['tablero', 'Lista'],
+                                ['lista', 'Lista'],
                                 ['gantt', 'Calendario'],
                             ] as const
                         ).map(([valor, etiqueta]) => (
@@ -130,12 +270,11 @@ export default function Programacion({
                                 key={valor}
                                 type="button"
                                 onClick={() => setVista(valor)}
+                                aria-pressed={vista === valor}
                                 className={cn(
-                                    'rounded-md px-3 py-1.5 text-sm transition',
-                                    // El calendario no entra en un celular.
-                                    valor === 'gantt' && 'max-md:hidden',
+                                    'min-h-9 rounded-md px-3 py-1.5 text-sm transition',
                                     vista === valor
-                                        ? 'bg-primary text-primary-foreground'
+                                        ? 'bg-muted font-medium text-foreground'
                                         : 'text-muted-foreground hover:text-foreground',
                                 )}
                             >
@@ -143,148 +282,32 @@ export default function Programacion({
                             </button>
                         ))}
                     </div>
-
-                    {/* Cuántos hay en cada etapa; tocar una filtra. */}
-                    <div className="flex flex-wrap gap-1.5 text-xs">
-                        {ETAPAS.map((opcion) => {
-                            const activa = etapa === opcion.etapa;
-
-                            return (
-                                <button
-                                    key={opcion.etapa}
-                                    type="button"
-                                    onClick={() =>
-                                        setEtapa(activa ? null : opcion.etapa)
-                                    }
-                                    aria-pressed={activa}
-                                    className={cn(
-                                        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition',
-                                        activa
-                                            ? opcion.suave
-                                            : 'text-muted-foreground hover:text-foreground',
-                                    )}
-                                >
-                                    <span
-                                        className={cn(
-                                            'size-2 rounded-full',
-                                            opcion.punto,
-                                        )}
-                                    />
-                                    {opcion.titulo}
-                                    <span className="font-medium text-foreground tabular-nums">
-                                        {
-                                            tablero.filter(
-                                                (vuelta) =>
-                                                    vuelta.etapa ===
-                                                    opcion.etapa,
-                                            ).length
-                                        }
-                                    </span>
-                                </button>
-                            );
-                        })}
-                        {/* Mina o particular: un ticket con las dos cuenta en
-                            las dos. Se combina con la etapa. */}
-                        <span className="mx-1 w-px self-stretch bg-border" />
-                        {CLASES.map((opcion) => {
-                            const activa = clase === opcion.clase;
-
-                            return (
-                                <button
-                                    key={opcion.clase}
-                                    type="button"
-                                    onClick={() =>
-                                        setClase(activa ? null : opcion.clase)
-                                    }
-                                    aria-pressed={activa}
-                                    data-filtro-clase={opcion.clase}
-                                    className={cn(
-                                        'flex items-center gap-1.5 rounded-full border px-2.5 py-1 transition',
-                                        activa
-                                            ? opcion.suave
-                                            : 'text-muted-foreground hover:text-foreground',
-                                    )}
-                                >
-                                    <span
-                                        className={cn(
-                                            'size-2 rounded-full',
-                                            opcion.punto,
-                                        )}
-                                    />
-                                    {opcion.titulo}
-                                    <span className="font-medium text-foreground tabular-nums">
-                                        {
-                                            tablero.filter((vuelta) =>
-                                                deClase(vuelta, opcion.clase),
-                                            ).length
-                                        }
-                                    </span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                <div className="flex gap-2">
-                    <div className="relative flex-1 lg:w-64">
-                        <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            value={buscar}
-                            onChange={(evento) =>
-                                setBuscar(evento.target.value)
-                            }
-                            placeholder="Placa, ticket o conductor"
-                            className="pl-8"
-                        />
-                    </div>
-                    <Button variant="outline" asChild>
-                        <Link href={guiasRutas.index().url}>
-                            <FileStack className="size-4" />
-                            <span className="max-sm:hidden">
-                                GR por asignar
-                            </span>
-                            {guiasPorAsignar > 0 && (
-                                <span className="rounded-full bg-amber-500 px-1.5 text-xs font-semibold text-white tabular-nums">
-                                    {guiasPorAsignar}
-                                </span>
-                            )}
-                        </Link>
-                    </Button>
-                    {puede('programacion.configurar') && (
-                        <Button variant="outline" size="icon" asChild>
-                            <Link
-                                href={configuracion.index().url}
-                                aria-label="Configurar la programación"
-                            >
-                                <Settings className="size-4" />
-                            </Link>
-                        </Button>
-                    )}
-                    {puede('programacion.crear') && (
-                        <Button onClick={() => setDialogo({ vuelta: null })}>
-                            <CalendarPlus className="size-4" />
-                            <span className="max-sm:hidden">Nuevo ticket</span>
-                        </Button>
-                    )}
                 </div>
             </div>
 
-            {vista === 'seguimiento' && (
-                <SeguimientoVueltas
-                    vueltas={visibles}
-                    onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
-                />
+            {pendiente !== null && (
+                <p className="-mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+                    Solo los de «Para atender» que elegiste.
+                    <button
+                        type="button"
+                        onClick={() => setPendiente(null)}
+                        className="font-medium text-primary hover:underline"
+                    >
+                        Ver todos
+                    </button>
+                </p>
             )}
-            {vista === 'tablero' && (
-                <TablaVueltas
-                    vueltas={visibles}
-                    onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
-                />
-            )}
-            {vista === 'gantt' && (
+
+            {vista === 'gantt' ? (
                 <GanttVueltas
                     vueltas={visibles}
                     onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
+                />
+            ) : (
+                <ListaProgramacion
+                    vueltas={visibles}
+                    onAbrir={(vuelta) => setAbiertaId(vuelta.id)}
+                    onEditar={editar}
                 />
             )}
 

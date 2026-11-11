@@ -92,6 +92,24 @@ it('places each trip in its stage on the board', function (): void {
             }));
 });
 
+/**
+ * La lista de programación: el ticket más nuevo arriba, aunque salga antes,
+ * y cada uno con todos sus pasos para la barra de avance.
+ */
+it('lists the board from the newest ticket, with every step for the progress bar', function (): void {
+    $antiguo = Vuelta::factory()->programada()->create(['inicio' => now()->addDays(3)->toDateString()]);
+    $nuevo = Vuelta::factory()->programada()->create(['inicio' => now()->addDay()->toDateString()]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('tablero.0.id', $nuevo->id)
+            ->where('tablero.1.id', $antiguo->id)
+            ->where('tablero.0.avance.0', ['clave' => 'programado', 'titulo' => 'Programado', 'estado' => 'hecho'])
+            ->where('tablero.0.avance.1.clave', 'taller')
+            ->where('tablero.0.siguiente.clave', 'taller'));
+});
+
 it('lists the history of a unit with the GR of each stop', function (): void {
     $parada = ParadaVuelta::factory()->create();
     // Sin tracto para que no se asigne sola: se engancha a mano.

@@ -771,3 +771,15 @@ it('sends no last km for a unit that never had one', function (): void {
         ->get(route('abastecimiento.index'))
         ->assertInertia(fn (Assert $page) => $page->where('vueltas.0.ultimo_km', null));
 });
+
+it('lists the open tickets from the newest to the oldest', function (): void {
+    $otroTracto = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto, 'placa' => 'ZZZ999']);
+    $antiguo = ticketListo($this->tracto);
+    $nuevo = ticketListo($otroTracto);
+
+    actingAs(actorConRol('abastecimiento'))
+        ->get(route('abastecimiento.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('vueltas.0.id', $nuevo->id)
+            ->where('vueltas.1.id', $antiguo->id));
+});

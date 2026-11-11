@@ -8,6 +8,7 @@ use App\Models\ParadaVuelta;
 use App\Models\Viaje;
 use App\Models\Vuelta;
 use App\Services\AsignadorVueltas;
+use App\Services\OpcionesDeTramo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -54,6 +55,9 @@ class GuiaPorAsignarController extends Controller
                 ])
                 ->all(),
             'puedeAsignar' => $request->user()?->can('asignarGuias', Vuelta::class) ?? false,
+            // Las rutas de la tabla, para sumar el combustible de una carga
+            // que no estaba programada sin salir de la bandeja.
+            'tramos' => fn (): array => app(OpcionesDeTramo::class)->todas(),
         ]);
     }
 
@@ -62,6 +66,9 @@ class GuiaPorAsignarController extends Controller
         $this->authorize('asignarGuias', Vuelta::class);
 
         $vuelta = $request->vuelta();
+        // Una carga que no estaba en el programa: entra como parada nueva o
+        // reemplaza un tramo que iba vacío.
+        $sinProgramar = $request->parada() === null || $request->parada()->esVacio();
         $parada = $this->asignador->asignar(
             $viaje,
             $vuelta,
@@ -70,9 +77,25 @@ class GuiaPorAsignarController extends Controller
             $request->user(),
         );
 
+        // Esa carga casi siempre trae un desvío: se ofrece sumar su
+        // combustible ahí mismo, a quien puede editar el ticket.
+        if ($sinProgramar && ($request->user()?->can('update', $vuelta) ?? false)) {
+            Inertia::flash('carga_sin_programar', [
+                'vuelta_id' => $vuelta->id,
+                'codigo' => $vuelta->codigo,
+                'sentido' => $parada->sentido->value,
+                'numero_gr' => $viaje->numero_gr,
+                'trayecto' => ($parada->lugar_origen ?? $parada->zona_origen?->label() ?? '¿?').' → '.($parada->lugar_destino ?? $parada->zona_destino?->label() ?? '¿?'),
+            ]);
+        }
+
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "GR {$viaje->numero_gr} asignada al ticket {$vuelta->codigo}".($parada->fuera_de_programa ? ' como parada no programada.' : '.'),
+            'message' => "GR {$viaje->numero_gr} asignada al ticket {$vuelta->codigo}".match (true) {
+                $parada->fuera_de_programa => ' como parada no programada.',
+                $sinProgramar => ': reemplaza el tramo que iba vacío.',
+                default => '.',
+            },
         ]);
     }
 
@@ -136,7 +159,8 @@ class GuiaPorAsignarController extends Controller
                 'inicio' => $vuelta->inicio?->toDateString(),
                 'estado_label' => $vuelta->estado->label(),
                 'paradas' => $vuelta->paradas
-                    ->reject(fn (ParadaVuelta $parada): bool => $parada->esVacio())
+                    // De los vacíos, solo el que esta GR puede reemplazar.
+                    ->filter(fn (ParadaVuelta $parada): bool => ! $parada->esVacio() || $this->asignador->esVacioReemplazable($parada, $guia))
                     ->map(fn (ParadaVuelta $parada): array => [
                         'id' => $parada->id,
                         'sentido' => $parada->sentido->value,
@@ -144,6 +168,7 @@ class GuiaPorAsignarController extends Controller
                         'carga' => $parada->tipo_carga->label(),
                         'guias' => (int) $parada->viajes_count,
                         'no_programada' => $parada->fuera_de_programa,
+                        'vacio' => $parada->esVacio(),
                     ])
                     ->values()
                     ->all(),

@@ -124,7 +124,10 @@ export function AdicionalesVuelta({ vuelta }: { vuelta: Vuelta }) {
             )}
             {agregando && (
                 <AdicionalDialog
-                    vuelta={vuelta}
+                    vueltaId={vuelta.id}
+                    sentidoInicial={
+                        vuelta.regreso.length > 0 ? 'regreso' : 'ida'
+                    }
                     onCerrar={() => setAgregando(false)}
                 />
             )}
@@ -132,11 +135,27 @@ export function AdicionalesVuelta({ vuelta }: { vuelta: Vuelta }) {
     );
 }
 
-function AdicionalDialog({
-    vuelta,
+/**
+ * También se abre desde la bandeja de GR, al asignar una carga que no
+ * estaba programada: ahí llega con el tramo y el motivo ya puestos.
+ */
+export function AdicionalDialog({
+    vueltaId,
+    sentidoInicial,
+    motivoInicial = '',
+    titulo = 'Sumar al tramo',
+    descripcion,
+    textoCerrar,
     onCerrar,
 }: {
-    vuelta: Vuelta;
+    vueltaId: number;
+    /** La vuelta si ya está programada; si no, la ida. */
+    sentidoInicial: Sentido;
+    motivoInicial?: string;
+    titulo?: string;
+    descripcion?: string;
+    /** Con texto, muestra el botón para cerrar sin sumar nada. */
+    textoCerrar?: string;
     onCerrar: () => void;
 }) {
     // Las rutas de la tabla llegan con la página (las mismas del formulario
@@ -146,7 +165,6 @@ function AdicionalDialog({
         tramos ? 'ruta' : 'libre',
     );
 
-    // El tramo por defecto: la vuelta si ya está programada; si no, la ida.
     const { data, setData, transform, post, processing, errors } = useForm<{
         sentido: Sentido;
         ruta_id: string;
@@ -154,14 +172,18 @@ function AdicionalDialog({
         galones: string;
         motivo: string;
     }>({
-        sentido: vuelta.regreso.length > 0 ? 'regreso' : 'ida',
+        sentido: sentidoInicial,
         ruta_id: '',
         variante_ruta_id: '',
         galones: '',
-        motivo: '',
+        motivo: motivoInicial,
     });
 
-    const rutas = tramos?.[data.sentido] ?? [];
+    // Lo que se suma en el camino casi siempre es un complemento (Camaná,
+    // Ilo, Huaral): van primero, antes de las rutas principales.
+    const rutas = [...(tramos?.[data.sentido] ?? [])].sort(
+        (una, otra) => Number(otra.es_complemento) - Number(una.es_complemento),
+    );
     const elegida = rutas.find((ruta) => ruta.value === data.ruta_id);
     const errores = errors as Record<string, string | undefined>;
 
@@ -183,7 +205,7 @@ function AdicionalDialog({
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
-        post(adicionales.store(vuelta.id).url, {
+        post(adicionales.store(vueltaId).url, {
             preserveScroll: true,
             onSuccess: onCerrar,
         });
@@ -197,10 +219,10 @@ function AdicionalDialog({
         <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
             <DialogContent className="md:max-w-md">
                 <DialogHeader>
-                    <DialogTitle>Sumar al tramo</DialogTitle>
+                    <DialogTitle>{titulo}</DialogTitle>
                     <DialogDescription>
-                        Para la carga que sale en el camino o un desvío. Sube el
-                        tope del tramo, aunque ya tenga combustible autorizado.
+                        {descripcion ??
+                            'Para la carga que sale en el camino o un desvío. Sube el tope del tramo, aunque ya tenga combustible autorizado.'}
                     </DialogDescription>
                 </DialogHeader>
                 <form
@@ -377,6 +399,15 @@ function AdicionalDialog({
                     </Field>
                 </form>
                 <DialogFooter>
+                    {textoCerrar && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onCerrar}
+                        >
+                            {textoCerrar}
+                        </Button>
+                    )}
                     <Button
                         type="submit"
                         form="agregar-adicional"
