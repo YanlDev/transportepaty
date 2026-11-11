@@ -36,9 +36,11 @@ const galones = (valor: number | null) =>
 function resumen(lineas: LineaRuta[]): string {
     const combustible = lineas
         .filter((linea) => linea.tipo === 'combustible')
-        .map(
-            (linea) =>
-                `${linea.punto ?? linea.concepto} ${galones(linea.galones)}`,
+        .map((linea) =>
+            // El full va sin galones a propósito: no está «por definir».
+            linea.tanque_lleno
+                ? `${linea.punto ?? linea.concepto} tanque full`
+                : `${linea.punto ?? linea.concepto} ${galones(linea.galones)}`,
         );
     const viaticos = lineas
         .filter((linea) => linea.tipo !== 'combustible')
@@ -108,7 +110,10 @@ function FilaRuta({
         .join(' ');
     const comunes = ruta.lineas.filter((linea) => linea.variante === null);
     const porDefinir = ruta.lineas.some(
-        (linea) => linea.tipo === 'combustible' && linea.galones === null,
+        (linea) =>
+            linea.tipo === 'combustible' &&
+            !linea.tanque_lleno &&
+            linea.galones === null,
     );
 
     return (

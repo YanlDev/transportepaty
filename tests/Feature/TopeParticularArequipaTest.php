@@ -114,3 +114,12 @@ it('says the full-tank routes tope as «Hasta Juliaca», without a grifo', funct
     expect($tramo)->toMatchArray(['previsto' => 250.0, 'registrado' => 164.0, 'falta' => 86.0])
         ->and(collect($tramo['puntos'])->pluck('punto')->all())->toContain('Hasta Juliaca + Uraca', 'Lima');
 });
+
+it('drops the old «falta poner los galones» note from the full-tank routes', function (): void {
+    $ruta = rutaDelCatalogo('Particular a Cusco');
+    $ruta->update(['nota' => "La pizarra no tiene el monto de viáticos.\nTenía «tanque full»: falta poner los galones de esa línea."]);
+
+    (require database_path('migrations/2026_11_11_215441_quita_el_aviso_viejo_de_tanque_full.php'))->up();
+
+    expect($ruta->fresh()->nota)->toBe('La pizarra no tiene el monto de viáticos.');
+});
