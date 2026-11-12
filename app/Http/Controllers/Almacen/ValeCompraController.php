@@ -6,15 +6,18 @@ use App\Enums\EstadoValeCompra;
 use App\Enums\Moneda;
 use App\Enums\SituacionValeCompra;
 use App\Enums\TipoValeCompra;
+use App\Enums\UnidadMedida;
 use App\Http\Controllers\Almacen\Concerns\CatalogosAlmacen;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Almacen\AnularDocumentoRequest;
 use App\Http\Requests\Almacen\ValeCompraRequest;
 use App\Models\Articulo;
+use App\Models\CategoriaArticulo;
 use App\Models\DetalleValeCompra;
 use App\Models\IngresoAlmacen;
 use App\Models\OrdenTrabajo;
 use App\Models\Proveedor;
+use App\Models\UbicacionAlmacen;
 use App\Models\ValeCompra;
 use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\CodigoQr;
@@ -494,6 +497,14 @@ class ValeCompraController extends Controller
             'proveedores' => $this->proveedoresParaElegir(),
             'puedeCrearProveedor' => request()->user()?->can('create', Proveedor::class) ?? false,
             'articulos' => $this->articulosParaElegir(false),
+            // Un repuesto que nunca se compró se da de alta sin salir del pedido.
+            'puedeCrearArticulo' => request()->user()?->can('create', Articulo::class) ?? false,
+            'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),
+            'ubicaciones' => UbicacionAlmacen::query()->orderBy('nombre')->get(['id', 'nombre']),
+            'unidades' => array_map(
+                fn (UnidadMedida $unidad): array => ['value' => $unidad->value, 'label' => "{$unidad->label()} ({$unidad->abreviatura()})"],
+                UnidadMedida::cases(),
+            ),
             'vehiculos' => $this->vehiculosParaElegir(),
             'ordenes' => $this->ordenesParaElegir(),
             'maximoKb' => (int) config('uploads.imagenes.max_kb'),

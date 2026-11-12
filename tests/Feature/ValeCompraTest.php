@@ -582,3 +582,33 @@ it('lets whoever asks for a purchase register a new supplier from the request', 
         ->post(route('almacen.proveedores.store'), ['razon_social' => 'No debería'])
         ->assertForbidden();
 });
+
+it('lets taller create an article that is not in the catalog from the purchase request', function (): void {
+    $taller = actorConRol('taller');
+
+    actingAs($taller)
+        ->get(route('almacen.compras.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('puedeCrearArticulo', true)
+            ->has('categorias')
+            ->has('ubicaciones')
+            ->has('unidades'));
+
+    actingAs($taller)
+        ->from(route('almacen.compras.create'))
+        ->post(route('almacen.articulos.store'), ['nombre' => 'Chicharra', 'unidad' => 'und', 'volver' => true])
+        ->assertRedirect(route('almacen.compras.create'))
+        ->assertSessionHasNoErrors();
+
+    $articulo = Articulo::query()->latest('id')->firstOrFail();
+
+    // De vuelta en el pedido, ya se puede elegir.
+    actingAs($taller)
+        ->get(route('almacen.compras.create'))
+        ->assertInertia(fn (Assert $page) => $page->where('articulos', fn ($articulos) => collect($articulos)->contains('id', $articulo->id)));
+
+    // Operaciones pide compras de emergencia, pero el catálogo no es suyo.
+    actingAs(actorConRol('operaciones'))
+        ->get(route('almacen.compras.create'))
+        ->assertInertia(fn (Assert $page) => $page->where('puedeCrearArticulo', false));
+});

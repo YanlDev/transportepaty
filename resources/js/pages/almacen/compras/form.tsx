@@ -6,6 +6,7 @@ import compras, {
     update,
 } from '@/actions/App/Http/Controllers/Almacen/ValeCompraController';
 import { migasAlmacen } from '@/components/almacen/almacen-nav';
+import { ArticuloRapidoDialog } from '@/components/almacen/articulo-rapido-dialog';
 import { ProveedorDialog } from '@/components/almacen/proveedor-dialog';
 import { CampoArchivo } from '@/components/campo-archivo';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
@@ -21,6 +22,7 @@ import { errorDeLinea, opcionesArticulo } from '@/lib/almacen';
 import { formatearPlaca } from '@/lib/format';
 import type {
     ArticuloElegible,
+    Opcion,
     OrdenElegible,
     ProveedorElegible,
     VehiculoElegible,
@@ -59,6 +61,11 @@ type Props = {
     /** Puede registrar un proveedor nuevo sin salir del pedido. */
     puedeCrearProveedor: boolean;
     articulos: ArticuloElegible[];
+    /** Puede dar de alta un artículo que todavía no está en el catálogo. */
+    puedeCrearArticulo: boolean;
+    categorias: Opcion[];
+    ubicaciones: Opcion[];
+    unidades: EnumOption[];
     vehiculos: VehiculoElegible[];
     ordenes: OrdenElegible[];
     maximoKb: number;
@@ -93,6 +100,10 @@ export default function CompraForm({
     proveedores,
     puedeCrearProveedor,
     articulos,
+    puedeCrearArticulo,
+    categorias,
+    ubicaciones,
+    unidades,
     vehiculos,
     ordenes,
     maximoKb,
@@ -165,6 +176,29 @@ export default function CompraForm({
                 i === indice ? { ...linea, ...cambios } : linea,
             ),
         );
+
+    /** El artículo recién creado va a la primera línea vacía, o a una nueva. */
+    const ponerArticuloNuevo = (id: number) =>
+        setData((actual) => {
+            const vacia = actual.detalles.findIndex(
+                (linea) => !linea.es_servicio && linea.articulo_id === null,
+            );
+
+            return {
+                ...actual,
+                detalles:
+                    vacia === -1
+                        ? [
+                              ...actual.detalles,
+                              { ...lineaVacia(), articulo_id: id },
+                          ]
+                        : actual.detalles.map((linea, i) =>
+                              i === vacia
+                                  ? { ...linea, articulo_id: id }
+                                  : linea,
+                          ),
+            };
+        });
 
     const guardar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -470,7 +504,9 @@ export default function CompraForm({
                                                 ? 'No entra al almacén: suma al costo de la orden cuando se confirme.'
                                                 : articulo
                                                   ? `${articulo.codigo} · se compra por ${articulo.unidad_compra ?? articulo.unidad}`
-                                                  : 'Si no está en el catálogo, regístralo primero en Almacén.'}
+                                                  : puedeCrearArticulo
+                                                    ? 'Si no está en el catálogo, créalo con «Artículo nuevo».'
+                                                    : 'Si no está en el catálogo, pide al almacén que lo registre.'}
                                         </p>
                                         <InputError
                                             message={
@@ -577,6 +613,14 @@ export default function CompraForm({
                             <Wrench className="size-4" />
                             Servicio de un tercero
                         </Button>
+                        {puedeCrearArticulo && (
+                            <ArticuloRapidoDialog
+                                categorias={categorias}
+                                ubicaciones={ubicaciones}
+                                unidades={unidades}
+                                onCreado={ponerArticuloNuevo}
+                            />
+                        )}
                     </div>
 
                     <p className="text-right text-sm text-muted-foreground">
