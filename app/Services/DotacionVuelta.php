@@ -300,15 +300,18 @@ class DotacionVuelta
 
     /**
      * Cómo se llama la fila de las líneas sin grifo: por su nombre («Hasta
-     * Juliaca», «Uraca»), unidas si son varias; «Total del tramo» si solo
-     * dicen «Combustible».
+     * Juliaca», «Uraca»; los tramos, «Recorrido»), unidas si son varias;
+     * «Total del tramo» si solo dicen «Combustible».
      *
-     * @param  list<array{punto_id: int|null, concepto?: string|null}>  $lineas
+     * @param  list<array{punto_id: int|null, concepto?: string|null, tramo?: bool}>  $lineas
      */
     private static function sinGrifo(array $lineas): string
     {
         $nombres = array_values(array_unique(array_filter(
-            array_map(fn (array $linea): ?string => $linea['punto_id'] === null ? trim((string) ($linea['concepto'] ?? '')) : null, $lineas),
+            // Los tramos de una ruta por tramos se nombran juntos: «Recorrido».
+            array_map(fn (array $linea): ?string => $linea['punto_id'] === null
+                ? (($linea['tramo'] ?? false) ? 'Recorrido' : trim((string) ($linea['concepto'] ?? '')))
+                : null, $lineas),
             fn (?string $nombre): bool => $nombre !== null && $nombre !== '' && mb_strtolower($nombre) !== 'combustible',
         )));
 

@@ -6,6 +6,7 @@ use App\Enums\SentidoTramo;
 use App\Enums\TipoCarga;
 use App\Enums\TipoLineaAbastecimiento;
 use App\Models\Concerns\RegistraHistorial;
+use App\Services\TablaDeTramos;
 use Database\Factories\RutaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,6 +32,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property string|null $descripcion
  * @property SentidoTramo|null $sentido Null: sirve en la ida y en la vuelta.
  * @property bool $es_complemento
+ * @property bool $por_tramos Sus galones salen de la tabla de tramos según su recorrido, no se escriben a mano.
  * @property TipoCarga|null $sube_con Un complemento que se suma solo cuando la ida sube a la mina con esta carga (con escoria, +10 gal).
  * @property list<ParadaRuta> $paradas
  * @property bool $pide_destino La carga particular a un destino que se elige al programar.
@@ -44,7 +46,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property-read Collection<int, VarianteRuta> $variantes
  */
 #[Fillable([
-    'nombre', 'descripcion', 'sentido', 'es_complemento', 'sube_con', 'paradas', 'pide_destino',
+    'nombre', 'descripcion', 'sentido', 'es_complemento', 'por_tramos', 'sube_con', 'paradas', 'pide_destino',
     'dias_viaje', 'km_estandar', 'color', 'nota', 'activa', 'orden',
 ])]
 class Ruta extends Model
@@ -96,10 +98,14 @@ class Ruta extends Model
      */
     public function lineasPara(?VarianteRuta $variante): array
     {
-        return array_values($this->lineas
+        $lineas = array_values($this->lineas
             ->filter(fn (LineaRuta $linea): bool => $linea->variante_ruta_id === null || $linea->variante_ruta_id === $variante?->id)
+            // Por tramos, el combustible (salvo el full) sale de la tabla.
+            ->reject(fn (LineaRuta $linea): bool => $this->por_tramos && $linea->tipo === TipoLineaAbastecimiento::Combustible && ! $linea->tanque_lleno)
             ->map(fn (LineaRuta $linea): array => $linea->copia())
             ->all());
+
+        return $this->por_tramos ? [...app(TablaDeTramos::class)->lineas($this->paradas), ...$lineas] : $lineas;
     }
 
     /**
@@ -146,6 +152,7 @@ class Ruta extends Model
         return [
             'sentido' => SentidoTramo::class,
             'es_complemento' => 'boolean',
+            'por_tramos' => 'boolean',
             'sube_con' => TipoCarga::class,
             'paradas' => 'array',
             'pide_destino' => 'boolean',

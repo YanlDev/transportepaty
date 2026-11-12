@@ -5,8 +5,10 @@ namespace App\Models;
 use App\Enums\SentidoTramo;
 use App\Enums\TipoLineaAbastecimiento;
 use App\Models\Concerns\RegistraHistorial;
+use App\Services\TablaDeTramos;
 use Database\Factories\RutaVueltaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,7 +19,7 @@ use Illuminate\Support\Carbon;
  * elegirla: su dotación es lo autorizado. Si el catálogo cambia después,
  * esto no. Un tramo tiene su ruta principal y, si hace falta, complementos.
  *
- * @phpstan-type LineaCopiada array{linea_id: int|null, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno?: bool, monto: float|null}
+ * @phpstan-type LineaCopiada array{linea_id: int|null, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno?: bool, monto: float|null, tramo?: bool, zona_origen?: string|null, zona_destino?: string|null, cargado?: bool}
  *
  * @property int $id
  * @property int $vuelta_id
@@ -25,6 +27,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $ruta_id
  * @property int|null $variante_ruta_id
  * @property bool $es_complemento
+ * @property bool $por_tramos Sus galones salen de la tabla de tramos con las paradas reales del ticket.
  * @property string $nombre
  * @property string|null $motivo Solo en un adicional: por qué ese ticket lleva galones de más.
  * @property string|null $variante
@@ -42,7 +45,7 @@ use Illuminate\Support\Carbon;
  * @property-read User|null $usuario
  */
 #[Fillable([
-    'vuelta_id', 'sentido', 'ruta_id', 'variante_ruta_id', 'es_complemento', 'nombre', 'motivo', 'variante',
+    'vuelta_id', 'sentido', 'ruta_id', 'variante_ruta_id', 'es_complemento', 'por_tramos', 'nombre', 'motivo', 'variante',
     'color', 'lineas', 'variante_pendiente', 'dias_viaje', 'km_estandar', 'orden', 'user_id',
 ])]
 class RutaVuelta extends Model
@@ -69,6 +72,7 @@ class RutaVuelta extends Model
             'ruta_id' => $ruta->id,
             'variante_ruta_id' => $variante?->id,
             'es_complemento' => $ruta->es_complemento,
+            'por_tramos' => $ruta->por_tramos,
             'nombre' => $ruta->nombre,
             'variante' => $variante?->nombre,
             'color' => $ruta->color,
@@ -84,10 +88,33 @@ class RutaVuelta extends Model
      */
     public function lineasDeCombustible(): array
     {
+        // Por tramos: lo que dice la tabla para las paradas reales del
+        // ticket (una GR que hace ir cargado un tramo vacío sube el tope).
+        if ($this->por_tramos) {
+            $tramos = array_values(array_filter($this->lineas, fn (array $linea): bool => (bool) ($linea['tramo'] ?? false)));
+
+            return app(TablaDeTramos::class)->lineasDelTicket($tramos, $this->paradasDelTramo());
+        }
+
         return array_values(array_filter(
             $this->lineas,
             fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value && ! ($linea['tanque_lleno'] ?? false),
         ));
+    }
+
+    /**
+     * Las paradas del ticket en este tramo: las ya cargadas si las hay, si
+     * no se consultan.
+     *
+     * @return Collection<int, ParadaVuelta>
+     */
+    private function paradasDelTramo(): Collection
+    {
+        if ($this->relationLoaded('vuelta') && $this->vuelta->relationLoaded('paradas')) {
+            return $this->vuelta->paradasDe($this->sentido);
+        }
+
+        return ParadaVuelta::query()->where('vuelta_id', $this->vuelta_id)->where('sentido', $this->sentido)->orderBy('orden')->get();
     }
 
     /**
@@ -198,6 +225,7 @@ class RutaVuelta extends Model
         return [
             'sentido' => SentidoTramo::class,
             'es_complemento' => 'boolean',
+            'por_tramos' => 'boolean',
             'lineas' => 'array',
             'variante_pendiente' => 'boolean',
             'dias_viaje' => 'integer',

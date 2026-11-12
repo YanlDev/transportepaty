@@ -1,7 +1,8 @@
-import { Head, setLayoutProps } from '@inertiajs/react';
-import { Pencil, Plus, Route } from 'lucide-react';
+import { Head, Link, setLayoutProps } from '@inertiajs/react';
+import { Fuel, Pencil, Plus, Route } from 'lucide-react';
 import { useState } from 'react';
 import hub from '@/actions/App/Http/Controllers/ConfiguracionController';
+import tramosRutas from '@/actions/App/Http/Controllers/GalonesPorTramoController';
 import rutas from '@/actions/App/Http/Controllers/RutaController';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { RutaDialog } from '@/components/rutas/ruta-dialog';
@@ -109,12 +110,14 @@ function FilaRuta({
         )
         .join(' ');
     const comunes = ruta.lineas.filter((linea) => linea.variante === null);
-    const porDefinir = ruta.lineas.some(
-        (linea) =>
-            linea.tipo === 'combustible' &&
-            !linea.tanque_lleno &&
-            linea.galones === null,
-    );
+    const porDefinir = ruta.por_tramos
+        ? ruta.tramos.some((tramo) => tramo.galones === null)
+        : ruta.lineas.some(
+              (linea) =>
+                  linea.tipo === 'combustible' &&
+                  !linea.tanque_lleno &&
+                  linea.galones === null,
+          );
 
     return (
         <li className="flex flex-col gap-2 px-4 py-3 md:flex-row md:items-start md:justify-between">
@@ -156,7 +159,19 @@ function FilaRuta({
                     </span>
                 )}
                 <span className="text-sm">
-                    {ruta.variantes.length === 0 ? (
+                    {ruta.por_tramos ? (
+                        // Por tramos: los galones de la tabla, y lo demás
+                        // (el full, los viáticos) como siempre.
+                        [
+                            ...ruta.tramos.map(
+                                (tramo) =>
+                                    `${tramo.concepto} ${tramo.galones === null ? '¿? gal' : `${tramo.galones} gal`}`,
+                            ),
+                            resumen(ruta.lineas),
+                        ]
+                            .filter(Boolean)
+                            .join(' · ')
+                    ) : ruta.variantes.length === 0 ? (
                         resumen(ruta.lineas) || (
                             <span className="text-muted-foreground">
                                 Sin dotación propia
@@ -240,10 +255,18 @@ export default function RutasIndex({ rutas: lista, opciones }: Props) {
                 descripcion="Cada tramo estándar con su recorrido y lo que se autoriza. Se elige al programar el ticket."
                 icono={Route}
                 acciones={
-                    <Button onClick={() => setEditando(null)}>
-                        <Plus className="size-4" />
-                        Ruta
-                    </Button>
+                    <>
+                        <Button variant="outline" asChild>
+                            <Link href={tramosRutas.index().url}>
+                                <Fuel className="size-4" />
+                                Galones por tramo
+                            </Link>
+                        </Button>
+                        <Button onClick={() => setEditando(null)}>
+                            <Plus className="size-4" />
+                            Ruta
+                        </Button>
+                    </>
                 }
             />
 

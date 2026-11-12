@@ -4,6 +4,7 @@ use App\Enums\SentidoTramo;
 use App\Models\Abastecimiento;
 use App\Models\LineaRuta;
 use App\Models\PuntoAbastecimiento;
+use App\Models\Ruta;
 use App\Models\RutaVuelta;
 use App\Models\Vuelta;
 use App\Services\GastosDelTicket;
@@ -14,6 +15,8 @@ use App\Services\GastosDelTicket;
  */
 function rompeParticularArequipa(): void
 {
+    // Antes de los galones por tramo: las rutas con full tenían su total a mano.
+    Ruta::query()->whereIn('nombre', ['Particular a Arequipa', 'Particular a Juliaca'])->update(['por_tramos' => false]);
     $ruta = rutaDelCatalogo('Particular a Arequipa');
     $ruta->lineas()->where('tipo', 'combustible')->delete();
     $lima = PuntoAbastecimiento::query()->where('nombre', 'Lima')->value('id');

@@ -29,6 +29,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmisionGreController;
 use App\Http\Controllers\EquipamientoCarretaController;
 use App\Http\Controllers\FacturaController;
+use App\Http\Controllers\GalonesPorTramoController;
 use App\Http\Controllers\GuiaPorAsignarController;
 use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\LecturaKilometrajeController;
@@ -206,6 +207,9 @@ Route::middleware('auth')->group(function () {
 
     // El catálogo de rutas: el recorrido y la dotación de cada tramo
     // estándar. Lo que se elige al programar y lo que abastecimiento ejecuta.
+    // Galones por tramo: antes que rutas/{ruta}, que si no se lo toma.
+    Route::get('rutas/tramos', [GalonesPorTramoController::class, 'index'])->name('rutas.tramos');
+    Route::put('rutas/tramos', [GalonesPorTramoController::class, 'guardar'])->name('rutas.tramos.guardar');
     Route::get('rutas', [RutaController::class, 'index'])->name('rutas.index');
     Route::post('rutas', [RutaController::class, 'store'])->name('rutas.store');
     Route::put('rutas/{ruta}', [RutaController::class, 'update'])->name('rutas.update');

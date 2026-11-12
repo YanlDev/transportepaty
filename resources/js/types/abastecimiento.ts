@@ -234,6 +234,10 @@ export type RutaCatalogo = {
     descripcion: string | null;
     sentido: 'ida' | 'regreso' | null;
     es_complemento: boolean;
+    /** Sus galones salen de la tabla de tramos, según su recorrido. */
+    por_tramos: boolean;
+    /** Los tramos con sus galones de la tabla (vacío si no va por tramos). */
+    tramos: { concepto: string; galones: number | null }[];
     paradas: ParadaRutaCatalogo[];
     pide_destino: boolean;
     dias_viaje: number | null;
@@ -249,7 +253,17 @@ export type RutaCatalogo = {
     usada: boolean;
 };
 
+/** Una fila de la tabla de galones por tramo. */
+export type GalonesTramo = {
+    zona_origen: string;
+    zona_destino: string;
+    galones_cargado: number | null;
+    galones_vacio: number | null;
+};
+
 export type OpcionesRutas = {
+    /** La tabla de galones por tramo, para mostrarlos en el editor. */
+    tramos: GalonesTramo[];
     zonas: Opcion[];
     cargas: Opcion[];
     tiposLinea: Opcion[];

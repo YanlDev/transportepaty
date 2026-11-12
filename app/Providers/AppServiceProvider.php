@@ -6,6 +6,7 @@ use App\Enums\Permiso;
 use App\Models\User;
 use App\Services\PalabrasDeZona;
 use App\Services\SincronizadorPermisos;
+use App\Services\TablaDeTramos;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Date;
@@ -23,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     {
         // Una lectura de las palabras de cada zona por petición (o por job).
         $this->app->scoped(PalabrasDeZona::class);
+        $this->app->scoped(TablaDeTramos::class);
     }
 
     /**

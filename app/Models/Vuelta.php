@@ -149,7 +149,9 @@ class Vuelta extends Model
      */
     public function rutasDe(SentidoTramo $sentido): Collection
     {
-        return $this->rutas->where('sentido', $sentido)->values();
+        // Las rutas por tramos leen las paradas de este mismo ticket.
+        return $this->rutas->where('sentido', $sentido)->values()
+            ->each(fn (RutaVuelta $ruta) => $ruta->setRelation('vuelta', $this));
     }
 
     /**

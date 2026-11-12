@@ -7,11 +7,13 @@ use App\Enums\TipoCarga;
 use App\Enums\TipoLineaAbastecimiento;
 use App\Enums\ZonaRuta;
 use App\Http\Requests\GuardarRutaRequest;
+use App\Models\GalonesPorTramo;
 use App\Models\LineaRuta;
 use App\Models\PuntoAbastecimiento;
 use App\Models\Ruta;
 use App\Models\RutaVuelta;
 use App\Models\VarianteRuta;
+use App\Services\TablaDeTramos;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -42,6 +44,13 @@ class RutaController extends Controller
                 ])
                 ->all(),
             'opciones' => [
+                // La tabla de tramos: el editor muestra los galones de cada parada.
+                'tramos' => GalonesPorTramo::query()->get()->map(fn (GalonesPorTramo $fila): array => [
+                    'zona_origen' => $fila->zona_origen->value,
+                    'zona_destino' => $fila->zona_destino->value,
+                    'galones_cargado' => $fila->galones_cargado === null ? null : (float) $fila->galones_cargado,
+                    'galones_vacio' => $fila->galones_vacio === null ? null : (float) $fila->galones_vacio,
+                ])->all(),
                 'zonas' => ZonaRuta::options(),
                 'cargas' => TipoCarga::options(),
                 'tiposLinea' => TipoLineaAbastecimiento::options(),
@@ -75,7 +84,9 @@ class RutaController extends Controller
             $this->guardarDotacion($ruta, $request);
         });
 
-        return back()->with('toast', ['type' => 'success', 'message' => "Ruta «{$ruta->nombre}» actualizada. Los tickets que ya la tienen no cambian."]);
+        return back()->with('toast', ['type' => 'success', 'message' => $ruta->por_tramos
+            ? "Ruta «{$ruta->nombre}» actualizada. Sus galones salen de la tabla de tramos."
+            : "Ruta «{$ruta->nombre}» actualizada. Los tickets que ya la tienen no cambian."]);
     }
 
     /**
@@ -115,6 +126,8 @@ class RutaController extends Controller
             'descripcion' => $request->filled('descripcion') ? $request->string('descripcion')->squish()->toString() : null,
             'sentido' => $request->filled('sentido') ? $request->string('sentido')->toString() : null,
             'es_complemento' => $request->boolean('es_complemento'),
+            // Un complemento suma galones fijos: no va por tramos.
+            'por_tramos' => $request->boolean('por_tramos') && ! $request->boolean('es_complemento'),
             'paradas' => $paradas,
             // La carga particular a un destino que se elige al programar.
             'pide_destino' => in_array(null, array_column($paradas, 'zona_destino'), true),
@@ -152,6 +165,12 @@ class RutaController extends Controller
 
         foreach (array_values((array) $request->validated('lineas', [])) as $orden => $datos) {
             $esCombustible = $datos['tipo'] === $combustible;
+
+            // Por tramos, el combustible sale de la tabla: solo queda el full.
+            if ($ruta->por_tramos && $esCombustible && ! ($datos['tanque_lleno'] ?? false)) {
+                continue;
+            }
+
             $linea = $ruta->lineas()->whereKey($datos['id'] ?? 0)->first() ?? new LineaRuta(['ruta_id' => $ruta->id]);
             $linea->fill([
                 'variante_ruta_id' => isset($datos['variante']) ? ($idsVariantes[(int) $datos['variante']] ?? null) : null,
@@ -185,6 +204,11 @@ class RutaController extends Controller
             'descripcion' => $ruta->descripcion,
             'sentido' => $ruta->sentido?->value,
             'es_complemento' => $ruta->es_complemento,
+            'por_tramos' => $ruta->por_tramos,
+            // Los tramos con sus galones, como salen de la tabla.
+            'tramos' => $ruta->por_tramos
+                ? array_map(fn (array $linea): array => ['concepto' => $linea['concepto'], 'galones' => $linea['galones']], app(TablaDeTramos::class)->lineas($ruta->paradas))
+                : [],
             'paradas' => $ruta->paradas,
             'pide_destino' => $ruta->pide_destino,
             'dias_viaje' => $ruta->dias_viaje,

@@ -35,6 +35,7 @@ class GuardarRutaRequest extends FormRequest
             'descripcion' => ['nullable', 'string', 'max:255'],
             'sentido' => ['nullable', Rule::enum(SentidoTramo::class)],
             'es_complemento' => ['boolean'],
+            'por_tramos' => ['boolean'],
             'dias_viaje' => ['nullable', 'integer', 'min:0', 'max:30'],
             'km_estandar' => ['nullable', 'integer', 'min:1', 'max:20000'],
             'color' => ['nullable', 'string', 'max:20'],

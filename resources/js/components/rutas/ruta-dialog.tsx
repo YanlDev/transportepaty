@@ -1,5 +1,6 @@
-import { router, useForm } from '@inertiajs/react';
+import { Link, router, useForm } from '@inertiajs/react';
 import { Plus, X } from 'lucide-react';
+import tramosRutas from '@/actions/App/Http/Controllers/GalonesPorTramoController';
 import rutas from '@/actions/App/Http/Controllers/RutaController';
 import { useConfirmar } from '@/components/confirmar';
 import { Button } from '@/components/ui/button';
@@ -24,6 +25,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { COLORES_TARJETA } from '@/lib/color-tarjeta';
 import type {
+    GalonesTramo,
     LineaRuta,
     OpcionesRutas,
     ParadaRutaCatalogo,
@@ -40,6 +42,7 @@ type FormData = {
     descripcion: string;
     sentido: '' | 'ida' | 'regreso';
     es_complemento: boolean;
+    por_tramos: boolean;
     dias_viaje: string;
     km_estandar: string;
     color: string;
@@ -84,6 +87,37 @@ function Elegir({
 
 const numeroONulo = (valor: string): number | null =>
     valor === '' ? null : Number(valor);
+
+/**
+ * Los galones de una parada según la tabla de tramos: cargado o vacío.
+ * Dentro de la misma zona, 0; null si la tabla no lo tiene (por definir).
+ */
+function galonesDeParada(
+    tabla: GalonesTramo[],
+    parada: ParadaRutaCatalogo,
+): number | null {
+    if (!parada.zona_origen || !parada.zona_destino) {
+        return null;
+    }
+
+    if (parada.zona_origen === parada.zona_destino) {
+        return 0;
+    }
+
+    const fila = tabla.find(
+        (tramo) =>
+            tramo.zona_origen === parada.zona_origen &&
+            tramo.zona_destino === parada.zona_destino,
+    );
+
+    if (!fila) {
+        return null;
+    }
+
+    return parada.tipo_carga === 'vacio'
+        ? fila.galones_vacio
+        : fila.galones_cargado;
+}
 
 /**
  * Agregar o editar una ruta del catálogo: el recorrido (sus paradas), la
@@ -133,6 +167,7 @@ export function RutaDialog({
             descripcion: ruta?.descripcion ?? '',
             sentido: ruta?.sentido ?? '',
             es_complemento: ruta?.es_complemento ?? false,
+            por_tramos: ruta?.por_tramos ?? false,
             dias_viaje: ruta?.dias_viaje?.toString() ?? '',
             km_estandar: ruta?.km_estandar?.toString() ?? '',
             color: ruta?.color ?? '',
@@ -396,6 +431,27 @@ export function RutaDialog({
                         </span>
                     </label>
 
+                    {!data.es_complemento && (
+                        <label className="flex items-start gap-2 text-sm">
+                            <Checkbox
+                                className="mt-0.5"
+                                checked={data.por_tramos}
+                                onCheckedChange={(marcado) =>
+                                    setData('por_tramos', marcado === true)
+                                }
+                            />
+                            <span>
+                                Combustible por tramos
+                                <span className="block text-xs text-muted-foreground">
+                                    Los galones salen de la tabla «Galones por
+                                    tramo» según el recorrido, cargado o vacío:
+                                    no se escriben a mano. En el ticket se
+                                    cuentan con sus paradas reales.
+                                </span>
+                            </span>
+                        </label>
+                    )}
+
                     <section className="flex flex-col gap-2">
                         <span className="text-sm font-medium">Recorrido</span>
                         {data.paradas.map((parada, indice) => (
@@ -486,6 +542,12 @@ export function RutaDialog({
                                 </Button>
                             </div>
                         ))}
+                        {data.por_tramos && !data.es_complemento && (
+                            <TramosDelRecorrido
+                                paradas={data.paradas}
+                                opciones={opciones}
+                            />
+                        )}
                         {errores.paradas && (
                             <p className="text-sm text-destructive">
                                 {errores.paradas}
@@ -617,17 +679,23 @@ export function RutaDialog({
                         <span className="text-sm font-medium">
                             Dotación
                             <span className="block text-xs font-normal text-muted-foreground">
-                                Combustible sin galones = «por definir»: el
-                                tramo no tiene tope hasta completarlo. «Tanque
-                                full» (Kio) va sin galones: cuando llega su
-                                voucher, lo que cargó descuenta del tope. Por
-                                eso el tope de todo el recorrido va en las otras
-                                líneas (Kio full + Arequipa 190 = 190 de Lima a
-                                Juliaca).
+                                {data.por_tramos
+                                    ? 'El combustible sale de la tabla de tramos (arriba). Aquí van el tanque full (Kio), que va sin galones y su voucher descuenta del total, los viáticos y los peajes.'
+                                    : 'Combustible sin galones = «por definir»: el tramo no tiene tope hasta completarlo. «Tanque full» (Kio) va sin galones: cuando llega su voucher, lo que cargó descuenta del tope. Por eso el tope de todo el recorrido va en las otras líneas (Kio full + Hasta Juliaca 190).'}
                             </span>
                         </span>
                         {data.lineas.map((linea, indice) => {
                             const combustible = linea.tipo === 'combustible';
+
+                            // Por tramos, el combustible sale de la tabla:
+                            // aquí solo queda el full.
+                            if (
+                                data.por_tramos &&
+                                combustible &&
+                                !linea.tanque_lleno
+                            ) {
+                                return null;
+                            }
 
                             return (
                                 <div
@@ -800,7 +868,7 @@ export function RutaDialog({
                                 </div>
                             );
                         })}
-                        {avisoDelFull(data.lineas) && (
+                        {!data.por_tramos && avisoDelFull(data.lineas) && (
                             <p className="rounded-md bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-200">
                                 {avisoDelFull(data.lineas)}
                             </p>
@@ -890,5 +958,61 @@ export function RutaDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+/**
+ * Cada parada del recorrido con sus galones de la tabla, y el total. Lo que
+ * la tabla no tiene queda marcado: sin eso el tramo no tiene tope.
+ */
+function TramosDelRecorrido({
+    paradas,
+    opciones,
+}: {
+    paradas: ParadaRutaCatalogo[];
+    opciones: OpcionesRutas;
+}) {
+    const zona = (valor: string | null | undefined) =>
+        opciones.zonas.find((opcion) => opcion.value === valor)?.label ?? '¿?';
+    const filas = paradas.map((parada) => ({
+        texto: `${zona(parada.zona_origen)} → ${zona(parada.zona_destino)} · ${parada.tipo_carga === 'vacio' ? 'vacío' : 'cargado'}`,
+        galones: galonesDeParada(opciones.tramos, parada),
+    }));
+    const faltan = filas.some((fila) => fila.galones === null);
+    const total = filas.reduce((suma, fila) => suma + (fila.galones ?? 0), 0);
+
+    return (
+        <div className="flex flex-col gap-1 rounded-lg bg-muted/50 px-3 py-2 text-sm">
+            {filas.map((fila, indice) => (
+                <div key={indice} className="flex justify-between gap-3">
+                    <span className="text-muted-foreground">{fila.texto}</span>
+                    {fila.galones === null ? (
+                        <span className="font-medium text-amber-700 dark:text-amber-400">
+                            falta en la tabla
+                        </span>
+                    ) : (
+                        <span className="font-medium tabular-nums">
+                            {fila.galones} gal
+                        </span>
+                    )}
+                </div>
+            ))}
+            <div className="flex justify-between gap-3 border-t pt-1 font-medium">
+                <span>Total del recorrido</span>
+                {faltan ? (
+                    <span className="text-amber-700 dark:text-amber-400">
+                        sin tope hasta completar la tabla
+                    </span>
+                ) : (
+                    <span className="tabular-nums">{total} gal</span>
+                )}
+            </div>
+            <Link
+                href={tramosRutas.index().url}
+                className="self-start text-xs font-medium text-primary hover:underline"
+            >
+                Editar la tabla de galones por tramo
+            </Link>
+        </div>
     );
 }
