@@ -300,6 +300,10 @@ export type ViajeListItem = {
     tipo_carga_label: string;
     peso: number;
     unidad_peso: string;
+    /** GR de bienes fiscalizados: el PDF no trae peso, se carga a mano en TN. */
+    bienes_fiscalizados: boolean;
+    /** Es BF y todavía nadie cargó el peso. */
+    falta_peso: boolean;
     /** Null si por alguna razón el PDF no quedó adjunto. */
     archivo_url: string | null;
     /**

@@ -170,16 +170,49 @@ it('extracts every field from a GRE de Bienes Fiscalizados, a format entirely di
         'destinatario' => 'SGS DEL PERU S.A.C.',
         'destinatario_ruc' => '20100114349',
         'peso' => '0',
-        'unidad_peso' => 'KGM',
+        'unidad_peso' => 'TNE',
+        'bienes_fiscalizados' => true,
         'placa_tracto' => 'TCK922',
         'placa_carreta' => 'VDI980',
         'conductor_nombre' => 'VILCA CHOQUEHUANCA DAVID',
         'conductor_dni' => '02439078',
     ]);
 
-    expect($campos['guias_remitente'])->toBe([]);
+    expect($campos['guias_remitente'])->toBe([['numero' => 'G010-00000355', 'ruc' => '20100114349']]);
     expect($campos['origen'])->toContain('BOCANEGRA');
     expect($campos['destino'])->toContain('PALCA');
+});
+
+it('reads a GRE de Bienes Fiscalizados of Cal & Cemento Sur with its guía remitente de referencia', function (): void {
+    $campos = (new LectorGuiaRemision)->extraerDesdeArchivo(
+        base_path('tests/Fixtures/guias/gr-bienes-fiscalizados-con-referencia.pdf'),
+    );
+
+    expect($campos)->toMatchArray([
+        'numero_gr' => 'G010-00000143',
+        'fecha_emision' => '12/11/2026',
+        'fecha_traslado' => '12/11/2026',
+        'origen' => 'CAR. JULIACA-PUNO KM. 11 HACIENDA YUNGURA, PUNO - SAN ROMAN - PUNO',
+        'destino' => 'INT. D SEC. PAMPA DE CAJAMARQUILLA REF.: (SUB LOTE D), LIMA - LIMA - LURIGANCHO',
+        'cliente' => 'CAL & CEMENTO SUR S.A.',
+        'cliente_ruc' => '20115039262',
+        'guias_remitente' => [['numero' => 'G010-00139559', 'ruc' => '20115039262']],
+        'peso' => '0',
+        'unidad_peso' => 'TNE',
+        'bienes_fiscalizados' => true,
+        'placa_tracto' => 'CCD774',
+        'placa_carreta' => 'BKL986',
+        'conductor_nombre' => 'PACHA ABILEZ FIDEL QUINTIN',
+        'conductor_dni' => '40912795',
+    ]);
+});
+
+it('marks a standard GRE as not bienes fiscalizados', function (): void {
+    $campos = (new LectorGuiaRemision)->extraerDesdeArchivo(
+        base_path('tests/Fixtures/guias/gr-minsur-concentrado.pdf'),
+    );
+
+    expect($campos['bienes_fiscalizados'])->toBeFalse();
 });
 
 it('throws when the file is not a parseable PDF', function (): void {

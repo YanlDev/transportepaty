@@ -32,6 +32,17 @@ class ViajePolicy
         return $user->checkPermissionTo(Permiso::ViajesEditar);
     }
 
+    /**
+     * El peso de una GR de bienes fiscalizados lo carga quien la sube (el PDF
+     * no lo trae) o quien corrige viajes. El de una GR normal sale del PDF y
+     * no se toca.
+     */
+    public function cargarPeso(User $user, Viaje $viaje): bool
+    {
+        return $viaje->bienes_fiscalizados
+            && ($user->checkPermissionTo(Permiso::ViajesRegistrar) || $user->checkPermissionTo(Permiso::ViajesEditar));
+    }
+
     public function delete(User $user, Viaje $viaje): bool
     {
         return $user->checkPermissionTo(Permiso::ViajesEliminar);

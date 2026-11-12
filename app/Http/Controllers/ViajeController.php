@@ -9,6 +9,7 @@ use App\Enums\TipoVehiculo;
 use App\Http\Requests\AnularViajeRequest;
 use App\Http\Requests\StoreViajeManualRequest;
 use App\Http\Requests\StoreViajeRequest;
+use App\Http\Requests\UpdatePesoViajeRequest;
 use App\Http\Requests\UpdateTipoCargaViajeRequest;
 use App\Models\Conductor;
 use App\Models\Factura;
@@ -173,12 +174,22 @@ class ViajeController extends Controller
 
         $creados = 0;
         $noReconocidos = 0;
+        $sinPeso = [];
 
         foreach ($request->file('archivos') as $archivo) {
             $resultado = $importador->importar($archivo);
 
             if ($resultado['reconocido']) {
                 $creados++;
+
+                if ($resultado['viaje']->faltaPeso()) {
+                    $sinPeso[] = [
+                        'id' => $resultado['viaje']->id,
+                        'numero_gr' => $resultado['viaje']->numero_gr,
+                        'cliente' => $resultado['viaje']->nombreCliente(),
+                        'placa_tracto' => $resultado['viaje']->placa_tracto,
+                    ];
+                }
             } else {
                 $noReconocidos++;
             }
@@ -190,6 +201,12 @@ class ViajeController extends Controller
             $mensaje .= $noReconocidos === 1
                 ? ' 1 archivo no se reconoció como GR de Paty.'
                 : " {$noReconocidos} archivos no se reconocieron como GR de Paty.";
+        }
+
+        // La GR de bienes fiscalizados no trae peso: la pantalla lo pide
+        // apenas termina la subida.
+        if ($sinPeso !== []) {
+            Inertia::flash('pedir_peso', $sinPeso);
         }
 
         return back()->with('toast', [
@@ -270,6 +287,25 @@ class ViajeController extends Controller
         $viaje->update(['tipo_carga' => $request->validated('tipo_carga')]);
 
         return back();
+    }
+
+    /**
+     * El peso en toneladas de una GR de bienes fiscalizados, que el PDF no
+     * trae (ver `LectorGuiaRemision::extraerCamposBienesFiscalizados`).
+     */
+    public function actualizarPeso(UpdatePesoViajeRequest $request, Viaje $viaje): RedirectResponse
+    {
+        $this->authorize('cargarPeso', $viaje);
+
+        $viaje->update([
+            'peso' => $request->validated('peso'),
+            'unidad_peso' => 'TNE',
+        ]);
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => "Peso de la GR {$viaje->numero_gr} guardado.",
+        ]);
     }
 
     /**

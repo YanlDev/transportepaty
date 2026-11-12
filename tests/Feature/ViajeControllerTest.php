@@ -115,10 +115,83 @@ it('creates a viaje from a GRE de Bienes Fiscalizados even though it has no peso
         ->and($viaje->cliente)->toBe('SGS DEL PERU S.A.C.')
         ->and($viaje->destinatario)->toBe('SGS DEL PERU S.A.C.')
         ->and((float) $viaje->peso)->toBe(0.0)
+        ->and($viaje->bienes_fiscalizados)->toBeTrue()
+        ->and($viaje->faltaPeso())->toBeTrue()
         ->and($viaje->tracto_id)->toBe($tracto->id)
         ->and($viaje->carreta_id)->toBe($carreta->id)
         ->and($viaje->conductor_id)->toBe($conductor->id)
         ->and($viaje->getFirstMedia('archivo'))->not->toBeNull();
+});
+
+it('asks for the peso right after uploading a GR de bienes fiscalizados', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-bienes-fiscalizados-con-referencia.pdf'), gr()]])
+        ->assertSessionHasNoErrors()
+        ->assertInertiaFlash('pedir_peso.0.numero_gr', 'G010-00000143')
+        ->assertInertiaFlash('pedir_peso.0.cliente', 'CAL & CEMENTO SUR S.A.')
+        ->assertInertiaFlash('pedir_peso.0.placa_tracto', 'CCD774');
+});
+
+it('does not ask for the peso of a standard GR', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr()]])
+        ->assertSessionHasNoErrors()
+        ->assertInertiaFlashMissing('pedir_peso');
+
+    expect(Viaje::query()->sole()->bienes_fiscalizados)->toBeFalse();
+});
+
+it('saves the peso of a GR de bienes fiscalizados in toneladas and keeps it when the PDF is uploaded again', function (): void {
+    $admin = actorConRol('admin');
+
+    actingAs($admin)
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-bienes-fiscalizados-con-referencia.pdf')]]);
+
+    $viaje = Viaje::query()->sole();
+
+    actingAs($admin)
+        ->patch(route('viajes.actualizarPeso', $viaje), ['peso' => '30.25'])
+        ->assertSessionHasNoErrors();
+
+    // El navegador vuelve al listado: ahí se consume el aviso de la subida.
+    actingAs($admin)->get(route('viajes.index'))->assertOk();
+
+    expect((float) $viaje->refresh()->peso)->toBe(30.25)
+        ->and($viaje->unidad_peso)->toBe('TNE')
+        ->and($viaje->faltaPeso())->toBeFalse();
+
+    actingAs($admin)
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-bienes-fiscalizados-con-referencia.pdf')]])
+        ->assertInertiaFlashMissing('pedir_peso');
+
+    expect((float) $viaje->refresh()->peso)->toBe(30.25)
+        ->and($viaje->unidad_peso)->toBe('TNE')
+        ->and($viaje->guias_remitente)->toBe([['numero' => 'G010-00139559', 'ruc' => '20115039262']]);
+});
+
+it('rejects a peso that is not in toneladas', function (string $peso): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr('gr-bienes-fiscalizados-con-referencia.pdf')]]);
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('viajes.actualizarPeso', Viaje::query()->sole()), ['peso' => $peso])
+        ->assertSessionHasErrors('peso');
+})->with(['', '0', '30000']);
+
+it('does not let anyone change the peso of a standard GR nor a visor the peso of a GR de bienes fiscalizados', function (): void {
+    actingAs(actorConRol('admin'))
+        ->post(route('viajes.store'), ['archivos' => [gr(), gr('gr-bienes-fiscalizados-con-referencia.pdf')]]);
+
+    $normal = Viaje::query()->where('bienes_fiscalizados', false)->sole();
+    $fiscalizada = Viaje::query()->where('bienes_fiscalizados', true)->sole();
+
+    actingAs(actorConRol('admin'))
+        ->patch(route('viajes.actualizarPeso', $normal), ['peso' => '10'])
+        ->assertForbidden();
+
+    actingAs(actorConRol('visor'))
+        ->patch(route('viajes.actualizarPeso', $fiscalizada), ['peso' => '10'])
+        ->assertForbidden();
 });
 
 it('clasifica un viaje de Minsur como Materiales cuando la guía remitente es serie T012', function (): void {

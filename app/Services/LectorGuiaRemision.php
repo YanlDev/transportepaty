@@ -145,6 +145,7 @@ class LectorGuiaRemision
             'guias_remitente' => $this->extraerGuiasRemitente($texto),
             'peso' => $this->capturar('/Peso Bruto total de la carga:\s*([\d,]+(?:\.\d+)?)/u', $texto),
             'unidad_peso' => $this->capturar('/Unidad de Medida del Peso Bruto:\s*(\w+)/u', $texto),
+            'bienes_fiscalizados' => false,
             'placa_tracto' => $this->capturar('/Principal:\s*Número de placa:\s*([A-Z0-9]+)/u', $texto),
             'placa_carreta' => $this->capturar('/Secundario 1:\s*Número de placa:\s*([A-Z0-9]+)/u', $texto),
             ...$this->extraerConductor($texto),
@@ -164,11 +165,11 @@ class LectorGuiaRemision
     }
 
     /**
-     * Verificado contra el único documento de este tipo visto en el corpus
-     * real (Pucamarca, RUC 20100114349 SGS DEL PERU S.A.C.): no trae sección
-     * de destinatario, así que se asume igual al remitente —lo habitual acá
-     * es que la misma empresa se abastezca a sí misma en otra sede—, y el
-     * peso queda fijo en 0 porque el dato simplemente no existe en el PDF.
+     * Verificado contra G010-142 (SGS, Pucamarca) y G010-143 (Cal & Cemento
+     * Sur): no trae sección de destinatario, así que se asume igual al
+     * remitente —lo habitual acá es que la misma empresa se abastezca a sí
+     * misma en otra sede—, y el peso queda en 0 TNE porque el dato no existe
+     * en el PDF: se pide a mano en toneladas después de importar.
      *
      * @return array<string, mixed>
      */
@@ -200,13 +201,33 @@ class LectorGuiaRemision
             'subcontratador_ruc' => null,
             'pagador_flete' => null,
             'pagador_flete_ruc' => null,
-            'guias_remitente' => [],
+            'guias_remitente' => $this->extraerGuiaReferenciaBienesFiscalizados($texto, $remitenteRuc),
             'peso' => '0',
-            'unidad_peso' => 'KGM',
+            'unidad_peso' => 'TNE',
+            'bienes_fiscalizados' => true,
             'placa_tracto' => $vehiculos[0] ?? null,
             'placa_carreta' => $vehiculos[1] ?? null,
             ...$this->extraerConductorBienesFiscalizados($texto),
         ];
+    }
+
+    /**
+     * «Guía de remisión electrónica BF remitente de referencia: G010-00139559».
+     * Es del mismo remitente: el PDF no repite su RUC al lado.
+     *
+     * @return list<array{numero: string, ruc: string}>
+     */
+    private function extraerGuiaReferenciaBienesFiscalizados(string $texto, ?string $remitenteRuc): array
+    {
+        $numero = $this->normalizarNumero(
+            $this->capturar('/remitente de referencia:\s*([A-Z0-9]{4}\s*-\s*\d+)/u', $texto),
+        );
+
+        if ($numero === null || $remitenteRuc === null) {
+            return [];
+        }
+
+        return [['numero' => $numero, 'ruc' => $remitenteRuc]];
     }
 
     /**

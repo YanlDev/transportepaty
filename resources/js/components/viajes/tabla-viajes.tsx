@@ -16,11 +16,12 @@ import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
 import { ConductorCelda } from '@/components/viajes/conductor-celda';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
 import { GuiasRemitenteCelda } from '@/components/viajes/guias-remitente-celda';
+import { PesoCelda } from '@/components/viajes/peso-celda';
 import { PlacaCelda } from '@/components/viajes/placa-celda';
 import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
 import { usePermisos } from '@/hooks/use-permisos';
 import type { FilaAgrupada } from '@/lib/agrupar-viajes';
-import { formatearFecha, formatearPeso } from '@/lib/format';
+import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption, ViajeListItem } from '@/types/fleet';
 
@@ -169,7 +170,7 @@ export function TablaViajes({
                                 />
                             </TableCell>
                             <TableCell className="text-right whitespace-nowrap tabular-nums">
-                                {formatearPeso(viaje.peso, viaje.unidad_peso)}
+                                <PesoCelda viaje={viaje} />
                             </TableCell>
                             <TableCell>
                                 <div className="flex items-center justify-end gap-1">

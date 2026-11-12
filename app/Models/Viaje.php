@@ -44,6 +44,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property array<int, array{numero: string, ruc: string}>|null $guias_remitente
  * @property float $peso
  * @property string $unidad_peso
+ * @property bool $bienes_fiscalizados
  * @property string $placa_tracto
  * @property string|null $placa_carreta
  * @property int|null $tracto_id
@@ -91,6 +92,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'guias_remitente',
     'peso',
     'unidad_peso',
+    'bienes_fiscalizados',
     'placa_tracto',
     'placa_carreta',
     'tracto_id',
@@ -463,6 +465,15 @@ class Viaje extends Model implements HasMedia
     }
 
     /**
+     * La GR de bienes fiscalizados no trae peso: hasta que alguien lo carga a
+     * mano, en toneladas, queda en 0.
+     */
+    public function faltaPeso(): bool
+    {
+        return $this->bienes_fiscalizados && (float) $this->peso <= 0;
+    }
+
+    /**
      * La fila del viaje tal como la dibujan los listados. Vive acá y no en un
      * controlador porque `/viajes` y `/contabilidad` muestran exactamente las
      * mismas columnas de operación —la segunda solo añade las de cobranza— y
@@ -501,6 +512,8 @@ class Viaje extends Model implements HasMedia
             'tipo_carga_label' => $this->tipo_carga->label(),
             'peso' => (float) $this->peso,
             'unidad_peso' => $this->unidad_peso,
+            'bienes_fiscalizados' => $this->bienes_fiscalizados,
+            'falta_peso' => $this->faltaPeso(),
             'archivo_url' => $this->getFirstMediaUrl('archivo') ?: null,
         ];
     }
@@ -551,6 +564,7 @@ class Viaje extends Model implements HasMedia
             'motivo_baja_sunat' => MotivoBajaGre::class,
             'guias_remitente' => 'array',
             'peso' => 'decimal:3',
+            'bienes_fiscalizados' => 'boolean',
             'tipo_carga' => TipoCarga::class,
         ];
     }

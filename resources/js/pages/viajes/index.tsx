@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import {
     FilePenLine,
     FileStack,
@@ -6,7 +6,7 @@ import {
     Route as RouteIcon,
     Send,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import emisionGre from '@/actions/App/Http/Controllers/EmisionGreController';
 import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import viajes, { create } from '@/actions/App/Http/Controllers/ViajeController';
@@ -23,6 +23,8 @@ import {
     SubirGuias,
     ZonaSoltarGuias,
 } from '@/components/viajes/acciones-guias';
+import { PesoBfDialog } from '@/components/viajes/peso-bf-dialog';
+import type { GuiaSinPeso } from '@/components/viajes/peso-bf-dialog';
 import { TablaViajes } from '@/components/viajes/tabla-viajes';
 import { ViajeDetalleDialog } from '@/components/viajes/viaje-detalle-dialog';
 import { ViajeTarjetaMovil } from '@/components/viajes/viaje-tarjeta-movil';
@@ -62,6 +64,24 @@ export default function ViajesIndex({
     const [viajeSeleccionado, setViajeSeleccionado] =
         useState<ViajeListItem | null>(null);
     const filas = agruparViajes(paginador.data);
+    const [pedirPeso, setPedirPeso] = useState<GuiaSinPeso[]>([]);
+    const [pidiendoPeso, setPidiendoPeso] = useState(false);
+
+    // Apenas termina una subida con GR de bienes fiscalizados, se pide su
+    // peso: el PDF no lo trae.
+    useEffect(
+        () =>
+            router.on('flash', (evento) => {
+                const guias = (evento as CustomEvent).detail?.flash
+                    ?.pedir_peso as GuiaSinPeso[] | undefined;
+
+                if (guias && guias.length > 0) {
+                    setPedirPeso(guias);
+                    setPidiendoPeso(true);
+                }
+            }),
+        [],
+    );
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -85,6 +105,12 @@ export default function ViajesIndex({
                 pantalla. Solo para quien puede importar: al visor no le sirve
                 un cartel que no lleva a nada. */}
             {puedeRegistrar && <ZonaSoltarGuias />}
+
+            <PesoBfDialog
+                guias={pedirPeso}
+                abierto={pidiendoPeso}
+                onAbiertoChange={setPidiendoPeso}
+            />
 
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>

@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { AccionAnulacion } from '@/components/viajes/anulacion-viaje';
 import { ClienteConRemitente } from '@/components/viajes/cliente-con-remitente';
 import { DeleteViajeDialog } from '@/components/viajes/delete-viaje-dialog';
+import { PesoCelda } from '@/components/viajes/peso-celda';
 import { TipoCargaCelda } from '@/components/viajes/tipo-carga-celda';
 import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha, formatearPeso, formatearPlaca } from '@/lib/format';
@@ -68,7 +69,9 @@ export function ViajeTarjetaMovil({
                     <ArrowRight className="size-3.5 shrink-0 text-muted-foreground" />
                     <span className="truncate">{viaje.destino_ciudad}</span>
                     <span className="ml-auto shrink-0 text-xs text-muted-foreground tabular-nums">
-                        {formatearPeso(viaje.peso, viaje.unidad_peso)}
+                        {viaje.falta_peso
+                            ? 'Falta peso'
+                            : formatearPeso(viaje.peso, viaje.unidad_peso)}
                     </span>
                 </p>
 
@@ -108,6 +111,9 @@ export function ViajeTarjetaMovil({
                     >
                         <Copiable valor={viaje.numero_gr} etiqueta="N° GR" />
                     </span>
+                    {/* Fuera del botón de la tarjeta: un botón no puede ir
+                        dentro de otro. */}
+                    {viaje.falta_peso && <PesoCelda viaje={viaje} />}
                 </div>
 
                 {/* Sin «vista rápida» del PDF: tocar la tarjeta abre el

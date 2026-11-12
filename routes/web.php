@@ -147,6 +147,8 @@ Route::middleware('auth')->group(function () {
         ->name('viajes.emitir.conductor');
     Route::patch('viajes/{viaje}/tipo-carga', [ViajeController::class, 'actualizarTipoCarga'])
         ->name('viajes.actualizarTipoCarga');
+    Route::patch('viajes/{viaje}/peso', [ViajeController::class, 'actualizarPeso'])
+        ->name('viajes.actualizarPeso');
     Route::post('viajes/{viaje}/anulacion', [ViajeController::class, 'anular'])->name('viajes.anular');
     Route::delete('viajes/{viaje}/anulacion', [ViajeController::class, 'reactivar'])->name('viajes.reactivar');
     Route::delete('viajes/{viaje}', [ViajeController::class, 'destroy'])->name('viajes.destroy');

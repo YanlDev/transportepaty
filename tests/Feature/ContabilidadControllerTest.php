@@ -69,6 +69,8 @@ it('carries the same operativo columns as the viajes list', function (): void {
                 'tipo_carga_label',
                 'peso',
                 'unidad_peso',
+                'bienes_fiscalizados',
+                'falta_peso',
                 'archivo_url',
                 'gr_fisica_recibida_at',
                 'estado',

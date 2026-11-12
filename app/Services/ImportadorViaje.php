@@ -99,6 +99,7 @@ class ImportadorViaje
             'guias_remitente' => $campos['guias_remitente'],
             'peso' => $this->normalizarPeso($campos['peso']),
             'unidad_peso' => $campos['unidad_peso'],
+            'bienes_fiscalizados' => (bool) ($campos['bienes_fiscalizados'] ?? false),
             'placa_tracto' => $campos['placa_tracto'],
             'placa_carreta' => $campos['placa_carreta'],
             'tracto_id' => $tracto?->id,
@@ -107,6 +108,12 @@ class ImportadorViaje
             'conductor_dni' => $campos['conductor_dni'],
             'conductor_id' => $conductor?->id,
         ];
+
+        // La GR de bienes fiscalizados no trae peso: se carga a mano en
+        // toneladas después de importar, y resubir el PDF no lo borra.
+        if ($yaExiste && $atributos['bienes_fiscalizados']) {
+            unset($atributos['peso'], $atributos['unidad_peso']);
+        }
 
         if (! $yaExiste) {
             $tipoCarga = $this->clasificarCarga($campos['guias_remitente'], $campos['destino']);
