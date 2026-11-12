@@ -80,3 +80,16 @@ it('marks only the units and conductores of the SUNAT list that match the padró
         ->and($sinCero->fresh()->iqbf)->toBeTrue()
         ->and($noInscrito->fresh()->iqbf)->toBeFalse();
 });
+
+it('marks the plates the first SUNAT printout left out', function (): void {
+    $actros = Vehiculo::factory()->create(['placa' => 'VEP-771']);
+    $carreta = Vehiculo::factory()->carreta()->create(['placa' => 'VJS982']);
+    $fuera = Vehiculo::factory()->carreta()->create(['placa' => 'VJS977']);
+
+    $migracion = require database_path('migrations/2026_11_12_142256_marca_las_placas_iqbf_que_faltaban.php');
+    $migracion->up();
+
+    expect($actros->fresh()->iqbf)->toBeTrue()
+        ->and($carreta->fresh()->iqbf)->toBeTrue()
+        ->and($fuera->fresh()->iqbf)->toBeFalse();
+});
