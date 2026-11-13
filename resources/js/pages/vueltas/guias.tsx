@@ -1,6 +1,13 @@
 import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/react';
-import { FileStack, Undo2, UserRound } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import {
+    AlertTriangle,
+    ExternalLink,
+    FileStack,
+    Search,
+    Undo2,
+    UserRound,
+} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import vueltasRutas from '@/actions/App/Http/Controllers/VueltaController';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
@@ -15,6 +22,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialogo-responsivo';
 import { Field } from '@/components/ui/field';
+import { Input } from '@/components/ui/input';
 import {
     Select,
     SelectContent,
@@ -27,6 +35,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { AdicionalDialog } from '@/components/vueltas/adicionales-vuelta';
 import { formatearFecha } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 type Sentido = 'ida' | 'regreso';
 
@@ -35,13 +44,16 @@ type DatosGuia = {
     numero_gr: string;
     fecha: string;
     placa: string;
+    carreta: string | null;
     tiene_unidad: boolean;
+    conductor_id: number | null;
     conductor: string | null;
     origen: string | null;
     destino: string | null;
     carga: string;
     peso: string;
     cliente: string;
+    destinatario: string | null;
 };
 
 type TicketAbierto = {
@@ -49,6 +61,18 @@ type TicketAbierto = {
     codigo: string | null;
     inicio: string | null;
     estado_label: string;
+    conductor_id: number | null;
+    conductor: string | null;
+    carreta: string | null;
+    /** Las GR que ya tiene asignadas. */
+    guias: number;
+    /** Todo el recorrido, vacíos incluidos. */
+    recorrido: {
+        sentido: Sentido;
+        texto: string;
+        carga: string;
+        guias: number;
+    }[];
     paradas: {
         id: number;
         sentido: Sentido;
@@ -97,6 +121,149 @@ const nueva = (sentido: Sentido) => `nueva-${sentido}`;
 const nombreTramo = (sentido: Sentido) =>
     sentido === 'ida' ? 'Ida' : 'Vuelta';
 
+/** Días desde el traslado: una GR vieja en la bandeja es la que urge. */
+const diasDesde = (fecha: string) =>
+    Math.max(
+        0,
+        Math.floor(
+            (Date.now() - new Date(`${fecha}T00:00:00`).getTime()) / 86_400_000,
+        ),
+    );
+
+const normalizar = (texto: string) =>
+    texto
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+
+type Filtro = 'todas' | 'con-ticket' | 'sin-ticket' | 'fuera-padron';
+
+const estadoDe = (guia: Pendiente): Exclude<Filtro, 'todas'> =>
+    !guia.tiene_unidad
+        ? 'fuera-padron'
+        : guia.tickets.length === 0
+          ? 'sin-ticket'
+          : 'con-ticket';
+
+const FILTROS: { valor: Filtro; texto: string }[] = [
+    { valor: 'todas', texto: 'Todas' },
+    { valor: 'con-ticket', texto: 'Con ticket abierto' },
+    { valor: 'sin-ticket', texto: 'Sin ticket abierto' },
+    { valor: 'fuera-padron', texto: 'Placa fuera del padrón' },
+];
+
+/**
+ * El ticket elegido, para reconocerlo antes de asignar: cuándo salió, quién
+ * maneja, con qué carreta y su recorrido. Avisa si no calza con la GR.
+ */
+function FichaTicket({
+    ticket,
+    guia,
+}: {
+    ticket: TicketAbierto;
+    guia: Pendiente;
+}) {
+    const otroConductor =
+        guia.conductor_id !== null &&
+        ticket.conductor_id !== null &&
+        guia.conductor_id !== ticket.conductor_id;
+    const otraCarreta =
+        guia.carreta !== null &&
+        ticket.carreta !== null &&
+        guia.carreta.replace('-', '') !== ticket.carreta.replace('-', '');
+
+    return (
+        <div className="flex flex-col gap-2 rounded-lg bg-muted/50 p-3 text-sm">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                <span className="font-medium">
+                    {ticket.codigo} · {ticket.estado_label}
+                </span>
+                <span className="text-muted-foreground">
+                    {ticket.inicio
+                        ? `Sale ${formatearFecha(ticket.inicio)}`
+                        : 'Sin fecha de salida'}
+                </span>
+                <span
+                    className={cn(
+                        'flex items-center gap-1',
+                        otroConductor && 'text-amber-700 dark:text-amber-400',
+                    )}
+                >
+                    <UserRound className="size-3.5 shrink-0" />
+                    {ticket.conductor ?? 'Sin conductor'}
+                </span>
+                {ticket.carreta && (
+                    <span
+                        className={cn(
+                            'flex items-center gap-1.5',
+                            otraCarreta && 'text-amber-700 dark:text-amber-400',
+                        )}
+                    >
+                        Carreta <Placa placa={ticket.carreta} tamano="sm" />
+                    </span>
+                )}
+                <span className="text-muted-foreground">
+                    {ticket.guias === 0
+                        ? 'Ninguna GR todavía'
+                        : `${ticket.guias} GR asignada${ticket.guias === 1 ? '' : 's'}`}
+                </span>
+                <Link
+                    href={vueltasRutas.show(ticket.id).url}
+                    className="ml-auto flex items-center gap-1 text-xs underline underline-offset-2"
+                >
+                    Ver ticket
+                    <ExternalLink className="size-3" />
+                </Link>
+            </div>
+            <div className="grid gap-1 sm:grid-cols-2">
+                {(['ida', 'regreso'] as const).map((sentido) => {
+                    const tramos = ticket.recorrido.filter(
+                        (parada) => parada.sentido === sentido,
+                    );
+
+                    return (
+                        <div key={sentido} className="flex flex-col">
+                            <span className="text-xs font-medium text-muted-foreground">
+                                {nombreTramo(sentido)}
+                            </span>
+                            {tramos.length === 0 ? (
+                                <span className="text-xs text-muted-foreground">
+                                    Sin programar
+                                </span>
+                            ) : (
+                                tramos.map((parada, indice) => (
+                                    <span key={indice} className="text-xs">
+                                        {parada.texto}
+                                        <span className="text-muted-foreground">
+                                            {' '}
+                                            · {parada.carga}
+                                            {parada.guias > 0 &&
+                                                ` · ${parada.guias} GR`}
+                                        </span>
+                                    </span>
+                                ))
+                            )}
+                        </div>
+                    );
+                })}
+            </div>
+            {(otroConductor || otraCarreta) && (
+                <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="size-3.5 shrink-0" />
+                    La GR trae{' '}
+                    {[
+                        otroConductor && `otro conductor (${guia.conductor})`,
+                        otraCarreta && `otra carreta (${guia.carreta})`,
+                    ]
+                        .filter(Boolean)
+                        .join(' y ')}
+                    : revisa que sea este ticket.
+                </p>
+            )}
+        </div>
+    );
+}
+
 /**
  * Una GR de la bandeja: el sistema propone el ticket abierto de la unidad y
  * la parada que coincide; quien asigna confirma o elige otra. Si no calza con
@@ -123,6 +290,7 @@ function FilaGuia({
     const ticket = guia.tickets.find((opcion) => opcion.id === data.vuelta_id);
     // Los errores vienen con los nombres que recibe el servidor.
     const errores = errors as Record<string, string | undefined>;
+    const dias = diasDesde(guia.fecha);
 
     const asignar = () => {
         transform((datos) => ({
@@ -143,12 +311,27 @@ function FilaGuia({
                 <div className="flex flex-col gap-1">
                     <span className="flex items-center gap-2">
                         <Placa placa={guia.placa} />
+                        {guia.carreta && (
+                            <Placa placa={guia.carreta} tamano="sm" />
+                        )}
                         <span className="font-mono text-sm">
                             {guia.numero_gr}
                         </span>
                         <span className="text-xs text-muted-foreground tabular-nums">
                             {formatearFecha(guia.fecha)}
                         </span>
+                        {dias > 0 && (
+                            <span
+                                className={cn(
+                                    'rounded-full px-1.5 text-xs tabular-nums',
+                                    dias >= 3
+                                        ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300'
+                                        : 'bg-muted text-muted-foreground',
+                                )}
+                            >
+                                hace {dias} día{dias === 1 ? '' : 's'}
+                            </span>
+                        )}
                     </span>
                     <span className="text-sm">
                         {guia.origen ?? '¿?'} → {guia.destino ?? '¿?'}
@@ -167,6 +350,9 @@ function FilaGuia({
                     </span>
                     <span className="max-w-xl truncate text-xs text-muted-foreground">
                         {guia.cliente}
+                        {guia.destinatario &&
+                            guia.destinatario !== guia.cliente &&
+                            ` → ${guia.destinatario}`}
                     </span>
                 </div>
                 {puedeAsignar && (
@@ -197,128 +383,145 @@ function FilaGuia({
                     o márcala sin ticket si ya andaba en ruta.
                 </p>
             ) : (
-                puedeAsignar && (
-                    <div className="grid gap-2 md:grid-cols-[12rem_1fr_auto] md:items-end">
-                        <Field label="Ticket" error={errores.vuelta_id}>
-                            {() => (
-                                <Select
-                                    value={
-                                        data.vuelta_id
-                                            ? String(data.vuelta_id)
-                                            : undefined
-                                    }
-                                    onValueChange={(valor) =>
-                                        setData((anterior) => ({
-                                            ...anterior,
-                                            vuelta_id: Number(valor),
-                                            parada:
-                                                Number(valor) ===
-                                                guia.sugerencia.vuelta_id
-                                                    ? paradaSugerida
-                                                    : nueva(
-                                                          guia.sugerencia
-                                                              .sentido,
-                                                      ),
-                                        }))
-                                    }
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Elegir…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {guia.tickets.map((opcion) => (
-                                            <SelectItem
-                                                key={opcion.id}
-                                                value={String(opcion.id)}
-                                            >
-                                                {opcion.codigo} ·{' '}
-                                                {opcion.estado_label}
-                                                {opcion.id ===
-                                                    guia.sugerencia.vuelta_id &&
-                                                    ' (sugerido)'}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                        </Field>
-                        <Field
-                            label="Parada"
-                            error={errores.parada_vuelta_id ?? errores.sentido}
-                        >
-                            {() => (
-                                <Select
-                                    value={data.parada || undefined}
-                                    disabled={ticket === undefined}
-                                    onValueChange={(valor) =>
-                                        setData('parada', valor)
-                                    }
-                                >
-                                    <SelectTrigger className="w-full">
-                                        <SelectValue placeholder="Elegir…" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {(['ida', 'regreso'] as const).map(
-                                            (sentido) => (
-                                                <SelectGroup key={sentido}>
-                                                    <SelectLabel>
-                                                        {nombreTramo(sentido)}
-                                                    </SelectLabel>
-                                                    {ticket?.paradas
-                                                        .filter(
-                                                            (parada) =>
-                                                                parada.sentido ===
+                <>
+                    {puedeAsignar && (
+                        <div className="grid gap-2 md:grid-cols-[18rem_1fr_auto] md:items-end">
+                            <Field label="Ticket" error={errores.vuelta_id}>
+                                {() => (
+                                    <Select
+                                        value={
+                                            data.vuelta_id
+                                                ? String(data.vuelta_id)
+                                                : undefined
+                                        }
+                                        onValueChange={(valor) =>
+                                            setData((anterior) => ({
+                                                ...anterior,
+                                                vuelta_id: Number(valor),
+                                                parada:
+                                                    Number(valor) ===
+                                                    guia.sugerencia.vuelta_id
+                                                        ? paradaSugerida
+                                                        : nueva(
+                                                              guia.sugerencia
+                                                                  .sentido,
+                                                          ),
+                                            }))
+                                        }
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Elegir…" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {guia.tickets.map((opcion) => (
+                                                <SelectItem
+                                                    key={opcion.id}
+                                                    value={String(opcion.id)}
+                                                >
+                                                    {opcion.codigo} ·{' '}
+                                                    {opcion.estado_label}
+                                                    {opcion.inicio &&
+                                                        ` · ${formatearFecha(opcion.inicio)}`}
+                                                    {opcion.id ===
+                                                        guia.sugerencia
+                                                            .vuelta_id &&
+                                                        ' (sugerido)'}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            </Field>
+                            <Field
+                                label="Parada"
+                                error={
+                                    errores.parada_vuelta_id ?? errores.sentido
+                                }
+                            >
+                                {() => (
+                                    <Select
+                                        value={data.parada || undefined}
+                                        disabled={ticket === undefined}
+                                        onValueChange={(valor) =>
+                                            setData('parada', valor)
+                                        }
+                                    >
+                                        <SelectTrigger className="w-full">
+                                            <SelectValue placeholder="Elegir…" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {(['ida', 'regreso'] as const).map(
+                                                (sentido) => (
+                                                    <SelectGroup key={sentido}>
+                                                        <SelectLabel>
+                                                            {nombreTramo(
                                                                 sentido,
-                                                        )
-                                                        .map((parada) => (
-                                                            <SelectItem
-                                                                key={parada.id}
-                                                                value={String(
-                                                                    parada.id,
-                                                                )}
-                                                            >
-                                                                {parada.texto} ·{' '}
-                                                                {parada.vacio
-                                                                    ? 'iba vacía: pasa a llevar esta carga'
-                                                                    : parada.carga}
-                                                                {parada.guias >
-                                                                    0 &&
-                                                                    ` · ${parada.guias} GR`}
-                                                                {parada.id ===
-                                                                    guia
-                                                                        .sugerencia
-                                                                        .parada_id &&
-                                                                    ' (sugerida)'}
-                                                            </SelectItem>
-                                                        ))}
-                                                    <SelectItem
-                                                        value={nueva(sentido)}
-                                                    >
-                                                        Nueva parada no
-                                                        programada en la{' '}
-                                                        {nombreTramo(
-                                                            sentido,
-                                                        ).toLowerCase()}
-                                                    </SelectItem>
-                                                </SelectGroup>
-                                            ),
-                                        )}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                        </Field>
-                        <Button
-                            onClick={asignar}
-                            disabled={
-                                processing ||
-                                data.vuelta_id === null ||
-                                data.parada === ''
-                            }
-                        >
-                            Asignar
-                        </Button>
-                    </div>
-                )
+                                                            )}
+                                                        </SelectLabel>
+                                                        {ticket?.paradas
+                                                            .filter(
+                                                                (parada) =>
+                                                                    parada.sentido ===
+                                                                    sentido,
+                                                            )
+                                                            .map((parada) => (
+                                                                <SelectItem
+                                                                    key={
+                                                                        parada.id
+                                                                    }
+                                                                    value={String(
+                                                                        parada.id,
+                                                                    )}
+                                                                >
+                                                                    {
+                                                                        parada.texto
+                                                                    }{' '}
+                                                                    ·{' '}
+                                                                    {parada.vacio
+                                                                        ? 'iba vacía: pasa a llevar esta carga'
+                                                                        : parada.carga}
+                                                                    {parada.guias >
+                                                                        0 &&
+                                                                        ` · ${parada.guias} GR`}
+                                                                    {parada.id ===
+                                                                        guia
+                                                                            .sugerencia
+                                                                            .parada_id &&
+                                                                        ' (sugerida)'}
+                                                                </SelectItem>
+                                                            ))}
+                                                        <SelectItem
+                                                            value={nueva(
+                                                                sentido,
+                                                            )}
+                                                        >
+                                                            Nueva parada no
+                                                            programada en la{' '}
+                                                            {nombreTramo(
+                                                                sentido,
+                                                            ).toLowerCase()}
+                                                        </SelectItem>
+                                                    </SelectGroup>
+                                                ),
+                                            )}
+                                        </SelectContent>
+                                    </Select>
+                                )}
+                            </Field>
+                            <Button
+                                onClick={asignar}
+                                disabled={
+                                    processing ||
+                                    data.vuelta_id === null ||
+                                    data.parada === ''
+                                }
+                            >
+                                Asignar
+                            </Button>
+                        </div>
+                    )}
+                    {ticket && <FichaTicket ticket={ticket} guia={guia} />}
+                </>
             )}
         </article>
     );
@@ -399,6 +602,38 @@ export default function GuiasPorAsignar({
     puedeAsignar,
 }: Props) {
     const [marcando, setMarcando] = useState<Pendiente | null>(null);
+    const [buscar, setBuscar] = useState('');
+    const [filtro, setFiltro] = useState<Filtro>('todas');
+
+    const encontradas = useMemo(() => {
+        const palabras = normalizar(buscar).split(/\s+/).filter(Boolean);
+
+        return pendientes.filter((guia) => {
+            const texto = normalizar(
+                [
+                    guia.placa,
+                    guia.placa.replace('-', ''),
+                    guia.carreta ?? '',
+                    guia.numero_gr,
+                    guia.conductor ?? '',
+                    guia.cliente,
+                    guia.destinatario ?? '',
+                    guia.origen ?? '',
+                    guia.destino ?? '',
+                    ...guia.tickets.map((ticket) => ticket.codigo ?? ''),
+                ].join(' '),
+            );
+
+            return palabras.every((palabra) => texto.includes(palabra));
+        });
+    }, [pendientes, buscar]);
+    const visibles = encontradas.filter(
+        (guia) => filtro === 'todas' || estadoDe(guia) === filtro,
+    );
+    const cuantas = (valor: Filtro) =>
+        valor === 'todas'
+            ? encontradas.length
+            : encontradas.filter((guia) => estadoDe(guia) === valor).length;
     const [sinProgramar, setSinProgramar] = useState<CargaSinProgramar | null>(
         null,
     );
@@ -433,15 +668,59 @@ export default function GuiasPorAsignar({
                 titulo="GR por asignar"
                 descripcion="Ninguna GR entra sola en un ticket: el sistema sugiere el ticket y la parada, y tú confirmas."
                 icono={FileStack}
+                acciones={
+                    pendientes.length > 0 && (
+                        <div className="relative flex-1 sm:w-72 sm:flex-none">
+                            <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                value={buscar}
+                                onChange={(evento) =>
+                                    setBuscar(evento.target.value)
+                                }
+                                placeholder="Placa, GR, conductor, cliente o ticket"
+                                className="pl-8"
+                            />
+                        </div>
+                    )
+                }
             />
+
+            {pendientes.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                    {FILTROS.map(({ valor, texto }) => {
+                        const total = cuantas(valor);
+
+                        return (
+                            <Button
+                                key={valor}
+                                size="sm"
+                                variant={
+                                    filtro === valor ? 'default' : 'outline'
+                                }
+                                onClick={() => setFiltro(valor)}
+                                disabled={valor !== 'todas' && total === 0}
+                            >
+                                {texto}
+                                <span className="tabular-nums opacity-70">
+                                    {total}
+                                </span>
+                            </Button>
+                        );
+                    })}
+                </div>
+            )}
 
             {pendientes.length === 0 ? (
                 <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
                     No hay GR por asignar.
                 </p>
+            ) : visibles.length === 0 ? (
+                <p className="rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+                    Ninguna GR coincide con la búsqueda.
+                </p>
             ) : (
                 <div className="flex flex-col gap-3">
-                    {pendientes.map((guia) => (
+                    {visibles.map((guia) => (
                         <FilaGuia
                             key={guia.id}
                             guia={guia}

@@ -34,7 +34,7 @@ class GuiaPorAsignarController extends Controller
         $pendientes = Viaje::query()
             ->whereNull('parada_vuelta_id')
             ->whereNull('sin_ticket_at')
-            ->with(['tracto:id,placa', 'conductor:id,nombres,apellidos'])
+            ->with(['tracto:id,placa', 'carreta:id,placa', 'conductor:id,nombres,apellidos'])
             ->orderBy('fecha_traslado')
             ->orderBy('id')
             ->get();
@@ -43,7 +43,7 @@ class GuiaPorAsignarController extends Controller
             'pendientes' => $pendientes->map(fn (Viaje $guia): array => $this->pendiente($guia))->all(),
             'sinTicket' => Viaje::query()
                 ->whereNotNull('sin_ticket_por')
-                ->with(['tracto:id,placa', 'conductor:id,nombres,apellidos', 'sinTicketPor:id,name'])
+                ->with(['tracto:id,placa', 'carreta:id,placa', 'conductor:id,nombres,apellidos', 'sinTicketPor:id,name'])
                 ->latest('sin_ticket_at')
                 ->limit(self::SIN_TICKET_RECIENTES)
                 ->get()
@@ -85,7 +85,7 @@ class GuiaPorAsignarController extends Controller
                 'codigo' => $vuelta->codigo,
                 'sentido' => $parada->sentido->value,
                 'numero_gr' => $viaje->numero_gr,
-                'trayecto' => ($parada->lugar_origen ?? $parada->zona_origen?->label() ?? '¿?').' → '.($parada->lugar_destino ?? $parada->zona_destino?->label() ?? '¿?'),
+                'trayecto' => $this->trayecto($parada),
             ]);
         }
 
@@ -149,7 +149,8 @@ class GuiaPorAsignarController extends Controller
      */
     private function pendiente(Viaje $guia): array
     {
-        $tickets = $this->asignador->ticketsPara($guia);
+        $tickets = $this->asignador->ticketsPara($guia)
+            ->load(['conductor:id,nombres,apellidos', 'carreta:id,placa']);
 
         return [
             ...$this->datosDeGuia($guia),
@@ -158,13 +159,27 @@ class GuiaPorAsignarController extends Controller
                 'codigo' => $vuelta->codigo,
                 'inicio' => $vuelta->inicio?->toDateString(),
                 'estado_label' => $vuelta->estado->label(),
+                'conductor_id' => $vuelta->conductor_id,
+                'conductor' => $vuelta->conductor?->nombre_completo,
+                'carreta' => $vuelta->carreta?->placa,
+                'guias' => (int) $vuelta->paradas->sum('viajes_count'),
+                // Todo el recorrido, vacíos incluidos, para reconocer el ticket.
+                'recorrido' => $vuelta->paradas
+                    ->map(fn (ParadaVuelta $parada): array => [
+                        'sentido' => $parada->sentido->value,
+                        'texto' => $this->trayecto($parada),
+                        'carga' => $parada->tipo_carga->label(),
+                        'guias' => (int) $parada->viajes_count,
+                    ])
+                    ->values()
+                    ->all(),
                 'paradas' => $vuelta->paradas
                     // De los vacíos, solo el que esta GR puede reemplazar.
                     ->filter(fn (ParadaVuelta $parada): bool => ! $parada->esVacio() || $this->asignador->esVacioReemplazable($parada, $guia))
                     ->map(fn (ParadaVuelta $parada): array => [
                         'id' => $parada->id,
                         'sentido' => $parada->sentido->value,
-                        'texto' => ($parada->lugar_origen ?? $parada->zona_origen?->label() ?? '¿?').' → '.($parada->lugar_destino ?? $parada->zona_destino?->label() ?? '¿?'),
+                        'texto' => $this->trayecto($parada),
                         'carga' => $parada->tipo_carga->label(),
                         'guias' => (int) $parada->viajes_count,
                         'no_programada' => $parada->fuera_de_programa,
@@ -177,11 +192,16 @@ class GuiaPorAsignarController extends Controller
         ];
     }
 
+    private function trayecto(ParadaVuelta $parada): string
+    {
+        return ($parada->lugar_origen ?? $parada->zona_origen?->label() ?? '¿?').' → '.($parada->lugar_destino ?? $parada->zona_destino?->label() ?? '¿?');
+    }
+
     /**
      * El conductor sale del padrón si la GR está enlazada; si no, el nombre
      * tal como viene en la GR.
      *
-     * @return array{id: int, numero_gr: string, fecha: string, placa: string, tiene_unidad: bool, conductor: string|null, origen: string|null, destino: string|null, carga: string, peso: string, cliente: string}
+     * @return array{id: int, numero_gr: string, fecha: string, placa: string, carreta: string|null, tiene_unidad: bool, conductor_id: int|null, conductor: string|null, origen: string|null, destino: string|null, carga: string, peso: string, cliente: string, destinatario: string|null}
      */
     private function datosDeGuia(Viaje $guia): array
     {
@@ -190,13 +210,16 @@ class GuiaPorAsignarController extends Controller
             'numero_gr' => $guia->numero_gr,
             'fecha' => $guia->fecha_traslado->toDateString(),
             'placa' => $guia->tracto->placa ?? $guia->placa_tracto,
+            'carreta' => $guia->carreta->placa ?? $guia->placa_carreta,
             'tiene_unidad' => $guia->tracto_id !== null,
+            'conductor_id' => $guia->conductor_id,
             'conductor' => $guia->conductor?->nombre_completo ?: ($guia->conductor_nombre ?: null),
             'origen' => $this->asignador->lugar($guia->origen),
             'destino' => $this->asignador->lugar($guia->destino),
             'carga' => $guia->tipo_carga->label(),
             'peso' => rtrim(rtrim(number_format((float) $guia->peso, 2, '.', ''), '0'), '.').' '.(strtoupper($guia->unidad_peso) === 'KGM' ? 'kg' : 't'),
             'cliente' => $guia->cliente,
+            'destinatario' => $guia->destinatario ?: null,
         ];
     }
 }

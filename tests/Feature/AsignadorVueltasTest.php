@@ -216,6 +216,10 @@ it('lists the tray with the open tickets of each unit and what the system sugges
             ->where('pendientes.0.id', $guia->id)
             ->where('pendientes.0.conductor', $guia->conductor?->nombre_completo ?? $guia->conductor_nombre)
             ->where('pendientes.0.tickets.0.codigo', $vuelta->codigo)
+            ->where('pendientes.0.tickets.0.conductor_id', $vuelta->conductor_id)
+            ->where('pendientes.0.tickets.0.guias', 0)
+            // El recorrido completo sí muestra el vacío, para reconocer el ticket.
+            ->has('pendientes.0.tickets.0.recorrido', 3)
             // El vacío no se ofrece: no lleva GR.
             ->has('pendientes.0.tickets.0.paradas', 2)
             ->where('pendientes.0.sugerencia.parada_id', paradaDe($vuelta, 1)->id)
