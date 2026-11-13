@@ -188,6 +188,21 @@ it('is approved by gerencia, signed, and valid for five days', function (): void
         ->and($vale->situacion())->toBe(SituacionValeCompra::Vigente);
 });
 
+it('shows an approved vale with its articles, its QR and a valid signature', function (): void {
+    $filtro = Articulo::factory()->create(['codigo' => 'A-00077']);
+    $vale = valeAprobado([[$filtro, 4, 59], ['Rectificado de tambor', 1, 120]]);
+
+    actingAs(actorConRol('gerencia'))
+        ->get(route('almacen.compras.show', $vale))
+        ->assertOk()
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('almacen/compras/show')
+            ->where('vale.firma_valida', true)
+            ->where('vale.detalles.0.codigo', 'A-00077')
+            ->where('vale.detalles.1.es_servicio', true)
+            ->whereNot('qr', null));
+});
+
 it('does not let anyone approve their own request', function (): void {
     $admin = actorConRol('admin');
     actingAs($admin)->post(route('almacen.compras.store'), pedidoDeCompra([[Articulo::factory()->create(), 1, 10]]));

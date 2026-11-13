@@ -65,10 +65,12 @@ class FirmaDeVales
 
     /**
      * La huella de lo que el vale autoriza, tal como está hoy en la base.
+     * Las líneas se leen aparte: recargar la relación del vale le quitaría
+     * a quien lo muestra lo que ya cargó con ellas (sus artículos).
      */
     public function huella(ValeCompra $vale): string
     {
-        $vale->load('detalles');
+        $detalles = $vale->detalles()->get();
 
         $contenido = [
             'numero' => $vale->numero(),
@@ -83,7 +85,7 @@ class FirmaDeVales
             'aprobo' => $vale->aprobado_por,
             'aprobado' => $vale->aprobado_at?->toIso8601String(),
             'vence' => $vale->vence_el?->toDateString(),
-            'lineas' => $vale->detalles
+            'lineas' => $detalles
                 ->sortBy('id')
                 ->map(fn (DetalleValeCompra $detalle): array => [
                     'articulo' => $detalle->articulo_id,
