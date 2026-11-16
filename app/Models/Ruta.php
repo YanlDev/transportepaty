@@ -105,7 +105,7 @@ class Ruta extends Model
             ->map(fn (LineaRuta $linea): array => $linea->copia())
             ->all());
 
-        return $this->por_tramos ? [...app(TablaDeTramos::class)->lineas($this->paradas), ...$lineas] : $lineas;
+        return $this->por_tramos ? [...app(TablaDeTramos::class)->lineas($this->paradas, $variante?->pesoDeReferencia()), ...$lineas] : $lineas;
     }
 
     /**
@@ -126,6 +126,44 @@ class Ruta extends Model
         ), 'galones');
 
         return in_array(null, $galones, true) ? null : (float) array_sum($galones);
+    }
+
+    /**
+     * Por tramos, si el recorrido tiene un tramo que gasta según el peso,
+     * las variantes de la ruta son las bandas de ese tramo en la tabla: se
+     * crean las que faltan y se van las que ya no están. Las que siguen
+     * conservan su id (los tickets las nombran).
+     *
+     * @return list<int>|null los ids en orden; null si el recorrido no tiene bandas (las variantes no se tocan)
+     */
+    public function sincronizarVariantesConLaTabla(): ?array
+    {
+        $bandas = $this->por_tramos ? app(TablaDeTramos::class)->bandasDelRecorrido($this->paradas) : [];
+
+        if ($bandas === []) {
+            return null;
+        }
+
+        $actuales = $this->variantes()->get();
+        $ids = [];
+
+        foreach ($bandas as $orden => $banda) {
+            $variante = $actuales->first(fn (VarianteRuta $variante): bool => self::mismoPeso($variante->peso_desde, $banda['peso_desde'])
+                && self::mismoPeso($variante->peso_hasta, $banda['peso_hasta']))
+                ?? new VarianteRuta(['ruta_id' => $this->id, 'nombre' => VarianteRuta::nombreDeBanda($banda['peso_desde'], $banda['peso_hasta'])]);
+            $variante->fill(['peso_desde' => $banda['peso_desde'], 'peso_hasta' => $banda['peso_hasta'], 'orden' => $orden + 1])->save();
+            $ids[] = $variante->id;
+        }
+
+        $actuales->reject(fn (VarianteRuta $variante): bool => in_array($variante->id, $ids, true))->each->delete();
+        $this->unsetRelation('variantes');
+
+        return $ids;
+    }
+
+    private static function mismoPeso(string|float|null $uno, ?float $otro): bool
+    {
+        return ($uno === null) === ($otro === null) && ($uno === null || abs((float) $uno - (float) $otro) < 0.005);
     }
 
     /**

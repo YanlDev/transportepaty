@@ -164,7 +164,9 @@ it('is configured by whoever configures programming or fuel', function (): void 
         ->assertInertia(fn (Assert $page) => $page
             ->component('rutas/index')
             ->has('rutas', Ruta::query()->count())
-            ->where('rutas', fn ($rutas): bool => collect($rutas)->firstWhere('nombre', 'Materiales a mina (Ransa)')['lineas'][0]['variante'] === 0));
+            ->where('rutas', fn ($rutas): bool => collect($rutas)->firstWhere('nombre', 'Particular a Tacna (Pucamarca)')['lineas'][0]['variante'] === 0
+                // Ransa va por tramos: sus variantes son las bandas de Lima → Mina en la tabla.
+                && collect($rutas)->firstWhere('nombre', 'Materiales a mina (Ransa)')['variantes'][0]['tope'] == 110));
 });
 
 it('edits a route keeping the ids of the rows that stay', function (): void {

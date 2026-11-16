@@ -55,6 +55,14 @@ class GuardarRutaRequest extends FormRequest
             'variantes.*.peso_desde' => ['nullable', 'numeric', 'min:0', 'max:99'],
             'variantes.*.peso_hasta' => ['nullable', 'numeric', 'min:0', 'max:99'],
 
+            // Lo que el formulario pregunta cuando un tramo del recorrido
+            // todavía no está en la tabla «Galones por tramo».
+            'tramos_nuevos' => ['array', 'max:16'],
+            'tramos_nuevos.*.zona_origen' => ['required', Rule::enum(ZonaRuta::class)],
+            'tramos_nuevos.*.zona_destino' => ['required', Rule::enum(ZonaRuta::class), 'different:tramos_nuevos.*.zona_origen'],
+            'tramos_nuevos.*.cargado' => ['required', 'boolean'],
+            'tramos_nuevos.*.galones' => ['required', 'numeric', 'min:0', 'max:999'],
+
             'lineas' => ['array', 'max:40'],
             'lineas.*.id' => ['nullable', 'integer'],
             'lineas.*.variante' => ['nullable', 'integer', 'min:0'],
@@ -109,6 +117,7 @@ class GuardarRutaRequest extends FormRequest
             'lineas.*.concepto' => 'concepto',
             'lineas.*.galones' => 'galones',
             'lineas.*.monto' => 'monto',
+            'tramos_nuevos.*.galones' => 'galones del tramo',
             'dias_viaje' => 'días de viaje',
             'km_estandar' => 'km',
         ];

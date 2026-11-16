@@ -158,8 +158,8 @@ it('does not authorize fuel for a leg without a known cap', function (): void {
         ->post(route('abastecimiento.store'), autorizacion($vuelta))
         ->assertSessionHasErrors('sentido');
 
-    // Ni con galones por definir.
-    $copia->update(['variante_pendiente' => false, 'lineas' => [
+    // Ni con galones por definir (una ruta con su combustible escrito a mano).
+    $copia->update(['variante_pendiente' => false, 'por_tramos' => false, 'lineas' => [
         ['linea_id' => null, 'tipo' => 'combustible', 'concepto' => 'Combustible', 'punto_id' => null, 'punto' => 'Kio', 'galones' => null, 'monto' => null],
     ]]);
 

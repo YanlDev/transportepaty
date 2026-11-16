@@ -114,6 +114,11 @@ function galonesDeParada(
         return null;
     }
 
+    // Cargado según el peso: lo dirá la banda que se elija en el ticket.
+    if (parada.tipo_carga !== 'vacio' && (fila.bandas ?? []).length > 0) {
+        return 0;
+    }
+
     return parada.tipo_carga === 'vacio'
         ? fila.galones_vacio
         : fila.galones_cargado;

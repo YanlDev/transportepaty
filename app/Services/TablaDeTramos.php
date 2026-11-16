@@ -30,18 +30,53 @@ class TablaDeTramos
     /**
      * Los galones de un tramo. Dentro de la misma zona (Huaral → Callao) no
      * hay tramo que contar: 0. Null si la tabla no lo tiene o le falta ese
-     * número.
+     * número. Si cargado va por bandas de peso, hace falta el peso.
      */
-    public function galones(ZonaRuta $origen, ZonaRuta $destino, bool $cargado): ?float
+    public function galones(ZonaRuta $origen, ZonaRuta $destino, bool $cargado, ?float $toneladas = null): ?float
     {
         if ($origen === $destino) {
             return 0.0;
         }
 
         $fila = $this->filas()->get($origen->value.'>'.$destino->value);
-        $galones = $cargado ? $fila?->galones_cargado : $fila?->galones_vacio;
 
-        return $galones === null ? null : (float) $galones;
+        if ($fila === null) {
+            return null;
+        }
+
+        if ($cargado) {
+            return $fila->galonesCargado($toneladas);
+        }
+
+        return $fila->galones_vacio === null ? null : (float) $fila->galones_vacio;
+    }
+
+    /**
+     * Las bandas de peso de un recorrido: las del primer tramo cargado que
+     * las tenga. De ahí salen las variantes de una ruta por tramos.
+     *
+     * @param  iterable<array{zona_origen?: string|null, zona_destino?: string|null, tipo_carga?: string|null}>  $paradas
+     * @return list<array{peso_desde: float|null, peso_hasta: float|null, galones: float}>
+     */
+    public function bandasDelRecorrido(iterable $paradas): array
+    {
+        foreach ($paradas as $parada) {
+            if (($parada['tipo_carga'] ?? null) === TipoCarga::Vacio->value) {
+                continue;
+            }
+
+            $fila = $this->filas()->get(($parada['zona_origen'] ?? '').'>'.($parada['zona_destino'] ?? ''));
+
+            if ($fila?->tieneBandas()) {
+                return array_map(fn (array $banda): array => [
+                    'peso_desde' => $banda['peso_desde'] === null ? null : (float) $banda['peso_desde'],
+                    'peso_hasta' => $banda['peso_hasta'] === null ? null : (float) $banda['peso_hasta'],
+                    'galones' => (float) $banda['galones'],
+                ], $fila->bandas ?? []);
+            }
+        }
+
+        return [];
     }
 
     /**
@@ -52,7 +87,7 @@ class TablaDeTramos
      * @param  iterable<ParadaVuelta|array{zona_origen: ZonaRuta|string|null, zona_destino: ZonaRuta|string|null, tipo_carga: TipoCarga|string}>  $paradas
      * @return list<LineaCopiada>
      */
-    public function lineas(iterable $paradas): array
+    public function lineas(iterable $paradas, ?float $toneladas = null): array
     {
         $lineas = [];
 
@@ -62,7 +97,7 @@ class TablaDeTramos
             $carga = $parada instanceof ParadaVuelta ? $parada->tipo_carga : TipoCarga::tryFrom((string) ($parada['tipo_carga'] ?? ''));
             $cargado = $carga !== TipoCarga::Vacio;
 
-            $lineas[] = $this->linea($origen, $destino, $cargado);
+            $lineas[] = $this->linea($origen, $destino, $cargado, $toneladas);
         }
 
         return $lineas;
@@ -86,24 +121,26 @@ class TablaDeTramos
         return array_map(function (array $tramo) use ($paradas): array {
             $origen = $this->zona($tramo['zona_origen'] ?? null);
             $destino = $this->zona($tramo['zona_destino'] ?? null);
+            // El peso de la banda que se eligió para la ruta del ticket.
+            $peso = isset($tramo['peso']) ? (float) $tramo['peso'] : null;
             $suyas = $paradas->filter(fn (ParadaVuelta $parada): bool => $origen !== null
                 && $parada->zona_origen === $origen
                 && ($destino === null || $parada->zona_destino === $destino));
 
             if ($suyas->isEmpty()) {
-                return $this->linea($origen, $destino, (bool) ($tramo['cargado'] ?? true));
+                return $this->linea($origen, $destino, (bool) ($tramo['cargado'] ?? true), $peso);
             }
 
             $parada = $suyas->first(fn (ParadaVuelta $parada): bool => $parada->tipo_carga !== TipoCarga::Vacio) ?? $suyas->first();
 
-            return $this->linea($parada->zona_origen, $parada->zona_destino, $parada->tipo_carga !== TipoCarga::Vacio);
+            return $this->linea($parada->zona_origen, $parada->zona_destino, $parada->tipo_carga !== TipoCarga::Vacio, $peso);
         }, $tramos);
     }
 
     /**
      * @return LineaCopiada
      */
-    private function linea(?ZonaRuta $origen, ?ZonaRuta $destino, bool $cargado): array
+    private function linea(?ZonaRuta $origen, ?ZonaRuta $destino, bool $cargado, ?float $toneladas = null): array
     {
         return [
             'linea_id' => null,
@@ -111,13 +148,14 @@ class TablaDeTramos
             'concepto' => ($origen?->label() ?? '¿?').' → '.($destino?->label() ?? '¿?').' · '.($cargado ? 'cargado' : 'vacío'),
             'punto_id' => null,
             'punto' => null,
-            'galones' => $origen === null || $destino === null ? null : $this->galones($origen, $destino, $cargado),
+            'galones' => $origen === null || $destino === null ? null : $this->galones($origen, $destino, $cargado, $toneladas),
             'tanque_lleno' => false,
             'monto' => null,
             'tramo' => true,
             'zona_origen' => $origen?->value,
             'zona_destino' => $destino?->value,
             'cargado' => $cargado,
+            'peso' => $toneladas,
         ];
     }
 

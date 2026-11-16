@@ -38,6 +38,29 @@ class VarianteRuta extends Model
     }
 
     /**
+     * Un peso que cae en esta variante: con él se busca la banda de cada
+     * tramo en la tabla de galones.
+     */
+    public function pesoDeReferencia(): ?float
+    {
+        if ($this->peso_hasta !== null) {
+            return (float) $this->peso_hasta;
+        }
+
+        return $this->peso_desde === null ? null : (float) $this->peso_desde + 0.01;
+    }
+
+    /**
+     * Cómo se nombra una banda de peso: «hasta 8 t», «más de 25 t».
+     */
+    public static function nombreDeBanda(?float $desde, ?float $hasta): string
+    {
+        $numero = fn (float $valor): string => rtrim(rtrim(number_format($valor, 2, '.', ''), '0'), '.');
+
+        return $hasta === null ? 'más de '.$numero((float) $desde).' t' : 'hasta '.$numero($hasta).' t';
+    }
+
+    /**
      * @return BelongsTo<Ruta, $this>
      */
     public function ruta(): BelongsTo

@@ -31,6 +31,11 @@ class GuardarGalonesPorTramoRequest extends FormRequest
             'filas.*.galones_cargado' => ['nullable', 'numeric', 'min:0', 'max:999'],
             'filas.*.galones_vacio' => ['nullable', 'numeric', 'min:0', 'max:999'],
             'filas.*.nota' => ['nullable', 'string', 'max:200'],
+            // Cargado según el peso: más de «desde» y hasta «hasta» toneladas.
+            'filas.*.bandas' => ['nullable', 'array', 'max:12'],
+            'filas.*.bandas.*.peso_desde' => ['nullable', 'numeric', 'min:0', 'max:99'],
+            'filas.*.bandas.*.peso_hasta' => ['nullable', 'numeric', 'min:0', 'max:99'],
+            'filas.*.bandas.*.galones' => ['required', 'numeric', 'min:0', 'max:999'],
         ];
     }
 
@@ -55,6 +60,25 @@ class GuardarGalonesPorTramoRequest extends FormRequest
                     if (($fila['zona_origen'] ?? null) !== null && ($fila['zona_origen'] ?? null) === ($fila['zona_destino'] ?? null)) {
                         $validator->errors()->add("filas.{$indice}.zona_destino", 'Un tramo va de una zona a otra.');
                     }
+
+                    // Las bandas van en orden y pegadas: cada una empieza
+                    // donde termina la anterior, y solo la última queda abierta.
+                    $bandas = array_values((array) ($fila['bandas'] ?? []));
+
+                    foreach ($bandas as $posicion => $banda) {
+                        $desde = $banda['peso_desde'] ?? null;
+                        $hasta = $banda['peso_hasta'] ?? null;
+                        $anterior = $bandas[$posicion - 1]['peso_hasta'] ?? null;
+                        $ultima = $posicion === count($bandas) - 1;
+
+                        if ($hasta === null && ! $ultima) {
+                            $validator->errors()->add("filas.{$indice}.bandas", 'Solo la última banda puede quedar sin «hasta».');
+                        } elseif ($hasta !== null && $desde !== null && (float) $hasta <= (float) $desde) {
+                            $validator->errors()->add("filas.{$indice}.bandas", 'En cada banda, «hasta» tiene que ser mayor que «más de».');
+                        } elseif ($posicion > 0 && ($desde === null || $anterior === null || abs((float) $desde - (float) $anterior) > 0.005)) {
+                            $validator->errors()->add("filas.{$indice}.bandas", 'Cada banda empieza donde termina la anterior.');
+                        }
+                    }
                 }
             },
         ];
@@ -70,6 +94,7 @@ class GuardarGalonesPorTramoRequest extends FormRequest
             'filas.*.zona_destino' => 'hasta',
             'filas.*.galones_cargado' => 'galones cargado',
             'filas.*.galones_vacio' => 'galones vacío',
+            'filas.*.bandas.*.galones' => 'galones de la banda',
         ];
     }
 }

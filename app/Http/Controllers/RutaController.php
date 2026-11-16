@@ -50,6 +50,7 @@ class RutaController extends Controller
                     'zona_destino' => $fila->zona_destino->value,
                     'galones_cargado' => $fila->galones_cargado === null ? null : (float) $fila->galones_cargado,
                     'galones_vacio' => $fila->galones_vacio === null ? null : (float) $fila->galones_vacio,
+                    'bandas' => $fila->bandas ?? [],
                 ])->all(),
                 'zonas' => ZonaRuta::options(),
                 'cargas' => TipoCarga::options(),
@@ -66,6 +67,7 @@ class RutaController extends Controller
         $this->authorize('configurar', Ruta::class);
 
         $ruta = DB::transaction(function () use ($request): Ruta {
+            $this->guardarTramosNuevos($request);
             $ruta = Ruta::query()->create([...$this->campos($request), 'orden' => (int) Ruta::query()->max('orden') + 1]);
             $this->guardarDotacion($ruta, $request);
 
@@ -80,6 +82,7 @@ class RutaController extends Controller
         $this->authorize('configurar', Ruta::class);
 
         DB::transaction(function () use ($request, $ruta): void {
+            $this->guardarTramosNuevos($request);
             $ruta->update($this->campos($request));
             $this->guardarDotacion($ruta, $request);
         });
@@ -140,14 +143,38 @@ class RutaController extends Controller
     }
 
     /**
+     * Los tramos que el formulario preguntó porque faltaban en la tabla
+     * «Galones por tramo»: se guardan ahí, para esta ruta y las que vengan.
+     * Un número que la tabla ya tiene no se pisa: se corrige en la tabla.
+     */
+    private function guardarTramosNuevos(GuardarRutaRequest $request): void
+    {
+        foreach ((array) $request->validated('tramos_nuevos', []) as $tramo) {
+            $fila = GalonesPorTramo::query()->firstOrNew([
+                'zona_origen' => $tramo['zona_origen'],
+                'zona_destino' => $tramo['zona_destino'],
+            ]);
+            $columna = filter_var($tramo['cargado'], FILTER_VALIDATE_BOOLEAN) ? 'galones_cargado' : 'galones_vacio';
+
+            if ($fila->{$columna} === null) {
+                $fila->{$columna} = $tramo['galones'];
+                $fila->save();
+            }
+        }
+    }
+
+    /**
      * Guarda variantes y líneas conservando los ids de las que siguen: los
      * viáticos depositados y las copias de los tickets las nombran.
      */
     private function guardarDotacion(Ruta $ruta, GuardarRutaRequest $request): void
     {
-        $idsVariantes = [];
+        // Por tramos con un tramo que gasta según el peso: las variantes son
+        // las bandas de la tabla, no lo que venga del formulario.
+        $deLaTabla = $ruta->sincronizarVariantesConLaTabla();
+        $idsVariantes = $deLaTabla ?? [];
 
-        foreach (array_values((array) $request->validated('variantes', [])) as $orden => $datos) {
+        foreach ($deLaTabla === null ? array_values((array) $request->validated('variantes', [])) : [] as $orden => $datos) {
             $variante = $ruta->variantes()->whereKey($datos['id'] ?? 0)->first() ?? new VarianteRuta(['ruta_id' => $ruta->id]);
             $variante->fill([
                 'nombre' => trim($datos['nombre']),
@@ -158,7 +185,9 @@ class RutaController extends Controller
             $idsVariantes[$orden] = $variante->id;
         }
 
-        $ruta->variantes()->whereNotIn('id', $idsVariantes)->get()->each->delete();
+        if ($deLaTabla === null) {
+            $ruta->variantes()->whereNotIn('id', $idsVariantes)->get()->each->delete();
+        }
 
         $idsLineas = [];
         $combustible = TipoLineaAbastecimiento::Combustible->value;
@@ -207,7 +236,13 @@ class RutaController extends Controller
             'por_tramos' => $ruta->por_tramos,
             // Los tramos con sus galones, como salen de la tabla.
             'tramos' => $ruta->por_tramos
-                ? array_map(fn (array $linea): array => ['concepto' => $linea['concepto'], 'galones' => $linea['galones']], app(TablaDeTramos::class)->lineas($ruta->paradas))
+                ? array_map(fn (array $linea): array => [
+                    'concepto' => $linea['concepto'],
+                    'galones' => $linea['galones'],
+                    // Gasta según el peso: sus galones los da la banda que se elija.
+                    'por_peso' => $linea['galones'] === null && ($linea['cargado'] ?? false)
+                        && app(TablaDeTramos::class)->bandasDelRecorrido([['zona_origen' => $linea['zona_origen'] ?? null, 'zona_destino' => $linea['zona_destino'] ?? null, 'tipo_carga' => 'particular']]) !== [],
+                ], app(TablaDeTramos::class)->lineas($ruta->paradas))
                 : [],
             'paradas' => $ruta->paradas,
             'pide_destino' => $ruta->pide_destino,
@@ -221,6 +256,8 @@ class RutaController extends Controller
                 'nombre' => $variante->nombre,
                 'peso_desde' => $variante->peso_desde === null ? null : (float) $variante->peso_desde,
                 'peso_hasta' => $variante->peso_hasta === null ? null : (float) $variante->peso_hasta,
+                // Por tramos: lo que suma el recorrido con esa banda.
+                'tope' => $ruta->por_tramos ? $ruta->topePara($variante) : null,
             ])->all(),
             'lineas' => $ruta->lineas->map(fn (LineaRuta $linea): array => [
                 'id' => $linea->id,

@@ -217,6 +217,8 @@ export type VarianteRutaCatalogo = {
     nombre: string;
     peso_desde: number | null;
     peso_hasta: number | null;
+    /** Por tramos: lo que suma el recorrido con esa banda de peso. */
+    tope?: number | null;
 };
 
 export type ParadaRutaCatalogo = {
@@ -237,7 +239,7 @@ export type RutaCatalogo = {
     /** Sus galones salen de la tabla de tramos, según su recorrido. */
     por_tramos: boolean;
     /** Los tramos con sus galones de la tabla (vacío si no va por tramos). */
-    tramos: { concepto: string; galones: number | null }[];
+    tramos: { concepto: string; galones: number | null; por_peso?: boolean }[];
     paradas: ParadaRutaCatalogo[];
     pide_destino: boolean;
     dias_viaje: number | null;
@@ -259,6 +261,12 @@ export type GalonesTramo = {
     zona_destino: string;
     galones_cargado: number | null;
     galones_vacio: number | null;
+    /** Cargado según el peso: más de «desde» y hasta «hasta» toneladas. */
+    bandas?: {
+        peso_desde: number | null;
+        peso_hasta: number | null;
+        galones: number;
+    }[];
 };
 
 export type OpcionesRutas = {

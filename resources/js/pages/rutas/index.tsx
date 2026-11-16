@@ -6,6 +6,10 @@ import tramosRutas from '@/actions/App/Http/Controllers/GalonesPorTramoControlle
 import rutas from '@/actions/App/Http/Controllers/RutaController';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { RutaDialog } from '@/components/rutas/ruta-dialog';
+import {
+    esRutaSimple,
+    RutaPorTramosDialog,
+} from '@/components/rutas/ruta-por-tramos-dialog';
 import { Button } from '@/components/ui/button';
 import { colorTarjeta } from '@/lib/color-tarjeta';
 import { colorDeSentido } from '@/lib/etapas';
@@ -111,7 +115,7 @@ function FilaRuta({
         .join(' ');
     const comunes = ruta.lineas.filter((linea) => linea.variante === null);
     const porDefinir = ruta.por_tramos
-        ? ruta.tramos.some((tramo) => tramo.galones === null)
+        ? ruta.tramos.some((tramo) => tramo.galones === null && !tramo.por_peso)
         : ruta.lineas.some(
               (linea) =>
                   linea.tipo === 'combustible' &&
@@ -165,7 +169,7 @@ function FilaRuta({
                         [
                             ...ruta.tramos.map(
                                 (tramo) =>
-                                    `${tramo.concepto} ${tramo.galones === null ? '¿? gal' : `${tramo.galones} gal`}`,
+                                    `${tramo.concepto} ${tramo.por_peso ? `según el peso (${ruta.variantes.map((variante) => `${variante.nombre} ${variante.tope ?? '¿?'}`).join(', ')} gal)` : tramo.galones === null ? '¿? gal' : `${tramo.galones} gal`}`,
                             ),
                             resumen(ruta.lineas),
                         ]
@@ -238,6 +242,13 @@ export default function RutasIndex({ rutas: lista, opciones }: Props) {
     const [editando, setEditando] = useState<RutaCatalogo | null | false>(
         false,
     );
+    // Las tres preguntas sirven para una ruta nueva y para las que ya van
+    // por tramos; lo demás (complementos, por peso) usa el editor completo.
+    const [completo, setCompleto] = useState(false);
+    const abrir = (ruta: RutaCatalogo | null) => {
+        setCompleto(ruta !== null && !esRutaSimple(ruta));
+        setEditando(ruta);
+    };
 
     setLayoutProps({
         breadcrumbs: [
@@ -262,7 +273,7 @@ export default function RutasIndex({ rutas: lista, opciones }: Props) {
                                 Galones por tramo
                             </Link>
                         </Button>
-                        <Button onClick={() => setEditando(null)}>
+                        <Button onClick={() => abrir(null)}>
                             <Plus className="size-4" />
                             Ruta
                         </Button>
@@ -295,19 +306,28 @@ export default function RutasIndex({ rutas: lista, opciones }: Props) {
                                 key={ruta.id}
                                 ruta={ruta}
                                 zonas={opciones.zonas}
-                                onEditar={() => setEditando(ruta)}
+                                onEditar={() => abrir(ruta)}
                             />
                         ))}
                     </ul>
                 </section>
             ))}
 
-            {editando !== false && (
+            {editando !== false && completo && (
                 <RutaDialog
                     key={editando?.id ?? 'nueva'}
                     ruta={editando}
                     opciones={opciones}
                     onCerrar={() => setEditando(false)}
+                />
+            )}
+            {editando !== false && !completo && (
+                <RutaPorTramosDialog
+                    key={editando?.id ?? 'nueva'}
+                    ruta={editando}
+                    opciones={opciones}
+                    onCerrar={() => setEditando(false)}
+                    onFormularioCompleto={() => setCompleto(true)}
                 />
             )}
         </div>

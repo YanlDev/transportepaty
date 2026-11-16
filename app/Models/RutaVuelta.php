@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
  * elegirla: su dotación es lo autorizado. Si el catálogo cambia después,
  * esto no. Un tramo tiene su ruta principal y, si hace falta, complementos.
  *
- * @phpstan-type LineaCopiada array{linea_id: int|null, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno?: bool, monto: float|null, tramo?: bool, zona_origen?: string|null, zona_destino?: string|null, cargado?: bool}
+ * @phpstan-type LineaCopiada array{linea_id: int|null, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno?: bool, monto: float|null, tramo?: bool, zona_origen?: string|null, zona_destino?: string|null, cargado?: bool, peso?: float|null}
  *
  * @property int $id
  * @property int $vuelta_id

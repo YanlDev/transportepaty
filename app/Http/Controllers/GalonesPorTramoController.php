@@ -42,6 +42,7 @@ class GalonesPorTramoController extends Controller
                     'zona_destino' => $fila->zona_destino->value,
                     'galones_cargado' => $fila->galones_cargado === null ? null : (float) $fila->galones_cargado,
                     'galones_vacio' => $fila->galones_vacio === null ? null : (float) $fila->galones_vacio,
+                    'bandas' => $fila->bandas ?? [],
                     'nota' => $fila->nota,
                     'rutas' => array_values(array_unique($usos[$fila->zona_origen->value.'>'.$fila->zona_destino->value] ?? [])),
                 ])
@@ -62,15 +63,25 @@ class GalonesPorTramoController extends Controller
                     'zona_origen' => $datos['zona_origen'],
                     'zona_destino' => $datos['zona_destino'],
                 ]);
+                $bandas = array_values(array_map(fn (array $banda): array => [
+                    'peso_desde' => isset($banda['peso_desde']) ? (float) $banda['peso_desde'] : null,
+                    'peso_hasta' => isset($banda['peso_hasta']) ? (float) $banda['peso_hasta'] : null,
+                    'galones' => (float) $banda['galones'],
+                ], (array) ($datos['bandas'] ?? [])));
                 $fila->fill([
-                    'galones_cargado' => $datos['galones_cargado'] ?? null,
+                    // Con bandas, cargado depende del peso: el número único no se usa.
+                    'galones_cargado' => $bandas === [] ? ($datos['galones_cargado'] ?? null) : null,
                     'galones_vacio' => $datos['galones_vacio'] ?? null,
+                    'bandas' => $bandas === [] ? null : $bandas,
                     'nota' => filled($datos['nota'] ?? null) ? trim($datos['nota']) : null,
                 ])->save();
                 $guardadas[] = $fila->id;
             }
 
             GalonesPorTramo::query()->whereNotIn('id', $guardadas)->get()->each->delete();
+
+            // Las rutas por tramos toman sus variantes de las bandas.
+            Ruta::query()->where('por_tramos', true)->get()->each->sincronizarVariantesConLaTabla();
         });
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Galones por tramo guardados. Los tickets con rutas por tramos ya usan los números nuevos.']);

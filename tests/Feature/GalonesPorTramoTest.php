@@ -170,3 +170,132 @@ it('saves a route by tramos keeping only the full tank among its fuel lines', fu
         // Lima → Cusco y Cusco → Juliaca no están en la tabla: sin tope.
         ->and($ruta->topePara(null))->toBeNull();
 });
+
+it('asks for the legs the table does not have and keeps them for the next routes', function (): void {
+    GalonesPorTramo::query()->updateOrCreate(
+        ['zona_origen' => 'cusco', 'zona_destino' => 'juliaca'],
+        ['galones_cargado' => null, 'galones_vacio' => 30],
+    );
+    GalonesPorTramo::query()->where('zona_origen', 'lima')->where('zona_destino', 'cusco')->delete();
+
+    actingAs(actorConRol('admin'))->post(route('rutas.store'), [
+        'nombre' => 'Particular a Cusco nueva',
+        'sentido' => 'regreso',
+        'por_tramos' => true,
+        'activa' => true,
+        'paradas' => [
+            ['zona_origen' => 'lima', 'zona_destino' => 'cusco', 'tipo_carga' => 'particular'],
+            ['zona_origen' => 'cusco', 'zona_destino' => 'juliaca', 'tipo_carga' => 'vacio'],
+        ],
+        'tramos_nuevos' => [
+            ['zona_origen' => 'lima', 'zona_destino' => 'cusco', 'cargado' => true, 'galones' => 170],
+            // La tabla ya tiene este número: no se pisa desde una ruta.
+            ['zona_origen' => 'cusco', 'zona_destino' => 'juliaca', 'cargado' => false, 'galones' => 99],
+        ],
+    ])->assertSessionHasNoErrors();
+
+    $tabla = app(TablaDeTramos::class);
+    $tabla->olvidar();
+
+    expect($tabla->galones(ZonaRuta::Lima, ZonaRuta::Cusco, true))->toBe(170.0)
+        ->and($tabla->galones(ZonaRuta::Lima, ZonaRuta::Cusco, false))->toBeNull()
+        ->and($tabla->galones(ZonaRuta::Cusco, ZonaRuta::Juliaca, false))->toBe(30.0)
+        ->and(rutaDelCatalogo('Particular a Cusco nueva')->load(['lineas.punto', 'variantes'])->topePara(null))->toBe(200.0);
+
+    actingAs(actorConRol('admin'))->post(route('rutas.store'), [
+        'nombre' => 'Mal tramo',
+        'por_tramos' => true,
+        'paradas' => [['zona_origen' => 'lima', 'zona_destino' => 'cusco', 'tipo_carga' => 'particular']],
+        'tramos_nuevos' => [['zona_origen' => 'lima', 'zona_destino' => 'lima', 'cargado' => true, 'galones' => 10]],
+    ])->assertSessionHasErrors('tramos_nuevos.0.zona_destino');
+});
+
+it('takes the gallons of a loaded leg from its weight band, through the variants of the route', function (): void {
+    // La migración deja Lima → Mina por bandas y «Materiales a mina (Ransa)» por tramos.
+    $ruta = rutaDelCatalogo('Materiales a mina (Ransa)')->load(['lineas.punto', 'variantes']);
+    $tabla = app(TablaDeTramos::class);
+
+    expect($ruta->por_tramos)->toBeTrue()
+        ->and($ruta->variantes)->toHaveCount(6)
+        ->and($ruta->topePara(null))->toBeNull()
+        ->and($ruta->variantes->map(fn ($variante) => $ruta->topePara($variante))->all())->toBe([110.0, 120.0, 130.0, 150.0, 190.0, 190.0])
+        ->and($ruta->topePara($ruta->varianteParaPeso(12.5)))->toBe(130.0)
+        ->and($tabla->galones(ZonaRuta::Lima, ZonaRuta::Mina, true))->toBeNull()
+        ->and($tabla->galones(ZonaRuta::Lima, ZonaRuta::Mina, true, 5))->toBe(110.0)
+        ->and($tabla->galones(ZonaRuta::Lima, ZonaRuta::Mina, true, 5.01))->toBe(120.0)
+        ->and($tabla->galones(ZonaRuta::Lima, ZonaRuta::Mina, true, 31))->toBe(190.0);
+
+    // En el ticket: sin banda elegida no hay tope; con la banda, el de la tabla.
+    $vuelta = Vuelta::factory()->create();
+    paradaDelTramo($vuelta, 1, ZonaRuta::Lima, ZonaRuta::Mina, TipoCarga::Materiales);
+    $copia = $vuelta->rutas()->create([...RutaVuelta::copiaDe($ruta, null), 'sentido' => SentidoTramo::Regreso, 'orden' => 1]);
+
+    expect($copia->variante_pendiente)->toBeTrue()->and($copia->tope())->toBeNull();
+
+    $copia->update(RutaVuelta::copiaDe($ruta, $ruta->varianteParaPeso(18)));
+
+    expect($copia->refresh()->tope())->toBe(150.0);
+
+    // Cambia la tabla: el ticket abierto toma el número nuevo de su banda.
+    $fila = GalonesPorTramo::query()->where('zona_origen', 'lima')->where('zona_destino', 'mina')->sole();
+    $bandas = $fila->bandas;
+    $bandas[3]['galones'] = 155;
+    $fila->update(['bandas' => $bandas]);
+
+    expect($copia->refresh()->tope())->toBe(155.0);
+});
+
+it('edits the weight bands in the table and keeps the route variants in step', function (): void {
+    $ruta = rutaDelCatalogo('Particular a mina');
+    $ids = $ruta->variantes()->pluck('id', 'nombre');
+    $filas = GalonesPorTramo::query()->get()->map(fn (GalonesPorTramo $fila): array => [
+        'zona_origen' => $fila->zona_origen->value,
+        'zona_destino' => $fila->zona_destino->value,
+        'galones_cargado' => $fila->galones_cargado,
+        'galones_vacio' => $fila->galones_vacio,
+        'nota' => $fila->nota,
+        'bandas' => $fila->zona_destino === ZonaRuta::Mina && $fila->zona_origen === ZonaRuta::Lima
+            ? [
+                ['peso_desde' => null, 'peso_hasta' => 5, 'galones' => 110],
+                ['peso_desde' => 5, 'peso_hasta' => 20, 'galones' => 140],
+                ['peso_desde' => 20, 'peso_hasta' => null, 'galones' => 190],
+            ]
+            : $fila->bandas,
+    ])->all();
+
+    actingAs(actorConRol('admin'))->put(route('rutas.tramos.guardar'), ['filas' => $filas])->assertSessionHasNoErrors();
+
+    $ruta = $ruta->refresh()->load(['lineas.punto', 'variantes']);
+
+    expect($ruta->variantes->pluck('nombre')->all())->toBe(['menos de 5 t', 'hasta 20 t', 'más de 20 t'])
+        // La banda que sigue igual conserva su variante: los tickets la nombran.
+        ->and($ruta->variantes->first()->id)->toBe($ids['menos de 5 t'])
+        ->and($ruta->variantes->map(fn ($variante) => $ruta->topePara($variante))->all())->toBe([110.0, 140.0, 190.0]);
+
+    // Bandas con hueco entre una y otra: no se guardan.
+    $filas[array_key_first(array_filter($filas, fn (array $fila): bool => $fila['bandas'] !== null))]['bandas'] = [
+        ['peso_desde' => null, 'peso_hasta' => 5, 'galones' => 110],
+        ['peso_desde' => 8, 'peso_hasta' => null, 'galones' => 190],
+    ];
+
+    actingAs(actorConRol('admin'))->put(route('rutas.tramos.guardar'), ['filas' => $filas])->assertSessionHasErrors();
+});
+
+it('keeps the weight variants of a route by tramos when it is saved from the three questions', function (): void {
+    $ruta = rutaDelCatalogo('Materiales a mina (Ransa)');
+    $ids = $ruta->variantes()->pluck('id')->all();
+
+    actingAs(actorConRol('admin'))->put(route('rutas.update', $ruta), [
+        'nombre' => 'Materiales a mina (Ransa)',
+        'sentido' => 'regreso',
+        'por_tramos' => true,
+        'activa' => true,
+        'paradas' => [['zona_origen' => 'lima', 'zona_destino' => 'mina', 'tipo_carga' => 'materiales']],
+        // El formulario no manda variantes: salen de las bandas de la tabla.
+        'variantes' => [],
+        'lineas' => [['id' => null, 'variante' => null, 'tipo' => 'viatico', 'concepto' => 'Viáticos', 'monto' => 300]],
+    ])->assertSessionHasNoErrors();
+
+    expect($ruta->variantes()->pluck('id')->all())->toBe($ids)
+        ->and($ruta->lineas()->pluck('concepto')->all())->toBe(['Viáticos']);
+});
