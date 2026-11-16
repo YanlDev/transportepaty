@@ -58,9 +58,11 @@ it('comes loaded with the options and the office board, together', function (): 
         ->and($concentrado->paradas)->toBe([['zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado']])
         ->and($concentrado->topePara(null))->toBe(220.0)
         ->and($concentrado->lineas->where('tipo', TipoLineaAbastecimiento::Viatico)->sum('monto'))->toEqual(843)
-        // El metálico va incluido en el concentrado: es un complemento sin dotación propia.
+        // El metálico al Callao es un complemento: suma 10 galones a la ida.
         ->and(rutaDelCatalogo('Metálico al Callao')->es_complemento)->toBeTrue()
-        ->and(rutaDelCatalogo('Metálico al Callao')->lineas)->toHaveCount(0)
+        ->and(rutaDelCatalogo('Metálico al Callao')->topePara(null))->toBe(10.0)
+        ->and(rutaDelCatalogo('Metálico al Callao')->nota)->toContain('220 a 230')
+        ->and($concentrado->nota)->toContain('el metálico al Callao suma 10 galones')
         ->and(rutaDelCatalogo('Particular a otro destino')->pide_destino)->toBeTrue()
         ->and(DestinoParticular::query()->pluck('lugar')->all())->toContain('Tacna', 'Ilo', 'Cusco')
         ->and(PalabraZona::query()->where('palabra', 'ANTAUTA')->sole()->zona)->toBe(ZonaRuta::Mina);
@@ -102,7 +104,7 @@ it('copies the chosen routes into the ticket when programming, with their comple
 
     expect($vuelta->rutas->pluck('nombre')->all())->toBe(['Concentrado a Pisco', 'Metálico al Callao'])
         ->and($vuelta->rutas[1]->es_complemento)->toBeTrue()
-        ->and($vuelta->topeDe(SentidoTramo::Ida))->toBe(220.0);
+        ->and($vuelta->topeDe(SentidoTramo::Ida))->toBe(230.0);
 });
 
 it('asks for one main route per leg that has stops, valid for that leg', function (): void {

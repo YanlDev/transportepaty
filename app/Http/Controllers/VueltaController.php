@@ -195,6 +195,18 @@ class VueltaController extends Controller
         return back()->with('toast', ['type' => 'success', 'message' => "Ticket {$vuelta->codigo} reabierto."]);
     }
 
+    /**
+     * Quita la marca «por revisar»: alguien ya miró lo que había que mirar.
+     */
+    public function revisado(Vuelta $vuelta): RedirectResponse
+    {
+        $this->authorize('update', $vuelta);
+
+        $vuelta->update(['por_revisar' => null]);
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Ticket {$vuelta->codigo} revisado."]);
+    }
+
     public function destroy(Vuelta $vuelta): RedirectResponse
     {
         $this->authorize('delete', $vuelta);
@@ -653,6 +665,7 @@ class VueltaController extends Controller
             'estado' => $vuelta->estado->value,
             'estado_label' => $vuelta->estado->label(),
             'origen' => $vuelta->origen->value,
+            'por_revisar' => $vuelta->por_revisar,
             'inicio' => $vuelta->inicio?->toDateString(),
             'fin' => $vuelta->fin?->toDateString(),
             'dias' => $vuelta->inicio && $vuelta->fin ? (int) $vuelta->inicio->diffInDays($vuelta->fin) + 1 : null,

@@ -145,7 +145,10 @@ function Fila({
             className={cn(
                 'flex flex-col gap-3 border-b px-4 py-3 last:border-b-0',
                 COLUMNAS,
+                // Marcado para que alguien lo mire: se ve desde la lista.
+                vuelta.por_revisar && 'bg-red-50 dark:bg-red-950/30',
             )}
+            title={vuelta.por_revisar ?? undefined}
         >
             <div className="flex min-w-0 items-start justify-between gap-3">
                 <button
@@ -162,6 +165,11 @@ function Fila({
                     <span className="max-w-full truncate text-xs text-muted-foreground">
                         {vuelta.conductor ?? 'Sin conductor'}
                     </span>
+                    {vuelta.por_revisar && (
+                        <span className="rounded bg-red-600 px-1.5 py-0.5 text-xs font-medium text-white">
+                            Por revisar
+                        </span>
+                    )}
                 </button>
                 {/* En la tarjeta, la etapa y el tiempo van arriba. */}
                 <div className="flex flex-col items-end gap-1 xl:hidden">

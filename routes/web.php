@@ -268,6 +268,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('vueltas/{vuelta}/adicionales/{adicional}', [AdicionalTramoController::class, 'destroy'])->name('vueltas.adicionales.destroy');
     Route::post('vueltas/{vuelta}/cerrar', [VueltaController::class, 'cerrar'])->name('vueltas.cerrar');
     Route::post('vueltas/{vuelta}/reabrir', [VueltaController::class, 'reabrir'])->name('vueltas.reabrir');
+    Route::post('vueltas/{vuelta}/revisado', [VueltaController::class, 'revisado'])->name('vueltas.revisado');
     Route::post('vueltas/{vuelta}/aviso', [VueltaController::class, 'avisarConductor'])->name('vueltas.aviso');
     Route::post('vueltas/{vuelta}/aviso-area/{area}', [VueltaController::class, 'avisarArea'])->name('vueltas.avisoArea');
 

@@ -43,6 +43,8 @@ export type EstadoVuelta = 'programada' | 'en_curso' | 'cerrada' | 'anulada';
 export type Vuelta = {
     id: number;
     codigo: string | null;
+    /** Por qué alguien tiene que mirar este ticket; null si no hace falta. */
+    por_revisar: string | null;
     tipo: 'mina' | 'particular';
     tipo_label: string;
     estado: EstadoVuelta;

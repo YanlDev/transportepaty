@@ -23,6 +23,7 @@ import { AdicionalesVuelta } from '@/components/vueltas/adicionales-vuelta';
 import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
 import { LlegadaDialog } from '@/components/vueltas/llegada-dialog';
+import { PorRevisar } from '@/components/vueltas/por-revisar';
 import {
     AvanceTicket,
     BotonSiguiente,
@@ -96,6 +97,7 @@ export function DetalleVuelta({
                                 {vuelta.carreta &&
                                     ` · carreta ${formatearPlaca(vuelta.carreta)}`}
                             </SheetDescription>
+                            <PorRevisar vuelta={vuelta} />
                             <div className="flex gap-2 pt-1">
                                 {vuelta.editable && (
                                     <Button

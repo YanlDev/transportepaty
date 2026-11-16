@@ -37,6 +37,7 @@ import { AvisosVuelta } from '@/components/vueltas/avisos-vuelta';
 import { EtapaBadge } from '@/components/vueltas/etapa-badge';
 import { ItinerarioVuelta } from '@/components/vueltas/itinerario-vuelta';
 import { LlegadaDialog } from '@/components/vueltas/llegada-dialog';
+import { PorRevisar } from '@/components/vueltas/por-revisar';
 import { ProgramarVueltaDialog } from '@/components/vueltas/programar-vuelta-dialog';
 import {
     EstadoVueltaBadge,
@@ -320,6 +321,8 @@ export default function ExpedienteTicket({
                         )
                     )}
                 </div>
+
+                <PorRevisar vuelta={ticket} />
 
                 <div className="flex flex-wrap gap-2">
                     {ticket.editable && (
