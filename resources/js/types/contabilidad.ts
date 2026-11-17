@@ -38,10 +38,21 @@ export type FacturaResumen = {
      * detracción, o el total si la detracción la deposita la empresa.
      */
     neto: number | null;
+    /** Lo que ya entró del neto: todo si está pagada, o la suma de sus cobros parciales. */
+    cobrado: number;
+    /** Lo que falta cobrar del neto. */
+    saldo: number;
+    /** Cuántos cobros vigentes le pagaron algo. */
+    cobros: number;
+    /**
+     * La fecha, la cuenta y la operación se corrigen en la fila: no tiene
+     * cobro todavía, o tiene uno solo que no paga otras facturas.
+     */
+    cobro_en_la_fila: boolean;
     moneda: string;
     /** `S/` o `$`, ya resuelto en el backend. */
     simbolo: string;
-    /** `facturado` | `falta_detraccion` | `pagado`. */
+    /** `facturado` | `cobro_parcial` | `falta_detraccion` | `pagado`. */
     estado: string;
     /** Emisión más el plazo de crédito (30 días). */
     fecha_vencimiento: string;
@@ -198,6 +209,23 @@ export type GrCandidata = {
  * Una factura que no cubre ninguna GR: se subió en PDF y no se pudo asociar
  * sola, o se quedó sin viajes. Espera en la bandeja «Facturas por asociar».
  */
+/** Una factura anulada, con lo que hace falta para entender por qué y restaurarla. */
+export type FacturaAnulada = {
+    id: number;
+    numero: string;
+    fecha_emision: string;
+    cliente: string | null;
+    total: number | null;
+    simbolo: string;
+    archivo_url: string | null;
+    motivo: string | null;
+    anulada_el: string | null;
+    anulada_por: string | null;
+    /** Las GR que cobraba al anularse. */
+    guias: string[];
+    restaurable: boolean;
+};
+
 export type FacturaPorAsociar = {
     id: number;
     numero: string;
@@ -225,4 +253,77 @@ export type ResultadoImportacionFactura = {
     nueva: boolean;
     asociadas: string[];
     alertas: string[];
+};
+
+/** Una factura que todavía debe algo: lo que se le puede aplicar a un cobro. */
+export type FacturaPorCobrar = {
+    id: number;
+    numero: string;
+    fecha_emision: string;
+    cliente_ruc: string | null;
+    cliente: string | null;
+    neto: number;
+    /** Lo que le falta cobrar: el tope de lo que se le puede aplicar. */
+    saldo: number;
+    moneda: string;
+};
+
+export type CuentaDeCobro = { id: number; alias: string; moneda: string };
+
+export type ClienteDeCobro = { id: number; alias: string; ruc: string | null };
+
+/** Un depósito y lo que pagó. */
+export type Cobro = {
+    id: number;
+    fecha: string;
+    cuenta: string | null;
+    numero_operacion: string | null;
+    cliente_id: number | null;
+    cliente: string | null;
+    monto: number;
+    moneda: string;
+    simbolo: string;
+    /** Lo repartido entre sus facturas. */
+    aplicado: number;
+    /** Lo que todavía no paga ninguna factura. */
+    saldo_a_favor: number;
+    facturas: { id: number; numero: string; monto: number }[];
+    observacion: string | null;
+    registrado_por: string | null;
+    anulado: boolean;
+    anulado_el: string | null;
+    anulado_por: string | null;
+    motivo_anulacion: string | null;
+    /** Tiene saldo a favor y el usuario puede repartirlo. */
+    aplicable: boolean;
+    anulable: boolean;
+};
+
+/** Un tramo de números seguidos que faltan en el correlativo. */
+export type RangoFaltante = {
+    desde: number;
+    hasta: number;
+    cantidad: number;
+    /** La fecha de la última factura anterior al hueco: sitúa de cuándo es. */
+    despues_del: string | null;
+};
+
+export type CorrelativoFaltante = {
+    serie: string;
+    faltan: number;
+    rangos: RangoFaltante[];
+};
+
+/** Un mes de la cobranza, con lo que tiene suelto y si está cerrado. */
+export type MesDeCobranza = {
+    /** `AAAA-MM`. */
+    mes: string;
+    label: string;
+    cerrado: boolean;
+    cerrado_por: string | null;
+    cerrado_el: string | null;
+    en_curso: boolean;
+    facturas: number;
+    sin_cobrar: number;
+    gr_sin_facturar: number;
 };

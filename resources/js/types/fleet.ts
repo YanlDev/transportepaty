@@ -410,6 +410,8 @@ export type Cliente = {
     recurrente: boolean;
     /** El cliente de sus despachos es el destinatario de cada GR. */
     cliente_es_destinatario: boolean;
+    /** El cliente paga el total y la detracción la deposita la empresa. */
+    detraccion_por_empresa: boolean;
     activo: boolean;
     notas: string | null;
 };

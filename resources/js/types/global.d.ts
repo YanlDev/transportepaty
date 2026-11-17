@@ -14,7 +14,7 @@ declare module '@inertiajs/core' {
             name: string;
             esAmbientePrueba: boolean;
             /** La campanita: alertas sin leer y las últimas. Null sin sesión. */
-            alertas: Campanita | null;
+            campanita: Campanita | null;
             /** Pendientes de hoy por entrada del menú (taller, abastecimiento, programacion). */
             pendientesMenu: Partial<
                 Record<'taller' | 'abastecimiento' | 'programacion', number>

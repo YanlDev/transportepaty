@@ -103,6 +103,8 @@ enum Permiso: string
 
     case CobranzaVer = 'cobranza.ver';
     case CobranzaGestionar = 'cobranza.gestionar';
+    case CobranzaAnular = 'cobranza.anular';
+    case CobranzaCerrarMes = 'cobranza.cerrar_mes';
 
     case CuentasVer = 'cuentas.ver';
     case CuentasGestionar = 'cuentas.gestionar';
@@ -252,6 +254,8 @@ enum Permiso: string
             self::CostosEditar => 'Editar los costos de la flota',
             self::CobranzaVer => 'Ver la cobranza',
             self::CobranzaGestionar => 'Facturar y registrar cobros',
+            self::CobranzaAnular => 'Anular y restaurar facturas',
+            self::CobranzaCerrarMes => 'Cerrar y reabrir un mes de la cobranza',
             self::CuentasVer => 'Ver las cuentas',
             self::CuentasGestionar => 'Administrar las cuentas',
             self::WhatsappAdministrar => 'Vincular el número y las áreas de aviso',

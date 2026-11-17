@@ -1,11 +1,27 @@
 import { Head, Link } from '@inertiajs/react';
-import { Download, Landmark, Receipt } from 'lucide-react';
+import {
+    Banknote,
+    ChartNoAxesColumn,
+    Download,
+    HandCoins,
+    Landmark,
+    ListChecks,
+    Lock,
+    Receipt,
+} from 'lucide-react';
 import { useState } from 'react';
+import cobros from '@/actions/App/Http/Controllers/CobroController';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cuentas from '@/actions/App/Http/Controllers/CuentaBancariaController';
+import detracciones from '@/actions/App/Http/Controllers/DetraccionController';
 import { importar } from '@/actions/App/Http/Controllers/FacturaController';
+import reporte from '@/actions/App/Http/Controllers/ReporteCobranzaController';
 import { BandejaPorAsociar } from '@/components/contabilidad/bandeja-por-asociar';
 import { BarraSeleccion } from '@/components/contabilidad/barra-seleccion';
+import { CierreDeMesDialog } from '@/components/contabilidad/cierre-de-mes-dialog';
+import { CorrelativoFaltante } from '@/components/contabilidad/correlativo-faltante';
+import { FacturasAnuladas } from '@/components/contabilidad/facturas-anuladas';
+import { RegistrarCobroDialog } from '@/components/contabilidad/registrar-cobro-dialog';
 import { ResultadoImportacion } from '@/components/contabilidad/resultado-importacion';
 import { ResumenCobranza } from '@/components/contabilidad/resumen-cobranza';
 import { TablaCobranza } from '@/components/contabilidad/tabla-cobranza';
@@ -26,6 +42,12 @@ import { agruparViajes } from '@/lib/agrupar-viajes';
 import { aSeleccion, esFacturable } from '@/lib/cobranza';
 import type {
     CuentaOpcion,
+    ClienteDeCobro,
+    CorrelativoFaltante as SerieFaltante,
+    CuentaDeCobro,
+    FacturaAnulada,
+    FacturaPorCobrar,
+    MesDeCobranza,
     FacturaPorAsociar,
     FiltrosContabilidad,
     ResumenCobranza as Resumen,
@@ -44,6 +66,12 @@ type Props = {
     meses: EnumOption[];
     cuentas: CuentaOpcion[];
     facturasPorAsociar: FacturaPorAsociar[];
+    facturasAnuladas: FacturaAnulada[];
+    cuentasDeCobro: CuentaDeCobro[];
+    clientesDeCobro: ClienteDeCobro[];
+    facturasPorCobrar: FacturaPorCobrar[];
+    correlativo: SerieFaltante[];
+    cierres: MesDeCobranza[];
 };
 
 const FACTURAS: DocumentoPdf = {
@@ -61,6 +89,12 @@ export default function ContabilidadIndex({
     meses,
     cuentas: cuentasBancarias,
     facturasPorAsociar,
+    facturasAnuladas,
+    cuentasDeCobro,
+    clientesDeCobro,
+    facturasPorCobrar,
+    correlativo,
+    cierres,
 }: Props) {
     const { puede } = usePermisos();
     const puedeFacturar = puede('cobranza.gestionar');
@@ -136,6 +170,52 @@ export default function ContabilidadIndex({
                             Excel
                         </a>
                     </Button>
+
+                    {puedeFacturar && (
+                        <RegistrarCobroDialog
+                            cuentas={cuentasDeCobro}
+                            clientes={clientesDeCobro}
+                            facturas={facturasPorCobrar}
+                            trigger={
+                                <Button variant="outline">
+                                    <HandCoins className="size-4" />
+                                    Registrar cobro
+                                </Button>
+                            }
+                        />
+                    )}
+
+                    <Button asChild variant="outline">
+                        <Link href={reporte.index()}>
+                            <ChartNoAxesColumn className="size-4" />
+                            Resumen
+                        </Link>
+                    </Button>
+
+                    <Button asChild variant="outline">
+                        <Link href={cobros.index()}>
+                            <ListChecks className="size-4" />
+                            Cobros
+                        </Link>
+                    </Button>
+
+                    <Button asChild variant="outline">
+                        <Link href={detracciones.index()}>
+                            <Banknote className="size-4" />
+                            Detracciones
+                        </Link>
+                    </Button>
+
+                    <CierreDeMesDialog
+                        meses={cierres}
+                        puedeCerrar={puede('cobranza.cerrar_mes')}
+                        trigger={
+                            <Button variant="outline">
+                                <Lock className="size-4" />
+                                Cierre de mes
+                            </Button>
+                        }
+                    />
 
                     <Button asChild variant="outline">
                         <Link href={cuentas.index()}>
@@ -281,6 +361,13 @@ export default function ContabilidadIndex({
             {paginador.data.length > 0 && (
                 <Paginacion paginador={paginador} preservarEstado />
             )}
+
+            <CorrelativoFaltante
+                series={correlativo}
+                puedeExplicar={puedeFacturar}
+            />
+
+            <FacturasAnuladas facturas={facturasAnuladas} />
         </div>
     );
 }

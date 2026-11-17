@@ -8,6 +8,7 @@ import {
     Fuel,
     IdCard,
     LayoutGrid,
+    ChartNoAxesColumn,
     Receipt,
     Route,
     Settings,
@@ -25,6 +26,7 @@ import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController'
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
+import reporteCobranza from '@/actions/App/Http/Controllers/ReporteCobranzaController';
 import taller from '@/actions/App/Http/Controllers/TallerController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
@@ -156,6 +158,13 @@ const contabilidadNavItem: NavItem = {
     icon: Receipt,
 };
 
+/** La cobranza de un vistazo, para la gerencia. */
+const resumenCobranzaNavItem: NavItem = {
+    title: 'Resumen de cobranza',
+    href: reporteCobranza.index(),
+    icon: ChartNoAxesColumn,
+};
+
 export function AppSidebar() {
     const { puede } = usePermisos();
     const { isCurrentUrl } = useCurrentUrl();
@@ -249,7 +258,9 @@ export function AppSidebar() {
     // Cotizaciones antes que Clientes: es lo que se usa a diario.
     const comercial = [...gestion].reverse();
 
-    const finanzas = puede('cobranza.ver') ? [contabilidadNavItem] : [];
+    const finanzas = puede('cobranza.ver')
+        ? [resumenCobranzaNavItem, contabilidadNavItem]
+        : [];
 
     // Con roles armados a mano una sección puede quedar vacía: no se pinta
     // el título solo.

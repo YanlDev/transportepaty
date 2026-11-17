@@ -93,7 +93,9 @@ class PatchFacturaRequest extends FormRequest
         $existente = is_string($value) ? Factura::conMismoNumero($value, $this->factura()->id) : null;
 
         if ($existente !== null) {
-            $fail("Esa factura ya está registrada como {$existente->numero}.");
+            $fail($existente->estaAnulada()
+                ? "La factura {$existente->numero} está anulada: restáurala desde «Facturas anuladas» en vez de registrarla de nuevo."
+                : "Esa factura ya está registrada como {$existente->numero}.");
         }
     }
 

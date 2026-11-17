@@ -255,9 +255,9 @@ it('shares the bell with every page', function (): void {
     actingAs($yo)
         ->get(route('abastecimiento.index'))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('alertas.sin_leer', 1)
-            ->has('alertas.recientes', 1)
-            ->where('alertas.recientes.0.tipo', 'taller_apto'));
+            ->where('campanita.sin_leer', 1)
+            ->has('campanita.recientes', 1)
+            ->where('campanita.recientes.0.tipo', 'taller_apto'));
 });
 
 it('lets only whoever may configure alerts see and change them', function (): void {
@@ -416,5 +416,6 @@ it('sends the overdue invoices to accounting with what is still owed', function 
     $alerta = $contador->fresh()->notifications->sole();
 
     expect($alerta->data['titulo'])->toBe('1 factura vencida sin cobrar')
-        ->and($alerta->data['mensaje'])->toContain('E001-00100 · DECORA HOGAR S.R.L. · S/ 8,850.00');
+        // Lo que debe es el neto: la detracción la deposita el cliente y no se le reclama.
+        ->and($alerta->data['mensaje'])->toContain('E001-00100 · DECORA HOGAR S.R.L. · S/ 8,496.00');
 });

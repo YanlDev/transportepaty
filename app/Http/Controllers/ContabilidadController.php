@@ -3,12 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Enums\Moneda;
+use App\Enums\Permiso;
 use App\Http\Requests\MarcarGrFisicaRequest;
 use App\Http\Requests\MarcarNoFacturableRequest;
 use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
 use App\Services\AsociadorFacturas;
+use App\Services\ControlDeCorrelativo;
 use App\Services\ExportadorCobranza;
 use App\Services\ResumenCobranza;
 use Illuminate\Http\RedirectResponse;
@@ -64,6 +66,7 @@ class ContabilidadController extends Controller
                 'facturas.clienteDelPadron:id,ruc,alias',
                 'facturas.viajes:viajes.id',
                 'facturas.media',
+                'facturas.cobros' => fn ($query) => $query->withCount('facturas'),
             ])
             ->orderByDesc('fecha_traslado')
             ->orderByDesc('numero_gr')
@@ -85,6 +88,10 @@ class ContabilidadController extends Controller
             // No dependen de los filtros: una factura sin GR no cae en ningún
             // mes ni cliente de la tabla, y por eso va aparte.
             'facturasPorAsociar' => fn (): array => $this->facturasPorAsociar(),
+            'facturasAnuladas' => fn (): array => $this->facturasAnuladas($request),
+            ...CobroController::catalogos(),
+            'correlativo' => fn (): array => app(ControlDeCorrelativo::class)->faltantes(),
+            'cierres' => fn (): array => CierreDeMesController::meses(),
         ]);
     }
 
@@ -243,6 +250,14 @@ class ContabilidadController extends Controller
             // Las cifras son las impresas en el PDF: no se recalculan.
             'desde_pdf' => $factura->desde_pdf,
             'neto' => $this->cifra($factura->neto),
+            // Lo que ya entró y lo que falta del neto, con cobros parciales.
+            'cobrado' => $factura->montoCobrado(),
+            'saldo' => $factura->saldo(),
+            // La fecha, la cuenta y la operación se corrigen en la fila solo
+            // si el cobro es de esta factura sola; si no, en Cobros.
+            'cobros' => $factura->cobros->count(),
+            'cobro_en_la_fila' => $factura->cobros->isEmpty()
+                || ($factura->cobros->count() === 1 && (int) $factura->cobros->first()->facturas_count === 1),
             'moneda' => $factura->moneda->value,
             'simbolo' => $factura->moneda->simbolo(),
             'estado' => $factura->estado()->value,
@@ -307,6 +322,44 @@ class ContabilidadController extends Controller
             })
             ->values()
             ->all();
+    }
+
+    /**
+     * Las facturas anuladas, la más reciente primero: qué era cada una, por
+     * qué se anuló y quién lo hizo. Desde acá se restauran.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function facturasAnuladas(Request $request): array
+    {
+        $puedeRestaurar = $request->user()?->checkPermissionTo(Permiso::CobranzaAnular) ?? false;
+        $anuladas = Factura::query()
+            ->conAnuladas()
+            ->whereNotNull('anulada_at')
+            ->with(['media', 'anuladaPor:id,name'])
+            ->orderByDesc('anulada_at')
+            ->get();
+        $guias = Viaje::query()
+            ->conAnuladas()
+            ->whereKey($anuladas->flatMap(fn (Factura $factura): array => $factura->viajes_al_anular ?? [])->unique()->all())
+            ->pluck('numero_gr', 'id');
+
+        return array_values($anuladas
+            ->map(fn (Factura $factura): array => [
+                'id' => $factura->id,
+                'numero' => $factura->numero,
+                'fecha_emision' => $factura->fecha_emision->toDateString(),
+                'cliente' => $factura->cliente_razon_social,
+                'total' => $this->cifra($factura->total),
+                'simbolo' => $factura->moneda->simbolo(),
+                'archivo_url' => $factura->getFirstMediaUrl('archivo') ?: null,
+                'motivo' => $factura->motivo_anulacion,
+                'anulada_el' => $factura->anulada_at?->toDateString(),
+                'anulada_por' => $factura->anuladaPor?->name,
+                'guias' => array_values(array_filter(array_map(fn (int $id): ?string => $guias->get($id), $factura->viajes_al_anular ?? []))),
+                'restaurable' => $puedeRestaurar,
+            ])
+            ->all());
     }
 
     /**

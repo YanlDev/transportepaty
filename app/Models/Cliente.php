@@ -34,6 +34,7 @@ use Illuminate\Support\Str;
  * @property string|null $direccion
  * @property bool $recurrente
  * @property bool $cliente_es_destinatario
+ * @property bool $detraccion_por_empresa El cliente paga el total y la detracción la deposita la empresa: lo toman sus facturas nuevas.
  * @property bool $activo
  * @property string|null $notas
  * @property-read Collection<int, Viaje> $viajes
@@ -56,6 +57,7 @@ use Illuminate\Support\Str;
     'cliente_es_destinatario',
     'activo',
     'notas',
+    'detraccion_por_empresa',
 ])]
 class Cliente extends Model
 {
@@ -243,6 +245,7 @@ class Cliente extends Model
         return [
             'recurrente' => 'boolean',
             'cliente_es_destinatario' => 'boolean',
+            'detraccion_por_empresa' => 'boolean',
             'activo' => 'boolean',
         ];
     }

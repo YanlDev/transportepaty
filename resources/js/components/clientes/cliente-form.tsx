@@ -29,6 +29,7 @@ type FormData = {
     direccion: string;
     recurrente: boolean;
     cliente_es_destinatario: boolean;
+    detraccion_por_empresa: boolean;
     activo: boolean;
     notas: string;
 };
@@ -45,12 +46,14 @@ export function ClienteForm({ mode, cliente }: Props) {
         direccion: cliente?.direccion ?? '',
         recurrente: cliente?.recurrente ?? false,
         cliente_es_destinatario: cliente?.cliente_es_destinatario ?? false,
+        detraccion_por_empresa: cliente?.detraccion_por_empresa ?? false,
         activo: cliente?.activo ?? true,
         notas: cliente?.notas ?? '',
     });
 
     const recurrenteId = useId();
     const destinatarioId = useId();
+    const detraccionId = useId();
     const activoId = useId();
 
     const { url } = usePage();
@@ -236,6 +239,32 @@ export function ClienteForm({ mode, cliente }: Props) {
                             <span className="text-xs text-muted-foreground">
                                 En sus GR, el viaje se le asigna a quien recibe
                                 la carga, no a este remitente.
+                            </span>
+                        </Label>
+                    </div>
+
+                    {/* Los clientes chicos pagan el total de la factura y la
+                        empresa deposita la detracción por ellos. */}
+                    <div className="flex items-start gap-2 sm:col-span-2">
+                        <Checkbox
+                            id={detraccionId}
+                            checked={data.detraccion_por_empresa}
+                            onCheckedChange={(value) =>
+                                setData(
+                                    'detraccion_por_empresa',
+                                    value === true,
+                                )
+                            }
+                        />
+                        <Label
+                            htmlFor={detraccionId}
+                            className="flex flex-col items-start gap-0.5 font-normal"
+                        >
+                            La detracción la deposita la empresa
+                            <span className="text-xs text-muted-foreground">
+                                El cliente paga el total de la factura. Vale
+                                para sus facturas nuevas; las que ya existen no
+                                cambian.
                             </span>
                         </Label>
                     </div>

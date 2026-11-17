@@ -1,20 +1,8 @@
 import { useForm } from '@inertiajs/react';
-import {
-    ChevronDown,
-    FileText,
-    Link2,
-    Trash2,
-    TriangleAlert,
-} from 'lucide-react';
+import { Ban, ChevronDown, FileText, Link2, TriangleAlert } from 'lucide-react';
 import { useId, useState } from 'react';
-import {
-    asociar,
-    destroy,
-} from '@/actions/App/Http/Controllers/FacturaController';
-import {
-    ConfirmarBorradoDialog,
-    Resaltado,
-} from '@/components/confirmar-borrado-dialog';
+import { asociar } from '@/actions/App/Http/Controllers/FacturaController';
+import { AnularFacturaDialog } from '@/components/contabilidad/anular-factura-dialog';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -31,6 +19,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { FacturaPorAsociar } from '@/types/contabilidad';
@@ -105,6 +94,8 @@ function ItemPorAsociar({
     factura: FacturaPorAsociar;
     puedeGestionar: boolean;
 }) {
+    const { puede } = usePermisos();
+
     return (
         <li className="flex flex-col gap-3 rounded-lg border bg-card p-3 sm:flex-row sm:items-center">
             <div className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
@@ -151,29 +142,23 @@ function ItemPorAsociar({
                 {puedeGestionar && (
                     <>
                         <AsociarDialog factura={factura} />
-                        <ConfirmarBorradoDialog
-                            url={destroy(factura.id).url}
-                            titulo="Anular la factura"
-                            etiquetaAccion="Anular"
-                            descripcion={
-                                <>
-                                    Se anula la factura{' '}
-                                    <Resaltado>{factura.numero}</Resaltado> y su
-                                    PDF. No tiene GR asociadas.
-                                </>
-                            }
-                            trigger={
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="size-8 text-muted-foreground hover:text-destructive"
-                                    aria-label={`Anular la factura ${factura.numero}`}
-                                    title="Anular la factura"
-                                >
-                                    <Trash2 className="size-4" />
-                                </Button>
-                            }
-                        />
+                        {puede('cobranza.anular') && (
+                            <AnularFacturaDialog
+                                factura={factura}
+                                viajes={0}
+                                trigger={
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-8 text-muted-foreground hover:text-destructive"
+                                        aria-label={`Anular la factura ${factura.numero}`}
+                                        title="Anular la factura"
+                                    >
+                                        <Ban className="size-4" />
+                                    </Button>
+                                }
+                            />
+                        )}
                     </>
                 )}
             </div>

@@ -14,6 +14,12 @@ beforeEach(function (): void {
     foreach (['admin', 'visor', 'conductor', 'contador'] as $role) {
         Role::findOrCreate($role, 'web');
     }
+
+    // Estas pruebas cubren el modo en que se espera la constancia de la
+    // detracción que deposita el cliente; por defecto está apagado.
+    config(['transpaty.facturacion.controlar_detraccion_del_cliente' => true]);
+    // Los viajes de estas pruebas son de todo el año: sin corte de inicio.
+    config(['transpaty.facturacion.inicio_cobranza' => '2026-01-01']);
 });
 
 it('redirects guests to login', function (): void {

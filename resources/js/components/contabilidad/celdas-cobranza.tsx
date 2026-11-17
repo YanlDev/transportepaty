@@ -1,5 +1,6 @@
-import { router } from '@inertiajs/react';
+import { Link, router } from '@inertiajs/react';
 import { FileText } from 'lucide-react';
+import cobros from '@/actions/App/Http/Controllers/CobroController';
 import { update } from '@/actions/App/Http/Controllers/FacturaController';
 import { CeldaEntidad } from '@/components/contabilidad/celda-entidad';
 import { CeldaMoneda } from '@/components/contabilidad/celda-moneda';
@@ -266,7 +267,7 @@ export function CeldasCobranza({
                     campo="fecha_pago"
                     valor={factura.fecha_pago}
                     tipo="fecha"
-                    editable={editable}
+                    editable={editable && factura.cobro_en_la_fila}
                     ancho="min-w-32"
                     etiqueta="Fecha de pago del neto"
                 >
@@ -278,6 +279,26 @@ export function CeldasCobranza({
                     fecha={factura.fecha_pago}
                     emision={factura.fecha_emision}
                 />
+                {/* Cobrada en parte: cuánto entró y cuánto falta. */}
+                {factura.fecha_pago === null && factura.cobrado > 0 && (
+                    <span className="block text-xs text-amber-700 dark:text-amber-500">
+                        cobrado {factura.simbolo}{' '}
+                        {formatearMonto(factura.cobrado)} · falta{' '}
+                        {formatearMonto(factura.saldo)}
+                    </span>
+                )}
+                {/* Un depósito compartido o varios cobros se corrigen en
+                    Cobros, no desde una sola factura. */}
+                {!factura.cobro_en_la_fila && (
+                    <Link
+                        href={cobros.index().url}
+                        className="block text-xs text-muted-foreground underline-offset-2 hover:underline"
+                    >
+                        {factura.cobros > 1
+                            ? `${factura.cobros} cobros`
+                            : 'depósito compartido'}
+                    </Link>
+                )}
             </TableCell>
 
             <TableCell className="whitespace-nowrap text-muted-foreground">
@@ -287,7 +308,7 @@ export function CeldasCobranza({
                     cuentaId={factura.cuenta_bancaria_id}
                     cuenta={factura.cuenta}
                     cuentas={cuentas}
-                    editable={editable}
+                    editable={editable && factura.cobro_en_la_fila}
                 />
                 {/* Cobrada pero sin decir por dónde entró la plata: es
                     justamente el dato que este módulo existe para no perder. */}
@@ -306,7 +327,7 @@ export function CeldasCobranza({
                     url={url}
                     campo="numero_operacion"
                     valor={factura.numero_operacion}
-                    editable={editable}
+                    editable={editable && factura.cobro_en_la_fila}
                     ancho="min-w-32"
                     etiqueta={
                         factura.cobro_en_efectivo

@@ -75,6 +75,8 @@ export type Permiso =
     | 'costos.editar'
     | 'cobranza.ver'
     | 'cobranza.gestionar'
+    | 'cobranza.anular'
+    | 'cobranza.cerrar_mes'
     | 'cuentas.ver'
     | 'cuentas.gestionar'
     | 'whatsapp.administrar'

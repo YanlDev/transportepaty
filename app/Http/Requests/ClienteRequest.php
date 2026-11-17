@@ -34,6 +34,7 @@ abstract class ClienteRequest extends FormRequest
             // El cliente de sus despachos es el destinatario de cada GR
             // (Porcelanato Latino factura el flete a las tiendas).
             'cliente_es_destinatario' => ['sometimes', 'boolean'],
+            'detraccion_por_empresa' => ['sometimes', 'boolean'],
             'activo' => ['required', 'boolean'],
             'notas' => ['nullable', 'string', 'max:2000'],
         ];

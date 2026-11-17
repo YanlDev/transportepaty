@@ -7,16 +7,20 @@ use App\Enums\Moneda;
 use App\Models\Concerns\RegistraHistorial;
 use App\Services\DesgloseFactura;
 use App\Services\ImportadorViaje;
+use App\Services\RegistroDeCobros;
 use App\Services\RelojOperativo;
 use Carbon\CarbonInterface;
 use Database\Factories\FacturaFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Relations\Pivot;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
@@ -70,6 +74,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string|null $detraccion_impresa
  * @property bool $detraccion_por_empresa
  * @property string|null $neto
+ * @property string $cobrado Lo que suman sus cobros vigentes; lo calcula `RegistroDeCobros`.
  * @property Moneda $moneda
  * @property Carbon|null $fecha_pago
  * @property int|null $cuenta_bancaria_id
@@ -84,8 +89,15 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property list<string>|null $gr_citadas
  * @property Carbon|null $periodo_desde
  * @property Carbon|null $periodo_hasta
+ * @property Carbon|null $anulada_at
+ * @property int|null $anulada_por
+ * @property string|null $motivo_anulacion
+ * @property list<int>|null $viajes_al_anular Las GR que cobraba al anularse: con ellas se restaura.
+ * @property-read User|null $anuladaPor
  * @property-read CuentaBancaria|null $cuentaBancaria
  * @property-read Collection<int, Viaje> $viajes
+ * @property-read Collection<int, Cobro> $cobros Con `pivot.monto`: lo que cada cobro le pagó.
+ * @property-read Pivot|null $pivot Cuando se carga desde un cobro: `monto` es lo que ese cobro le pagó.
  */
 #[Fillable([
     'numero',
@@ -151,16 +163,47 @@ class Factura extends Model implements HasMedia
      * copian en la fila para que una factura ya emitida no cambie si cambia
      * la tasa.
      */
+    public const SIN_ANULADAS = 'sin-anuladas';
+
     protected static function booted(): void
     {
+        // Una factura anulada no es plata: no cuenta en la cobranza ni cubre
+        // ningún viaje. Se excluye acá, una sola vez, igual que las GR
+        // anuladas en `Viaje`.
+        static::addGlobalScope(self::SIN_ANULADAS, function (Builder $query): void {
+            $query->whereNull($query->qualifyColumn('anulada_at'));
+        });
+
         static::creating(function (Factura $factura): void {
             $factura->tasa_igv ??= (string) config('transpaty.igv');
             $factura->tasa_detraccion ??= (string) config('transpaty.facturacion.detraccion');
         });
 
         static::saving(function (Factura $factura): void {
+            // Con el mes cerrado, la factura no se crea ni se corrige. Lo que
+            // llega después —la constancia de la detracción, una nota— sí.
+            if (array_diff(array_keys($factura->getDirty()), ['fecha_detraccion', 'constancia_detraccion', 'observacion']) !== []) {
+                CierreDeMes::exigirAbierto("Factura {$factura->numero}", $factura->getOriginal('fecha_emision'), $factura->fecha_emision);
+            }
+
+            // Quién deposita la detracción lo dice el cliente, salvo que la
+            // factura nueva ya lo traiga dicho.
+            if (! $factura->exists && ! $factura->detraccion_por_empresa && filled($factura->cliente_ruc)) {
+                $factura->detraccion_por_empresa = Cliente::query()
+                    ->where('ruc', $factura->cliente_ruc)
+                    ->value('detraccion_por_empresa') ?? false;
+            }
+
             $factura->desglosar();
             $factura->aplicarQuienDepositaLaDetraccion();
+        });
+
+        // Si cambia el neto de una factura con cobros, lo cobrado se mide de
+        // nuevo contra él: puede dejar de estar pagada, o pasar a estarlo.
+        static::saved(function (Factura $factura): void {
+            if ($factura->wasChanged('neto') && $factura->cobros()->exists()) {
+                app(RegistroDeCobros::class)->sincronizar($factura);
+            }
         });
     }
 
@@ -293,11 +336,101 @@ class Factura extends Model implements HasMedia
         $clave = self::claveDeNumero($numero);
         $serie = mb_substr($clave, 0, 4);
 
+        // Las anuladas también: su número ya se usó y no se registra otra vez.
         return self::query()
+            ->conAnuladas()
             ->when($exceptoId !== null, fn ($query) => $query->whereKeyNot($exceptoId))
             ->whereLike('numero', "%{$serie}%", caseSensitive: false)
-            ->get(['id', 'numero'])
+            ->get(['id', 'numero', 'anulada_at'])
             ->first(fn (self $factura): bool => self::claveDeNumero($factura->numero) === $clave);
+    }
+
+    /**
+     * Incluye las anuladas: para listarlas, restaurarlas y no repetir su
+     * número.
+     *
+     * @param  Builder<self>  $query
+     * @return Builder<self>
+     */
+    public function scopeConAnuladas(Builder $query): Builder
+    {
+        return $query->withoutGlobalScope(self::SIN_ANULADAS);
+    }
+
+    /**
+     * Las rutas encuentran también las anuladas: sin esto no habría cómo
+     * restaurar una.
+     *
+     * @param  Builder<self>  $query
+     * @param  mixed  $value
+     * @param  string|null  $field
+     * @return \Illuminate\Contracts\Database\Eloquent\Builder
+     */
+    public function resolveRouteBindingQuery($query, $value, $field = null)
+    {
+        return parent::resolveRouteBindingQuery($query->withoutGlobalScope(self::SIN_ANULADAS), $value, $field);
+    }
+
+    public function estaAnulada(): bool
+    {
+        return $this->anulada_at !== null;
+    }
+
+    /**
+     * Si ya se registró el pago del neto o el depósito de la detracción.
+     */
+    public function tieneCobro(): bool
+    {
+        return $this->fecha_pago !== null || $this->fecha_detraccion !== null;
+    }
+
+    /**
+     * Anula la factura: suelta sus GR (quedan por facturar de nuevo) y las
+     * recuerda para poder restaurarla. No se borra nada, ni el PDF.
+     */
+    public function anular(string $motivo, User $usuario): void
+    {
+        DB::transaction(function () use ($motivo, $usuario): void {
+            $viajes = $this->viajes()->pluck('viajes.id')->map(fn ($id): int => (int) $id)->all();
+
+            $this->viajes()->detach();
+            $this->forceFill([
+                'anulada_at' => now(),
+                'anulada_por' => $usuario->id,
+                'motivo_anulacion' => $motivo,
+                'viajes_al_anular' => $viajes,
+            ])->save();
+        });
+    }
+
+    /**
+     * Deshace la anulación y le devuelve las GR que cobraba y siguen
+     * vigentes. Devuelve cuántas no volvieron (se anularon entretanto).
+     */
+    public function restaurar(): int
+    {
+        return DB::transaction(function (): int {
+            $anteriores = $this->viajes_al_anular ?? [];
+            $vigentes = Viaje::query()->whereKey($anteriores)->pluck('id')->all();
+
+            $this->forceFill([
+                'anulada_at' => null,
+                'anulada_por' => null,
+                'motivo_anulacion' => null,
+                'viajes_al_anular' => null,
+            ])->save();
+            $this->viajes()->syncWithoutDetaching($vigentes);
+
+            return count($anteriores) - count($vigentes);
+        });
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function anuladaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'anulada_por');
     }
 
     /**
@@ -351,7 +484,7 @@ class Factura extends Model implements HasMedia
     public function estado(): EstadoCobranza
     {
         if ($this->fecha_pago === null) {
-            return EstadoCobranza::Facturado;
+            return (float) $this->cobrado > 0 ? EstadoCobranza::Parcial : EstadoCobranza::Facturado;
         }
 
         return $this->faltaDetraccion()
@@ -359,10 +492,51 @@ class Factura extends Model implements HasMedia
             : EstadoCobranza::Pagado;
     }
 
-    /** Lleva detracción, la deposita el cliente y todavía no lo hizo. */
+    /**
+     * Lo que ya entró del neto: todo si está pagada, y si no lo que suman
+     * sus cobros parciales.
+     */
+    public function montoCobrado(): float
+    {
+        return $this->fecha_pago !== null ? (float) $this->neto : (float) $this->cobrado;
+    }
+
+    /**
+     * Lo que todavía falta cobrar del neto.
+     */
+    public function saldo(): float
+    {
+        return $this->fecha_pago !== null ? 0.0 : max(round((float) $this->neto - (float) $this->cobrado, 2), 0.0);
+    }
+
+    /**
+     * Los cobros vigentes que le pagaron algo.
+     *
+     * @return BelongsToMany<Cobro, $this>
+     */
+    public function cobros(): BelongsToMany
+    {
+        return $this->belongsToMany(Cobro::class)->withPivot('monto')->withTimestamps();
+    }
+
+    /**
+     * Lo que le pagó el cobro desde el que se cargó esta factura
+     * (`$cobro->facturas`). Cero si no vino por esa relación.
+     */
+    public function montoDelCobro(): float
+    {
+        return (float) $this->getRelationValue('pivot')?->getAttribute('monto');
+    }
+
+    /**
+     * Lleva detracción, la deposita el cliente y todavía no se registró. Solo
+     * cuenta si la empresa controla esa constancia; si no, con el neto
+     * adentro la factura está pagada y esto es siempre falso.
+     */
     public function faltaDetraccion(): bool
     {
-        return ! $this->detraccion_por_empresa
+        return (bool) config('transpaty.facturacion.controlar_detraccion_del_cliente')
+            && ! $this->detraccion_por_empresa
             && (float) $this->detraccion > 0
             && $this->fecha_detraccion === null;
     }
@@ -436,6 +610,8 @@ class Factura extends Model implements HasMedia
             'periodo_desde' => 'date:Y-m-d',
             'periodo_hasta' => 'date:Y-m-d',
             'gr_citadas' => 'array',
+            'anulada_at' => 'datetime',
+            'viajes_al_anular' => 'array',
             'desde_pdf' => 'boolean',
             'detraccion_redondeada' => 'boolean',
             'detraccion_manual' => 'boolean',
@@ -448,6 +624,7 @@ class Factura extends Model implements HasMedia
             'detraccion' => 'decimal:2',
             'detraccion_impresa' => 'decimal:2',
             'neto' => 'decimal:2',
+            'cobrado' => 'decimal:2',
             'moneda' => Moneda::class,
         ];
     }

@@ -1,17 +1,16 @@
 import { router } from '@inertiajs/react';
-import { Ban, FilePlus2, Link2Off, Receipt, Trash2 } from 'lucide-react';
+import { Ban, FilePlus2, Link2Off, Receipt } from 'lucide-react';
 import { marcarNoFacturable } from '@/actions/App/Http/Controllers/ContabilidadController';
-import {
-    desvincular,
-    destroy,
-} from '@/actions/App/Http/Controllers/FacturaController';
+import { desvincular } from '@/actions/App/Http/Controllers/FacturaController';
 import {
     ConfirmarBorradoDialog,
     Resaltado,
 } from '@/components/confirmar-borrado-dialog';
+import { AnularFacturaDialog } from '@/components/contabilidad/anular-factura-dialog';
 import { NoFacturableDialog } from '@/components/contabilidad/no-facturable-dialog';
 import { OtraFacturaDialog } from '@/components/contabilidad/otra-factura-dialog';
 import { Button } from '@/components/ui/button';
+import { usePermisos } from '@/hooks/use-permisos';
 import { avisarError } from '@/lib/aviso-error';
 import type { FacturaResumen, ViajeContable } from '@/types/contabilidad';
 
@@ -35,6 +34,8 @@ export function AccionesFila({
     /** En la última factura del viaje: deja sumarle una más. */
     agregarOtra?: boolean;
 }) {
+    const { puede } = usePermisos();
+
     if (factura === null) {
         return puedeFacturar ? <AccionesSinFactura viaje={viaje} /> : null;
     }
@@ -87,20 +88,10 @@ export function AccionesFila({
                 />
             )}
 
-            {puedeFacturar && (
-                <ConfirmarBorradoDialog
-                    url={destroy(factura.id).url}
-                    titulo="Anular la factura"
-                    etiquetaAccion="Anular"
-                    descripcion={
-                        <>
-                            Se anula la factura{' '}
-                            <Resaltado>{factura.numero}</Resaltado> y sale de
-                            sus {factura.viajes_count}{' '}
-                            {factura.viajes_count === 1 ? 'viaje' : 'viajes'}.
-                            Las otras facturas de esos viajes no se tocan.
-                        </>
-                    }
+            {puede('cobranza.anular') && (
+                <AnularFacturaDialog
+                    factura={factura}
+                    viajes={factura.viajes_count}
                     trigger={
                         <Button
                             variant="ghost"
@@ -109,7 +100,7 @@ export function AccionesFila({
                             aria-label={`Anular la factura ${factura.numero}`}
                             title="Anular la factura"
                         >
-                            <Trash2 className="size-4" />
+                            <Ban className="size-4" />
                         </Button>
                     }
                 />

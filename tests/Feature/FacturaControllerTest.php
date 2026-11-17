@@ -13,6 +13,10 @@ beforeEach(function (): void {
     foreach (['admin', 'visor', 'conductor', 'contador'] as $role) {
         Role::findOrCreate($role, 'web');
     }
+
+    // Estas pruebas cubren el modo en que se espera la constancia de la
+    // detracción que deposita el cliente; por defecto está apagado.
+    config(['transpaty.facturacion.controlar_detraccion_del_cliente' => true]);
 });
 
 /**
@@ -334,19 +338,100 @@ it('sends the factura to the bandeja when its last viaje is freed', function ():
         );
 });
 
-it('frees every viaje when the factura is anulada', function (): void {
+it('keeps an anulada factura with its reason and frees its viajes', function (): void {
     $factura = Factura::factory()->create();
-    Viaje::factory()->count(2)->hasAttached($factura, relationship: 'facturas')->create();
+    $viajes = Viaje::factory()->count(2)->hasAttached($factura, relationship: 'facturas')->create();
+    $contador = actorConRol('contador');
 
-    actingAs(actorConRol('contador'))
-        ->delete(route('facturas.destroy', $factura))
+    actingAs($contador)
+        ->post(route('facturas.anular', $factura), ['motivo' => 'RUC equivocado, la reemplaza otra'])
         ->assertSessionHasNoErrors();
 
+    $anulada = Factura::query()->conAnuladas()->sole();
+
+    // No se borra: sale de la cobranza y recuerda qué cobraba.
     expect(Factura::query()->count())->toBe(0)
-        // Los viajes no se van con la factura: anular una emitida por error es
+        ->and($anulada->motivo_anulacion)->toBe('RUC equivocado, la reemplaza otra')
+        ->and($anulada->anulada_por)->toBe($contador->id)
+        ->and($anulada->viajes_al_anular)->toEqualCanonicalizing($viajes->modelKeys())
+        // Los viajes quedan libres: anular una emitida por error es
         // justamente para poder volver a facturarlos.
         ->and(Viaje::query()->count())->toBe(2)
         ->and(Viaje::query()->whereHas('facturas')->count())->toBe(0);
+});
+
+it('asks for a reason and for its own permission to anular', function (): void {
+    $factura = Factura::factory()->create();
+    $soloFactura = actorConRol('visor');
+    $soloFactura->givePermissionTo('cobranza.ver', 'cobranza.gestionar');
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.anular', $factura), ['motivo' => ''])
+        ->assertSessionHasErrors('motivo');
+    actingAs($soloFactura)
+        ->post(route('facturas.anular', $factura), ['motivo' => 'Emitida por error'])
+        ->assertForbidden();
+
+    expect(Factura::query()->count())->toBe(1);
+});
+
+it('refuses to anular a factura that already has a payment', function (): void {
+    $cobrada = Factura::factory()->create(['fecha_pago' => '2026-11-10']);
+
+    actingAs(actorConRol('contador'))
+        ->post(route('facturas.anular', $cobrada), ['motivo' => 'Emitida por error'])
+        ->assertSessionHasErrors('motivo');
+
+    expect($cobrada->fresh()->estaAnulada())->toBeFalse();
+});
+
+it('restores an anulada factura with the viajes it had', function (): void {
+    $factura = Factura::factory()->create();
+    $viajes = Viaje::factory()->count(2)->hasAttached($factura, relationship: 'facturas')->create();
+    $contador = actorConRol('contador');
+    $factura->anular('Anulada por error', $contador);
+
+    actingAs($contador)->post(route('facturas.restaurar', $factura))->assertSessionHasNoErrors();
+
+    $restaurada = Factura::query()->sole();
+
+    expect($restaurada->estaAnulada())->toBeFalse()
+        ->and($restaurada->motivo_anulacion)->toBeNull()
+        ->and($restaurada->viajes()->pluck('viajes.id')->all())->toEqualCanonicalizing($viajes->modelKeys());
+});
+
+it('does not let the number of an anulada factura be used again, nor the factura be edited', function (): void {
+    $factura = Factura::factory()->create(['numero' => 'E001-14700']);
+    $viaje = Viaje::factory()->create();
+    $contador = actorConRol('contador');
+    $factura->anular('Anulada por error', $contador);
+
+    actingAs($contador)
+        ->post(route('facturas.store'), ['numero' => 'E001-14700', 'fecha_emision' => '2026-11-10', 'total' => 1180, 'moneda' => 'PEN', 'viaje_ids' => [$viaje->id]])
+        ->assertSessionHasErrors('numero');
+    actingAs($contador)
+        ->patch(route('facturas.update', $factura), ['observacion' => 'x'])
+        ->assertForbidden();
+
+    expect(Factura::query()->conAnuladas()->count())->toBe(1);
+});
+
+it('lists the anuladas on the cobranza screen and leaves them out of the money', function (): void {
+    $factura = Factura::factory()->create(['numero' => 'E001-14701']);
+    Viaje::factory()->hasAttached($factura, relationship: 'facturas')->create();
+    $contador = actorConRol('contador');
+    $factura->anular('Duplicada', $contador);
+
+    actingAs($contador)
+        ->get(route('contabilidad.index'))
+        ->assertInertia(fn ($page) => $page
+            ->has('facturasAnuladas', 1)
+            ->where('facturasAnuladas.0.numero', 'E001-14701')
+            ->where('facturasAnuladas.0.motivo', 'Duplicada')
+            ->where('facturasAnuladas.0.restaurable', true)
+            ->has('facturasAnuladas.0.guias', 1)
+            ->has('facturasPorAsociar', 0)
+        );
 });
 
 /**

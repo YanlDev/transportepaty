@@ -41,7 +41,7 @@ return new class extends Migration
      */
     private function corregirFacturadoA(): void
     {
-        Factura::query()
+        Factura::query()->withoutGlobalScopes()
             ->where('desde_pdf', false)
             ->where('cliente_ruc', self::RUC_PORCELANATO)
             ->with('viajes:viajes.id,cliente,cliente_ruc,remitente_ruc')

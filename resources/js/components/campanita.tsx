@@ -24,15 +24,15 @@ const CADA = 60_000;
  * página. Tocar una la marca como leída y lleva a donde se resuelve.
  */
 export function Campanita() {
-    const { alertas } = usePage().props;
+    const { campanita } = usePage().props;
 
-    usePoll(CADA, { only: ['alertas'] });
+    usePoll(CADA, { only: ['campanita'] });
 
-    if (alertas === null) {
+    if (campanita === null) {
         return null;
     }
 
-    const sinLeer = alertas.sin_leer;
+    const sinLeer = campanita.sin_leer;
 
     return (
         <Popover>
@@ -71,13 +71,13 @@ export function Campanita() {
                     )}
                 </div>
 
-                {alertas.recientes.length === 0 ? (
+                {campanita.recientes.length === 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-muted-foreground">
                         No tienes alertas.
                     </p>
                 ) : (
                     <ul className="max-h-[60vh] divide-y overflow-y-auto">
-                        {alertas.recientes.map((alerta) => (
+                        {campanita.recientes.map((alerta) => (
                             <li key={alerta.id}>
                                 <FilaAlerta alerta={alerta} />
                             </li>

@@ -16,6 +16,7 @@ enum EstadoCobranza: string
 
     case SinFacturar = 'sin_facturar';
     case Facturado = 'facturado';
+    case Parcial = 'cobro_parcial';
     case FaltaDetraccion = 'falta_detraccion';
     case Pagado = 'pagado';
     case NoFacturable = 'no_facturable';
@@ -25,6 +26,7 @@ enum EstadoCobranza: string
         return match ($this) {
             self::SinFacturar => 'Sin facturar',
             self::Facturado => 'Por cobrar',
+            self::Parcial => 'Cobro parcial',
             self::FaltaDetraccion => 'Falta detracción',
             self::Pagado => 'Pagado',
             self::NoFacturable => 'No se factura',

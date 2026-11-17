@@ -3,13 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Enums\TipoCarga;
+use App\Http\Requests\AnularFacturaRequest;
 use App\Http\Requests\AsociarFacturaRequest;
 use App\Http\Requests\ImportarFacturasRequest;
 use App\Http\Requests\PatchFacturaRequest;
 use App\Http\Requests\StoreFacturaRequest;
+use App\Models\CierreDeMes;
 use App\Models\Factura;
 use App\Models\Viaje;
 use App\Services\ImportadorFactura;
+use App\Services\RegistroDeCobros;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
@@ -112,6 +115,7 @@ class FacturaController extends Controller
     public function asociar(AsociarFacturaRequest $request, Factura $factura): RedirectResponse
     {
         $this->authorize('update', $factura);
+        CierreDeMes::exigirAbierto("Factura {$factura->numero}", $factura->fecha_emision);
 
         $viajes = $request->viajes();
 
@@ -157,11 +161,10 @@ class FacturaController extends Controller
             $datos['numero'] = Str::upper(trim($datos['numero']));
         }
 
-        // Sin fecha de pago no hay cuenta que valga: dejarla apuntando a un
-        // banco sería decir que se cobró por ahí algo que no se ha cobrado.
-        if (array_key_exists('fecha_pago', $datos) && $datos['fecha_pago'] === null) {
-            $datos['cuenta_bancaria_id'] = null;
-        }
+        // La fecha de pago, la cuenta y el N° de operación ya no se escriben
+        // en la factura: son el cobro, y la factura los toma de él.
+        $cobro = array_intersect_key($datos, array_flip(['fecha_pago', 'cuenta_bancaria_id', 'numero_operacion']));
+        $datos = array_diff_key($datos, $cobro);
 
         // La detracción no es fillable: se escribe a mano solo por acá, y
         // borrarla devuelve el cálculo.
@@ -174,28 +177,49 @@ class FacturaController extends Controller
                 : ['detraccion' => $detraccion, 'detraccion_manual' => true]);
         }
 
-        $factura->update($datos);
+        DB::transaction(function () use ($factura, $datos, $cobro, $request): void {
+            $factura->update($datos);
+
+            if ($cobro !== []) {
+                app(RegistroDeCobros::class)->desdeLaFactura($factura->fresh(), $cobro, $request->user());
+            }
+        });
 
         return back();
     }
 
     /**
-     * Anula la factura. Los viajes no se borran con ella: vuelven a estar
-     * disponibles para facturarse de nuevo, que es justamente lo que se busca
-     * al anular una emitida por error.
+     * Anula la factura, con su motivo. No se borra: queda en «Facturas
+     * anuladas» y sus viajes vuelven a estar por facturar, que es lo que se
+     * busca al anular una emitida por error.
      */
-    public function destroy(Factura $factura): RedirectResponse
+    public function anular(AnularFacturaRequest $request, Factura $factura): RedirectResponse
     {
-        $this->authorize('delete', $factura);
+        $this->authorize('anular', $factura);
 
-        DB::transaction(function () use ($factura): void {
-            $factura->viajes()->detach();
-            $factura->delete();
-        });
+        $factura->anular($request->string('motivo')->trim()->toString(), $request->user());
 
         return back()->with('toast', [
             'type' => 'success',
             'message' => "Factura {$factura->numero} anulada.",
+        ]);
+    }
+
+    /**
+     * Deshace una anulación hecha por error: la factura vuelve a la cobranza
+     * con las GR que cobraba.
+     */
+    public function restaurar(Factura $factura): RedirectResponse
+    {
+        $this->authorize('restaurar', $factura);
+
+        $perdidas = $factura->restaurar();
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => $perdidas > 0
+                ? "Factura {$factura->numero} restaurada. {$perdidas} de sus GR ya no están vigentes y no volvieron."
+                : "Factura {$factura->numero} restaurada.",
         ]);
     }
 
@@ -209,6 +233,7 @@ class FacturaController extends Controller
         $this->authorize('update', $factura);
 
         abort_unless($factura->viajes()->whereKey($viaje->id)->exists(), 404);
+        CierreDeMes::exigirAbierto("Factura {$factura->numero}", $factura->fecha_emision);
 
         // Si era la última GR, la factura no se anula: pasa a la bandeja
         // «Facturas por asociar», desde donde se le asignan las correctas o se

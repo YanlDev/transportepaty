@@ -78,6 +78,12 @@ class ResumenCobranza
     public function consulta(array $filtros): Builder
     {
         return Viaje::query()
+            // Lo anterior al inicio de la cobranza no se lleva desde acá: una
+            // GR vieja sin factura no está «por facturar». Si alguna sí se
+            // facturó, sigue apareciendo con su factura.
+            ->where(fn ($query) => $query
+                ->where('fecha_traslado', '>=', (string) config('transpaty.facturacion.inicio_cobranza'))
+                ->orWhereHas('facturas'))
             ->when($filtros['buscar'], function ($query, string $buscar): void {
                 $query->where(function ($query) use ($buscar): void {
                     $query->whereLike('numero_gr', "%{$buscar}%", caseSensitive: false)
@@ -122,6 +128,7 @@ class ResumenCobranza
                     EstadoCobranza::SinFacturar->value => $query->whereDoesntHave('facturas')->whereNull('no_facturable_at'),
                     EstadoCobranza::NoFacturable->value => $query->whereNotNull('no_facturable_at'),
                     EstadoCobranza::Facturado->value => $query->whereHas('facturas', fn ($query) => $query->whereNull('fecha_pago')),
+                    EstadoCobranza::Parcial->value => $query->whereHas('facturas', fn ($query) => $query->whereNull('fecha_pago')->where('cobrado', '>', 0)),
                     EstadoCobranza::FaltaDetraccion->value => $query
                         ->whereDoesntHave('facturas', fn ($query) => $query->whereNull('fecha_pago'))
                         ->whereHas('facturas', fn ($query) => $this->conDetraccionPendiente($query)),
@@ -149,6 +156,11 @@ class ResumenCobranza
      */
     private function conDetraccionPendiente(Builder $query): Builder
     {
+        // Sin control de la detracción del cliente, ninguna queda pendiente.
+        if (! config('transpaty.facturacion.controlar_detraccion_del_cliente')) {
+            return $query->whereRaw('1 = 0');
+        }
+
         return $query->where('detraccion', '>', 0)
             ->whereNull('fecha_detraccion')
             ->where('detraccion_por_empresa', false);
@@ -174,8 +186,15 @@ class ResumenCobranza
      */
     public static function opcionesDeEstado(): array
     {
+        $estados = array_values(array_filter(
+            EstadoCobranza::options(),
+            // «Falta detracción» solo existe si se controla la del cliente.
+            fn (array $opcion): bool => $opcion['value'] !== EstadoCobranza::FaltaDetraccion->value
+                || config('transpaty.facturacion.controlar_detraccion_del_cliente'),
+        ));
+
         return [
-            ...EstadoCobranza::options(),
+            ...$estados,
             ['value' => self::SIN_ENTIDAD, 'label' => 'Cobrada sin entidad'],
         ];
     }
@@ -223,8 +242,7 @@ class ResumenCobranza
                     'moneda' => $moneda->value,
                     'simbolo' => $moneda->simbolo(),
                     'por_cobrar' => round($propias
-                        ->filter(fn (ParteDeFactura $parte): bool => $parte->factura->fecha_pago === null)
-                        ->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->neto)), 2),
+                        ->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->saldo())), 2),
                     'detraccion_por_cobrar' => round($detracciones
                         ->filter(fn (ParteDeFactura $parte): bool => $parte->factura->faltaDetraccion())
                         ->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->detraccion)), 2),
@@ -233,8 +251,7 @@ class ResumenCobranza
                         ->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->detraccion)), 2),
                     'cobrado' => round(
                         $propias
-                            ->filter(fn (ParteDeFactura $parte): bool => $parte->factura->fecha_pago !== null)
-                            ->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->neto))
+                            ->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->montoCobrado()))
                         + $detracciones->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->detraccionCobrada())),
                         2,
                     ),
@@ -468,6 +485,8 @@ class ResumenCobranza
             ->whereDoesntHave('facturas')
             // Lo que se decidió no cobrar no está pendiente de nada.
             ->whereNull('no_facturable_at')
+            // Lo anterior al inicio de la cobranza no se factura desde acá.
+            ->where('fecha_traslado', '>=', (string) config('transpaty.facturacion.inicio_cobranza'))
             ->reorder()
             ->pluck('fecha_traslado')
             ->groupBy(fn (CarbonImmutable|Carbon $fecha): string => $fecha->format('Y-m'))

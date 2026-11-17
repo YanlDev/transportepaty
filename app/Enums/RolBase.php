@@ -91,7 +91,7 @@ enum RolBase: string
                 Permiso::TableroVer, Permiso::ProgramacionVer, Permiso::ProgramacionCerrar,
                 Permiso::ViajesVer, Permiso::VehiculosVer,
                 Permiso::AbastecimientoVer, Permiso::AbastecimientoViaticos,
-                Permiso::CobranzaVer, Permiso::CobranzaGestionar,
+                Permiso::CobranzaVer, Permiso::CobranzaGestionar, Permiso::CobranzaAnular, Permiso::CobranzaCerrarMes,
                 Permiso::CuentasVer, Permiso::CuentasGestionar,
             ],
 

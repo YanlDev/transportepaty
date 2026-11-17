@@ -273,6 +273,7 @@ class Viaje extends Model implements HasMedia
 
         return match (true) {
             $estados->contains(EstadoCobranza::Facturado) => EstadoCobranza::Facturado,
+            $estados->contains(EstadoCobranza::Parcial) => EstadoCobranza::Parcial,
             $estados->contains(EstadoCobranza::FaltaDetraccion) => EstadoCobranza::FaltaDetraccion,
             default => EstadoCobranza::Pagado,
         };

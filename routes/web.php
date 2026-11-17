@@ -14,7 +14,9 @@ use App\Http\Controllers\Almacen\ValeCompraController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\BuscadorGlobalController;
+use App\Http\Controllers\CierreDeMesController;
 use App\Http\Controllers\ClienteController;
+use App\Http\Controllers\CobroController;
 use App\Http\Controllers\ConciliacionCombustibleController;
 use App\Http\Controllers\ConductorController;
 use App\Http\Controllers\ConductorDocumentoController;
@@ -23,9 +25,11 @@ use App\Http\Controllers\ConfiguracionAlertaController;
 use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\ConfiguracionProgramacionController;
 use App\Http\Controllers\ContabilidadController;
+use App\Http\Controllers\CorrelativoController;
 use App\Http\Controllers\CotizacionController;
 use App\Http\Controllers\CuentaBancariaController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DetraccionController;
 use App\Http\Controllers\EmisionGreController;
 use App\Http\Controllers\EquipamientoCarretaController;
 use App\Http\Controllers\FacturaController;
@@ -40,6 +44,7 @@ use App\Http\Controllers\OrdenTrabajoController;
 use App\Http\Controllers\ParametroCostoController;
 use App\Http\Controllers\PlanMantenimientoController;
 use App\Http\Controllers\ReciboWhatsappController;
+use App\Http\Controllers\ReporteCobranzaController;
 use App\Http\Controllers\RolController;
 use App\Http\Controllers\RutaController;
 use App\Http\Controllers\TallerController;
@@ -160,6 +165,19 @@ Route::middleware('auth')->group(function () {
     // Antes de `cuentas` por lo mismo: `exportar` no es un parámetro.
     Route::get('contabilidad/exportar', [ContabilidadController::class, 'exportar'])
         ->name('contabilidad.exportar');
+    // Cerrar y reabrir un mes; explicar los números de factura que faltan.
+    Route::post('contabilidad/cierres', [CierreDeMesController::class, 'store'])->name('cierres.store');
+    Route::delete('contabilidad/cierres/{mes}', [CierreDeMesController::class, 'destroy'])->where('mes', '\\d{4}-\\d{2}')->name('cierres.destroy');
+    Route::post('contabilidad/correlativo', [CorrelativoController::class, 'store'])->name('correlativo.store');
+    // Los cobros: cada depósito y las facturas que paga.
+    Route::get('contabilidad/cobros', [CobroController::class, 'index'])->name('cobros.index');
+    Route::post('contabilidad/cobros', [CobroController::class, 'store'])->name('cobros.store');
+    Route::post('contabilidad/cobros/{cobro}/aplicaciones', [CobroController::class, 'aplicar'])->name('cobros.aplicar');
+    Route::post('contabilidad/cobros/{cobro}/anular', [CobroController::class, 'anular'])->name('cobros.anular');
+    // El resumen para la gerencia.
+    Route::get('contabilidad/reporte', [ReporteCobranzaController::class, 'index'])->name('contabilidad.reporte');
+    // Las detracciones que deposita la empresa por los clientes que le pagan el total.
+    Route::get('contabilidad/detracciones', [DetraccionController::class, 'index'])->name('detracciones.index');
     Route::get('contabilidad/cuentas', [CuentaBancariaController::class, 'index'])
         ->name('cuentas-bancarias.index');
     Route::post('contabilidad/cuentas', [CuentaBancariaController::class, 'store'])
@@ -177,7 +195,9 @@ Route::middleware('auth')->group(function () {
     // PATCH y no PUT: la cobranza se edita celda por celda y cada guardado
     // manda solo el campo que se acaba de tocar.
     Route::patch('facturas/{factura}', [FacturaController::class, 'update'])->name('facturas.update');
-    Route::delete('facturas/{factura}', [FacturaController::class, 'destroy'])->name('facturas.destroy');
+    // Una factura no se borra: se anula con su motivo, y se puede restaurar.
+    Route::post('facturas/{factura}/anular', [FacturaController::class, 'anular'])->name('facturas.anular');
+    Route::post('facturas/{factura}/restaurar', [FacturaController::class, 'restaurar'])->name('facturas.restaurar');
     // Si el papel de la GR ya llegó a la oficina: lo marca la cobranza.
     Route::patch('viajes/{viaje}/gr-fisica', [ContabilidadController::class, 'marcarGrFisica'])
         ->name('contabilidad.gr-fisica');

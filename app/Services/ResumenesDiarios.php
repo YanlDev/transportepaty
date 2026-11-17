@@ -128,10 +128,13 @@ class ResumenesDiarios
         ];
     }
 
-    /** Lo que falta cobrar: el neto si no entró, más la detracción si falta. */
+    /**
+     * Lo que falta cobrar: lo que queda del neto, más la detracción del
+     * cliente solo si la empresa controla esa constancia.
+     */
     private function pendiente(Factura $factura): float
     {
-        return ($factura->fecha_pago === null ? (float) $factura->neto : 0.0)
+        return $factura->saldo()
             + ($factura->faltaDetraccion() ? (float) $factura->detraccion : 0.0);
     }
 

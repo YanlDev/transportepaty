@@ -10,18 +10,20 @@ import { cn } from '@/lib/utils';
 const TONOS: Record<string, StatusTone> = {
     sin_facturar: 'danger',
     facturado: 'warning',
+    cobro_parcial: 'warning',
     falta_detraccion: 'info',
     pagado: 'success',
     no_facturable: 'neutral',
 };
 
 /** Los estados en que todavía falta cobrar algo: los únicos que pueden vencer. */
-const POR_COBRAR = ['facturado', 'falta_detraccion'];
+const POR_COBRAR = ['facturado', 'cobro_parcial', 'falta_detraccion'];
 
 /** Las siglas de la tabla, donde el estado completo se comía la columna. */
 const SIGLAS: Record<string, string> = {
     sin_facturar: 'S/F',
     facturado: 'P/C',
+    cobro_parcial: 'PARC',
     falta_detraccion: 'DET',
     pagado: 'PAG',
     no_facturable: 'N/F',

@@ -125,6 +125,7 @@ class ExportadorCobranza
         'sin_facturar' => 'FEE2E2',
         'facturado' => 'FEF3C7',
         'falta_detraccion' => 'E0F2FE',
+        'cobro_parcial' => 'FEF3C7',
         'pagado' => 'DCFCE7',
         'no_facturable' => 'F4F4F5',
     ];
@@ -647,7 +648,7 @@ class ExportadorCobranza
 
     private function netoPendiente(Factura $factura, Moneda $moneda): float
     {
-        return $factura->moneda === $moneda && $factura->fecha_pago === null ? $this->parte($factura, $factura->neto) : 0.0;
+        return $factura->moneda === $moneda ? $this->parte($factura, $factura->saldo()) : 0.0;
     }
 
     private function detraccionPendiente(Factura $factura, Moneda $moneda): float
@@ -668,7 +669,7 @@ class ExportadorCobranza
 
     private function cobrado(Factura $factura, Moneda $moneda): float
     {
-        return ($factura->moneda === $moneda && $factura->fecha_pago !== null ? $this->parte($factura, $factura->neto) : 0.0)
+        return ($factura->moneda === $moneda ? $this->parte($factura, $factura->montoCobrado()) : 0.0)
             + ($moneda === Moneda::Soles ? $this->parte($factura, $factura->detraccionCobrada()) : 0.0);
     }
 

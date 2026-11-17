@@ -76,6 +76,16 @@ return [
         'detraccion' => (float) env('TRANSPATY_DETRACCION', 0.04),
         'umbral_detraccion' => (float) env('TRANSPATY_UMBRAL_DETRACCION', 400),
         'plazo_credito_dias' => (int) env('TRANSPATY_PLAZO_CREDITO_DIAS', 30),
+        // Desde cuándo se lleva la cobranza en el sistema: lo anterior
+        // (julio y agosto de 2026) no se factura ni se cobra desde acá y no
+        // aparece como pendiente en el reporte de gerencia.
+        'inicio_cobranza' => env('TRANSPATY_INICIO_COBRANZA', '2026-09-01'),
+        // Si se espera la constancia de la detracción que deposita el
+        // cliente para dar la factura por pagada. Apagado: con el neto
+        // adentro la factura está pagada (los clientes que depositan su
+        // detracción son los grandes y siempre cumplen); lo único que se
+        // sigue es la detracción que deposita la empresa.
+        'controlar_detraccion_del_cliente' => (bool) env('TRANSPATY_CONTROLAR_DETRACCION_DEL_CLIENTE', false),
     ],
 
     /*

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Enums\TipoCarga;
+use App\Models\CierreDeMes;
 use App\Models\Cliente;
 use App\Models\Factura;
 use Illuminate\Http\UploadedFile;
@@ -56,6 +57,15 @@ class ImportadorFactura
 
         if ($campos['valor'] === null || $campos['total'] === null) {
             return $this->noReconocida($nombre, "No se pudieron leer los montos de la factura {$campos['numero']}.");
+        }
+
+        if (CierreDeMes::estaCerrado($campos['fecha_emision'])) {
+            return $this->noReconocida($nombre, "La factura {$campos['numero']} es de un mes cerrado: reábrelo para subirla.");
+        }
+
+        // Una anulada no se pisa con el PDF: alguien decidió sacarla.
+        if (Factura::conMismoNumero($campos['numero'])?->estaAnulada()) {
+            return $this->noReconocida($nombre, "La factura {$campos['numero']} está anulada: restáurala desde «Facturas anuladas» si corresponde.");
         }
 
         return DB::transaction(function () use ($archivo, $campos, $nombre): array {

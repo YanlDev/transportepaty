@@ -37,17 +37,18 @@ export function ResumenCobranza({
                     {/* Va aparte del neto porque entra por otro lado: el
                         cliente la deposita en el Banco de la Nación, y
                         siempre en soles, así que solo va en ese bloque. */}
-                    {monto.moneda === 'PEN' && (
-                        <div>
-                            <p className="text-xs text-muted-foreground">
-                                Detracción por cobrar
-                            </p>
-                            <p className="text-xl font-semibold text-sky-700 tabular-nums dark:text-sky-400">
-                                {monto.simbolo}{' '}
-                                {cifra(monto.detraccion_por_cobrar)}
-                            </p>
-                        </div>
-                    )}
+                    {monto.moneda === 'PEN' &&
+                        monto.detraccion_por_cobrar > 0 && (
+                            <div>
+                                <p className="text-xs text-muted-foreground">
+                                    Detracción por cobrar
+                                </p>
+                                <p className="text-xl font-semibold text-sky-700 tabular-nums dark:text-sky-400">
+                                    {monto.simbolo}{' '}
+                                    {cifra(monto.detraccion_por_cobrar)}
+                                </p>
+                            </div>
+                        )}
                     {/* No es plata por cobrar: es de Paty, que la deposita por
                         los clientes que le pagan el total. */}
                     {monto.detraccion_por_depositar > 0 && (

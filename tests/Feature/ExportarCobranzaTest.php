@@ -15,6 +15,10 @@ beforeEach(function (): void {
     foreach (['admin', 'visor', 'conductor', 'contador'] as $role) {
         Role::findOrCreate($role, 'web');
     }
+
+    // Estas pruebas cubren el modo en que se espera la constancia de la
+    // detracción que deposita el cliente; por defecto está apagado.
+    config(['transpaty.facturacion.controlar_detraccion_del_cliente' => true]);
 });
 
 /**

@@ -58,8 +58,10 @@ class HandleInertiaRequests extends Middleware
             // calcula a lo más una vez por minuto por usuario: va en todas
             // las páginas.
             // La campanita: cuántas alertas faltan leer y las últimas. Se
-            // pide de nuevo cada minuto desde la página abierta.
-            'alertas' => fn (): ?array => $user ? AlertaController::campanita($request) : null,
+            // pide de nuevo cada minuto desde la página abierta. Va con nombre
+            // propio (no «alertas») para no chocar con el prop de la bandeja
+            // en `/alertas`, que se llama igual y la dejaría sin datos.
+            'campanita' => fn (): ?array => $user ? AlertaController::campanita($request) : null,
             'pendientesMenu' => fn (): array => $user
                 ? Cache::remember("pendientes-menu:{$user->id}", 60, fn (): array => app(PendientesDelInicio::class)->porEntradaDelMenu($user))
                 : [],

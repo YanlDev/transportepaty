@@ -30,11 +30,21 @@ class FacturaPolicy
 
     public function update(User $user, Factura $factura): bool
     {
-        return $user->checkPermissionTo(Permiso::CobranzaGestionar);
+        // Una anulada no se corrige ni se asocia: primero se restaura.
+        return ! $factura->estaAnulada() && $user->checkPermissionTo(Permiso::CobranzaGestionar);
     }
 
-    public function delete(User $user, Factura $factura): bool
+    /**
+     * Anular saca plata de la cobranza: tiene su propio permiso, aparte de
+     * facturar. Una factura ya no se borra nunca.
+     */
+    public function anular(User $user, Factura $factura): bool
     {
-        return $user->checkPermissionTo(Permiso::CobranzaGestionar);
+        return ! $factura->estaAnulada() && $user->checkPermissionTo(Permiso::CobranzaAnular);
+    }
+
+    public function restaurar(User $user, Factura $factura): bool
+    {
+        return $factura->estaAnulada() && $user->checkPermissionTo(Permiso::CobranzaAnular);
     }
 }
