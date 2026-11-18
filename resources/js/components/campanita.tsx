@@ -1,9 +1,11 @@
-import { Link, usePage, usePoll } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { Bell } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import {
     abrir,
     index as bandeja,
     leerTodas,
+    sondearCampanita,
 } from '@/actions/App/Http/Controllers/AlertaController';
 import { Button } from '@/components/ui/button';
 import {
@@ -13,20 +15,73 @@ import {
 } from '@/components/ui/popover';
 import { haceCuanto } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import type { Alerta } from '@/types/alertas';
+import type { Alerta, Campanita as DatosCampanita } from '@/types/alertas';
 
 /** Cada cuánto se vuelve a preguntar si llegaron alertas nuevas. */
 const CADA = 60_000;
 
 /**
  * La campanita del encabezado: cuántas alertas faltan leer y las últimas.
- * Se pregunta de nuevo cada minuto, solo por las alertas, sin recargar la
- * página. Tocar una la marca como leída y lleva a donde se resuelve.
+ * Se pregunta de nuevo cada minuto a una ruta propia, sin pasar por la
+ * página abierta: como recarga parcial, cada pregunta le hacía rehacer todas
+ * sus consultas. Tocar una la marca como leída y lleva a donde se resuelve.
  */
 export function Campanita() {
-    const { campanita } = usePage().props;
+    const { campanita: deLaPagina } = usePage().props;
+    const conSesion = deLaPagina !== null;
 
-    usePoll(CADA, { only: ['campanita'] });
+    // Lo último que respondió el sondeo, junto a los datos de página que
+    // había entonces: cuando la página trae datos nuevos (una visita, marcar
+    // como leídas), mandan esos y lo sondeado queda atrás.
+    const [sondeo, setSondeo] = useState<{
+        base: DatosCampanita | null;
+        datos: DatosCampanita;
+    } | null>(null);
+
+    // En un ref para que el reloj del sondeo no se reinicie con cada
+    // navegación.
+    const base = useRef(deLaPagina);
+
+    useEffect(() => {
+        base.current = deLaPagina;
+    }, [deLaPagina]);
+
+    useEffect(() => {
+        if (!conSesion) {
+            return;
+        }
+
+        const preguntar = () => {
+            // Con la pestaña oculta no se pregunta: nadie la está mirando.
+            if (document.hidden) {
+                return;
+            }
+
+            fetch(sondearCampanita.url(), {
+                headers: { Accept: 'application/json' },
+                credentials: 'same-origin',
+            })
+                .then((respuesta) =>
+                    respuesta.ok ? respuesta.json() : Promise.reject(),
+                )
+                .then((datos: DatosCampanita) =>
+                    setSondeo({ base: base.current, datos }),
+                )
+                // Sin red o con la sesión vencida: queda lo que ya había.
+                .catch(() => {});
+        };
+
+        const intervalo = window.setInterval(preguntar, CADA);
+        // Al volver a la pestaña se pregunta de una vez, sin esperar el minuto.
+        document.addEventListener('visibilitychange', preguntar);
+
+        return () => {
+            window.clearInterval(intervalo);
+            document.removeEventListener('visibilitychange', preguntar);
+        };
+    }, [conSesion]);
+
+    const campanita = sondeo?.base === deLaPagina ? sondeo.datos : deLaPagina;
 
     if (campanita === null) {
         return null;

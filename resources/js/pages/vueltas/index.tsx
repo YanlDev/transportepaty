@@ -1,4 +1,4 @@
-import { Head, Link, setLayoutProps, usePoll } from '@inertiajs/react';
+import { Head, Link, router, setLayoutProps, usePoll } from '@inertiajs/react';
 import {
     CalendarCheck,
     CalendarPlus,
@@ -6,7 +6,7 @@ import {
     Search,
     Settings,
 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import configuracion from '@/actions/App/Http/Controllers/ConfiguracionProgramacionController';
 import guiasRutas from '@/actions/App/Http/Controllers/GuiaPorAsignarController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
@@ -35,6 +35,8 @@ type Props = OpcionesVuelta & {
     fecha: string;
     /** Cada ticket abierto en su etapa, y las unidades en base. */
     tablero: TarjetaVuelta[];
+    /** Huella de lo que pinta el tablero: si cambia, hay algo nuevo. */
+    firmaTablero: string;
     /** Las GR que todavía no están en ningún ticket. */
     guiasPorAsignar: number;
 };
@@ -69,6 +71,7 @@ function filtrar(lista: TarjetaVuelta[], buscar: string): TarjetaVuelta[] {
 export default function Programacion({
     fecha,
     tablero,
+    firmaTablero,
     guiasPorAsignar,
     ...opciones
 }: Props) {
@@ -86,9 +89,24 @@ export default function Programacion({
         breadcrumbs: [{ title: 'Programación', href: vueltas.index().url }],
     });
 
-    // Cada 15 segundos: lo que otras áreas registran (GR asignadas, OK de
-    // taller, llegadas) se ve sin recargar.
-    usePoll(15_000, { only: ['tablero', 'guiasPorAsignar'] });
+    // Cada 15 segundos se pregunta solo por la firma (una consulta liviana).
+    // El tablero entero —que pesa y repinta todas las tarjetas— se vuelve a
+    // pedir únicamente cuando la firma cambió: lo que otras áreas registran
+    // (GR asignadas, OK de taller, llegadas) se ve igual sin recargar.
+    usePoll(15_000, { only: ['firmaTablero', 'guiasPorAsignar'] });
+
+    const pintado = useRef({ firma: firmaTablero, tablero });
+
+    useEffect(() => {
+        const anterior = pintado.current;
+        pintado.current = { firma: firmaTablero, tablero };
+
+        // Firma nueva con el tablero de antes: falta traerlo. Si llegaron
+        // juntos (una visita completa), ya está al día.
+        if (anterior.firma !== firmaTablero && anterior.tablero === tablero) {
+            router.reload({ only: ['tablero'] });
+        }
+    }, [firmaTablero, tablero]);
 
     const filtradas = useMemo(
         () => filtrar(tablero, buscar),

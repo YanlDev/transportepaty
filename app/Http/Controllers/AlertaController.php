@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Enums\TipoAlerta;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Notifications\DatabaseNotification;
@@ -49,6 +50,17 @@ class AlertaController extends Controller
         $request->user()->unreadNotifications()->update(['read_at' => now()]);
 
         return back();
+    }
+
+    /**
+     * Lo que la campanita vuelve a preguntar cada minuto. Tiene su propia
+     * ruta para no pasar por el controlador de la página que esté abierta:
+     * como recarga parcial, cada pregunta rehacía todas las consultas de esa
+     * página solo para traer las alertas.
+     */
+    public function sondearCampanita(Request $request): JsonResponse
+    {
+        return response()->json(self::campanita($request));
     }
 
     /**

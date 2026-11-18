@@ -47,6 +47,14 @@ class ResumenTablero
     private const CLIENTES_EN_GRAFICO = 10;
 
     /**
+     * Lo que devuelve `paraElRango()`, por nombre: el controlador reparte
+     * cada parte en su propio prop sin tener que calcularlas para saberlo.
+     *
+     * @var list<string>
+     */
+    public const PARTES = ['resumen', 'documentos', 'unidades', 'viajesPorCliente', 'cargaMinsur', 'viajesPorTipoCliente', 'topCargas', 'ultimosViajes'];
+
+    /**
      * Todo el tablero para un rango de fechas ya resuelto.
      *
      * @return array<string, mixed>

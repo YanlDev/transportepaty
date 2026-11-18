@@ -24,10 +24,19 @@ class DashboardController extends Controller
 
         $rango = $this->rangoPedido($request);
 
+        // El resumen se calcula una sola vez y solo si alguna de sus partes
+        // se pide: el sondeo de los pendientes, cada minuto, no lo toca.
+        $calculado = null;
+        $resumen = function () use (&$calculado, $rango): array {
+            return $calculado ??= $this->resumen->paraElRango($rango['desde'], $rango['hasta']);
+        };
+
         return Inertia::render('dashboard', [
             'rango' => $rango,
-            ...$this->resumen->paraElRango($rango['desde'], $rango['hasta']),
-            'metaConcentrado' => $this->resumen->metaConcentrado($rango['mes']),
+            ...collect(ResumenTablero::PARTES)
+                ->mapWithKeys(fn (string $parte): array => [$parte => fn (): mixed => $resumen()[$parte]])
+                ->all(),
+            'metaConcentrado' => fn (): mixed => $this->resumen->metaConcentrado($rango['mes']),
             // Lo que le toca a cada quien hoy, según sus permisos.
             'pendientes' => fn (): array => $request->user() ? $this->pendientes->para($request->user()) : [],
         ]);

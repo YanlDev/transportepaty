@@ -11,16 +11,19 @@ use App\Enums\TipoVehiculo;
 use App\Enums\ZonaRuta;
 use App\Http\Requests\GuardarVueltaRequest;
 use App\Http\Requests\RegistrarLlegadaRequest;
+use App\Models\Abastecimiento;
 use App\Models\AreaAviso;
 use App\Models\Cliente;
 use App\Models\Conductor;
 use App\Models\EnvioWhatsapp;
+use App\Models\HistorialCambio;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
 use App\Models\Ruta;
 use App\Models\RutaVuelta;
 use App\Models\Vehiculo;
 use App\Models\Viaje;
+use App\Models\Viatico;
 use App\Models\Vuelta;
 use App\Services\AlertasDelTicket;
 use App\Services\AsignadorVueltas;
@@ -37,6 +40,7 @@ use App\Services\WhatsappServicio;
 use Closure;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -68,7 +72,10 @@ class VueltaController extends Controller
         return Inertia::render('vueltas/index', [
             // Hoy: la fecha de salida que se propone al programar.
             'fecha' => RelojOperativo::fechaDeHoy()->toDateString(),
-            'tablero' => $this->tablero($request),
+            // En closure: el sondeo de cada 15 segundos pregunta solo por la
+            // firma y no arma el tablero entero.
+            'tablero' => fn (): array => $this->tablero($request),
+            'firmaTablero' => fn (): string => $this->firmaDelTablero(),
             // Las GR que esperan que alguien las ponga en un ticket.
             'guiasPorAsignar' => fn (): int => Viaje::query()->whereNull('parada_vuelta_id')->whereNull('sin_ticket_at')->count(),
             ...$this->opcionesDelFormulario(),
@@ -311,6 +318,42 @@ class VueltaController extends Controller
                 ...$this->pasos->seguimiento($fila['vuelta'], $gastos[$fila['vuelta']->id]),
             ])
             ->all());
+    }
+
+    /**
+     * Una huella de todo lo que pinta el tablero: cambia cuando alguien
+     * registra algo en un ticket (una GR, el OK de taller, un despacho, una
+     * llegada) o cuando cambia el día, que mueve los atrasos. La página
+     * pregunta por ella cada pocos segundos y solo vuelve a pedir el tablero
+     * —que es pesado— cuando la huella es otra.
+     *
+     * Si el tablero empieza a mostrar algo de otra tabla, va también acá.
+     */
+    private function firmaDelTablero(): string
+    {
+        $tablas = [
+            (new Vuelta)->getTable() => 'updated_at',
+            (new ParadaVuelta)->getTable() => 'updated_at',
+            (new RutaVuelta)->getTable() => 'updated_at',
+            (new Viaje)->getTable() => 'updated_at',
+            (new RevisionTaller)->getTable() => 'updated_at',
+            (new Abastecimiento)->getTable() => 'updated_at',
+            (new Viatico)->getTable() => 'updated_at',
+            (new HistorialCambio)->getTable() => 'created_at',
+        ];
+
+        $consulta = null;
+
+        foreach ($tablas as $tabla => $columna) {
+            $parte = DB::table($tabla)->selectRaw("count(*) as cuantas, max({$columna}) as ultima");
+            $consulta = $consulta === null ? $parte : $consulta->unionAll($parte);
+        }
+
+        $marcas = $consulta->get()
+            ->map(fn (object $fila): string => "{$fila->cuantas}@{$fila->ultima}")
+            ->implode('|');
+
+        return hash('xxh3', RelojOperativo::fechaDeHoy()->toDateString().'|'.$marcas);
     }
 
     /**

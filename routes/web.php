@@ -474,6 +474,7 @@ Route::middleware('auth')->group(function () {
 
     // La bandeja de alertas de cada quien: sin permiso, cada uno ve las suyas.
     Route::get('alertas', [AlertaController::class, 'index'])->name('alertas.index');
+    Route::get('alertas/campanita', [AlertaController::class, 'sondearCampanita'])->name('alertas.campanita');
     Route::post('alertas/leidas', [AlertaController::class, 'leerTodas'])->name('alertas.leidas');
     Route::post('alertas/{alerta}/abrir', [AlertaController::class, 'abrir'])->name('alertas.abrir');
 
