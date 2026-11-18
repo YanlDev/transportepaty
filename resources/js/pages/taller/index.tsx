@@ -16,6 +16,7 @@ import taller from '@/actions/App/Http/Controllers/TallerController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { RegistrarKmDialog } from '@/components/mantenimiento/registrar-km-dialog';
+import { EstadoOrden } from '@/components/ordenes/estado-orden';
 import { Placa } from '@/components/placa';
 import { AvisosUnidad } from '@/components/taller/avisos-unidad';
 import type { AvisoTaller } from '@/components/taller/avisos-unidad';
@@ -23,6 +24,7 @@ import {
     EstadoTallerBadge,
     fechaHoraTaller,
 } from '@/components/taller/estado-taller';
+import { PedirTrabajoDialog } from '@/components/taller/pedir-trabajo-dialog';
 import { RevisionTallerDialog } from '@/components/taller/revision-taller-dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,6 +82,11 @@ type OrdenAbierta = {
     tipo: string;
     servicio: string | null;
     estado: string;
+    estado_valor: string;
+    urgente: boolean;
+    mecanicos: string[];
+    /** Quién la pidió, mientras sea una solicitud. */
+    solicitante: string | null;
     fecha: string;
     trabajo: string | null;
     /** Materiales del preventivo que todavía no salieron del almacén. */
@@ -93,7 +100,14 @@ type Props = {
     tickets: Ticket[];
     ordenes: OrdenAbierta[];
     llegadas: Llegada[];
-    puede: { ver_unidad: boolean; registrar_km: boolean };
+    /** Las unidades a las que se les puede pedir un trabajo. */
+    unidades: { id: number; placa: string; tipo: string }[];
+    puede: {
+        ver_unidad: boolean;
+        registrar_km: boolean;
+        solicitar_trabajo: boolean;
+        gestionar_ordenes: boolean;
+    };
 };
 
 const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
@@ -227,7 +241,13 @@ function TarjetaTaller({
  * La bandeja de taller: cada ticket abierto espera el apto antes de pasar a
  * abastecimiento. Si no es apto, taller dice cuándo estará lista la unidad.
  */
-export default function Taller({ tickets, ordenes, llegadas, puede }: Props) {
+export default function Taller({
+    tickets,
+    ordenes,
+    llegadas,
+    unidades,
+    puede,
+}: Props) {
     const [kmDe, setKmDe] = useState<number | null>(null);
     const [buscar, setBuscar] = useState('');
     const [revisando, setRevisando] = useState<{
@@ -480,14 +500,19 @@ export default function Taller({ tickets, ordenes, llegadas, puede }: Props) {
 
             {GRUPOS.filter((grupo) => grupo.clave !== 'apto').map(bandeja)}
 
-            {puede.ver_unidad && (
+            {(puede.ver_unidad || puede.solicitar_trabajo) && (
                 <section className="flex flex-col gap-2">
-                    <h2 className="flex items-center gap-2 text-sm font-semibold">
-                        En taller, con orden abierta
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
-                            {ordenes.length}
-                        </span>
-                    </h2>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                        <h2 className="flex items-center gap-2 text-sm font-semibold">
+                            Órdenes de trabajo abiertas
+                            <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground tabular-nums">
+                                {ordenes.length}
+                            </span>
+                        </h2>
+                        {puede.solicitar_trabajo && (
+                            <PedirTrabajoDialog unidades={unidades} />
+                        )}
+                    </div>
                     {ordenes.length === 0 ? (
                         <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
                             No hay órdenes de trabajo abiertas.
@@ -496,20 +521,45 @@ export default function Taller({ tickets, ordenes, llegadas, puede }: Props) {
                         <ul className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
                             {ordenes.map((orden) => (
                                 <li key={orden.id}>
-                                    <Link
-                                        href={abrirOrden(orden.id).url}
-                                        className="flex min-h-16 items-center gap-3 rounded-xl border bg-card p-3 transition-colors hover:bg-accent/50"
+                                    <OrdenEnlace
+                                        href={
+                                            puede.gestionar_ordenes
+                                                ? abrirOrden(orden.id).url
+                                                : null
+                                        }
                                     >
                                         <Placa placa={orden.placa} />
-                                        <span className="flex min-w-0 flex-1 flex-col text-sm">
-                                            <span className="font-medium">
+                                        <span className="flex min-w-0 flex-1 flex-col gap-0.5 text-sm">
+                                            <span className="flex flex-wrap items-center gap-x-2 gap-y-1 font-medium">
                                                 {orden.numero} · {orden.tipo}
                                                 {orden.servicio &&
                                                     ` ${orden.servicio}`}
+                                                <EstadoOrden
+                                                    estado={orden.estado_valor}
+                                                    etiqueta={orden.estado}
+                                                />
+                                                {orden.urgente && (
+                                                    <span className="rounded-full bg-red-600 px-2 py-0.5 text-xs font-semibold text-white">
+                                                        Urgente
+                                                    </span>
+                                                )}
                                             </span>
+                                            {orden.trabajo && (
+                                                <span className="truncate text-xs text-muted-foreground">
+                                                    {orden.trabajo}
+                                                </span>
+                                            )}
                                             <span className="truncate text-xs text-muted-foreground">
-                                                {orden.estado} · desde{' '}
+                                                Desde{' '}
                                                 {formatearFecha(orden.fecha)}
+                                                {' · '}
+                                                {orden.solicitante
+                                                    ? `Pidió ${orden.solicitante}`
+                                                    : orden.mecanicos.length > 0
+                                                      ? orden.mecanicos.join(
+                                                            ', ',
+                                                        )
+                                                      : 'Sin mecánico'}
                                             </span>
                                             {orden.faltan > 0 && (
                                                 <span className="text-xs font-medium text-red-700 dark:text-red-300">
@@ -519,8 +569,10 @@ export default function Taller({ tickets, ordenes, llegadas, puede }: Props) {
                                                 </span>
                                             )}
                                         </span>
-                                        <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-                                    </Link>
+                                        {puede.gestionar_ordenes && (
+                                            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+                                        )}
+                                    </OrdenEnlace>
                                 </li>
                             ))}
                         </ul>
@@ -573,5 +625,28 @@ export default function Taller({ tickets, ordenes, llegadas, puede }: Props) {
                 onCerrar={() => setRevisando(null)}
             />
         </div>
+    );
+}
+
+/** La tarjeta de una orden: enlace para quien la gestiona, solo vista si no. */
+function OrdenEnlace({
+    href,
+    children,
+}: {
+    href: string | null;
+    children: React.ReactNode;
+}) {
+    const clase =
+        'flex min-h-16 items-center gap-3 rounded-xl border bg-card p-3';
+
+    return href === null ? (
+        <div className={clase}>{children}</div>
+    ) : (
+        <Link
+            href={href}
+            className={cn(clase, 'transition-colors hover:bg-accent/50')}
+        >
+            {children}
+        </Link>
     );
 }

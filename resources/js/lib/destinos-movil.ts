@@ -1,5 +1,6 @@
 import type { InertiaLinkProps } from '@inertiajs/react';
 import {
+    ClipboardList,
     CalendarCheck,
     CalendarDays,
     ClipboardCheck,
@@ -18,6 +19,7 @@ import asistencia from '@/actions/App/Http/Controllers/AsistenciaController';
 import conductores from '@/actions/App/Http/Controllers/ConductorController';
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
+import misOrdenes from '@/actions/App/Http/Controllers/MisOrdenesController';
 import taller from '@/actions/App/Http/Controllers/TallerController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
@@ -38,6 +40,8 @@ type Candidato = DestinoMovil & {
     propia: Permiso[];
     /** Con cualquiera de estos, la puede abrir aunque solo sea para mirar. */
     lectura: Permiso[];
+    /** Con este permiso el área no se ofrece: ya la cubre otra. */
+    salvo?: Permiso;
 };
 
 /**
@@ -49,6 +53,17 @@ type Candidato = DestinoMovil & {
  * las áreas propias y, si sobra lugar, las de lectura.
  */
 const CANDIDATOS: Candidato[] = [
+    // El mecánico no tiene otra área: sus órdenes son su pantalla. Quien
+    // además gestiona el mantenimiento (el admin) no las necesita abajo.
+    {
+        clave: 'mis-ordenes',
+        titulo: 'Mis órdenes',
+        href: misOrdenes.index(),
+        icono: ClipboardList,
+        propia: ['mantenimiento.ejecutar'],
+        lectura: [],
+        salvo: 'mantenimiento.gestionar',
+    },
     {
         clave: 'programacion',
         titulo: 'Programación',
@@ -146,7 +161,9 @@ export function destinosMoviles(
     puede: (permiso: Permiso) => boolean,
     cupo: number,
 ): DestinoMovil[] {
-    const propias = CANDIDATOS.filter((c) => c.propia.some(puede));
+    const propias = CANDIDATOS.filter(
+        (c) => c.propia.some(puede) && !(c.salvo && puede(c.salvo)),
+    );
     const deLectura = CANDIDATOS.filter(
         (c) => !propias.includes(c) && c.lectura.some(puede),
     );

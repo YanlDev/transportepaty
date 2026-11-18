@@ -28,6 +28,8 @@ export type Permiso =
     | 'mantenimiento.registrar_km'
     | 'mantenimiento.corregir_km'
     | 'mantenimiento.gestionar'
+    | 'mantenimiento.solicitar'
+    | 'mantenimiento.ejecutar'
     | 'mantenimiento.configurar'
     | 'mantenimiento.llantas'
     | 'mantenimiento.equipamiento'

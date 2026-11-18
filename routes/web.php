@@ -39,6 +39,7 @@ use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\LecturaKilometrajeController;
 use App\Http\Controllers\LlantaController;
 use App\Http\Controllers\MantenimientoController;
+use App\Http\Controllers\MisOrdenesController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\OrdenTrabajoController;
 use App\Http\Controllers\ParametroCostoController;
@@ -47,6 +48,7 @@ use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\ReporteCobranzaController;
 use App\Http\Controllers\RolController;
 use App\Http\Controllers\RutaController;
+use App\Http\Controllers\SolicitudTrabajoController;
 use App\Http\Controllers\TallerController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\VehiculoController;
@@ -213,6 +215,16 @@ Route::middleware('auth')->group(function () {
     // Taller: la bandeja de tickets por revisar y el apto o no apto de salida.
     Route::get('taller', [TallerController::class, 'index'])->name('taller.index');
     Route::post('vueltas/{vuelta}/revision-taller', [TallerController::class, 'store'])->name('taller.store');
+    Route::post('taller/solicitudes', [SolicitudTrabajoController::class, 'store'])->name('taller.solicitudes.store');
+
+    // La pantalla del mecánico: solo sus órdenes asignadas, paso a paso.
+    Route::get('mis-ordenes', [MisOrdenesController::class, 'index'])->name('mis-ordenes.index');
+    Route::get('mis-ordenes/{orden}', [MisOrdenesController::class, 'show'])->name('mis-ordenes.show');
+    Route::post('mis-ordenes/{orden}/iniciar', [MisOrdenesController::class, 'iniciar'])->name('mis-ordenes.iniciar');
+    Route::post('mis-ordenes/{orden}/terminar', [MisOrdenesController::class, 'terminar'])->name('mis-ordenes.terminar');
+    Route::post('mis-ordenes/{orden}/fotos', [MisOrdenesController::class, 'fotos'])->name('mis-ordenes.fotos.store');
+    Route::delete('mis-ordenes/{orden}/fotos/{foto}', [MisOrdenesController::class, 'eliminarFoto'])->name('mis-ordenes.fotos.destroy');
+    Route::post('mis-ordenes/{orden}/tareas/{tarea}', [MisOrdenesController::class, 'marcarTarea'])->name('mis-ordenes.tareas.marcar');
 
     // Abastecimiento: el tablero con lo autorizado a cada ticket (la
     // tarjeta confirmada de cada tramo), el combustible autorizado, que se
@@ -308,6 +320,8 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.kilometrajes.store');
     Route::delete('mantenimiento/kilometrajes/{lectura}', [LecturaKilometrajeController::class, 'destroy'])
         ->name('mantenimiento.kilometrajes.destroy');
+    Route::get('mantenimiento/ordenes', [OrdenTrabajoController::class, 'index'])
+        ->name('mantenimiento.ordenes.index');
     Route::get('mantenimiento/ordenes/crear', [OrdenTrabajoController::class, 'create'])
         ->name('mantenimiento.ordenes.create');
     Route::post('mantenimiento/ordenes', [OrdenTrabajoController::class, 'store'])
@@ -320,6 +334,10 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.ordenes.update');
     Route::post('mantenimiento/ordenes/{orden}/anular', [OrdenTrabajoController::class, 'anular'])
         ->name('mantenimiento.ordenes.anular');
+    Route::post('mantenimiento/ordenes/{orden}/observar', [OrdenTrabajoController::class, 'observar'])
+        ->name('mantenimiento.ordenes.observar');
+    Route::post('mantenimiento/ordenes/{orden}/rechazar', [OrdenTrabajoController::class, 'rechazar'])
+        ->name('mantenimiento.ordenes.rechazar');
     Route::delete('mantenimiento/ordenes/{orden}/fotos/{foto}', [OrdenTrabajoController::class, 'eliminarFoto'])
         ->name('mantenimiento.ordenes.fotos.destroy');
     Route::get('mantenimiento/llantas', [LlantaController::class, 'index'])

@@ -3,12 +3,14 @@
 namespace App\Http\Requests;
 
 use App\Enums\EstadoOrdenTrabajo;
+use App\Enums\PrioridadOrden;
 use App\Enums\TipoOrdenTrabajo;
 use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\ServicioMantenimiento;
 use App\Models\Vehiculo;
 use App\Services\Archivos\ReglasDeArchivo;
+use App\Services\EjecucionDeOrden;
 use App\Services\MaterialesDeOrden;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -56,7 +58,15 @@ class StoreOrdenTrabajoRequest extends FormRequest
                 'integer',
                 Rule::exists('servicios_mantenimiento', 'id'),
             ],
-            'estado' => ['required', Rule::enum(EstadoOrdenTrabajo::class)],
+            'estado' => ['required', Rule::in($this->estadosElegibles())],
+            'prioridad' => ['nullable', Rule::enum(PrioridadOrden::class)],
+            // A quién se le asigna: uno o varios mecánicos, con su usuario.
+            'mecanicos' => ['nullable', 'array', 'max:10'],
+            'mecanicos.*' => ['integer', 'distinct', Rule::in($this->mecanicosElegibles())],
+            'responsable_id' => ['nullable', 'integer'],
+            'tareas' => ['nullable', 'array', 'max:60'],
+            'tareas.*.id' => ['nullable', 'integer'],
+            'tareas.*.descripcion' => ['required', 'string', 'max:500'],
             'fecha' => ['required', 'date'],
             'kilometraje' => ['nullable', 'integer', 'min:1', 'max:9999999'],
             'inicio' => ['nullable', 'date'],
@@ -136,6 +146,9 @@ class StoreOrdenTrabajoRequest extends FormRequest
     {
         return [
             'servicio_mantenimiento_id.required_if' => 'Elige el servicio del plan.',
+            'estado.in' => 'Ese estado no se elige a mano: sale de lo que hace el mecánico.',
+            'mecanicos.*.in' => 'Ese usuario no es mecánico o ya no está activo.',
+            'tareas.*.descripcion.required' => 'Escribe la tarea o quítala.',
             'justificacion_materiales.min' => 'Explica un poco más por qué se cierra sin esos repuestos.',
             'fotos_antes.max' => 'Hasta :max fotos por grupo.',
             'fotos_despues.max' => 'Hasta :max fotos por grupo.',
@@ -145,6 +158,35 @@ class StoreOrdenTrabajoRequest extends FormRequest
             'fotos_despues.*.mimetypes' => 'Cada foto debe ser JPG, PNG, WEBP o HEIC.',
             'termino.after_or_equal' => 'El término no puede ser antes del inicio.',
         ];
+    }
+
+    /**
+     * Taller elige entre pendiente, en proceso y finalizada. Al editar
+     * también vale dejar la orden como está (solicitada, por revisar,
+     * observada): esos estados salen de una acción, no se eligen.
+     *
+     * @return list<string>
+     */
+    protected function estadosElegibles(): array
+    {
+        return array_values(array_unique(array_filter([
+            ...array_map(fn (EstadoOrdenTrabajo $estado): string => $estado->value, EstadoOrdenTrabajo::deTaller()),
+            $this->orden()?->estado->value,
+        ])));
+    }
+
+    /**
+     * Los mecánicos activos, más los que la orden ya tenía (aunque después
+     * hayan dejado de serlo: no se pierde quién hizo el trabajo).
+     *
+     * @return list<int>
+     */
+    protected function mecanicosElegibles(): array
+    {
+        return array_values(array_unique([
+            ...app(EjecucionDeOrden::class)->mecanicosDisponibles()->modelKeys(),
+            ...($this->orden()?->mecanicos()->pluck('users.id')->all() ?? []),
+        ]));
     }
 
     /**

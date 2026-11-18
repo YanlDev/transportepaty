@@ -2,7 +2,6 @@
 
 namespace App\Http\Requests;
 
-use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\ResultadoTaller;
 use App\Models\OrdenTrabajo;
 use App\Models\Vuelta;
@@ -35,6 +34,8 @@ class RevisarSalidaRequest extends FormRequest
             'disponible_estimado' => [$noApta, 'nullable', 'date'],
             'motivo' => [$noApta, 'nullable', 'string', 'max:500'],
             'trabajos' => ['nullable', 'string', 'max:2000'],
+            // Con el no apto, abrir de una vez la orden de trabajo.
+            'crear_orden' => ['nullable', 'boolean'],
             // El km con que sale: con el de la llegada, el ticket sabe cuánto
             // recorrió y cuánto rindió el combustible.
             'kilometraje' => ['nullable', 'integer', 'min:1', 'max:9999999'],
@@ -79,10 +80,9 @@ class RevisarSalidaRequest extends FormRequest
     private function tieneOrdenAbierta(Validator $validator, Vuelta $vuelta): bool
     {
         $abiertas = OrdenTrabajo::query()
-            ->vigentes()
+            ->enTaller()
             ->with('vehiculo:id,placa')
             ->whereIn('vehiculo_id', array_filter([$vuelta->tracto_id, $vuelta->carreta_id]))
-            ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
             ->orderBy('id')
             ->get();
 

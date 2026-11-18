@@ -25,6 +25,7 @@ enum RolBase: string
     case Contador = 'contador';
     case Rrhh = 'rrhh';
     case Almacen = 'almacen';
+    case Mecanico = 'mecanico';
 
     /**
      * @return list<Permiso>
@@ -55,6 +56,8 @@ enum RolBase: string
                 Permiso::VehiculosVer, Permiso::VehiculosCrear, Permiso::VehiculosEditar,
                 Permiso::ConductoresVer,
                 Permiso::NovedadesRegistrar, Permiso::NovedadesLevantar,
+                // Pide trabajos a taller; taller los acepta y los asigna.
+                Permiso::MantenimientoSolicitar,
                 Permiso::ClientesVer, Permiso::CotizacionesVer,
                 // El jefe de operaciones pide y aprueba lo de una unidad
                 // parada en ruta.
@@ -69,6 +72,7 @@ enum RolBase: string
                 Permiso::TallerVer, Permiso::TallerRevisar,
                 Permiso::VehiculosVer,
                 Permiso::MantenimientoVer, Permiso::MantenimientoRegistrarKm, Permiso::MantenimientoGestionar,
+                Permiso::MantenimientoSolicitar,
                 Permiso::MantenimientoLlantas, Permiso::MantenimientoEquipamiento,
                 Permiso::NovedadesRegistrar, Permiso::NovedadesLevantar,
                 Permiso::AlmacenVer, Permiso::AlmacenCatalogo,
@@ -110,6 +114,13 @@ enum RolBase: string
                 Permiso::AlmacenIngresar, Permiso::AlmacenDespachar,
                 Permiso::AlmacenInventariar, Permiso::AlmacenAnular,
                 Permiso::ComprasVer, Permiso::ComprasSolicitar,
+            ],
+
+            // Solo ve las órdenes de trabajo que taller le asignó: las
+            // empieza, marca sus tareas, sube las fotos y las termina. No ve
+            // el tablero, la flota, el almacén ni los costos.
+            self::Mecanico => [
+                Permiso::MantenimientoEjecutar,
             ],
         };
     }

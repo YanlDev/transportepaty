@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Enums\EstadoLlanta;
 use App\Enums\EstadoMantenimiento;
 use App\Enums\EstadoOrdenTrabajo;
+use App\Enums\PrioridadOrden;
 use App\Models\OrdenTrabajo;
 use App\Models\Vehiculo;
 use Illuminate\Support\Collection;
@@ -33,14 +34,17 @@ class AvisosDeTaller
      * taller, tengan ticket o no. De una preventiva se dice cuántos materiales
      * de su nivel todavía no salieron del almacén.
      *
-     * @return list<array{id: int, numero: string, vehiculo_id: int, placa: string, tipo: string, servicio: string|null, estado: string, fecha: string, trabajo: string|null, faltan: int}>
+     * También van las solicitudes que taller todavía no aceptó, y de cada
+     * una quién la tiene asignada.
+     *
+     * @return list<array{id: int, numero: string, vehiculo_id: int, placa: string, tipo: string, servicio: string|null, estado: string, estado_valor: string, urgente: bool, mecanicos: list<string>, solicitante: string|null, fecha: string, trabajo: string|null, faltan: int}>
      */
     public function ordenesAbiertas(): array
     {
         return array_values(OrdenTrabajo::query()
             ->vigentes()
             ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
-            ->with(['vehiculo:id,placa', 'servicio'])
+            ->with(['vehiculo:id,placa', 'servicio', 'mecanicos:id,name', 'creador:id,name'])
             ->orderBy('fecha')
             ->orderBy('id')
             ->get()
@@ -52,6 +56,10 @@ class AvisosDeTaller
                 'tipo' => $orden->tipo->label(),
                 'servicio' => $orden->servicio?->codigo,
                 'estado' => $orden->estado->label(),
+                'estado_valor' => $orden->estado->value,
+                'urgente' => $orden->prioridad === PrioridadOrden::Urgente,
+                'mecanicos' => $orden->mecanicos->pluck('name')->all(),
+                'solicitante' => $orden->estado === EstadoOrdenTrabajo::Solicitada ? $orden->creador?->name : null,
                 'fecha' => $orden->fecha->toDateString(),
                 'trabajo' => $orden->trabajo,
                 'faltan' => $orden->servicio === null ? 0 : count($this->materiales->faltantes($orden->servicio, $orden)),
@@ -74,9 +82,8 @@ class AvisosDeTaller
         $preventivo = $this->mantenimiento->paraFlota($vehiculos);
         $llantas = $this->llantas->paraFlota($vehiculos);
         $abiertas = OrdenTrabajo::query()
-            ->vigentes()
+            ->enTaller()
             ->whereIn('vehiculo_id', $vehiculos->pluck('id'))
-            ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
             ->orderBy('id')
             ->get(['id', 'vehiculo_id', 'estado'])
             ->groupBy('vehiculo_id');
