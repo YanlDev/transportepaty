@@ -4,9 +4,12 @@ namespace App\Http\Middleware;
 
 use App\Http\Controllers\AlertaController;
 use App\Services\PendientesDelInicio;
+use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
+use Inertia\Inertia;
 use Inertia\Middleware;
+use Symfony\Component\HttpFoundation\Response;
 
 class HandleInertiaRequests extends Middleware
 {
@@ -18,6 +21,20 @@ class HandleInertiaRequests extends Middleware
      * @var string
      */
     protected $rootView = 'app';
+
+    /**
+     * Los controladores avisan con `->with('toast', [...])`, pero Inertia v3
+     * solo manda al cliente lo que pasa por `Inertia::flash()`: sin este
+     * puente el aviso se quedaba en la sesión y nunca salía en pantalla.
+     */
+    public function handle(Request $request, Closure $next): Response
+    {
+        if ($request->hasSession() && $request->session()->has('toast') && ! array_key_exists('toast', Inertia::getFlashed($request))) {
+            Inertia::flash('toast', $request->session()->get('toast'));
+        }
+
+        return parent::handle($request, $next);
+    }
 
     /**
      * Determines the current asset version.

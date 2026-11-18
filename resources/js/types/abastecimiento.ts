@@ -259,6 +259,8 @@ export type RutaCatalogo = {
 export type GalonesTramo = {
     zona_origen: string;
     zona_destino: string;
+    /** Sin carga vale para cualquiera; con carga manda solo para esa. */
+    tipo_carga?: string | null;
     galones_cargado: number | null;
     galones_vacio: number | null;
     /** Cargado según el peso: más de «desde» y hasta «hasta» toneladas. */

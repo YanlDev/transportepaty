@@ -148,8 +148,8 @@ export default function GalonesPorTramo({ filas, zonas, cargas }: Props) {
             </p>
 
             <div className="overflow-x-auto rounded-xl border bg-card">
-                <div className="min-w-[900px]">
-                    <div className="grid grid-cols-[1fr_1fr_9rem_7rem_7rem_1.4fr_auto] gap-2 border-b px-4 py-2.5 text-xs text-muted-foreground">
+                <div className="min-w-[940px]">
+                    <div className="grid grid-cols-[1fr_1fr_11rem_7rem_7rem_1.4fr_auto] gap-2 border-b px-4 py-2.5 text-xs text-muted-foreground">
                         <span>Desde</span>
                         <span>Hasta</span>
                         <span>Carga</span>
@@ -161,7 +161,7 @@ export default function GalonesPorTramo({ filas, zonas, cargas }: Props) {
                     {data.filas.map((fila, indice) => (
                         <div
                             key={fila.id ?? `n${indice}`}
-                            className="grid grid-cols-[1fr_1fr_9rem_7rem_7rem_1.4fr_auto] items-start gap-2 border-b px-4 py-2.5 last:border-b-0"
+                            className="grid grid-cols-[1fr_1fr_11rem_7rem_7rem_1.4fr_auto] items-start gap-2 border-b px-4 py-2.5 last:border-b-0"
                         >
                             <Zona
                                 valor={fila.zona_origen}

@@ -1,7 +1,8 @@
-import { useForm } from '@inertiajs/react';
-import { Pencil, Plus } from 'lucide-react';
+import { useForm, useHttp } from '@inertiajs/react';
+import { Pencil, Plus, Search } from 'lucide-react';
 import { useState } from 'react';
 import {
+    consultarRuc,
     store,
     update,
 } from '@/actions/App/Http/Controllers/Almacen/ProveedorController';
@@ -22,6 +23,20 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import type { Proveedor } from '@/types/almacen';
+
+/** Lo que responde la consulta de un RUC en SUNAT. */
+type RespuestaSunat = {
+    encontrado: boolean;
+    mensaje?: string;
+    datos?: {
+        razon_social: string | null;
+        direccion: string | null;
+        telefono: string | null;
+        email: string | null;
+    };
+    /** SUNAT no lo trae como activo y habido. */
+    observado?: boolean;
+};
 
 /**
  * Registrar o corregir un proveedor sin salir de la pantalla: desde el
@@ -51,6 +66,59 @@ export function ProveedorDialog({
             notas: proveedor?.notas ?? '',
             activo: proveedor?.activo ?? true,
         });
+
+    const sunat = useHttp<Record<string, never>, RespuestaSunat>({});
+    const [aviso, setAviso] = useState<{
+        texto: string;
+        alerta: boolean;
+    } | null>(null);
+    const rucCompleto = /^\d{11}$/.test(data.ruc.trim());
+
+    /** Trae de SUNAT los datos del RUC escrito; todo queda editable. */
+    const buscarEnSunat = () => {
+        setAviso(null);
+        sunat.get(consultarRuc(data.ruc.trim()).url, {
+            onSuccess: (respuesta) => {
+                if (!respuesta.encontrado || !respuesta.datos) {
+                    setAviso({
+                        texto: respuesta.mensaje ?? 'No se encontró el RUC.',
+                        alerta: true,
+                    });
+
+                    return;
+                }
+
+                const { razon_social, direccion, telefono, email } =
+                    respuesta.datos;
+
+                // La razón social y la dirección son las de SUNAT; el
+                // teléfono y el correo solo si no había nada escrito.
+                setData((actual) => ({
+                    ...actual,
+                    razon_social: razon_social ?? actual.razon_social,
+                    direccion: direccion ?? actual.direccion,
+                    telefono: actual.telefono || (telefono ?? ''),
+                    email: actual.email || (email ?? ''),
+                }));
+                setAviso(
+                    respuesta.observado
+                        ? {
+                              texto: 'SUNAT no lo trae como activo y habido. Revísalo antes de comprarle.',
+                              alerta: true,
+                          }
+                        : {
+                              texto: 'Datos traídos de SUNAT. Revísalos antes de guardar.',
+                              alerta: false,
+                          },
+                );
+            },
+            onError: () =>
+                setAviso({
+                    texto: 'No se pudo consultar a SUNAT. Llena los datos a mano.',
+                    alerta: true,
+                }),
+        });
+    };
 
     const guardar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -95,6 +163,7 @@ export function ProveedorDialog({
 
                 if (!valor) {
                     clearErrors();
+                    setAviso(null);
                 }
             }}
         >
@@ -125,16 +194,47 @@ export function ProveedorDialog({
                     <div className="grid gap-4 py-4 sm:grid-cols-2">
                         <Field label="RUC" error={errors.ruc}>
                             {(id) => (
-                                <Input
-                                    id={id}
-                                    inputMode="numeric"
-                                    maxLength={11}
-                                    value={data.ruc}
-                                    onChange={(e) =>
-                                        setData('ruc', e.target.value)
-                                    }
-                                    placeholder="20123456789"
-                                />
+                                <div className="flex flex-col gap-1.5">
+                                    <div className="flex gap-2">
+                                        <Input
+                                            id={id}
+                                            inputMode="numeric"
+                                            maxLength={11}
+                                            value={data.ruc}
+                                            onChange={(e) =>
+                                                setData('ruc', e.target.value)
+                                            }
+                                            placeholder="20123456789"
+                                        />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            onClick={buscarEnSunat}
+                                            disabled={
+                                                !rucCompleto || sunat.processing
+                                            }
+                                        >
+                                            {sunat.processing ? (
+                                                <Spinner />
+                                            ) : (
+                                                <Search className="size-4" />
+                                            )}
+                                            SUNAT
+                                        </Button>
+                                    </div>
+                                    {aviso && (
+                                        <p
+                                            role="status"
+                                            className={
+                                                aviso.alerta
+                                                    ? 'text-xs text-amber-700 dark:text-amber-400'
+                                                    : 'text-xs text-muted-foreground'
+                                            }
+                                        >
+                                            {aviso.texto}
+                                        </p>
+                                    )}
+                                </div>
                             )}
                         </Field>
                         <Field

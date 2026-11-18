@@ -386,6 +386,7 @@ Route::middleware('auth')->group(function () {
         Route::put('configuracion/minimos', [ConfiguracionAlmacenController::class, 'guardarMinimos'])->name('minimos.update');
 
         Route::get('proveedores', [ProveedorController::class, 'index'])->name('proveedores.index');
+        Route::get('proveedores/sunat/{ruc}', [ProveedorController::class, 'consultarRuc'])->middleware('throttle:30,1')->name('proveedores.sunat');
         Route::post('proveedores', [ProveedorController::class, 'store'])->name('proveedores.store');
         Route::put('proveedores/{proveedor}', [ProveedorController::class, 'update'])->name('proveedores.update');
 

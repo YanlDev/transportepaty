@@ -19,6 +19,7 @@ use App\Models\Vehiculo;
 use App\Services\CostoDeCompra;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Spatie\Permission\Models\Role;
@@ -477,6 +478,47 @@ it('does not change the unit of an item that already has movements', function ()
     actingAs(almacenero())
         ->put(route('almacen.articulos.update', $filtro), ['nombre' => $filtro->nombre, 'unidad' => 'jgo'])
         ->assertSessionHasErrors('unidad');
+});
+
+it('fills a supplier from its RUC with what SUNAT says', function (): void {
+    config(['services.sunat_sol.ruc' => '20364000643', 'services.sunat_sol.usuario' => 'PATYGRE', 'services.sunat_sol.clave' => 'secreta']);
+    fingirSol(tokenSol(), api: [
+        'contribuyentes/20100136741' => Http::response(['datosContribuyente' => [
+            'desRazonSocial' => 'REPUESTOS ANDINOS S.A.C.',
+            'desDireccion' => 'AV. LOS INCAS NRO. 120',
+            'ubigeo' => ['codUbigeo' => '040101', 'desDepartamento' => 'AREQUIPA ', 'desProvincia' => 'AREQUIPA ', 'desDistrito' => 'AREQUIPA'],
+            'contacto' => ['numTelefono1' => '054221100', 'numTelefono2' => '-', 'numTelefono3' => '959000111'],
+            'codCorreo1' => 'VENTAS@ANDINOS.PE',
+            'codEstado' => '00',
+            'codDomHabido' => '09',
+        ]]),
+        'contribuyentes/20555555551' => Http::response(['msg' => 'caído'], 500),
+    ]);
+
+    actingAs(almacenero())
+        ->getJson(route('almacen.proveedores.sunat', '20100136741'))
+        ->assertOk()
+        ->assertJson([
+            'encontrado' => true,
+            'datos' => [
+                'razon_social' => 'REPUESTOS ANDINOS S.A.C.',
+                'direccion' => 'AV. LOS INCAS NRO. 120 - AREQUIPA - AREQUIPA - AREQUIPA',
+                'telefono' => '054221100 / 959000111',
+                'email' => 'ventas@andinos.pe',
+            ],
+            // No está como habido: se avisa.
+            'observado' => true,
+        ]);
+
+    // No existe, SUNAT caída o RUC mal escrito: se dice y se llena a mano.
+    actingAs(almacenero())->getJson(route('almacen.proveedores.sunat', '20999999991'))
+        ->assertOk()->assertJson(['encontrado' => false, 'mensaje' => 'SUNAT no tiene ese RUC.']);
+    actingAs(almacenero())->getJson(route('almacen.proveedores.sunat', '20555555551'))
+        ->assertOk()->assertJsonPath('encontrado', false);
+    actingAs(almacenero())->getJson(route('almacen.proveedores.sunat', '123'))
+        ->assertOk()->assertJson(['encontrado' => false, 'mensaje' => 'El RUC tiene 11 dígitos.']);
+
+    actingAs(actorConRol('visor'))->getJson(route('almacen.proveedores.sunat', '20100136741'))->assertForbidden();
 });
 
 it('registers a supplier and does not repeat its RUC', function (): void {

@@ -363,3 +363,15 @@ it('lists the leg once per cargo and rejects the same leg twice for the same car
     ]])->assertSessionHasErrors(['filas.2.zona_destino', 'filas.3.tipo_carga'])
         ->assertSessionDoesntHaveErrors(['filas.1.zona_destino']);
 });
+
+it('sends the route editor every row with its cargo, so Particular a mina shows its own table', function (): void {
+    actingAs(actorConRol('admin'))
+        ->get(route('rutas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('opciones.tramos', fn ($tramos) => collect($tramos)->contains(fn ($fila) => $fila['zona_origen'] === 'lima'
+                && $fila['zona_destino'] === 'mina'
+                && $fila['tipo_carga'] === 'particular')
+                && collect($tramos)->contains(fn ($fila) => $fila['zona_origen'] === 'lima'
+                    && $fila['zona_destino'] === 'mina'
+                    && $fila['tipo_carga'] === null)));
+});

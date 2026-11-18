@@ -26,6 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { filaDeLaTabla } from '@/lib/tabla-de-tramos';
 import { cn } from '@/lib/utils';
 import type {
     GalonesTramo,
@@ -76,15 +77,13 @@ function enLaTabla(
     origen: string,
     destino: string,
     cargado: boolean,
+    carga: string | null,
 ): number | null {
     if (origen === destino) {
         return 0;
     }
 
-    const fila = tabla.find(
-        (tramo) =>
-            tramo.zona_origen === origen && tramo.zona_destino === destino,
-    );
+    const fila = filaDeLaTabla(tabla, origen, destino, cargado ? carga : null);
 
     if (!fila) {
         return null;
@@ -208,18 +207,21 @@ export function RutaPorTramosDialog({
         const destino = lugares[indice + 1];
         const tabla =
             origen && destino
-                ? enLaTabla(opciones.tramos, origen, destino, tramo.cargado)
+                ? enLaTabla(
+                      opciones.tramos,
+                      origen,
+                      destino,
+                      tramo.cargado,
+                      tramo.carga,
+                  )
                 : null;
         const llave = clave(origen, destino, tramo.cargado);
         const escrito = nuevos[llave] ?? '';
         // Cargado en un tramo que gasta según las toneladas.
         const bandas =
             (tramo.cargado &&
-                opciones.tramos.find(
-                    (fila) =>
-                        fila.zona_origen === origen &&
-                        fila.zona_destino === destino,
-                )?.bandas) ||
+                filaDeLaTabla(opciones.tramos, origen, destino, tramo.carga)
+                    ?.bandas) ||
             [];
 
         return {

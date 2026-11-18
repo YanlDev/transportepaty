@@ -45,10 +45,11 @@ class RutaController extends Controller
                 ->all(),
             'opciones' => [
                 // La tabla de tramos: el editor muestra los galones de cada parada.
-                // Las tres preguntas leen la tabla general (sin carga).
-                'tramos' => GalonesPorTramo::query()->whereNull('tipo_carga')->get()->map(fn (GalonesPorTramo $fila): array => [
+                // Con su carga: el editor toma la fila de esa carga, o la general.
+                'tramos' => GalonesPorTramo::query()->get()->map(fn (GalonesPorTramo $fila): array => [
                     'zona_origen' => $fila->zona_origen->value,
                     'zona_destino' => $fila->zona_destino->value,
+                    'tipo_carga' => $fila->tipo_carga?->value,
                     'galones_cargado' => $fila->galones_cargado === null ? null : (float) $fila->galones_cargado,
                     'galones_vacio' => $fila->galones_vacio === null ? null : (float) $fila->galones_vacio,
                     'bandas' => $fila->bandas ?? [],

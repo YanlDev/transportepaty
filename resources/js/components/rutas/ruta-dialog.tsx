@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { COLORES_TARJETA } from '@/lib/color-tarjeta';
+import { filaDeLaTabla } from '@/lib/tabla-de-tramos';
 import type {
     GalonesTramo,
     LineaRuta,
@@ -104,10 +105,11 @@ function galonesDeParada(
         return 0;
     }
 
-    const fila = tabla.find(
-        (tramo) =>
-            tramo.zona_origen === parada.zona_origen &&
-            tramo.zona_destino === parada.zona_destino,
+    const fila = filaDeLaTabla(
+        tabla,
+        parada.zona_origen,
+        parada.zona_destino,
+        parada.tipo_carga,
     );
 
     if (!fila) {
