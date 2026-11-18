@@ -19,6 +19,8 @@ type Fila = {
     id?: number;
     zona_origen: string;
     zona_destino: string;
+    /** Sin carga vale para cualquiera; con carga manda solo para esa. */
+    tipo_carga: string | null;
     galones_cargado: number | null;
     galones_vacio: number | null;
     /** Cargado según el peso: con bandas, el número único no se usa. */
@@ -44,7 +46,10 @@ const encadenar = (bandas: Banda[]): Banda[] =>
 type Props = {
     filas: Fila[];
     zonas: Opcion[];
+    cargas: Opcion[];
 };
+
+const CUALQUIER_CARGA = 'cualquiera';
 
 const numeroONulo = (valor: string): number | null =>
     valor === '' ? null : Number(valor);
@@ -87,7 +92,7 @@ function Zona({
  * vacía. Juliaca es la base: un viaje particular es hasta el destino cargado
  * y de ahí a Juliaca vacío (o cargado). Las rutas por tramos suman de aquí.
  */
-export default function GalonesPorTramo({ filas, zonas }: Props) {
+export default function GalonesPorTramo({ filas, zonas, cargas }: Props) {
     const { data, setData, put, processing, errors, isDirty } = useForm<{
         filas: Fila[];
     }>({ filas });
@@ -137,14 +142,17 @@ export default function GalonesPorTramo({ filas, zonas }: Props) {
                 Juliaca es la base: un viaje particular es hasta el destino
                 cargado, y de ahí a Juliaca vacío (o cargado si trae algo). Una
                 casilla vacía queda «por definir»: la ruta que la use no tiene
-                tope hasta llenarla.
+                tope hasta llenarla. Un tramo con carga (Lima → Mina ·
+                Particular) manda sobre el general solo cuando va cargado con
+                eso.
             </p>
 
             <div className="overflow-x-auto rounded-xl border bg-card">
-                <div className="min-w-[760px]">
-                    <div className="grid grid-cols-[1fr_1fr_7rem_7rem_1.4fr_auto] gap-2 border-b px-4 py-2.5 text-xs text-muted-foreground">
+                <div className="min-w-[900px]">
+                    <div className="grid grid-cols-[1fr_1fr_9rem_7rem_7rem_1.4fr_auto] gap-2 border-b px-4 py-2.5 text-xs text-muted-foreground">
                         <span>Desde</span>
                         <span>Hasta</span>
+                        <span>Carga</span>
                         <span>Cargado (gal)</span>
                         <span>Vacío (gal)</span>
                         <span>Nota · rutas que lo usan</span>
@@ -153,7 +161,7 @@ export default function GalonesPorTramo({ filas, zonas }: Props) {
                     {data.filas.map((fila, indice) => (
                         <div
                             key={fila.id ?? `n${indice}`}
-                            className="grid grid-cols-[1fr_1fr_7rem_7rem_1.4fr_auto] items-start gap-2 border-b px-4 py-2.5 last:border-b-0"
+                            className="grid grid-cols-[1fr_1fr_9rem_7rem_7rem_1.4fr_auto] items-start gap-2 border-b px-4 py-2.5 last:border-b-0"
                         >
                             <Zona
                                 valor={fila.zona_origen}
@@ -188,6 +196,40 @@ export default function GalonesPorTramo({ filas, zonas }: Props) {
                                     </span>
                                 )}
                             </div>
+                            <Select
+                                value={fila.tipo_carga ?? CUALQUIER_CARGA}
+                                onValueChange={(valor) =>
+                                    cambiar(
+                                        indice,
+                                        valor === CUALQUIER_CARGA
+                                            ? { tipo_carga: null }
+                                            : {
+                                                  tipo_carga: valor,
+                                                  galones_vacio: null,
+                                              },
+                                    )
+                                }
+                            >
+                                <SelectTrigger
+                                    className="w-full min-w-0"
+                                    aria-label="Carga"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value={CUALQUIER_CARGA}>
+                                        Cualquier carga
+                                    </SelectItem>
+                                    {cargas.map((carga) => (
+                                        <SelectItem
+                                            key={carga.value}
+                                            value={carga.value}
+                                        >
+                                            {carga.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                             <div className="flex flex-col gap-1">
                                 {(fila.bandas ?? []).length > 0 ? (
                                     <span className="flex h-9 items-center text-sm text-muted-foreground">
@@ -244,7 +286,16 @@ export default function GalonesPorTramo({ filas, zonas }: Props) {
                                 step="0.5"
                                 inputMode="decimal"
                                 aria-label="Galones vacío"
-                                placeholder="¿?"
+                                // Vacío no lleva carga: lo da el tramo general.
+                                disabled={fila.tipo_carga !== null}
+                                title={
+                                    fila.tipo_carga !== null
+                                        ? 'Vacío lo da el tramo de cualquier carga'
+                                        : undefined
+                                }
+                                placeholder={
+                                    fila.tipo_carga !== null ? '—' : '¿?'
+                                }
                                 value={fila.galones_vacio ?? ''}
                                 onChange={(evento) =>
                                     cambiar(indice, {
@@ -316,6 +367,7 @@ export default function GalonesPorTramo({ filas, zonas }: Props) {
                         {
                             zona_origen: '',
                             zona_destino: 'juliaca',
+                            tipo_carga: null,
                             galones_cargado: null,
                             galones_vacio: null,
                             nota: null,

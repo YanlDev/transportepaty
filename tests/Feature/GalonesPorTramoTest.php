@@ -237,7 +237,7 @@ it('takes the gallons of a loaded leg from its weight band, through the variants
     expect($copia->refresh()->tope())->toBe(150.0);
 
     // Cambia la tabla: el ticket abierto toma el número nuevo de su banda.
-    $fila = GalonesPorTramo::query()->where('zona_origen', 'lima')->where('zona_destino', 'mina')->sole();
+    $fila = GalonesPorTramo::query()->where('zona_origen', 'lima')->where('zona_destino', 'mina')->whereNull('tipo_carga')->sole();
     $bandas = $fila->bandas;
     $bandas[3]['galones'] = 155;
     $fila->update(['bandas' => $bandas]);
@@ -251,10 +251,11 @@ it('edits the weight bands in the table and keeps the route variants in step', f
     $filas = GalonesPorTramo::query()->get()->map(fn (GalonesPorTramo $fila): array => [
         'zona_origen' => $fila->zona_origen->value,
         'zona_destino' => $fila->zona_destino->value,
+        'tipo_carga' => $fila->tipo_carga?->value,
         'galones_cargado' => $fila->galones_cargado,
         'galones_vacio' => $fila->galones_vacio,
         'nota' => $fila->nota,
-        'bandas' => $fila->zona_destino === ZonaRuta::Mina && $fila->zona_origen === ZonaRuta::Lima
+        'bandas' => $fila->zona_destino === ZonaRuta::Mina && $fila->zona_origen === ZonaRuta::Lima && $fila->tipo_carga === TipoCarga::Particular
             ? [
                 ['peso_desde' => null, 'peso_hasta' => 5, 'galones' => 110],
                 ['peso_desde' => 5, 'peso_hasta' => 20, 'galones' => 140],
@@ -271,6 +272,10 @@ it('edits the weight bands in the table and keeps the route variants in step', f
         // La banda que sigue igual conserva su variante: los tickets la nombran.
         ->and($ruta->variantes->first()->id)->toBe($ids['menos de 5 t'])
         ->and($ruta->variantes->map(fn ($variante) => $ruta->topePara($variante))->all())->toBe([110.0, 140.0, 190.0]);
+
+    // La de Ransa no se tocó: es otra fila.
+    $ransa = rutaDelCatalogo('Materiales a mina (Ransa)')->load(['lineas.punto', 'variantes']);
+    expect($ransa->variantes->map(fn ($variante) => $ransa->topePara($variante))->all())->toBe([110.0, 120.0, 130.0, 150.0, 190.0, 190.0]);
 
     // Bandas con hueco entre una y otra: no se guardan.
     $filas[array_key_first(array_filter($filas, fn (array $fila): bool => $fila['bandas'] !== null))]['bandas'] = [
@@ -298,4 +303,63 @@ it('keeps the weight variants of a route by tramos when it is saved from the thr
 
     expect($ruta->variantes()->pluck('id')->all())->toBe($ids)
         ->and($ruta->lineas()->pluck('concepto')->all())->toBe(['Viáticos']);
+});
+
+it('gives Particular a mina its own table with the Ransa numbers, apart from Ransa', function (): void {
+    $tabla = app(TablaDeTramos::class);
+    $particular = GalonesPorTramo::query()->where('zona_origen', 'lima')->where('zona_destino', 'mina')->where('tipo_carga', 'particular')->sole();
+
+    expect($particular->bandas)->toBe(GalonesPorTramo::query()->where('zona_origen', 'lima')->where('zona_destino', 'mina')->whereNull('tipo_carga')->sole()->bandas)
+        ->and($tabla->galones(ZonaRuta::Lima, ZonaRuta::Mina, true, 1.37, TipoCarga::Particular))->toBe(110.0)
+        ->and($tabla->galones(ZonaRuta::Lima, ZonaRuta::Mina, true, 30, TipoCarga::Particular))->toBe(190.0);
+
+    // Un ticket de JS Industrial (particular) y uno de Ransa, con la misma banda.
+    $js = Vuelta::factory()->create();
+    paradaDelTramo($js, 1, ZonaRuta::Lima, ZonaRuta::Mina, TipoCarga::Particular);
+    $rutaParticular = rutaDelCatalogo('Particular a mina')->load(['lineas.punto', 'variantes']);
+    $copiaParticular = $js->rutas()->create([...RutaVuelta::copiaDe($rutaParticular, $rutaParticular->varianteParaPeso(18)), 'sentido' => SentidoTramo::Regreso, 'orden' => 1]);
+
+    $ransa = Vuelta::factory()->create();
+    paradaDelTramo($ransa, 1, ZonaRuta::Lima, ZonaRuta::Mina, TipoCarga::Materiales);
+    $rutaRansa = rutaDelCatalogo('Materiales a mina (Ransa)')->load(['lineas.punto', 'variantes']);
+    $copiaRansa = $ransa->rutas()->create([...RutaVuelta::copiaDe($rutaRansa, $rutaRansa->varianteParaPeso(18)), 'sentido' => SentidoTramo::Regreso, 'orden' => 1]);
+
+    expect($copiaParticular->tope())->toBe(150.0)->and($copiaRansa->tope())->toBe(150.0);
+
+    // Cambia solo la de particular: el ticket de Ransa sigue igual.
+    $bandas = $particular->bandas;
+    $bandas[3]['galones'] = 160;
+    $particular->update(['bandas' => $bandas]);
+
+    expect($copiaParticular->refresh()->tope())->toBe(160.0)
+        ->and($copiaRansa->refresh()->tope())->toBe(150.0);
+
+    // Un ticket de antes, sin la carga en su línea, la toma de su GR.
+    $lineas = $copiaParticular->lineas;
+    unset($lineas[0]['tipo_carga']);
+    $copiaParticular->update(['lineas' => $lineas]);
+
+    expect($copiaParticular->refresh()->tope())->toBe(160.0);
+});
+
+it('lists the leg once per cargo and rejects the same leg twice for the same cargo', function (): void {
+    actingAs(actorConRol('admin'))
+        ->get(route('rutas.tramos'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('filas', fn ($filas) => collect($filas)->contains(fn ($fila) => $fila['zona_origen'] === 'lima'
+                && $fila['zona_destino'] === 'mina'
+                && $fila['tipo_carga'] === 'particular'
+                && $fila['rutas'] === ['Particular a mina'])
+                && collect($filas)->contains(fn ($fila) => $fila['zona_origen'] === 'lima'
+                    && $fila['zona_destino'] === 'mina'
+                    && $fila['tipo_carga'] === null
+                    && $fila['rutas'] === ['Materiales a mina (Ransa)'])));
+
+    actingAs(actorConRol('admin'))->put(route('rutas.tramos.guardar'), ['filas' => [
+        ['zona_origen' => 'lima', 'zona_destino' => 'mina', 'galones_cargado' => 150],
+        ['zona_origen' => 'lima', 'zona_destino' => 'mina', 'tipo_carga' => 'particular', 'galones_cargado' => 160, 'galones_vacio' => 40],
+        ['zona_origen' => 'lima', 'zona_destino' => 'mina', 'tipo_carga' => 'particular', 'galones_cargado' => 170],
+        ['zona_origen' => 'lima', 'zona_destino' => 'arequipa', 'tipo_carga' => 'vacio', 'galones_cargado' => 10],
+    ]])->assertSessionHasErrors(['filas.2.zona_destino', 'filas.3.tipo_carga'])
+        ->assertSessionDoesntHaveErrors(['filas.1.zona_destino']);
 });

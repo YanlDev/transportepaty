@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\TipoCarga;
 use App\Enums\ZonaRuta;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -10,7 +11,9 @@ use Illuminate\Validation\Validator;
 
 /**
  * La tabla de galones por tramo entera: cada fila, desde → hasta con sus
- * galones cargado y vacío (vacíos = por definir). Un tramo va una sola vez.
+ * galones cargado y vacío (vacíos = por definir). Un tramo va una sola vez
+ * por carga: la general (sin carga) y, si hace falta, una por cada carga que
+ * gaste distinto.
  */
 class GuardarGalonesPorTramoRequest extends FormRequest
 {
@@ -28,6 +31,7 @@ class GuardarGalonesPorTramoRequest extends FormRequest
             'filas' => ['present', 'array', 'max:80'],
             'filas.*.zona_origen' => ['required', Rule::enum(ZonaRuta::class)],
             'filas.*.zona_destino' => ['required', Rule::enum(ZonaRuta::class)],
+            'filas.*.tipo_carga' => ['nullable', Rule::enum(TipoCarga::class)->except(TipoCarga::excluidosDeViaje())],
             'filas.*.galones_cargado' => ['nullable', 'numeric', 'min:0', 'max:999'],
             'filas.*.galones_vacio' => ['nullable', 'numeric', 'min:0', 'max:999'],
             'filas.*.nota' => ['nullable', 'string', 'max:200'],
@@ -49,10 +53,12 @@ class GuardarGalonesPorTramoRequest extends FormRequest
                 $vistos = [];
 
                 foreach ((array) $this->input('filas', []) as $indice => $fila) {
-                    $clave = ($fila['zona_origen'] ?? '').'>'.($fila['zona_destino'] ?? '');
+                    $clave = ($fila['zona_origen'] ?? '').'>'.($fila['zona_destino'] ?? '').'>'.($fila['tipo_carga'] ?? '');
 
                     if (isset($vistos[$clave])) {
-                        $validator->errors()->add("filas.{$indice}.zona_destino", 'Ese tramo ya está en la tabla.');
+                        $validator->errors()->add("filas.{$indice}.zona_destino", filled($fila['tipo_carga'] ?? null)
+                            ? 'Ese tramo ya está en la tabla para esa carga.'
+                            : 'Ese tramo ya está en la tabla.');
                     }
 
                     $vistos[$clave] = true;
@@ -82,6 +88,16 @@ class GuardarGalonesPorTramoRequest extends FormRequest
                 }
             },
         ];
+    }
+
+    /**
+     * Las cargas que pueden tener su propia fila: las de un viaje.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public static function cargas(): array
+    {
+        return TipoCarga::opcionesDeViaje();
     }
 
     /**

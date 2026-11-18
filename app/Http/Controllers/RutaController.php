@@ -45,7 +45,8 @@ class RutaController extends Controller
                 ->all(),
             'opciones' => [
                 // La tabla de tramos: el editor muestra los galones de cada parada.
-                'tramos' => GalonesPorTramo::query()->get()->map(fn (GalonesPorTramo $fila): array => [
+                // Las tres preguntas leen la tabla general (sin carga).
+                'tramos' => GalonesPorTramo::query()->whereNull('tipo_carga')->get()->map(fn (GalonesPorTramo $fila): array => [
                     'zona_origen' => $fila->zona_origen->value,
                     'zona_destino' => $fila->zona_destino->value,
                     'galones_cargado' => $fila->galones_cargado === null ? null : (float) $fila->galones_cargado,
@@ -153,6 +154,7 @@ class RutaController extends Controller
             $fila = GalonesPorTramo::query()->firstOrNew([
                 'zona_origen' => $tramo['zona_origen'],
                 'zona_destino' => $tramo['zona_destino'],
+                'tipo_carga' => null,
             ]);
             $columna = filter_var($tramo['cargado'], FILTER_VALIDATE_BOOLEAN) ? 'galones_cargado' : 'galones_vacio';
 
@@ -241,7 +243,7 @@ class RutaController extends Controller
                     'galones' => $linea['galones'],
                     // Gasta según el peso: sus galones los da la banda que se elija.
                     'por_peso' => $linea['galones'] === null && ($linea['cargado'] ?? false)
-                        && app(TablaDeTramos::class)->bandasDelRecorrido([['zona_origen' => $linea['zona_origen'] ?? null, 'zona_destino' => $linea['zona_destino'] ?? null, 'tipo_carga' => 'particular']]) !== [],
+                        && app(TablaDeTramos::class)->bandasDelRecorrido([['zona_origen' => $linea['zona_origen'] ?? null, 'zona_destino' => $linea['zona_destino'] ?? null, 'tipo_carga' => $linea['tipo_carga'] ?? 'particular']]) !== [],
                 ], app(TablaDeTramos::class)->lineas($ruta->paradas))
                 : [],
             'paradas' => $ruta->paradas,
