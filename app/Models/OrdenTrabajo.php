@@ -3,14 +3,17 @@
 namespace App\Models;
 
 use App\Enums\EstadoOrdenTrabajo;
+use App\Enums\PrioridadOrden;
 use App\Enums\TipoOrdenTrabajo;
 use App\Models\Concerns\RegistraHistorial;
 use App\Models\Concerns\SeAnula;
 use Database\Factories\OrdenTrabajoFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 use Spatie\MediaLibrary\HasMedia;
@@ -29,15 +32,26 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * salida del almacén que la nombran (ver `MaterialesDeOrden`). Y no se borra:
  * se anula, y una anulada no cuenta para el plan.
  *
+ * La ejecutan uno o varios mecánicos, cada uno con su usuario: la orden
+ * recuerda quién la empezó, quién la terminó y quién de taller la revisó
+ * (ver `EjecucionDeOrden`).
+ *
  * @property int $id
  * @property int $vehiculo_id
  * @property TipoOrdenTrabajo $tipo
  * @property int|null $servicio_mantenimiento_id
  * @property EstadoOrdenTrabajo $estado
+ * @property PrioridadOrden $prioridad
  * @property Carbon $fecha
  * @property int|null $kilometraje
  * @property Carbon|null $inicio
+ * @property int|null $iniciado_por
  * @property Carbon|null $termino
+ * @property int|null $terminado_por
+ * @property string|null $nota_mecanico
+ * @property int|null $revisado_por
+ * @property Carbon|null $revisado_at
+ * @property string|null $observacion_revision
  * @property string $trabajo
  * @property string|null $tecnico
  * @property string|null $observacion
@@ -54,10 +68,17 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'tipo',
     'servicio_mantenimiento_id',
     'estado',
+    'prioridad',
     'fecha',
     'kilometraje',
     'inicio',
+    'iniciado_por',
     'termino',
+    'terminado_por',
+    'nota_mecanico',
+    'revisado_por',
+    'revisado_at',
+    'observacion_revision',
     'trabajo',
     'tecnico',
     'observacion',
@@ -75,6 +96,13 @@ class OrdenTrabajo extends Model implements HasMedia
     use InteractsWithMedia;
 
     protected $table = 'ordenes_trabajo';
+
+    /**
+     * @var array<string, mixed>
+     */
+    protected $attributes = [
+        'prioridad' => 'normal',
+    ];
 
     /**
      * @return BelongsTo<Vehiculo, $this>
@@ -102,6 +130,90 @@ class OrdenTrabajo extends Model implements HasMedia
         return $this->hasMany(SalidaAlmacen::class);
     }
 
+    /**
+     * Los mecánicos que la ejecutan; uno de ellos es el responsable.
+     *
+     * @return BelongsToMany<User, $this>
+     */
+    public function mecanicos(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'orden_trabajo_mecanico')
+            ->withPivot('responsable')
+            ->withTimestamps()
+            ->orderByDesc('orden_trabajo_mecanico.responsable')
+            ->orderBy('users.name');
+    }
+
+    /**
+     * @return HasMany<TareaOrden, $this>
+     */
+    public function tareas(): HasMany
+    {
+        return $this->hasMany(TareaOrden::class)->orderBy('posicion')->orderBy('id');
+    }
+
+    /**
+     * Quien la registró o la pidió.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function creador(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function iniciadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'iniciado_por');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function terminadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'terminado_por');
+    }
+
+    /**
+     * Quien de taller la aprobó o la observó.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function revisadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'revisado_por');
+    }
+
+    /**
+     * Las que tienen a la unidad en taller: vigentes, aceptadas y sin
+     * finalizar. Una solicitud todavía no cuenta.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeEnTaller(Builder $query): void
+    {
+        $query->vigentes()->whereIn($this->qualifyColumn('estado'), EstadoOrdenTrabajo::enTaller());
+    }
+
+    /**
+     * Las asignadas a un mecánico.
+     *
+     * @param  Builder<static>  $query
+     */
+    public function scopeDeMecanico(Builder $query, User $mecanico): void
+    {
+        $query->whereHas('mecanicos', fn (Builder $mecanicos) => $mecanicos->whereKey($mecanico->id));
+    }
+
+    public function esDeMecanico(User $mecanico): bool
+    {
+        return $this->mecanicos()->whereKey($mecanico->id)->exists();
+    }
+
     public function numero(): string
     {
         return sprintf('OT-%05d', $this->id);
@@ -126,6 +238,8 @@ class OrdenTrabajo extends Model implements HasMedia
         return [
             'tipo' => TipoOrdenTrabajo::class,
             'estado' => EstadoOrdenTrabajo::class,
+            'prioridad' => PrioridadOrden::class,
+            'revisado_at' => 'datetime',
             'fecha' => 'date:Y-m-d',
             'kilometraje' => 'integer',
             'inicio' => 'datetime',

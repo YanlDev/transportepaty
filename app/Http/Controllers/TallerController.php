@@ -2,17 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\EstadoVuelta;
+use App\Enums\PrioridadOrden;
 use App\Enums\ResultadoTaller;
+use App\Enums\TipoOrdenTrabajo;
 use App\Http\Requests\RevisarSalidaRequest;
 use App\Models\LecturaKilometraje;
 use App\Models\OrdenTrabajo;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
+use App\Models\Vehiculo;
 use App\Models\Vuelta;
 use App\Services\AlertasDelTicket;
 use App\Services\AvisosDeTaller;
 use App\Services\OdometroDeUnidad;
+use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -59,6 +64,8 @@ class TallerController extends Controller
         $veMantenimiento = $usuario?->can('viewAny', OrdenTrabajo::class) ?? false;
         $registraKm = $usuario?->can('create', LecturaKilometraje::class) ?? false;
         $llegadas = $registraKm ? $this->llegadasSinKm() : collect();
+        $solicita = $usuario?->can('solicitar', OrdenTrabajo::class) ?? false;
+        $gestionaOrdenes = $usuario?->can('create', OrdenTrabajo::class) ?? false;
 
         // Lo que hay que saber de cada unidad antes del apto, para todas de
         // una vez: solo para quien puede ver el mantenimiento.
@@ -74,7 +81,21 @@ class TallerController extends Controller
             'tickets' => array_values($vueltas
                 ->map(fn (Vuelta $vuelta): array => $this->fila($vuelta, $request, $avisos))
                 ->all()),
-            'ordenes' => $veMantenimiento ? $this->avisos->ordenesAbiertas() : [],
+            // Quien pide trabajos también ve en qué van, aunque no entre a
+            // Mantenimiento.
+            'ordenes' => $veMantenimiento || $solicita ? $this->avisos->ordenesAbiertas() : [],
+            // Las unidades a las que se les puede pedir un trabajo.
+            'unidades' => $solicita
+                ? Vehiculo::query()
+                    ->orderBy('placa')
+                    ->get(['id', 'placa', 'tipo'])
+                    ->map(fn (Vehiculo $vehiculo): array => [
+                        'id' => $vehiculo->id,
+                        'placa' => $vehiculo->placa,
+                        'tipo' => $vehiculo->tipo->label(),
+                    ])
+                    ->all()
+                : [],
             'llegadas' => array_values($llegadas
                 ->map(fn (Vuelta $vuelta): array => [
                     'id' => $vuelta->tracto_id,
@@ -88,6 +109,8 @@ class TallerController extends Controller
             'puede' => [
                 'ver_unidad' => $veMantenimiento,
                 'registrar_km' => $registraKm,
+                'solicitar_trabajo' => $solicita,
+                'gestionar_ordenes' => $gestionaOrdenes,
             ],
         ]);
     }
@@ -145,11 +168,43 @@ class TallerController extends Controller
 
         $alertas->revisado($vuelta, $revision, $request->user());
 
+        $orden = $noApta && $request->boolean('crear_orden') ? $this->ordenDelNoApto($request, $vuelta, $revision) : null;
+
         return back()->with('toast', [
             'type' => $noApta ? 'warning' : 'success',
             'message' => $noApta
                 ? "{$vuelta->codigo}: no apta. Programación verá cuándo estará lista."
+                    .($orden === null ? '' : " Se abrió la {$orden->numero()}: asígnale mecánico.")
                 : "{$vuelta->codigo}: apta. Pasa a abastecimiento.",
+        ]);
+    }
+
+    /**
+     * El no apto abre la orden de trabajo del tracto con lo que taller
+     * escribió, para que no haya que copiarlo a mano. Solo si quien revisa
+     * puede registrar órdenes y la unidad no tiene ya una abierta.
+     */
+    private function ordenDelNoApto(Request $request, Vuelta $vuelta, RevisionTaller $revision): ?OrdenTrabajo
+    {
+        if (! ($request->user()?->can('create', OrdenTrabajo::class) ?? false)) {
+            return null;
+        }
+
+        if (OrdenTrabajo::query()->enTaller()->where('vehiculo_id', $vuelta->tracto_id)->exists()) {
+            return null;
+        }
+
+        return OrdenTrabajo::create([
+            'vehiculo_id' => $vuelta->tracto_id,
+            'tipo' => TipoOrdenTrabajo::Correctiva,
+            'estado' => EstadoOrdenTrabajo::Pendiente,
+            // Tiene un ticket esperando: va primero.
+            'prioridad' => PrioridadOrden::Urgente,
+            'fecha' => RelojOperativo::hoy(),
+            'kilometraje' => $revision->kilometraje,
+            'trabajo' => trim(($revision->trabajos ?? '') !== '' ? "{$revision->motivo}\n{$revision->trabajos}" : (string) $revision->motivo),
+            'observacion' => "No apto del ticket {$vuelta->codigo}.",
+            'user_id' => $request->user()?->id,
         ]);
     }
 

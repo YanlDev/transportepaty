@@ -1,5 +1,5 @@
 import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
-import { PackageOpen } from 'lucide-react';
+import { CircleDot, PackageOpen, Plus, Star, X } from 'lucide-react';
 import { useState } from 'react';
 import {
     create as crearVale,
@@ -10,6 +10,9 @@ import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoControlle
 import {
     anular,
     eliminarFoto,
+    index as listaDeOrdenes,
+    observar,
+    rechazar,
     store,
     update,
 } from '@/actions/App/Http/Controllers/OrdenTrabajoController';
@@ -17,6 +20,9 @@ import { AnularDialog } from '@/components/almacen/anular-dialog';
 import InputError from '@/components/input-error';
 import { formatearKm } from '@/components/mantenimiento/estado-mantenimiento';
 import { SelectorFotos } from '@/components/mantenimiento/selector-fotos';
+import { EstadoOrden } from '@/components/ordenes/estado-orden';
+import { GaleriaFotos } from '@/components/ordenes/galeria-fotos';
+import { LineaDeTiempo } from '@/components/ordenes/linea-de-tiempo';
 import { SelectorBuscable } from '@/components/selector-buscable';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,6 +34,7 @@ import { formatearFecha, formatearPlaca, formatearSoles } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption } from '@/types/fleet';
 import type {
+    EjecucionDeOrden,
     FotoOrden,
     MaterialesOrden,
     ServicioPlan,
@@ -46,6 +53,10 @@ type Inicial = {
     tecnico?: string | null;
     observacion?: string | null;
     justificacion_materiales?: string | null;
+    prioridad?: string;
+    mecanicos?: number[];
+    responsable_id?: number | null;
+    tareas?: { id: number | null; descripcion: string }[];
 };
 
 type Props = {
@@ -55,16 +66,34 @@ type Props = {
         numero: string;
         vehiculo_id: number;
         puede_anular: boolean;
+        /** El mecánico la terminó y taller puede devolvérsela. */
+        puede_observar: boolean;
+        /** Es una solicitud que taller puede rechazar. */
+        puede_rechazar: boolean;
+        estado: string;
+        estado_label: string;
         fotos: FotoOrden[];
     } | null;
+    /** Lo que hicieron los mecánicos; null al crear. */
+    ejecucion: EjecucionDeOrden | null;
     /** Lo que salió del almacén para la orden; solo al editar. */
     materiales?: MaterialesOrden;
     inicial: Inicial;
-    tractos: { id: number; placa: string; marca: string | null }[];
+    /** Tractos y carretas (el nombre quedó de cuando eran solo tractos). */
+    tractos: {
+        id: number;
+        placa: string;
+        marca: string | null;
+        tipo: string;
+        tipo_label: string;
+    }[];
     /** Los servicios del plan de cada marca, por marca en mayúsculas. */
     servicios: Record<string, ServicioPlan[]>;
     tipos: EnumOption[];
     estados: EnumOption[];
+    prioridades: EnumOption[];
+    /** Los usuarios a los que se les puede asignar la orden. */
+    mecanicos: { id: number; nombre: string }[];
 };
 
 type Formulario = {
@@ -80,6 +109,10 @@ type Formulario = {
     tecnico: string;
     observacion: string;
     justificacion_materiales: string;
+    prioridad: string;
+    mecanicos: number[];
+    responsable_id: number | null;
+    tareas: { id: number | null; descripcion: string }[];
     fotos_antes: File[];
     fotos_despues: File[];
 };
@@ -94,8 +127,11 @@ const PASO_DE_CAMPO: Record<string, number> = {
     servicio_mantenimiento_id: 0,
     fecha: 0,
     kilometraje: 0,
+    prioridad: 0,
     trabajo: 1,
     tecnico: 1,
+    mecanicos: 1,
+    tareas: 1,
     fotos_antes: 1,
     estado: 2,
     justificacion_materiales: 2,
@@ -107,9 +143,17 @@ const PASO_DE_CAMPO: Record<string, number> = {
 
 /** Lo que cada estado le dice al resto: taller, almacén y el OK de salida. */
 const QUE_SIGNIFICA: Record<string, string> = {
-    pendiente: 'Todavía no se empieza. La unidad no recibe el apto.',
+    solicitada:
+        'Es un pedido sin aceptar: no bloquea a la unidad. Elige «Pendiente» para aceptarlo.',
+    pendiente:
+        'Aceptada y lista para que el mecánico la empiece. La unidad no recibe el apto.',
     en_proceso: 'Se está trabajando. La unidad no recibe el apto.',
-    finalizada: 'El trabajo terminó: la unidad puede volver a salir.',
+    por_revisar:
+        'El mecánico la terminó y espera tu revisión. Elige «Finalizada» para aprobarla.',
+    observada:
+        'Devuelta al mecánico para que corrija. La unidad no recibe el apto.',
+    finalizada:
+        'El trabajo terminó y queda tu usuario como quien la finalizó: la unidad puede volver a salir.',
 };
 
 /**
@@ -126,6 +170,9 @@ export default function OrdenTrabajo({
     servicios,
     tipos,
     estados,
+    prioridades,
+    mecanicos,
+    ejecucion,
 }: Props) {
     const editando = orden !== null;
 
@@ -135,8 +182,14 @@ export default function OrdenTrabajo({
 
     // Una orden abierta se retoma donde se trabaja: el trabajo y sus
     // materiales. Una nueva empieza por la unidad.
+    // La que el mecánico terminó se abre en el cierre: ahí están sus fotos
+    // y la decisión de taller.
     const [paso, setPaso] = useState(
-        orden !== null && inicial.estado !== 'finalizada' ? 1 : 0,
+        orden === null || inicial.estado === 'finalizada'
+            ? 0
+            : inicial.estado === 'por_revisar'
+              ? 2
+              : 1,
     );
 
     const { data, setData, post, transform, processing, progress, errors } =
@@ -154,6 +207,10 @@ export default function OrdenTrabajo({
             tecnico: inicial.tecnico ?? '',
             observacion: inicial.observacion ?? '',
             justificacion_materiales: inicial.justificacion_materiales ?? '',
+            prioridad: inicial.prioridad ?? 'normal',
+            mecanicos: inicial.mecanicos ?? [],
+            responsable_id: inicial.responsable_id ?? null,
+            tareas: inicial.tareas ?? [],
             fotos_antes: [],
             fotos_despues: [],
         });
@@ -191,6 +248,7 @@ export default function OrdenTrabajo({
     setLayoutProps({
         breadcrumbs: [
             { title: 'Mantenimiento', href: mantenimiento.index().url },
+            { title: 'Órdenes', href: listaDeOrdenes().url },
             {
                 title: editando ? 'Editar orden' : 'Nueva orden',
                 href: '#',
@@ -217,12 +275,45 @@ export default function OrdenTrabajo({
         }));
     };
 
+    // Con un solo mecánico él es el responsable; con varios se elige uno.
+    const alternarMecanico = (id: number) => {
+        setData((previo) => {
+            const elegidos = previo.mecanicos.includes(id)
+                ? previo.mecanicos.filter((otro) => otro !== id)
+                : [...previo.mecanicos, id];
+
+            return {
+                ...previo,
+                mecanicos: elegidos,
+                responsable_id: elegidos.includes(previo.responsable_id ?? -1)
+                    ? previo.responsable_id
+                    : (elegidos[0] ?? null),
+            };
+        });
+    };
+
+    const tareasHechas = new Map(
+        (ejecucion?.tareas ?? []).map((tarea) => [tarea.id, tarea]),
+    );
+    const porRevisar = orden?.estado === 'por_revisar';
+
     const guardar = (evento: React.FormEvent) => {
         evento.preventDefault();
 
         // PHP no lee archivos de un PUT: la edición viaja como POST con
         // `_method`, que Laravel convierte en PUT.
-        transform((datos) => (editando ? { ...datos, _method: 'put' } : datos));
+        // Las tareas en blanco no viajan: son filas que se agregaron y no se
+        // llenaron.
+        transform((datos) => {
+            const limpio = {
+                ...datos,
+                tareas: datos.tareas.filter(
+                    (tarea) => tarea.descripcion.trim() !== '',
+                ),
+            };
+
+            return editando ? { ...limpio, _method: 'put' } : limpio;
+        });
 
         post(editando ? update(orden.id).url : store().url, {
             preserveScroll: true,
@@ -249,14 +340,63 @@ export default function OrdenTrabajo({
                         ? `Orden de trabajo ${orden.numero}`
                         : 'Nueva orden de trabajo'}
                 </h1>
-                {editando && orden.puede_anular && (
-                    <AnularDialog
-                        url={anular(orden.id).url}
-                        titulo={`¿Anular la ${orden.numero}?`}
-                        descripcion="No se borra: queda a la vista con el motivo. Si era una preventiva, el plan vuelve a contar desde el servicio anterior. Con vales de almacén vigentes no se puede anular."
-                    />
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                    {editando && (
+                        <EstadoOrden
+                            estado={orden.estado}
+                            etiqueta={orden.estado_label}
+                        />
+                    )}
+                    {editando && orden.puede_anular && (
+                        <AnularDialog
+                            url={anular(orden.id).url}
+                            titulo={`¿Anular la ${orden.numero}?`}
+                            descripcion="No se borra: queda a la vista con el motivo. Si era una preventiva, el plan vuelve a contar desde el servicio anterior. Con vales de almacén vigentes no se puede anular."
+                        />
+                    )}
+                </div>
             </div>
+
+            {editando && orden.puede_rechazar && (
+                <div className="flex flex-col gap-3 rounded-xl border border-violet-500/40 bg-violet-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <p>
+                        <span className="font-semibold">
+                            Es una solicitud
+                            {ejecucion?.pasos[0]?.usuario &&
+                                ` de ${ejecucion.pasos[0].usuario}`}
+                            .{' '}
+                        </span>
+                        Para aceptarla, asigna mecánico en «Trabajo» y déjala
+                        «Pendiente» en «Cierre».
+                    </p>
+                    <AnularDialog
+                        url={rechazar(orden.id).url}
+                        titulo={`¿Rechazar la solicitud ${orden.numero}?`}
+                        descripcion="Queda anulada con el motivo, a la vista de quien la pidió."
+                        etiqueta="Rechazar"
+                        ayuda="Por qué no se va a atender"
+                    />
+                </div>
+            )}
+
+            {editando && orden.puede_observar && (
+                <div className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                    <p>
+                        <span className="font-semibold">
+                            El mecánico la terminó.{' '}
+                        </span>
+                        Revisa las fotos y la nota en «Cierre». Si está bien,
+                        apruébala; si falta algo, devuélvela.
+                    </p>
+                    <AnularDialog
+                        url={observar(orden.id).url}
+                        titulo={`¿Devolver la ${orden.numero} al mecánico?`}
+                        descripcion="Vuelve a su lista como «Observada», con lo que escribas acá."
+                        etiqueta="Observar"
+                        ayuda="Qué tiene que corregir"
+                    />
+                </div>
+            )}
 
             <form
                 onSubmit={guardar}
@@ -279,7 +419,7 @@ export default function OrdenTrabajo({
                                         ? formatearPlaca(tracto.placa)
                                         : '—'}
                                     <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                        {tracto?.marca}
+                                        {tracto?.tipo_label} {tracto?.marca}
                                     </span>
                                 </p>
                             ) : (
@@ -297,7 +437,7 @@ export default function OrdenTrabajo({
                                     opciones={tractos.map((opcion) => ({
                                         valor: opcion.id,
                                         etiqueta: formatearPlaca(opcion.placa),
-                                        detalle: `${opcion.placa} ${opcion.marca ?? ''}`,
+                                        detalle: `${opcion.tipo_label} ${opcion.placa} ${opcion.marca ?? ''}`,
                                     }))}
                                     invalido={!!errors.vehiculo_id}
                                 />
@@ -317,9 +457,11 @@ export default function OrdenTrabajo({
                                 <Label>Servicio del plan</Label>
                                 {delPlan.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">
-                                        {tracto
-                                            ? `La marca ${tracto.marca ?? ''} todavía no tiene plan: regístrala como correctiva.`
-                                            : 'Elige primero la unidad.'}
+                                        {!tracto
+                                            ? 'Elige primero la unidad.'
+                                            : tracto.tipo === 'carreta'
+                                              ? 'Las carretas no tienen plan por kilometraje: regístrala como correctiva.'
+                                              : `La marca ${tracto.marca ?? ''} todavía no tiene plan: regístrala como correctiva.`}
                                     </p>
                                 ) : (
                                     <div className="grid grid-cols-4 gap-2">
@@ -359,6 +501,13 @@ export default function OrdenTrabajo({
                                 />
                             </div>
                         )}
+
+                        <Segmentado
+                            etiqueta="Prioridad"
+                            opciones={prioridades}
+                            valor={data.prioridad}
+                            onCambio={(valor) => setData('prioridad', valor)}
+                        />
 
                         <div className="grid grid-cols-2 gap-3">
                             <div className="grid gap-1.5">
@@ -402,7 +551,7 @@ export default function OrdenTrabajo({
                     <>
                         <div className="grid gap-1.5">
                             <Label htmlFor="orden-trabajo">
-                                Trabajo realizado
+                                Trabajo: qué hay que hacer o qué se hizo
                             </Label>
                             <Textarea
                                 id="orden-trabajo"
@@ -411,13 +560,182 @@ export default function OrdenTrabajo({
                                 onChange={(evento) =>
                                     setData('trabajo', evento.target.value)
                                 }
-                                placeholder="Qué se hizo, qué se cambió"
+                                placeholder="Es lo que lee el mecánico en su celular"
                             />
                             <InputError message={errors.trabajo} />
                         </div>
 
+                        <div className="grid gap-2">
+                            <Label>Mecánicos asignados</Label>
+                            {mecanicos.length === 0 ? (
+                                <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                                    Todavía no hay usuarios con el rol Mecánico.
+                                    Créalos en Configuración → Usuarios para
+                                    asignarles órdenes.
+                                </p>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {mecanicos.map((mecanico) => {
+                                        const elegido = data.mecanicos.includes(
+                                            mecanico.id,
+                                        );
+                                        const responde =
+                                            data.responsable_id === mecanico.id;
+
+                                        return (
+                                            <span
+                                                key={mecanico.id}
+                                                className={cn(
+                                                    'flex min-h-11 items-center overflow-hidden rounded-full border text-sm font-medium transition-colors',
+                                                    elegido
+                                                        ? 'border-primary bg-primary text-primary-foreground'
+                                                        : 'hover:bg-accent',
+                                                )}
+                                            >
+                                                <button
+                                                    type="button"
+                                                    aria-pressed={elegido}
+                                                    onClick={() =>
+                                                        alternarMecanico(
+                                                            mecanico.id,
+                                                        )
+                                                    }
+                                                    className="min-h-11 px-4"
+                                                >
+                                                    {mecanico.nombre}
+                                                </button>
+                                                {elegido &&
+                                                    data.mecanicos.length >
+                                                        1 && (
+                                                        <button
+                                                            type="button"
+                                                            aria-pressed={
+                                                                responde
+                                                            }
+                                                            aria-label={`${mecanico.nombre} es el responsable`}
+                                                            title="Responsable"
+                                                            onClick={() =>
+                                                                setData(
+                                                                    'responsable_id',
+                                                                    mecanico.id,
+                                                                )
+                                                            }
+                                                            className="flex min-h-11 items-center border-l border-primary-foreground/30 px-3"
+                                                        >
+                                                            <Star
+                                                                className={cn(
+                                                                    'size-4',
+                                                                    responde &&
+                                                                        'fill-current',
+                                                                )}
+                                                            />
+                                                        </button>
+                                                    )}
+                                            </span>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                                {data.mecanicos.length === 0
+                                    ? 'Sin mecánico, la orden la lleva taller y no aparece en ningún celular.'
+                                    : data.mecanicos.length === 1
+                                      ? 'La verá en «Mis órdenes» y la empieza con la foto del antes.'
+                                      : 'Todos la ven en «Mis órdenes». La estrella marca al responsable.'}
+                            </p>
+                            <InputError
+                                message={errores(errors, 'mecanicos')}
+                            />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label>Tareas (opcional)</Label>
+                            {data.tareas.length === 0 && (
+                                <p className="text-xs text-muted-foreground">
+                                    {preventiva && !editando
+                                        ? 'Si no escribes ninguna, se cargan solas las del servicio del plan.'
+                                        : 'Una lista de lo que el mecánico va marcando.'}
+                                </p>
+                            )}
+                            {data.tareas.map((tarea, indice) => {
+                                const hecha =
+                                    tarea.id !== null &&
+                                    tareasHechas.get(tarea.id)?.hecha;
+
+                                return (
+                                    <div
+                                        key={tarea.id ?? `nueva-${indice}`}
+                                        className="flex items-center gap-2"
+                                    >
+                                        <Input
+                                            className={cn(
+                                                'h-11',
+                                                hecha &&
+                                                    'border-emerald-500/50 bg-emerald-500/5',
+                                            )}
+                                            aria-label={`Tarea ${indice + 1}`}
+                                            value={tarea.descripcion}
+                                            onChange={(evento) =>
+                                                setData(
+                                                    'tareas',
+                                                    data.tareas.map(
+                                                        (otra, posicion) =>
+                                                            posicion === indice
+                                                                ? {
+                                                                      ...otra,
+                                                                      descripcion:
+                                                                          evento
+                                                                              .target
+                                                                              .value,
+                                                                  }
+                                                                : otra,
+                                                    ),
+                                                )
+                                            }
+                                            placeholder="Qué hay que hacer"
+                                        />
+                                        <Button
+                                            type="button"
+                                            size="icon"
+                                            variant="ghost"
+                                            className="size-11 shrink-0"
+                                            aria-label={`Quitar la tarea ${indice + 1}`}
+                                            onClick={() =>
+                                                setData(
+                                                    'tareas',
+                                                    data.tareas.filter(
+                                                        (_, posicion) =>
+                                                            posicion !== indice,
+                                                    ),
+                                                )
+                                            }
+                                        >
+                                            <X className="size-4" />
+                                        </Button>
+                                    </div>
+                                );
+                            })}
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-11 self-start"
+                                onClick={() =>
+                                    setData('tareas', [
+                                        ...data.tareas,
+                                        { id: null, descripcion: '' },
+                                    ])
+                                }
+                            >
+                                <Plus className="size-4" />
+                                Agregar tarea
+                            </Button>
+                            <InputError message={errores(errors, 'tareas')} />
+                        </div>
+
                         <div className="grid gap-1.5">
-                            <Label htmlFor="orden-tecnico">Técnico</Label>
+                            <Label htmlFor="orden-tecnico">
+                                Técnico externo (opcional)
+                            </Label>
                             <Input
                                 id="orden-tecnico"
                                 className="h-11"
@@ -456,6 +774,82 @@ export default function OrdenTrabajo({
 
                 {paso === 2 && (
                     <>
+                        {ejecucion && (
+                            <section className="flex flex-col gap-4 rounded-xl border bg-card p-4">
+                                <h2 className="text-sm font-semibold">
+                                    Lo que hizo el taller
+                                </h2>
+                                {ejecucion.tareas.length > 0 && (
+                                    <ul className="grid gap-1 text-sm">
+                                        {ejecucion.tareas.map((tarea) => (
+                                            <li
+                                                key={tarea.id}
+                                                className="flex items-start gap-2"
+                                            >
+                                                <span
+                                                    className={cn(
+                                                        'mt-0.5 font-semibold',
+                                                        tarea.hecha
+                                                            ? 'text-emerald-600'
+                                                            : 'text-amber-600',
+                                                    )}
+                                                >
+                                                    {tarea.hecha ? '✓' : '○'}
+                                                </span>
+                                                <span>
+                                                    {tarea.descripcion}
+                                                    {tarea.hecha_por && (
+                                                        <span className="ml-2 text-xs text-muted-foreground">
+                                                            {tarea.hecha_por}
+                                                        </span>
+                                                    )}
+                                                </span>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                                {ejecucion.llantas.length > 0 && (
+                                    <div className="grid gap-1 text-sm">
+                                        <span className="flex items-center gap-2 font-medium">
+                                            <CircleDot className="size-4 text-muted-foreground" />
+                                            Llantas movidas mientras estuvo
+                                            abierta
+                                        </span>
+                                        <ul className="grid gap-1 text-muted-foreground">
+                                            {ejecucion.llantas.map(
+                                                (movimiento) => (
+                                                    <li key={movimiento.id}>
+                                                        {formatearFecha(
+                                                            movimiento.fecha,
+                                                        )}{' '}
+                                                        · {movimiento.tipo} ·
+                                                        posición{' '}
+                                                        {movimiento.posicion}
+                                                        {movimiento.posicion_destino &&
+                                                            ` → ${movimiento.posicion_destino}`}
+                                                        {movimiento.llanta &&
+                                                            ` · ${movimiento.llanta}`}
+                                                        {movimiento.usuario &&
+                                                            ` · ${movimiento.usuario}`}
+                                                    </li>
+                                                ),
+                                            )}
+                                        </ul>
+                                    </div>
+                                )}
+                                {porRevisar && (
+                                    <GaleriaFotos
+                                        titulo="Antes"
+                                        fotos={(orden?.fotos ?? []).filter(
+                                            (foto) =>
+                                                foto.coleccion === 'antes',
+                                        )}
+                                    />
+                                )}
+                                <LineaDeTiempo pasos={ejecucion.pasos} />
+                            </section>
+                        )}
+
                         <div className="grid gap-2">
                             <Label>¿Cómo queda la orden?</Label>
                             <div className="grid gap-2">
@@ -611,7 +1005,11 @@ export default function OrdenTrabajo({
                             }
                         >
                             {processing && <Spinner />}
-                            {editando ? 'Guardar cambios' : 'Registrar orden'}
+                            {!editando
+                                ? 'Registrar orden'
+                                : porRevisar && data.estado === 'finalizada'
+                                  ? 'Aprobar y finalizar'
+                                  : 'Guardar cambios'}
                         </Button>
                     )}
                 </div>

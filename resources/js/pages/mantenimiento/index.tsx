@@ -3,6 +3,7 @@ import {
     ChevronRight,
     CircleCheck,
     CircleDot,
+    ClipboardList,
     ClipboardPlus,
     Clock,
     Gauge,
@@ -37,6 +38,7 @@ import { index as llantasInicio } from '@/routes/mantenimiento/llantas';
 import {
     create as crearOrden,
     edit as abrirOrden,
+    index as listaDeOrdenes,
 } from '@/routes/mantenimiento/ordenes';
 import type {
     MarcaMantenimiento,
@@ -54,6 +56,8 @@ type OrdenAbierta = {
     tipo: string;
     servicio: string | null;
     estado: string;
+    estado_valor: string;
+    mecanicos: string[];
     fecha: string;
     faltan: number;
 };
@@ -182,6 +186,20 @@ export default function MantenimientoIndex({
                 className="flex gap-2 overflow-x-auto pb-1"
             >
                 <Seccion
+                    href={listaDeOrdenes().url}
+                    icono={<ClipboardList />}
+                    titulo="Órdenes"
+                    // Lo que espera a taller: terminadas por revisar y
+                    // solicitudes por aceptar.
+                    pendientes={
+                        ordenes.filter((orden) =>
+                            ['por_revisar', 'solicitada'].includes(
+                                orden.estado_valor,
+                            ),
+                        ).length
+                    }
+                />
+                <Seccion
                     href={mantenimiento.preventivo().url}
                     icono={<Wrench />}
                     titulo="Preventivo"
@@ -271,7 +289,7 @@ export default function MantenimientoIndex({
                                     href={abrirOrden(orden.id).url}
                                     placa={orden.placa}
                                     titulo={`${orden.numero} · ${orden.tipo}${orden.servicio ? ` ${orden.servicio}` : ''}`}
-                                    detalle={`${orden.estado} · desde ${formatearFecha(orden.fecha)}`}
+                                    detalle={`${orden.estado} · desde ${formatearFecha(orden.fecha)} · ${orden.mecanicos.length > 0 ? orden.mecanicos.join(', ') : 'sin mecánico'}`}
                                     alerta={
                                         orden.faltan > 0
                                             ? orden.faltan === 1

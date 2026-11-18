@@ -34,6 +34,8 @@ enum Permiso: string
     case MantenimientoRegistrarKm = 'mantenimiento.registrar_km';
     case MantenimientoCorregirKm = 'mantenimiento.corregir_km';
     case MantenimientoGestionar = 'mantenimiento.gestionar';
+    case MantenimientoSolicitar = 'mantenimiento.solicitar';
+    case MantenimientoEjecutar = 'mantenimiento.ejecutar';
     case MantenimientoAnular = 'mantenimiento.anular';
     case MantenimientoCargaInicial = 'mantenimiento.carga_inicial';
     case MantenimientoConfigurar = 'mantenimiento.configurar';
@@ -196,7 +198,9 @@ enum Permiso: string
             self::MantenimientoVer => 'Ver el mantenimiento de la flota',
             self::MantenimientoRegistrarKm => 'Registrar kilometrajes',
             self::MantenimientoCorregirKm => 'Corregir o quitar un kilometraje ya registrado',
-            self::MantenimientoGestionar => 'Registrar y editar órdenes de trabajo',
+            self::MantenimientoGestionar => 'Registrar, asignar y revisar órdenes de trabajo',
+            self::MantenimientoSolicitar => 'Pedir un trabajo a taller',
+            self::MantenimientoEjecutar => 'Ejecutar las órdenes de trabajo asignadas (mecánico)',
             self::MantenimientoAnular => 'Anular órdenes de trabajo y movimientos de equipamiento',
             self::MantenimientoCargaInicial => 'Cargar llantas que ya estaban montadas antes del almacén',
             self::MantenimientoConfigurar => 'Configurar el plan de cada marca',

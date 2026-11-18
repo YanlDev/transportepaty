@@ -206,3 +206,62 @@ export type PlanEditable = {
     unidades: number;
     servicios: ServicioEditable[];
 };
+
+/** Una tarea de la orden: el mecánico la marca cuando la hizo. */
+export type TareaDeOrden = {
+    id: number;
+    descripcion: string;
+    hecha: boolean;
+    hecha_por: string | null;
+    hecha_at: string | null;
+};
+
+/** Un paso dado en la orden, con el usuario que lo dio. */
+export type PasoDeOrden = {
+    paso: string;
+    usuario: string | null;
+    cuando: string | null;
+    nota: string | null;
+};
+
+/** Un movimiento de llantas de la unidad mientras la orden estuvo abierta. */
+export type LlantaDeOrden = {
+    id: number;
+    tipo: string;
+    posicion: string;
+    posicion_destino: string | null;
+    fecha: string;
+    llanta: string | null;
+    usuario: string | null;
+};
+
+/** Lo que se ve de la ejecución de una orden, para el mecánico y para taller. */
+export type EjecucionDeOrden = {
+    mecanicos: { id: number; nombre: string; responsable: boolean }[];
+    tareas: TareaDeOrden[];
+    fotos: FotoOrden[];
+    pasos: PasoDeOrden[];
+    llantas: LlantaDeOrden[];
+    nota_mecanico: string | null;
+    observacion_revision: string | null;
+};
+
+/** Una orden en la lista del mecánico. */
+export type OrdenDeMecanico = {
+    id: number;
+    numero: string;
+    placa: string;
+    marca: string | null;
+    tipo_unidad: string;
+    tipo: string;
+    servicio: string | null;
+    estado: string;
+    estado_label: string;
+    urgente: boolean;
+    fecha: string;
+    trabajo: string;
+    tareas_total: number;
+    tareas_hechas: number;
+    companeros: string[];
+    observacion_revision: string | null;
+};

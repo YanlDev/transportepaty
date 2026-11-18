@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\OrdenTrabajo;
 use App\Models\Viaje;
 use App\Services\PendientesDelInicio;
 use App\Services\RelojOperativo;
 use App\Services\ResumenTablero;
 use Carbon\CarbonImmutable;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -18,8 +20,15 @@ class DashboardController extends Controller
         private readonly PendientesDelInicio $pendientes,
     ) {}
 
-    public function index(Request $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
+        // El mecánico no tiene tablero: su inicio son sus órdenes.
+        $usuario = $request->user();
+
+        if ($usuario !== null && $usuario->cannot('ver-tablero') && $usuario->can('verAsignadas', OrdenTrabajo::class)) {
+            return to_route('mis-ordenes.index');
+        }
+
         $this->authorize('ver-tablero');
 
         $rango = $this->rangoPedido($request);

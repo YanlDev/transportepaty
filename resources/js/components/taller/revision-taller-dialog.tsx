@@ -13,6 +13,7 @@ import {
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +24,8 @@ type FormData = {
     trabajos: string;
     /** El km con que sale: con el de llegada da el rendimiento. */
     kilometraje: string;
+    /** Con el no apto, abrir de una vez la orden de trabajo. */
+    crear_orden: boolean;
 };
 
 /** `datetime-local` de hoy o de mañana a esa hora, en la hora del equipo. */
@@ -80,7 +83,9 @@ export function RevisionTallerDialog({
             // ese o unos pocos más, y corregir dos cifras es más rápido que
             // escribir seis.
             kilometraje: ticket?.km_actual ? String(ticket.km_actual) : '',
+            crear_orden: true,
         });
+    const { puede } = usePermisos();
 
     const cerrar = () => {
         reset();
@@ -280,6 +285,33 @@ export function RevisionTallerDialog({
                                 />
                             )}
                         </Field>
+                    )}
+
+                    {noApta && puede('mantenimiento.gestionar') && (
+                        <label className="flex min-h-11 items-start gap-3 rounded-lg border p-3 text-sm">
+                            <input
+                                type="checkbox"
+                                className="mt-0.5 size-5 accent-primary"
+                                checked={data.crear_orden}
+                                onChange={(evento) =>
+                                    setData(
+                                        'crear_orden',
+                                        evento.target.checked,
+                                    )
+                                }
+                            />
+                            <span>
+                                <span className="font-medium">
+                                    Abrir la orden de trabajo
+                                </span>
+                                <span className="block text-xs text-muted-foreground">
+                                    Se crea como urgente con el motivo y los
+                                    trabajos; después le asignas mecánico. Si la
+                                    unidad ya tiene una abierta, no se crea
+                                    otra.
+                                </span>
+                            </span>
+                        </label>
                     )}
 
                     {data.resultado === 'apto' && (

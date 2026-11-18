@@ -26,11 +26,14 @@ export function AnularDialog({
     titulo,
     descripcion,
     etiqueta = 'Anular',
+    ayuda = 'Por qué se anula',
 }: {
     url: string;
     titulo: string;
     descripcion: string;
     etiqueta?: string;
+    /** Lo que se sugiere escribir en el motivo. */
+    ayuda?: string;
 }) {
     const [abierto, setAbierto] = useState(false);
     const { data, setData, post, processing, errors, reset, clearErrors } =
@@ -81,7 +84,7 @@ export function AnularDialog({
                             id="motivo-anulacion"
                             value={data.motivo}
                             onChange={(e) => setData('motivo', e.target.value)}
-                            placeholder="Por qué se anula"
+                            placeholder={ayuda}
                             rows={3}
                         />
                         <InputError message={errores.motivo} />

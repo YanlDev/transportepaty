@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Almacen\Concerns;
 
-use App\Enums\EstadoOrdenTrabajo;
 use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
 use App\Models\Proveedor;
@@ -90,8 +89,7 @@ trait CatalogosAlmacen
     {
         return array_values(OrdenTrabajo::query()
             ->with('vehiculo:id,placa')
-            ->vigentes()
-            ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
+            ->enTaller()
             ->orderByDesc('fecha')
             ->orderByDesc('id')
             ->limit(200)

@@ -5,6 +5,7 @@ import {
     CalendarCheck,
     CalendarDays,
     ClipboardCheck,
+    ClipboardList,
     Fuel,
     IdCard,
     LayoutGrid,
@@ -25,6 +26,7 @@ import configuracion from '@/actions/App/Http/Controllers/ConfiguracionControlle
 import contabilidad from '@/actions/App/Http/Controllers/ContabilidadController';
 import cotizaciones from '@/actions/App/Http/Controllers/CotizacionController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
+import misOrdenes from '@/actions/App/Http/Controllers/MisOrdenesController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
 import reporteCobranza from '@/actions/App/Http/Controllers/ReporteCobranzaController';
 import taller from '@/actions/App/Http/Controllers/TallerController';
@@ -79,6 +81,13 @@ const mantenimientoNavItem: NavItem = {
     title: 'Mantenimiento',
     href: mantenimiento.index(),
     icon: Wrench,
+};
+
+/** La pantalla del mecánico: las órdenes que taller le asignó. */
+const misOrdenesNavItem: NavItem = {
+    title: 'Mis órdenes',
+    href: misOrdenes.index(),
+    icon: ClipboardList,
 };
 
 /** El almacén del taller: stock, compras, vales y conteos. */
@@ -241,6 +250,11 @@ export function AppSidebar() {
     const tallerItems = [
         ...(puede('taller.ver')
             ? [{ ...tallerNavItem, badge: pendientesMenu.taller }]
+            : []),
+        // Solo para el mecánico: quien gestiona el mantenimiento ve todas
+        // las órdenes desde ahí.
+        ...(puede('mantenimiento.ejecutar') && !puede('mantenimiento.gestionar')
+            ? [misOrdenesNavItem]
             : []),
         ...(puede('mantenimiento.ver') ? [mantenimientoNavItem] : []),
         // Todo lo de `/almacen` marca la entrada: el stock, los vales, las

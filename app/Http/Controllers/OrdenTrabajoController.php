@@ -3,9 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Enums\EstadoOrdenTrabajo;
+use App\Enums\PrioridadOrden;
 use App\Enums\TipoOrdenTrabajo;
 use App\Enums\TipoVehiculo;
 use App\Http\Requests\Almacen\AnularDocumentoRequest;
+use App\Http\Requests\ObservarOrdenRequest;
 use App\Http\Requests\StoreOrdenTrabajoRequest;
 use App\Http\Requests\UpdateOrdenTrabajoRequest;
 use App\Models\Articulo;
@@ -13,12 +15,15 @@ use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
 use App\Models\SalidaAlmacen;
 use App\Models\ServicioMantenimiento;
+use App\Models\User;
 use App\Models\ValeCompra;
 use App\Models\Vehiculo;
+use App\Services\EjecucionDeOrden;
 use App\Services\FileUploadService;
 use App\Services\MaterialesDeOrden;
 use App\Services\ProximoMantenimiento;
 use App\Services\RelojOperativo;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +41,76 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  */
 class OrdenTrabajoController extends Controller
 {
+    /** Lo que no es columna de la orden: va a sus fotos, mecánicos y tareas. */
+    private const FUERA_DE_LA_ORDEN = ['fotos_antes', 'fotos_despues', 'mecanicos', 'responsable_id', 'tareas'];
+
+    public function __construct(private readonly EjecucionDeOrden $ejecucion) {}
+
+    /**
+     * Todas las órdenes, con lo que hay que atender primero: las solicitudes
+     * por aceptar y lo que los mecánicos terminaron y espera revisión.
+     */
+    public function index(Request $request): Response
+    {
+        $this->authorize('viewAny', OrdenTrabajo::class);
+
+        $estado = $request->string('estado')->toString() ?: 'abiertas';
+        $mecanico = $request->integer('mecanico') ?: null;
+        $placa = mb_strtoupper(trim($request->string('q')->toString()));
+
+        $ordenes = OrdenTrabajo::query()
+            ->with(['vehiculo:id,placa,tipo', 'servicio:id,codigo', 'mecanicos:id,name', 'creador:id,name'])
+            ->withCount('media')
+            ->when($estado === 'abiertas', fn (Builder $query) => $query->vigentes()->where('estado', '!=', EstadoOrdenTrabajo::Finalizada))
+            ->when($estado === 'anuladas', fn (Builder $query) => $query->whereNotNull('anulado_at'))
+            ->when(EstadoOrdenTrabajo::tryFrom($estado) !== null, fn (Builder $query) => $query->vigentes()->where('estado', $estado))
+            ->when($mecanico !== null, fn (Builder $query) => $query->whereHas('mecanicos', fn (Builder $mecanicos) => $mecanicos->whereKey($mecanico)))
+            ->when($placa !== '', fn (Builder $query) => $query->whereHas('vehiculo', fn (Builder $vehiculo) => $vehiculo->withTrashed()->where('placa', 'like', "%{$placa}%")))
+            ->orderByRaw("case estado when 'por_revisar' then 0 when 'solicitada' then 1 when 'observada' then 2 when 'en_proceso' then 3 when 'pendiente' then 4 else 5 end")
+            ->orderByRaw("case prioridad when 'urgente' then 0 else 1 end")
+            ->orderByDesc('fecha')
+            ->orderByDesc('id')
+            ->paginate(30)
+            ->withQueryString();
+
+        $puedeEditar = $request->user()?->can('create', OrdenTrabajo::class) ?? false;
+
+        return Inertia::render('mantenimiento/ordenes', [
+            'ordenes' => $ordenes->through(fn (OrdenTrabajo $orden): array => [
+                'id' => $orden->id,
+                'numero' => $orden->numero(),
+                'vehiculo_id' => $orden->vehiculo_id,
+                'placa' => $orden->vehiculo->placa,
+                'tipo_unidad' => $orden->vehiculo->tipo->label(),
+                'tipo' => $orden->tipo->label(),
+                'servicio' => $orden->servicio?->codigo,
+                'estado' => $orden->estaAnulado() ? 'anulada' : $orden->estado->value,
+                'estado_label' => $orden->estaAnulado() ? 'Anulada' : $orden->estado->label(),
+                'urgente' => $orden->prioridad === PrioridadOrden::Urgente,
+                'fecha' => $orden->fecha->toDateString(),
+                'trabajo' => $orden->trabajo,
+                'mecanicos' => $orden->mecanicos->pluck('name')->all(),
+                'solicitante' => $orden->estado === EstadoOrdenTrabajo::Solicitada ? $orden->creador?->name : null,
+                'fotos' => $orden->media_count,
+            ]),
+            'filtros' => ['estado' => $estado, 'mecanico' => $mecanico, 'q' => $placa],
+            'estados' => [
+                ['value' => 'abiertas', 'label' => 'Abiertas'],
+                ...EstadoOrdenTrabajo::options(),
+                ['value' => 'anuladas', 'label' => 'Anuladas'],
+                ['value' => 'todas', 'label' => 'Todas'],
+            ],
+            'mecanicos' => $this->mecanicosDisponibles(),
+            // Cuántas esperan a taller, para que salten aunque se esté
+            // mirando otro filtro.
+            'por_atender' => [
+                'por_revisar' => OrdenTrabajo::query()->vigentes()->where('estado', EstadoOrdenTrabajo::PorRevisar)->count(),
+                'solicitadas' => OrdenTrabajo::query()->vigentes()->where('estado', EstadoOrdenTrabajo::Solicitada)->count(),
+            ],
+            'puede' => ['editar' => $puedeEditar],
+        ]);
+    }
+
     public function create(Request $request, ProximoMantenimiento $mantenimiento): Response
     {
         $this->authorize('create', OrdenTrabajo::class);
@@ -54,7 +129,13 @@ class OrdenTrabajoController extends Controller
                 'trabajo' => $estado['proximo']['nombre'] ?? '',
                 'kilometraje' => $estado['km_actual'] ?? null,
                 'fecha' => RelojOperativo::hoy(),
+                'estado' => EstadoOrdenTrabajo::Pendiente->value,
+                'prioridad' => PrioridadOrden::Normal->value,
+                'mecanicos' => [],
+                'responsable_id' => null,
+                'tareas' => [],
             ],
+            'ejecucion' => null,
             ...$this->catalogos(),
         ]);
     }
@@ -65,11 +146,20 @@ class OrdenTrabajoController extends Controller
 
         $orden = DB::transaction(function () use ($request, $subidas): OrdenTrabajo {
             $orden = OrdenTrabajo::create([
-                ...$request->safe()->except(['fotos_antes', 'fotos_despues']),
+                ...$this->datosDeLaOrden($request),
+                ...$this->revision($request, null),
                 'user_id' => $request->user()?->id,
             ]);
 
             $this->guardarFotos($request, $orden, $subidas);
+            $this->ejecucion->asignar($orden, $this->mecanicosPedidos($request), $request->integer('responsable_id') ?: null);
+
+            // Una preventiva nace con la lista de su nivel, si no se le
+            // escribió otra.
+            $tareas = $request->validated('tareas') ?? [];
+            $this->ejecucion->guardarTareas($orden, $tareas !== [] || $orden->servicio === null
+                ? $tareas
+                : $this->ejecucion->tareasDelPlan($orden->servicio));
 
             return $orden;
         });
@@ -84,7 +174,7 @@ class OrdenTrabajoController extends Controller
     {
         $this->authorize('update', $orden);
 
-        $orden->load(['media', 'servicio']);
+        $orden->load(['media', 'servicio', 'mecanicos:id,name', 'tareas']);
         $veCostos = $request->user()?->can('verCostos', Articulo::class) ?? false;
 
         return Inertia::render('mantenimiento/orden', [
@@ -93,6 +183,10 @@ class OrdenTrabajoController extends Controller
                 'numero' => $orden->numero(),
                 'vehiculo_id' => $orden->vehiculo_id,
                 'puede_anular' => $request->user()?->can('anular', $orden) ?? false,
+                'puede_observar' => $request->user()?->can('observar', $orden) ?? false,
+                'puede_rechazar' => $request->user()?->can('rechazar', $orden) ?? false,
+                'estado' => $orden->estado->value,
+                'estado_label' => $orden->estado->label(),
                 'fotos' => $orden->media
                     ->map(fn (Media $foto): array => [
                         'id' => $foto->id,
@@ -115,7 +209,14 @@ class OrdenTrabajoController extends Controller
                 'tecnico' => $orden->tecnico,
                 'observacion' => $orden->observacion,
                 'justificacion_materiales' => $orden->justificacion_materiales,
+                'prioridad' => $orden->prioridad->value,
+                'mecanicos' => $orden->mecanicos->modelKeys(),
+                'responsable_id' => $orden->mecanicos->first(fn (User $mecanico): bool => (bool) $mecanico->pivot->responsable)?->id,
+                'tareas' => $orden->tareas
+                    ->map(fn ($tarea): array => ['id' => $tarea->id, 'descripcion' => $tarea->descripcion])
+                    ->all(),
             ],
+            'ejecucion' => $this->ejecucion->vista($orden),
             'materiales' => [
                 'lineas' => array_map(
                     fn (array $linea): array => [...$linea, 'costo' => $veCostos ? $linea['costo'] : null],
@@ -134,7 +235,7 @@ class OrdenTrabajoController extends Controller
                 'puede_despachar' => $request->user()?->can('create', SalidaAlmacen::class) ?? false,
                 've_almacen' => $request->user()?->can('viewAny', SalidaAlmacen::class) ?? false,
             ],
-            ...$this->catalogos(),
+            ...$this->catalogos($orden),
         ]);
     }
 
@@ -143,9 +244,21 @@ class OrdenTrabajoController extends Controller
         $this->authorize('update', $orden);
 
         DB::transaction(function () use ($request, $orden, $subidas): void {
-            $orden->update($request->safe()->except(['fotos_antes', 'fotos_despues']));
+            $orden->update([
+                ...$this->datosDeLaOrden($request),
+                ...$this->revision($request, $orden),
+            ]);
 
             $this->guardarFotos($request, $orden, $subidas);
+
+            // Lo que el formulario no manda no se toca.
+            if ($request->has('mecanicos')) {
+                $this->ejecucion->asignar($orden, $this->mecanicosPedidos($request), $request->integer('responsable_id') ?: null);
+            }
+
+            if ($request->has('tareas')) {
+                $this->ejecucion->guardarTareas($orden, $request->validated('tareas') ?? []);
+            }
         });
 
         return to_route('mantenimiento.show', $orden->vehiculo_id)->with('toast', [
@@ -186,6 +299,45 @@ class OrdenTrabajoController extends Controller
     }
 
     /**
+     * Taller revisó lo que el mecánico terminó y no lo aprueba: vuelve al
+     * mecánico con lo que hay que corregir. (Aprobar es finalizar la orden
+     * desde su formulario, con las mismas reglas de siempre.)
+     */
+    public function observar(ObservarOrdenRequest $request, OrdenTrabajo $orden): RedirectResponse
+    {
+        $this->authorize('observar', $orden);
+
+        /** @var User $revisor */
+        $revisor = $request->user();
+        $this->ejecucion->observar($orden, $revisor, $request->validated('motivo'));
+
+        return to_route('mantenimiento.ordenes.index')->with('toast', [
+            'type' => 'warning',
+            'message' => "{$orden->numero()} observada: vuelve al mecánico.",
+        ]);
+    }
+
+    /**
+     * Una solicitud que taller no va a atender: queda anulada con el motivo,
+     * a la vista de quien la pidió.
+     */
+    public function rechazar(AnularDocumentoRequest $request, OrdenTrabajo $orden): RedirectResponse
+    {
+        $this->authorize('rechazar', $orden);
+
+        $orden->update([
+            'anulado_at' => now(),
+            'anulado_por' => $request->user()?->id,
+            'motivo_anulacion' => $request->validated('motivo'),
+        ]);
+
+        return to_route('mantenimiento.ordenes.index')->with('toast', [
+            'type' => 'success',
+            'message' => "Solicitud {$orden->numero()} rechazada.",
+        ]);
+    }
+
+    /**
      * Quita una foto del panel sin tocar el resto de la orden.
      */
     public function eliminarFoto(OrdenTrabajo $orden, Media $foto): RedirectResponse
@@ -209,22 +361,87 @@ class OrdenTrabajoController extends Controller
     }
 
     /**
-     * Las unidades y los servicios del plan de cada marca, para que el
-     * formulario ofrezca solo los del plan de la unidad elegida.
+     * Las columnas de la orden que llegan del formulario.
      *
      * @return array<string, mixed>
      */
-    private function catalogos(): array
+    private function datosDeLaOrden(StoreOrdenTrabajoRequest $request): array
     {
+        $datos = $request->safe()->except(self::FUERA_DE_LA_ORDEN);
+
+        if (($datos['prioridad'] ?? null) === null) {
+            unset($datos['prioridad']);
+        }
+
+        return $datos;
+    }
+
+    /**
+     * Quien deja la orden finalizada es quien la revisó: queda su usuario y
+     * la hora. Si se reabre, la revisión anterior se borra.
+     *
+     * @return array<string, mixed>
+     */
+    private function revision(StoreOrdenTrabajoRequest $request, ?OrdenTrabajo $orden): array
+    {
+        $finaliza = $request->input('estado') === EstadoOrdenTrabajo::Finalizada->value;
+        $yaEstaba = $orden?->estado === EstadoOrdenTrabajo::Finalizada;
+
+        return match (true) {
+            $finaliza && ! $yaEstaba => ['revisado_por' => $request->user()?->id, 'revisado_at' => now(), 'observacion_revision' => null],
+            ! $finaliza && $yaEstaba => ['revisado_por' => null, 'revisado_at' => null],
+            default => [],
+        };
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function mecanicosPedidos(StoreOrdenTrabajoRequest $request): array
+    {
+        return array_map(intval(...), $request->validated('mecanicos') ?? []);
+    }
+
+    /**
+     * @return list<array{id: int, nombre: string}>
+     */
+    private function mecanicosDisponibles(): array
+    {
+        return $this->ejecucion->mecanicosDisponibles()
+            ->map(fn (User $mecanico): array => ['id' => $mecanico->id, 'nombre' => $mecanico->name])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Las unidades (tractos y carretas) y los servicios del plan de cada
+     * marca, para que el formulario ofrezca solo los del plan de la unidad
+     * elegida. Una carreta no tiene plan por km: sus órdenes son correctivas.
+     *
+     * @return array<string, mixed>
+     */
+    private function catalogos(?OrdenTrabajo $orden = null): array
+    {
+        // Los estados que taller elige a mano; si la orden está en uno que
+        // sale de una acción (por revisar, observada…), se puede dejar así.
+        $estados = EstadoOrdenTrabajo::deTaller();
+
+        if ($orden !== null && ! in_array($orden->estado, $estados, true)) {
+            $estados = [$orden->estado, ...$estados];
+        }
+
         return [
             'tractos' => Vehiculo::query()
-                ->where('tipo', TipoVehiculo::Tracto)
+                ->when($orden !== null, fn (Builder $query) => $query->withTrashed()->whereKey($orden?->vehiculo_id))
+                ->orderByRaw('case tipo when ? then 0 else 1 end', [TipoVehiculo::Tracto->value])
                 ->orderBy('placa')
-                ->get(['id', 'placa', 'marca'])
+                ->get(['id', 'placa', 'marca', 'tipo'])
                 ->map(fn (Vehiculo $vehiculo): array => [
                     'id' => $vehiculo->id,
                     'placa' => $vehiculo->placa,
                     'marca' => $vehiculo->marca === null ? null : mb_strtoupper(trim($vehiculo->marca)),
+                    'tipo' => $vehiculo->tipo->value,
+                    'tipo_label' => $vehiculo->tipo->label(),
                 ])
                 ->all(),
             'servicios' => PlanMantenimiento::query()
@@ -242,7 +459,12 @@ class OrdenTrabajoController extends Controller
                 ])
                 ->all(),
             'tipos' => TipoOrdenTrabajo::options(),
-            'estados' => EstadoOrdenTrabajo::options(),
+            'estados' => array_map(
+                fn (EstadoOrdenTrabajo $estado): array => ['value' => $estado->value, 'label' => $estado->label()],
+                $estados,
+            ),
+            'prioridades' => PrioridadOrden::options(),
+            'mecanicos' => $this->mecanicosDisponibles(),
         ];
     }
 }
