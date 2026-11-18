@@ -31,6 +31,8 @@ type ClienteDeuda = {
         fecha: string;
         simbolo: string;
         saldo: number;
+        /** También cubre viajes de otro mes: el saldo es solo su parte. */
+        repartida: boolean;
         parcial: boolean;
         vence: string;
         dias_vencida: number | null;
@@ -409,7 +411,13 @@ function Vacio({ children }: { children: React.ReactNode }) {
 }
 
 /** De lo facturado, cuánto entró, cuánto falta al día y cuánto está vencido. */
-function Avance({ avance }: { avance: Reporte['avance'] }) {
+function Avance({
+    avance,
+    delMes,
+}: {
+    avance: Reporte['avance'];
+    delMes: boolean;
+}) {
     const total = Math.max(avance.facturado, 0.01);
     const porcentaje = Math.round((avance.cobrado / total) * 100);
     const partes = [
@@ -427,7 +435,9 @@ function Avance({ avance }: { avance: Reporte['avance'] }) {
             <div className="flex items-end justify-between gap-3">
                 <div className="min-w-0">
                     <p className="text-sm text-muted-foreground">
-                        De lo facturado ya entró
+                        {delMes
+                            ? 'De lo facturado por los viajes del mes ya entró'
+                            : 'De lo facturado ya entró'}
                     </p>
                     <p className="text-3xl font-semibold tabular-nums">
                         {porcentaje}%
@@ -547,7 +557,7 @@ export default function ReporteCobranza({ reporte }: { reporte: Reporte }) {
                 )}
             </div>
 
-            <Avance avance={reporte.avance} />
+            <Avance avance={reporte.avance} delMes={reporte.mes !== null} />
 
             {/* Las cuatro respuestas: cada una abre su detalle abajo. */}
             <div role="tablist" className="grid grid-cols-2 gap-3">
@@ -621,6 +631,8 @@ export default function ReporteCobranza({ reporte }: { reporte: Reporte }) {
                     <div>
                         <h2 className="text-base font-semibold">Quién debe</h2>
                         <p className="text-sm text-muted-foreground">
+                            {reporte.mes !== null &&
+                                'Por los viajes de este mes, se haya facturado cuando sea. '}
                             Del que más debe al que menos. Toca un cliente para
                             ver sus facturas.
                         </p>
@@ -743,6 +755,8 @@ export default function ReporteCobranza({ reporte }: { reporte: Reporte }) {
                                                         )}
                                                         {factura.parcial &&
                                                             ' · cobro parcial'}
+                                                        {factura.repartida &&
+                                                            ' · solo la parte de este mes'}
                                                         {(factura.dias_vencida ??
                                                             0) <= 0 &&
                                                             ` · vence el ${formatearFecha(factura.vence)}`}
@@ -875,8 +889,10 @@ export default function ReporteCobranza({ reporte }: { reporte: Reporte }) {
                     <div>
                         <h2 className="text-base font-semibold">Ya pagaron</h2>
                         <p className="text-sm text-muted-foreground">
-                            Lo que entró en este período, por cliente. Toca uno
-                            para ver qué facturas pagó.
+                            {reporte.mes !== null
+                                ? 'Lo que ya entró por los viajes de este mes, por cliente, haya entrado cuando sea.'
+                                : 'Lo que entró en este período, por cliente.'}{' '}
+                            Toca uno para ver qué facturas pagó.
                         </p>
                     </div>
 
@@ -1030,7 +1046,9 @@ export default function ReporteCobranza({ reporte }: { reporte: Reporte }) {
                 <div>
                     <h2 className="text-base font-semibold">Mes a mes</h2>
                     <p className="text-sm text-muted-foreground">
-                        Lo que se facturó y lo que entró cada mes, en soles.
+                        Las facturas que se emitieron y los depósitos que
+                        entraron en cada mes, en soles. Por fecha de factura y
+                        de depósito, no de viaje.
                     </p>
                 </div>
                 <ul className="flex flex-col gap-4 rounded-2xl border bg-card p-4">
@@ -1046,8 +1064,12 @@ export default function ReporteCobranza({ reporte }: { reporte: Reporte }) {
                             </button>
                             {(
                                 [
-                                    ['Facturado', mes.facturado, 'bg-sky-500'],
-                                    ['Cobrado', mes.cobrado, 'bg-emerald-500'],
+                                    ['Emitido', mes.facturado, 'bg-sky-500'],
+                                    [
+                                        'Depositado',
+                                        mes.cobrado,
+                                        'bg-emerald-500',
+                                    ],
                                 ] as const
                             ).map(([etiqueta, monto, color]) => (
                                 <div

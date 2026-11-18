@@ -15,9 +15,16 @@ use Illuminate\Support\Collection;
  * a la empresa. Todo desde el inicio de la cobranza (`inicio_cobranza`) o de
  * un mes.
  *
- * El mes se lee por lo que pasó en él: las GR que se trasladaron, las
- * facturas que se emitieron y los cobros que entraron. Lo pendiente (por
- * cobrar, vencido, detracciones) es siempre la foto de hoy.
+ * El mes es el de los viajes, igual que en la tabla de Contabilidad: de las
+ * GR que se trasladaron en él, cuáles faltan facturar, cuánto se facturó por
+ * ellas, cuánto falta cobrar y cuánto ya entró, se haya emitido la factura o
+ * entrado el depósito cuando sea. Una factura con GR de dos meses aporta a
+ * cada uno la parte de sus GR (`ParteDeFactura`), así el resumen y la tabla
+ * dan el mismo número. Sin mes, cuenta todo lo emitido desde el inicio.
+ *
+ * Solo «mes a mes» va por fecha de emisión y de depósito: es la marcha de lo
+ * que se emitió y de la plata que entró. Las detracciones son siempre la foto
+ * de hoy.
  *
  * @phpstan-type Reporte array{
  *     mes: string|null,
@@ -31,10 +38,13 @@ use Illuminate\Support\Collection;
  *     saldo_a_favor: list<array{simbolo: string, monto: float}>,
  *     por_mes: list<array{mes: string, label: string, facturado: float, cobrado: float}>
  * }
+ * @phpstan-type Pago array{cobro: Cobro, moneda: Moneda, monto: float, facturas: list<array{numero: string, monto: float}>}
  */
 class ReporteGerencia
 {
     private const MESES = ['', 'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+
+    public function __construct(private ResumenCobranza $resumen) {}
 
     /**
      * @return Reporte
@@ -51,18 +61,20 @@ class ReporteGerencia
             ->where('fecha_emision', '>=', $inicio->toDateString())
             ->with('clienteDelPadron:id,ruc,alias')
             ->get();
-        $delPeriodo = $facturas->filter(fn (Factura $factura): bool => $factura->fecha_emision->gte($desde)
-            && ($hasta === null || $factura->fecha_emision->lte($hasta)));
-        // En un mes, lo pendiente es lo de las facturas de ese mes.
-        $pendientes = $delPeriodo->filter(fn (Factura $factura): bool => $factura->saldo() > 0);
-        $vencidas = $pendientes->filter(fn (Factura $factura): bool => ($factura->diasVencida() ?? 0) > 0);
-
-        $cobros = Cobro::query()
-            ->where('fecha', '>=', $desde->toDateString())
-            ->when($hasta, fn ($query) => $query->where('fecha', '<=', $hasta->toDateString()))
-            ->with(['cliente:id,alias,ruc', 'facturas' => fn ($query) => $query->with('clienteDelPadron:id,ruc,alias')])
-            ->orderByDesc('fecha')
-            ->get();
+        $delPeriodo = $mes === null
+            ? $facturas->map(fn (Factura $factura): ParteDeFactura => new ParteDeFactura($factura, [], []))->toBase()
+            : $this->resumen->partes([
+                'buscar' => null,
+                'cliente' => null,
+                'estado' => null,
+                'mes' => null,
+                'desde' => $desde->toDateString(),
+                'hasta' => $hasta?->toDateString(),
+            ], ['clienteDelPadron:id,ruc,alias']);
+        $pendientes = $delPeriodo->filter(fn (ParteDeFactura $parte): bool => $parte->factura->saldo() > 0)->values();
+        $vencidas = $pendientes->filter(fn (ParteDeFactura $parte): bool => ($parte->factura->diasVencida() ?? 0) > 0);
+        $saldo = fn (ParteDeFactura $parte): float => $parte->de($parte->factura->saldo());
+        $pagos = $this->pagos($mes === null ? null : $delPeriodo, $desde);
 
         $porDepositar = $facturas->filter(fn (Factura $factura): bool => $factura->detraccionPorDepositar());
 
@@ -73,20 +85,20 @@ class ReporteGerencia
             'por_facturar' => $this->porFacturar($desde, $hasta, $hoy),
             'facturado' => [
                 'facturas' => $delPeriodo->count(),
-                'montos' => $this->porMoneda($delPeriodo, fn (Factura $factura): float => (float) $factura->total),
+                'montos' => $this->porMoneda($delPeriodo, fn (ParteDeFactura $parte): float => $parte->de($parte->factura->total)),
             ],
             'por_cobrar' => [
                 'facturas' => $pendientes->count(),
-                'montos' => $this->porMoneda($pendientes, fn (Factura $factura): float => $factura->saldo()),
-                'vencido' => $this->porMoneda($vencidas, fn (Factura $factura): float => $factura->saldo()),
+                'montos' => $this->porMoneda($pendientes, $saldo),
+                'vencido' => $this->porMoneda($vencidas, $saldo),
                 'facturas_vencidas' => $vencidas->count(),
                 'tramos' => $this->tramosDeAtraso($pendientes),
                 'clientes' => $this->deudaPorCliente($pendientes),
             ],
             'cobrado' => [
-                'cobros' => $cobros->count(),
-                'montos' => $this->porMoneda($cobros, fn (Cobro $cobro): float => (float) $cobro->monto),
-                'clientes' => $this->pagosPorCliente($cobros),
+                'cobros' => $pagos->count(),
+                'montos' => $this->porMoneda($pagos, fn (array $pago): float => $pago['monto'], fn (array $pago): Moneda => $pago['moneda']),
+                'clientes' => $this->pagosPorCliente($pagos),
             ],
             'avance' => $this->avance($delPeriodo),
             // Siempre la foto de hoy, sin importar el mes: es lo que la
@@ -158,42 +170,46 @@ class ReporteGerencia
     }
 
     /**
-     * Quién debe y cuánto, del que más al que menos, con sus facturas.
+     * Quién debe y cuánto, del que más al que menos, con sus facturas. De una
+     * factura repartida entre meses, solo la parte del período.
      *
-     * @param  Collection<int, Factura>  $pendientes
+     * @param  Collection<int, ParteDeFactura>  $pendientes
      * @return list<array<string, mixed>>
      */
     private function deudaPorCliente(Collection $pendientes): array
     {
-        $mayor = (float) $pendientes
-            ->groupBy(fn (Factura $factura): string => $factura->cliente_ruc ?? ('sin-ruc-'.$factura->cliente_razon_social))
-            ->max(fn (Collection $delCliente): float => (float) $delCliente->sum(fn (Factura $factura): float => $factura->saldo()));
+        $saldo = fn (ParteDeFactura $parte): float => $parte->de($parte->factura->saldo());
+        $porCliente = $pendientes->groupBy(fn (ParteDeFactura $parte): string => $parte->factura->cliente_ruc
+            ?? ('sin-ruc-'.$parte->factura->cliente_razon_social));
+        $mayor = (float) $porCliente->max(fn (Collection $delCliente): float => (float) $delCliente->sum($saldo));
 
-        return array_values($pendientes
-            ->groupBy(fn (Factura $factura): string => $factura->cliente_ruc ?? ('sin-ruc-'.$factura->cliente_razon_social))
-            ->map(function (Collection $delCliente) use ($mayor): array {
-                $vencidas = $delCliente->filter(fn (Factura $factura): bool => ($factura->diasVencida() ?? 0) > 0);
-                $debe = (float) $delCliente->sum(fn (Factura $factura): float => $factura->saldo());
+        return array_values($porCliente
+            ->map(function (Collection $delCliente) use ($mayor, $saldo): array {
+                $vencidas = $delCliente->filter(fn (ParteDeFactura $parte): bool => ($parte->factura->diasVencida() ?? 0) > 0);
+                $debe = (float) $delCliente->sum($saldo);
+                $primera = $delCliente->first()->factura;
 
                 return [
-                    'cliente' => $delCliente->first()->nombreCliente() ?? 'Sin cliente',
-                    'filtro' => $delCliente->first()->cliente_ruc ?: $delCliente->first()->cliente_razon_social,
+                    'cliente' => $primera->nombreCliente() ?? 'Sin cliente',
+                    'filtro' => $primera->cliente_ruc ?: $primera->cliente_razon_social,
                     // Cuánto pesa frente al que más debe: el largo de su barra.
                     'parte' => $mayor > 0 ? round($debe / $mayor, 4) : 0.0,
                     'facturas' => $delCliente->count(),
-                    'montos' => $this->porMoneda($delCliente, fn (Factura $factura): float => $factura->saldo()),
-                    'orden' => (float) $delCliente->sum(fn (Factura $factura): float => $factura->saldo()),
-                    'vencido' => $this->porMoneda($vencidas, fn (Factura $factura): float => $factura->saldo()),
-                    'dias_vencida' => (int) $vencidas->max(fn (Factura $factura): int => $factura->diasVencida() ?? 0),
+                    'montos' => $this->porMoneda($delCliente, $saldo),
+                    'orden' => $debe,
+                    'vencido' => $this->porMoneda($vencidas, $saldo),
+                    'dias_vencida' => (int) $vencidas->max(fn (ParteDeFactura $parte): int => $parte->factura->diasVencida() ?? 0),
                     // Las que más llevan vencidas, primero.
-                    'detalle' => $delCliente->sortByDesc(fn (Factura $factura): int => $factura->diasVencida() ?? -9999)->take(20)->map(fn (Factura $factura): array => [
-                        'numero' => $factura->numero,
-                        'fecha' => $factura->fecha_emision->toDateString(),
-                        'simbolo' => $factura->moneda->simbolo(),
-                        'saldo' => $factura->saldo(),
-                        'parcial' => (float) $factura->cobrado > 0,
-                        'vence' => $factura->fechaVencimiento()->toDateString(),
-                        'dias_vencida' => $factura->diasVencida(),
+                    'detalle' => $delCliente->sortByDesc(fn (ParteDeFactura $parte): int => $parte->factura->diasVencida() ?? -9999)->take(20)->map(fn (ParteDeFactura $parte): array => [
+                        'numero' => $parte->factura->numero,
+                        'fecha' => $parte->factura->fecha_emision->toDateString(),
+                        'simbolo' => $parte->factura->moneda->simbolo(),
+                        'saldo' => $saldo($parte),
+                        // También cubre GR de otro mes: acá va solo su parte.
+                        'repartida' => ! $parte->completa(),
+                        'parcial' => (float) $parte->factura->cobrado > 0,
+                        'vence' => $parte->factura->fechaVencimiento()->toDateString(),
+                        'dias_vencida' => $parte->factura->diasVencida(),
                     ])->values()->all(),
                 ];
             })
@@ -205,18 +221,18 @@ class ReporteGerencia
      * Lo por cobrar en soles según su atraso: al día, y vencido hasta 30,
      * hasta 60 y más de 60 días.
      *
-     * @param  Collection<int, Factura>  $pendientes
+     * @param  Collection<int, ParteDeFactura>  $pendientes
      * @return list<array{tramo: string, facturas: int, monto: float, vencido: bool}>
      */
     private function tramosDeAtraso(Collection $pendientes): array
     {
-        $soles = $pendientes->filter(fn (Factura $factura): bool => $factura->moneda === Moneda::Soles);
+        $soles = $pendientes->filter(fn (ParteDeFactura $parte): bool => $parte->factura->moneda === Moneda::Soles);
         $tramos = ['Al día' => [null, 0], '1 a 30 días' => [1, 30], '31 a 60 días' => [31, 60], 'Más de 60' => [61, null]];
 
         return array_map(function (string $tramo, array $limites) use ($soles): array {
             [$desde, $hasta] = $limites;
-            $delTramo = $soles->filter(function (Factura $factura) use ($desde, $hasta): bool {
-                $dias = $factura->diasVencida() ?? 0;
+            $delTramo = $soles->filter(function (ParteDeFactura $parte) use ($desde, $hasta): bool {
+                $dias = $parte->factura->diasVencida() ?? 0;
 
                 return ($desde === null || $dias >= $desde) && ($hasta === null || $dias <= $hasta);
             });
@@ -224,7 +240,7 @@ class ReporteGerencia
             return [
                 'tramo' => $tramo,
                 'facturas' => $delTramo->count(),
-                'monto' => round((float) $delTramo->sum(fn (Factura $factura): float => $factura->saldo()), 2),
+                'monto' => round((float) $delTramo->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->saldo())), 2),
                 'vencido' => $desde !== null,
             ];
         }, array_keys($tramos), array_values($tramos));
@@ -234,73 +250,99 @@ class ReporteGerencia
      * De lo facturado en el período (en soles, lo que paga el cliente):
      * cuánto ya entró, cuánto falta y está al día, y cuánto está vencido.
      *
-     * @param  Collection<int, Factura>  $facturas
+     * @param  Collection<int, ParteDeFactura>  $partes
      * @return array{facturado: float, cobrado: float, al_dia: float, vencido: float}
      */
-    private function avance(Collection $facturas): array
+    private function avance(Collection $partes): array
     {
-        $soles = $facturas->filter(fn (Factura $factura): bool => $factura->moneda === Moneda::Soles);
+        $soles = $partes->filter(fn (ParteDeFactura $parte): bool => $parte->factura->moneda === Moneda::Soles);
+        $saldo = fn (ParteDeFactura $parte): float => $parte->de($parte->factura->saldo());
         $vencido = (float) $soles
-            ->filter(fn (Factura $factura): bool => ($factura->diasVencida() ?? 0) > 0)
-            ->sum(fn (Factura $factura): float => $factura->saldo());
-        $pendiente = (float) $soles->sum(fn (Factura $factura): float => $factura->saldo());
+            ->filter(fn (ParteDeFactura $parte): bool => ($parte->factura->diasVencida() ?? 0) > 0)
+            ->sum($saldo);
+        $pendiente = (float) $soles->sum($saldo);
 
         return [
-            'facturado' => round((float) $soles->sum(fn (Factura $factura): float => (float) $factura->neto), 2),
-            'cobrado' => round((float) $soles->sum(fn (Factura $factura): float => $factura->montoCobrado()), 2),
+            'facturado' => round((float) $soles->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->neto)), 2),
+            'cobrado' => round((float) $soles->sum(fn (ParteDeFactura $parte): float => $parte->de($parte->factura->montoCobrado())), 2),
             'al_dia' => round($pendiente - $vencido, 2),
             'vencido' => round($vencido, 2),
         ];
     }
 
     /**
+     * Los depósitos del período, cada uno con lo que cuenta y las facturas
+     * que pagó.
+     *
+     * Sin mes son los que entraron desde el inicio, enteros. En un mes son
+     * los que pagaron facturas de los viajes de ese mes, hayan entrado cuando
+     * hayan entrado, y de cada uno cuenta solo lo que fue a esos viajes.
+     *
+     * @param  Collection<int, ParteDeFactura>|null  $partes  Las del mes, o `null` sin mes.
+     * @return Collection<int, Pago>
+     */
+    private function pagos(?Collection $partes, CarbonImmutable $desde): Collection
+    {
+        $porFactura = $partes?->keyBy(fn (ParteDeFactura $parte): int => $parte->factura->id);
+
+        return Cobro::query()
+            ->when($porFactura === null, fn ($query) => $query->where('fecha', '>=', $desde->toDateString()))
+            ->when($porFactura !== null, fn ($query) => $query->whereHas('facturas', fn ($query) => $query->whereIn('facturas.id', $porFactura->keys()->all())))
+            ->with(['cliente:id,alias,ruc', 'facturas' => fn ($query) => $query->with('clienteDelPadron:id,ruc,alias')])
+            ->orderByDesc('fecha')
+            ->get()
+            ->map(function (Cobro $cobro) use ($porFactura): array {
+                $facturas = $cobro->facturas
+                    ->filter(fn (Factura $factura): bool => $porFactura === null || $porFactura->has($factura->id))
+                    ->map(function (Factura $factura) use ($porFactura): array {
+                        $monto = (float) $factura->pivot?->getAttribute('monto');
+
+                        return [
+                            'numero' => $factura->numero,
+                            'monto' => $porFactura === null ? $monto : $porFactura->get($factura->id)->de($monto),
+                        ];
+                    })
+                    ->values();
+
+                return [
+                    'cobro' => $cobro,
+                    'moneda' => $cobro->moneda,
+                    'monto' => $porFactura === null ? (float) $cobro->monto : round((float) $facturas->sum('monto'), 2),
+                    'facturas' => array_values($facturas->all()),
+                ];
+            })
+            ->toBase();
+    }
+
+    /**
      * Quién pagó en el período y cuánto, con las facturas que pagó cada
      * depósito. El cliente es el del cobro o, si no lo dice, el de su factura.
      *
-     * @param  Collection<int, Cobro>  $cobros
+     * @param  Collection<int, Pago>  $pagos
      * @return list<array<string, mixed>>
      */
-    private function pagosPorCliente(Collection $cobros): array
+    private function pagosPorCliente(Collection $pagos): array
     {
-        return array_values($cobros
-            ->groupBy(fn (Cobro $cobro): string => $cobro->cliente->alias
-                ?? $cobro->facturas->first()?->nombreCliente()
+        return array_values($pagos
+            ->groupBy(fn (array $pago): string => $pago['cobro']->cliente->alias
+                ?? $pago['cobro']->facturas->first()?->nombreCliente()
                 ?? 'Sin cliente')
             ->map(fn (Collection $delCliente, string $cliente): array => [
                 'cliente' => $cliente,
                 'cobros' => $delCliente->count(),
-                'montos' => $this->porMoneda($delCliente, fn (Cobro $cobro): float => (float) $cobro->monto),
-                'orden' => (float) $delCliente->sum(fn (Cobro $cobro): float => (float) $cobro->monto),
-                'ultimo' => $delCliente->max(fn (Cobro $cobro): string => $cobro->fecha->toDateString()),
-                'detalle' => $this->facturasPagadas($delCliente->take(40)),
+                'montos' => $this->porMoneda($delCliente, fn (array $pago): float => $pago['monto'], fn (array $pago): Moneda => $pago['moneda']),
+                'orden' => (float) $delCliente->sum('monto'),
+                'ultimo' => $delCliente->max(fn (array $pago): string => $pago['cobro']->fecha->toDateString()),
+                'detalle' => $delCliente->take(40)->flatMap(fn (array $pago): array => array_map(fn (array $factura): array => [
+                    'numero' => $factura['numero'],
+                    'fecha' => $pago['cobro']->fecha->toDateString(),
+                    'simbolo' => $pago['moneda']->simbolo(),
+                    'monto' => $factura['monto'],
+                    'operacion' => $pago['cobro']->numero_operacion,
+                ], $pago['facturas']))->values()->all(),
             ])
             ->sortByDesc('orden')
             ->all());
-    }
-
-    /**
-     * Las facturas que pagaron esos cobros, con lo que le tocó a cada una.
-     *
-     * @param  Collection<int, Cobro>  $cobros
-     * @return list<array{numero: string, fecha: string, simbolo: string, monto: float, operacion: string|null}>
-     */
-    private function facturasPagadas(Collection $cobros): array
-    {
-        $pagadas = [];
-
-        foreach ($cobros as $cobro) {
-            foreach ($cobro->facturas as $factura) {
-                $pagadas[] = [
-                    'numero' => $factura->numero,
-                    'fecha' => $cobro->fecha->toDateString(),
-                    'simbolo' => $cobro->moneda->simbolo(),
-                    'monto' => (float) $factura->pivot?->getAttribute('monto'),
-                    'operacion' => $cobro->numero_operacion,
-                ];
-            }
-        }
-
-        return $pagadas;
     }
 
     /**
@@ -349,12 +391,15 @@ class ReporteGerencia
      *
      * @param  Collection<int, T>  $items
      * @param  callable(T): float  $monto
+     * @param  (callable(T): Moneda)|null  $moneda  De dónde sale la moneda, si no es de la factura o del cobro.
      * @return list<array{simbolo: string, monto: float}>
      */
-    private function porMoneda(Collection $items, callable $monto): array
+    private function porMoneda(Collection $items, callable $monto, ?callable $moneda = null): array
     {
+        $moneda ??= fn ($item): Moneda => $item instanceof ParteDeFactura ? $item->factura->moneda : $item->moneda;
+
         return array_values($items
-            ->groupBy(fn ($item): string => $item->moneda->value)
+            ->groupBy(fn ($item): string => $moneda($item)->value)
             ->map(fn (Collection $deLaMoneda, string $moneda): array => [
                 'simbolo' => Moneda::from($moneda)->simbolo(),
                 'monto' => round((float) $deLaMoneda->sum($monto), 2),

@@ -7,6 +7,7 @@ use App\Models\CuentaBancaria;
 use App\Models\Factura;
 use App\Models\Viaje;
 use App\Services\RegistroDeCobros;
+use App\Services\ResumenCobranza;
 
 use function Pest\Laravel\actingAs;
 
@@ -327,14 +328,52 @@ it('gives the management the cobranza at a glance', function (): void {
             ->has('reporte.por_mes', 3)
         );
 
-    // Por mes: en octubre se facturó y no entró nada.
+    actingAs(actorConRol('visor'))->get(route('contabilidad.reporte'))->assertForbidden();
+});
+
+it('reads a month of the management summary by the date of the trips, like the table', function (): void {
+    $this->travelTo('2026-11-17 10:00');
+    $deSetiembre = Viaje::factory()->count(2)->create(['fecha_traslado' => '2026-09-20']);
+    $deOctubre = Viaje::factory()->create(['fecha_traslado' => '2026-10-02']);
+    // Emitida en octubre por viajes de los dos meses: 2/3 es de setiembre.
+    $repartida = facturaPorCobrar(3000, ['fecha_emision' => '2026-10-05', 'cliente_ruc' => '20100136741', 'cliente_razon_social' => 'MINSUR S.A.']);
+    $repartida->viajes()->attach([...$deSetiembre->modelKeys(), $deOctubre->id]);
+    // Emitida en setiembre por un viaje de agosto: no es de setiembre.
+    $deAgosto = facturaPorCobrar(9000, ['fecha_emision' => '2026-09-22']);
+    $deAgosto->viajes()->attach(Viaje::factory()->create(['fecha_traslado' => '2026-08-30']));
+    // Un depósito de noviembre que paga la mitad de la repartida.
+    app(RegistroDeCobros::class)->registrar(
+        ['fecha' => '2026-11-03', 'cuenta_bancaria_id' => $this->cuenta->id, 'monto' => 1500.0, 'moneda' => 'PEN'],
+        [$repartida->id => 1500.0],
+        $this->contador,
+    );
+
+    actingAs($this->contador)
+        ->get(route('contabilidad.reporte', ['mes' => '2026-09']))
+        ->assertInertia(fn ($page) => $page
+            ->where('reporte.facturado.facturas', 1)
+            ->where('reporte.facturado.montos.0.monto', 2000)
+            ->where('reporte.por_cobrar.facturas', 1)
+            ->where('reporte.por_cobrar.montos.0.monto', 1000)
+            ->where('reporte.por_cobrar.clientes.0.detalle.0.numero', $repartida->numero)
+            ->where('reporte.por_cobrar.clientes.0.detalle.0.saldo', 1000)
+            ->where('reporte.por_cobrar.clientes.0.detalle.0.repartida', true)
+            // Entró en noviembre, pero es plata de los viajes de setiembre.
+            ->where('reporte.cobrado.cobros', 1)
+            ->where('reporte.cobrado.montos.0.monto', 1000)
+            ->where('reporte.avance.facturado', 2000)
+            ->where('reporte.avance.cobrado', 1000)
+        );
+
+    // Lo mismo que suma la tabla de Contabilidad con el mes puesto.
+    $deLaTabla = app(ResumenCobranza::class)->totales(['buscar' => null, 'cliente' => null, 'estado' => null, 'mes' => '2026-09', 'desde' => null, 'hasta' => null]);
+    expect($deLaTabla['montos'][0]['por_cobrar'])->toBe(1000.0);
+
     actingAs($this->contador)
         ->get(route('contabilidad.reporte', ['mes' => '2026-10']))
         ->assertInertia(fn ($page) => $page
-            ->where('reporte.facturado.facturas', 2)
-            ->where('reporte.cobrado.cobros', 0)
-            ->where('reporte.por_facturar.guias', 0)
+            ->where('reporte.facturado.montos.0.monto', 1000)
+            ->where('reporte.por_cobrar.montos.0.monto', 500)
+            ->where('reporte.cobrado.montos.0.monto', 500)
         );
-
-    actingAs(actorConRol('visor'))->get(route('contabilidad.reporte'))->assertForbidden();
 });
