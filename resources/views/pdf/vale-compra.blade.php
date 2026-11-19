@@ -1,8 +1,8 @@
 {{--
-    El vale de compra aprobado, para imprimir o mandar al proveedor.
+    El pedido de compra aprobado, para imprimir o mandar al proveedor.
 
     Lo que da fe no es este papel sino la página de verificación: el QR (o el
-    código escrito a mano) lleva al vale real en el sistema, con su firma y su
+    código escrito a mano) lleva al pedido real en el sistema, con su firma y su
     estado de hoy. Por eso el papel lo dice bien grande.
 
     El QR va dibujado como una tabla de celdas: dompdf no necesita ninguna
@@ -17,7 +17,7 @@
 <html lang="es">
 <head>
     <meta charset="utf-8">
-    <title>Vale de compra {{ $vale->numero() }}</title>
+    <title>Pedido de compra {{ $vale->numero() }}</title>
     <style>
         @page { margin: 36px 44px; }
         body { font-family: Helvetica, Arial, sans-serif; font-size: 10px; color: #222; line-height: 1.35; }
@@ -43,7 +43,7 @@
     <table class="ancho">
         <tr>
             <td style="vertical-align: top;">
-                <h1>VALE DE COMPRA</h1>
+                <h1>PEDIDO DE COMPRA</h1>
                 <p style="font-size: 12px; font-weight: bold;">Transportes Paty</p>
                 <p class="gris">RUC {{ config('transpaty.facturacion.ruc_empresa') }}</p>
                 @if ($vale->tipo === \App\Enums\TipoValeCompra::Emergencia)
@@ -54,7 +54,7 @@
                 <div class="caja centro">
                     <p style="font-size: 16px; font-weight: bold;">{{ $vale->numero() }}</p>
                     <p>Aprobado el {{ $vale->aprobado_at?->timezone(\App\Services\RelojOperativo::ahora()->getTimezone())->format('d/m/Y H:i') }}</p>
-                    <p style="font-weight: bold;">Vale hasta el {{ $vale->vence_el?->format('d/m/Y') }}</p>
+                    <p style="font-weight: bold;">Sirve hasta el {{ $vale->vence_el?->format('d/m/Y') }}</p>
                 </div>
             </td>
         </tr>
@@ -123,11 +123,11 @@
     </table>
 
     <div class="aviso" style="margin-top: 14px;">
-        <p><strong>Antes de entregar, verifique este vale.</strong> Escanee el código QR o entre a <strong>{{ $urlManual }}</strong> y escriba el código de verificación. La página muestra el vale tal como fue aprobado y si todavía sirve: si lo que ve ahí no coincide con este papel —el monto, las cantidades, el proveedor—, o dice que está usado, vencido o anulado, <strong>no entregue</strong>.</p>
+        <p><strong>Antes de entregar, verifique este pedido.</strong> Escanee el código QR o entre a <strong>{{ $urlManual }}</strong> y escriba el código de verificación. La página muestra el pedido tal como fue aprobado y si todavía sirve: si lo que ve ahí no coincide con este papel —el monto, las cantidades, el proveedor—, o dice que está usado, vencido o anulado, <strong>no entregue</strong>.</p>
         @if ($vale->permite_parciales)
-            <p style="margin-top: 4px;">Este vale admite entregas en partes hasta completar su monto, y solo hasta la fecha indicada. La página de verificación dice cuánto queda.</p>
+            <p style="margin-top: 4px;">Este pedido admite entregas en partes hasta completar su monto, y solo hasta la fecha indicada. La página de verificación dice cuánto queda.</p>
         @else
-            <p style="margin-top: 4px;">Este vale sirve para una sola compra, por el monto exacto, y solo hasta la fecha indicada. La factura o boleta debe ser por el mismo importe.</p>
+            <p style="margin-top: 4px;">Este pedido sirve para una sola compra, por el monto exacto, y solo hasta la fecha indicada. La factura o boleta debe ser por el mismo importe.</p>
         @endif
     </div>
 

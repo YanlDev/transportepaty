@@ -42,6 +42,7 @@ class ProveedorRequest extends FormRequest
             'email' => ['nullable', 'email', 'max:255'],
             'direccion' => ['nullable', 'string', 'max:255'],
             'condicion_pago' => ['nullable', 'string', 'max:255'],
+            'cuenta_pago' => ['nullable', 'string', 'max:500'],
             'notas' => ['nullable', 'string', 'max:1000'],
             'activo' => ['boolean'],
         ];

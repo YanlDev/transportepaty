@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Una línea de lo que el vale autoriza a comprar: un artículo del almacén o,
+ * Una línea de lo que el pedido autoriza a comprar: un artículo del almacén o,
  * sin artículo, el servicio de un tercero.
  *
  * @property int $id

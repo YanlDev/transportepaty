@@ -38,6 +38,32 @@ class EjecucionDeOrden
     public function __construct(private readonly MaterialesDeOrden $materiales) {}
 
     /**
+     * El catálogo del almacén para pedir repuestos por su nombre: sin
+     * costos, solo si hay. «Hay» es lo que queda libre: lo apartado para
+     * otras órdenes ya aprobadas no cuenta.
+     *
+     * @return list<array{id: int, nombre: string, codigo: string, unidad: string, hay: bool}>
+     */
+    public function articulosPedibles(): array
+    {
+        $reservado = app(RepuestosDeOrden::class)->reservado();
+
+        return Articulo::query()
+            ->where('activo', true)
+            ->orderBy('nombre')
+            ->limit(1000)
+            ->get(['id', 'codigo', 'nombre', 'unidad', 'stock'])
+            ->map(fn (Articulo $articulo): array => [
+                'id' => $articulo->id,
+                'nombre' => $articulo->nombre,
+                'codigo' => $articulo->codigo,
+                'unidad' => $articulo->unidad->value,
+                'hay' => (float) $articulo->stock - ($reservado[$articulo->id]['cantidad'] ?? 0) > 0.0005,
+            ])
+            ->all();
+    }
+
+    /**
      * El mecánico suma una tarea a su requerimiento.
      */
     public function agregarTarea(OrdenTrabajo $orden, string $descripcion): TareaOrden

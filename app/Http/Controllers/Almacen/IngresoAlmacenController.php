@@ -10,6 +10,7 @@ use App\Enums\UnidadMedida;
 use App\Http\Controllers\Almacen\Concerns\CatalogosAlmacen;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Almacen\AnularDocumentoRequest;
+use App\Http\Requests\Almacen\CompletarIngresoRequest;
 use App\Http\Requests\Almacen\StoreIngresoRequest;
 use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
@@ -24,6 +25,7 @@ use App\Services\CostoDeCompra;
 use App\Services\FileUploadService;
 use App\Services\Kardex;
 use App\Services\PeriodoAlmacen;
+use App\Services\RecepcionDeCompra;
 use App\Services\RelojOperativo;
 use App\Services\UsoDeVale;
 use Illuminate\Http\RedirectResponse;
@@ -37,7 +39,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Lo que entra al almacén: las compras con su comprobante y las devoluciones
- * de los vales.
+ * de los pedidos.
  */
 class IngresoAlmacenController extends Controller
 {
@@ -101,8 +103,8 @@ class IngresoAlmacenController extends Controller
             'comprobantes' => TipoComprobante::options(),
             'monedas' => Moneda::options(),
             'hoy' => RelojOperativo::hoy(),
-            // Los vales con que todavía se puede comprar, y desde qué fecha
-            // de comprobante el vale es obligatorio.
+            // Los pedidos con que todavía se puede comprar, y desde qué fecha
+            // de comprobante el pedido es obligatorio.
             'vales' => $this->valesParaElegir(),
             'valeInicial' => $request->integer('vale') ?: null,
             'valeObligatorioDesde' => UsoDeVale::obligatorioDesde()?->toDateString(),
@@ -152,8 +154,8 @@ class IngresoAlmacenController extends Controller
         $total = round((float) $datos['total_comprobante'], 2);
 
         $ingreso = DB::transaction(function () use ($request, $datos, $comprobante, $moneda, $lineas, $calculo, $total): IngresoAlmacen {
-            // El vale se bloquea y se vuelve a comprobar acá adentro: dos
-            // compras a la vez con el mismo vale no pueden entrar las dos.
+            // El pedido se bloquea y se vuelve a comprobar acá adentro: dos
+            // compras a la vez con el mismo pedido no pueden entrar las dos.
             if (isset($datos['vale_compra_id'])) {
                 $vale = ValeCompra::query()->lockForUpdate()->with(['detalles', 'proveedor'])->findOrFail((int) $datos['vale_compra_id']);
                 $error = $this->usoDeVale->error($vale, (int) $datos['proveedor_id'], $moneda, $datos['fecha_emision'], $total, $request->lineasParaElVale());
@@ -206,11 +208,11 @@ class IngresoAlmacenController extends Controller
         });
 
         return to_route('almacen.ingresos.show', $ingreso)
-            ->with('toast', ['type' => 'success', 'message' => "Ingreso {$ingreso->numero()} registrado: el stock ya se actualizó."]);
+            ->with('toast', ['type' => 'success', 'message' => "Recepción {$ingreso->numero()} registrada: el stock ya se actualizó."]);
     }
 
     /**
-     * Los vales aprobados que todavía sirven para comprar, con sus líneas
+     * Los pedidos aprobados que todavía sirven para comprar, con sus líneas
      * para precargar el ingreso.
      *
      * @return list<array<string, mixed>>
@@ -246,6 +248,43 @@ class IngresoAlmacenController extends Controller
      * Cambiar la foto o el PDF (se subió el equivocado o salió borroso). El
      * anterior se borra: la colección guarda uno solo.
      */
+    /**
+     * Llegó el comprobante de una recepción que entró sin él: se pone lo que
+     * dice el papel y el costo de lo recibido se corrige.
+     */
+    public function completar(CompletarIngresoRequest $request, IngresoAlmacen $ingreso, RecepcionDeCompra $recepcion): RedirectResponse
+    {
+        $this->authorize('create', IngresoAlmacen::class);
+
+        abort_unless($ingreso->comprobante_pendiente && ! $ingreso->estaAnulado(), 404);
+
+        $datos = $request->validated();
+        $articulos = Articulo::query()->whereIn('id', array_column($datos['detalles'], 'articulo_id'))->get()->keyBy('id');
+        $lineas = array_values(array_map(fn (array $linea): array => [
+            'cantidad' => (float) $linea['cantidad'],
+            'precio_unitario' => (float) $linea['precio_unitario'],
+            'factor' => $articulos[$linea['articulo_id']]->factor(),
+            'bonificacion' => false,
+        ], $datos['detalles']));
+
+        $calculo = $this->costoDeCompra->calcular(
+            TipoComprobante::from($datos['tipo_comprobante']),
+            $ingreso->moneda,
+            null,
+            $request->boolean('precios_con_igv'),
+            $lineas,
+            (float) ($datos['descuento'] ?? 0),
+            (float) ($datos['flete'] ?? 0),
+        );
+
+        DB::transaction(function () use ($request, $ingreso, $recepcion, $datos, $calculo, $lineas): void {
+            $recepcion->completar($ingreso, $datos, $calculo, array_column($lineas, 'precio_unitario'));
+            $this->subidas->guardar($ingreso, $request->file('comprobante'), 'comprobante', 'comprobante');
+        });
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Comprobante de la {$ingreso->numero()} completado: el costo quedó con lo que dice el papel."]);
+    }
+
     public function reemplazarComprobante(Request $request, IngresoAlmacen $ingreso): RedirectResponse
     {
         $this->authorize('reemplazarComprobante', $ingreso);
@@ -272,6 +311,10 @@ class IngresoAlmacenController extends Controller
                 ...$this->cabecera($ingreso, $veCostos),
                 'tipo_cambio' => $ingreso->tipo_cambio === null ? null : (float) $ingreso->tipo_cambio,
                 'precios_con_igv' => $ingreso->precios_con_igv,
+                // La mercadería ya entró con los precios del pedido; falta
+                // poner lo que dice el comprobante.
+                'comprobante_pendiente' => $ingreso->comprobante_pendiente,
+                'total_pedido' => $ingreso->comprobante_pendiente ? (float) $ingreso->total : null,
                 'fecha_emision' => $ingreso->fecha_emision?->toDateString(),
                 'descuento' => $this->costo($veCostos, $ingreso->descuento),
                 'flete' => $this->costo($veCostos, $ingreso->flete),
@@ -307,6 +350,12 @@ class IngresoAlmacenController extends Controller
                     'costo_total' => $this->costo($veCostos, $detalle->costo_total),
                 ])->values()->all(),
             ],
+            'puedeCompletar' => $ingreso->comprobante_pendiente && ! $ingreso->estaAnulado() && ($request->user()?->can('create', IngresoAlmacen::class) ?? false),
+            'tiposComprobante' => array_map(
+                fn (TipoComprobante $tipo): array => ['value' => $tipo->value, 'label' => $tipo->label(), 'exige_numero' => $tipo->exigeSerieNumero(), 'lleva_igv' => $tipo->llevaIgv()],
+                TipoComprobante::cases(),
+            ),
+            'hoy' => RelojOperativo::hoy(),
             'puedeAnular' => $request->user()?->can('anular', $ingreso) ?? false,
             'periodoAbierto' => PeriodoAlmacen::estaAbierto($ingreso->fecha),
             'puedeReemplazarComprobante' => $request->user()?->can('reemplazarComprobante', $ingreso) ?? false,
@@ -342,7 +391,7 @@ class IngresoAlmacenController extends Controller
             $this->kardex->anular($ingreso);
         });
 
-        return back()->with('toast', ['type' => 'success', 'message' => "Ingreso {$ingreso->numero()} anulado: salió del kardex."]);
+        return back()->with('toast', ['type' => 'success', 'message' => "Recepción {$ingreso->numero()} anulada: salió del kardex."]);
     }
 
     /**

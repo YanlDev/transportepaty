@@ -8,7 +8,7 @@ use Illuminate\Console\Attributes\Signature;
 use Illuminate\Console\Command;
 
 #[Signature('vales:generar-clave')]
-#[Description('Genera la clave con que el servidor firma los vales de compra')]
+#[Description('Genera la clave con que el servidor firma los pedidos de compra')]
 class GenerarClaveDeVales extends Command
 {
     /**

@@ -69,7 +69,7 @@ export function abrirBuscador(): void {
  */
 const ACCIONES: Accion[] = [
     {
-        titulo: 'Despachar un vale de almacén',
+        titulo: 'Entregar repuestos del almacén',
         url: nuevoVale().url,
         icono: ArrowUpFromLine,
         permiso: 'almacen.despachar',

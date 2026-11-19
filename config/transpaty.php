@@ -175,6 +175,9 @@ return [
         'vigencia_dias' => (int) env('TRANSPATY_VALE_VIGENCIA_DIAS', 5),
         'vale_obligatorio_desde' => env('TRANSPATY_VALE_OBLIGATORIO_DESDE', '2026-11-10'),
         'clave_firma' => env('TRANSPATY_VALES_CLAVE_FIRMA'),
+        // Cuánto puede diferir el comprobante del monto aprobado sin volver
+        // a aprobación: cubre redondeos, no cambios de precio.
+        'tolerancia_monto' => (float) env('TRANSPATY_COMPRAS_TOLERANCIA', 1.00),
     ],
 
     'respaldos' => [

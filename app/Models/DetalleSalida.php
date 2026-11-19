@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
 /**
- * Una línea del vale de salida. Su costo lo pone `Kardex`: el promedio del
+ * Una línea de la entrega. Su costo lo pone `Kardex`: el promedio del
  * artículo en la fecha del vale.
  *
  * @property int $id

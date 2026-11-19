@@ -18,6 +18,8 @@ type Props = {
     niveles: EnumOption[];
     /** El catálogo del almacén. */
     articulos: ArticuloDelPlan[];
+    /** Las unidades del almacén: el plan usa las mismas. */
+    unidades: EnumOption[];
 };
 
 type RepuestoForm = {
@@ -57,7 +59,12 @@ const repuestoVacio: RepuestoForm = {
  * L; acá se decide a cuántos km (y meses) va cada uno y qué lleva. Cada
  * nivel incluye a los anteriores, así que solo se anota lo que suma.
  */
-export default function PlanMantenimiento({ plan, niveles, articulos }: Props) {
+export default function PlanMantenimiento({
+    plan,
+    niveles,
+    articulos,
+    unidades,
+}: Props) {
     const { data, setData, put, transform, processing, errors, isDirty } =
         useForm<Formulario>({
             nombre: plan.nombre,
@@ -385,16 +392,31 @@ export default function PlanMantenimiento({ plan, niveles, articulos }: Props) {
                                         }
                                         className="tabular-nums"
                                     />
-                                    <Input
+                                    <select
                                         aria-label="Unidad"
-                                        placeholder="und"
-                                        value={repuesto.unidad}
+                                        value={repuesto.unidad || 'und'}
+                                        // Con artículo ligado manda la
+                                        // unidad del artículo.
+                                        disabled={
+                                            repuesto.es_servicio ||
+                                            repuesto.articulo_id !== null
+                                        }
                                         onChange={(e) =>
                                             cambiarRepuesto(indice, fila, {
                                                 unidad: e.target.value,
                                             })
                                         }
-                                    />
+                                        className="h-9 rounded-md border bg-background px-2 text-sm disabled:opacity-60"
+                                    >
+                                        {unidades.map((unidad) => (
+                                            <option
+                                                key={unidad.value}
+                                                value={unidad.value}
+                                            >
+                                                {unidad.label}
+                                            </option>
+                                        ))}
+                                    </select>
                                     <Button
                                         type="button"
                                         variant="ghost"
@@ -453,7 +475,7 @@ export default function PlanMantenimiento({ plan, niveles, articulos }: Props) {
                                                             },
                                                         )
                                                     }
-                                                    etiqueta="Artículo del almacén (sin ligar)"
+                                                    etiqueta="Artículo del almacén (se crea solo al guardar)"
                                                     opciones={articulos.map(
                                                         (articulo) => ({
                                                             valor: articulo.id,

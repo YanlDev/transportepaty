@@ -264,7 +264,7 @@ it('muestra en la orden lo que salió del almacén y lo que todavía le falta', 
         ->assertSee($orden->numero())
         ->assertSee('Repuestos del almacén')
         ->assertSee('Sin artículo de almacén ligado')
-        ->assertSee('Sacar repuestos del almacén')
+        ->assertSee('Entregar repuestos del almacén')
         ->assertSee('Anular')
         ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
         ->assertNoJavaScriptErrors()

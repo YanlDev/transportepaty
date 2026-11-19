@@ -30,7 +30,7 @@ enum TipoComprobante: string
             self::Boleta => 'Boleta',
             self::NotaVenta => 'Nota de venta',
             self::Ticket => 'Ticket',
-            self::Vale => 'Vale o recibo',
+            self::Vale => 'Recibo simple',
             self::Otro => 'Otro',
         };
     }

@@ -24,6 +24,8 @@ import { migasAlmacen } from '@/components/almacen/almacen-nav';
 import { AnularDialog } from '@/components/almacen/anular-dialog';
 import { CodigoQr } from '@/components/almacen/codigo-qr';
 import { Dato } from '@/components/almacen/dato';
+import { PagoDeCompra } from '@/components/almacen/pago-de-compra';
+import { RecibirMercaderia } from '@/components/almacen/recibir-mercaderia';
 import { CampoArchivo } from '@/components/campo-archivo';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import InputError from '@/components/input-error';
@@ -55,6 +57,7 @@ import {
 } from '@/lib/format';
 import { TONO_SITUACION } from '@/types/compras';
 import type { LineaVale, ValeDetalle } from '@/types/compras';
+import type { EnumOption } from '@/types/fleet';
 
 type Props = {
     vale: ValeDetalle;
@@ -66,8 +69,13 @@ type Props = {
         confirmar_servicio: boolean;
         ingresar: boolean;
         imprimir: boolean;
+        pagar: boolean;
     };
-    /** La cuadrícula del QR de verificación; null si el vale no está aprobado. */
+    medios: EnumOption[];
+    /** Las cuentas de la empresa, para decir de cuál salió el pago. */
+    cuentas: { id: number; nombre: string }[];
+    hoy: string;
+    /** La cuadrícula del QR de verificación; null si el pedido no está aprobado. */
     qr: boolean[][] | null;
     /** Lo pidió quien lo está viendo: no puede aprobarlo. */
     esPropio: boolean;
@@ -75,9 +83,9 @@ type Props = {
 };
 
 /**
- * El vale de compra: lo que se pidió, quién lo aprobó y si todavía sirve.
+ * El pedido de compra: lo que se pidió, quién lo aprobó y si todavía sirve.
  * Aprobado, se descarga en PDF con su QR; la compra entra al almacén desde
- * acá, ya ligada al vale.
+ * acá, ya ligada al pedido.
  */
 export default function CompraShow({
     vale,
@@ -85,10 +93,13 @@ export default function CompraShow({
     qr,
     esPropio,
     maximoKb,
+    medios,
+    cuentas,
+    hoy,
 }: Props) {
     setLayoutProps({
         breadcrumbs: migasAlmacen(
-            { title: 'Compras', href: compras.index().url },
+            { title: 'Pedidos de compra', href: compras.index().url },
             { title: vale.numero, href: compras.show(vale.id).url },
         ),
     });
@@ -111,7 +122,7 @@ export default function CompraShow({
             <Head title={vale.numero} />
 
             <EncabezadoPantalla
-                titulo={`Vale de compra ${vale.numero}`}
+                titulo={`Pedido de compra ${vale.numero}`}
                 descripcion={`${vale.tipo_label} · ${vale.proveedor}`}
                 icono={ShoppingCart}
                 acciones={
@@ -136,7 +147,7 @@ export default function CompraShow({
                             <AnularDialog
                                 url={anular(vale.id).url}
                                 titulo={`Anular ${vale.numero}`}
-                                descripcion="El vale deja de servir para comprar. Queda a la vista con el motivo, y quien lo verifique verá que está anulado."
+                                descripcion="El pedido deja de servir para comprar. Queda a la vista con el motivo, y quien lo verifique verá que está anulado."
                             />
                         )}
                     </>
@@ -150,7 +161,7 @@ export default function CompraShow({
                 />
                 {vale.vence_el && (
                     <span className="text-sm text-muted-foreground">
-                        Vale hasta el {formatearFecha(vale.vence_el)}
+                        Sirve hasta el {formatearFecha(vale.vence_el)}
                     </span>
                 )}
                 {vale.firma_valida === true && (
@@ -180,6 +191,17 @@ export default function CompraShow({
                 </Aviso>
             )}
 
+            {vale.directo_a_unidad && (
+                <p className="rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm">
+                    <span className="font-semibold">
+                        Emergencia ya instalada en la unidad.{' '}
+                    </span>
+                    {vale.estado === 'aprobado'
+                        ? 'Al aprobarse entró y salió a la unidad sola: solo falta completar el comprobante en su recepción.'
+                        : 'Al aprobarla, lo comprado entra y sale a la unidad solo, sin pasar por el almacén.'}
+                </p>
+            )}
+
             {puede.aprobar && (
                 <section className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/5 p-5">
                     <h2 className="text-sm font-semibold">
@@ -193,7 +215,7 @@ export default function CompraShow({
                     ) : (
                         <>
                             <p className="text-sm text-muted-foreground">
-                                Al aprobar, el sistema firma el vale por{' '}
+                                Al aprobar, el sistema firma el pedido por{' '}
                                 <strong className="text-foreground">
                                     {monto(vale.total)}
                                 </strong>{' '}
@@ -229,6 +251,20 @@ export default function CompraShow({
                 </section>
             )}
 
+            {vale.pago !== null && vale.situacion !== 'anulado' && (
+                <PagoDeCompra
+                    valeId={vale.id}
+                    numero={vale.numero}
+                    simbolo={vale.simbolo}
+                    formaPago={vale.forma_pago}
+                    pago={vale.pago}
+                    puedePagar={puede.pagar}
+                    medios={medios}
+                    cuentas={cuentas}
+                    hoy={hoy}
+                />
+            )}
+
             <section className="grid gap-6 rounded-xl border bg-card p-5 md:grid-cols-[1fr_auto]">
                 <dl className="grid content-start gap-4 text-sm sm:grid-cols-2">
                     <Dato titulo="Proveedor">
@@ -242,6 +278,9 @@ export default function CompraShow({
                     <Dato titulo="Total a pagar">
                         <span className="text-base font-semibold tabular-nums">
                             {monto(vale.total)}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                            {vale.forma_pago}
                         </span>
                     </Dato>
                     <Dato titulo="Para">
@@ -399,7 +438,7 @@ export default function CompraShow({
                 <section className="flex flex-col gap-3">
                     <div className="flex items-center justify-between gap-2">
                         <h2 className="text-sm font-semibold text-muted-foreground uppercase">
-                            Compras con este vale
+                            Compras con este pedido
                         </h2>
                         {vale.recibido > 0 && vale.saldo > 0 && (
                             <span className="text-sm text-muted-foreground">
@@ -434,26 +473,47 @@ export default function CompraShow({
                         </ul>
                     )}
                     {puede.ingresar && hayArticulos && (
-                        <Button asChild className="self-start">
-                            <Link
-                                href={ingresosAlmacen.create.url({
-                                    query: { vale: vale.id },
-                                })}
-                            >
-                                Registrar la compra con este vale
-                            </Link>
-                        </Button>
+                        <div className="flex flex-wrap items-center gap-2">
+                            {vale.por_recibir.length > 0 && (
+                                <RecibirMercaderia
+                                    valeId={vale.id}
+                                    numero={vale.numero}
+                                    lineas={vale.por_recibir}
+                                    hoy={hoy}
+                                    enPartes={vale.permite_parciales === true}
+                                />
+                            )}
+                            <Button asChild variant="outline" className="h-12">
+                                <Link
+                                    href={ingresosAlmacen.create.url({
+                                        query: { vale: vale.id },
+                                    })}
+                                >
+                                    Registrar la compra con este pedido
+                                </Link>
+                            </Button>
+                        </div>
                     )}
+                    {puede.ingresar &&
+                        hayArticulos &&
+                        vale.por_recibir.length > 0 && (
+                            <p className="text-xs text-muted-foreground">
+                                «Recibir la mercadería» suma al stock ya y deja
+                                el comprobante para después. «Registrar la
+                                compra» hace todo junto, con el comprobante en
+                                la mano.
+                            </p>
+                        )}
                 </section>
             )}
 
             {vale.permite_parciales !== null && puede.parciales && (
                 <section className="flex flex-col gap-2 rounded-xl border border-dashed p-5 text-sm">
-                    <h2 className="font-semibold">Entregas parciales</h2>
+                    <h2 className="font-semibold">Compras en partes</h2>
                     <p className="text-muted-foreground">
                         {vale.permite_parciales
-                            ? 'Este vale admite varias compras hasta completar su monto.'
-                            : 'Un vale sirve para una sola compra por el monto exacto. Solo si el proveedor va a entregar en partes, actívalo acá.'}
+                            ? 'Este pedido admite varias compras hasta completar su monto.'
+                            : 'Un pedido sirve para una sola compra por el monto exacto. Solo si el proveedor va a entregar en partes, actívalo acá.'}
                     </p>
                     <Button
                         variant="outline"
@@ -470,7 +530,7 @@ export default function CompraShow({
                     >
                         {vale.permite_parciales
                             ? 'Volver a una sola compra'
-                            : 'Permitir entregas parciales'}
+                            : 'Permitir compras en partes'}
                     </Button>
                 </section>
             )}

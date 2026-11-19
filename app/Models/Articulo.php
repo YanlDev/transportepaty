@@ -33,6 +33,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property list<string>|null $marcas_compatibles
  * @property string|null $observacion
  * @property bool $activo
+ * @property int|null $plan_mantenimiento_id El plan preventivo del que nació; null si se creó a mano.
  * @property string $stock
  * @property string $costo_promedio
  * @property string $valor

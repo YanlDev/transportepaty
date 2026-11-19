@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
 
 /**
- * Cada vez que alguien abrió la página de verificación de un vale: cuándo,
+ * Cada vez que alguien abrió la página de verificación de un pedido: cuándo,
  * desde dónde y qué se le mostró.
  *
  * @property int $id

@@ -31,25 +31,25 @@ const SECCIONES: {
 }[] = [
     {
         clave: 'stock',
-        titulo: 'Stock',
+        titulo: 'Inicio y stock',
         href: almacen.index().url,
         icono: Package,
     },
     {
         clave: 'compras',
-        titulo: 'Compras',
+        titulo: 'Pedidos de compra',
         href: compras.index().url,
         icono: ShoppingCart,
     },
     {
         clave: 'ingresos',
-        titulo: 'Ingresos',
+        titulo: 'Recepciones',
         href: ingresos.index().url,
         icono: ArrowDownToLine,
     },
     {
         clave: 'salidas',
-        titulo: 'Vales de salida',
+        titulo: 'Entregas',
         href: salidas.index().url,
         icono: ArrowUpFromLine,
     },

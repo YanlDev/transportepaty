@@ -11,14 +11,15 @@ use App\Models\ValeCompra;
 use Illuminate\Support\Carbon;
 
 /**
- * Si una compra puede entrar al almacén con un vale de compra.
+ * Si una compra puede entrar al almacén con un pedido de compra.
  *
  * El comprobante tiene que ser lo que se aprobó: del mismo proveedor, en la
- * misma moneda, emitido mientras el vale valía, con artículos del vale y sin
- * pasarse de sus cantidades. Y por el mismo monto: si el comprobante dice
- * otra cosa, el vale se corrige y vuelve a aprobación. No hay tolerancia.
+ * misma moneda, emitido mientras el pedido valía, con artículos del pedido y sin
+ * pasarse de sus cantidades. Y por el mismo monto, con una tolerancia
+ * pequeña para los redondeos (`transpaty.compras.tolerancia_monto`): si el
+ * comprobante dice otra cosa, el pedido se corrige y vuelve a aprobación.
  *
- * Un vale se usa en una sola compra, salvo que gerencia le haya activado las
+ * Un pedido se usa en una sola compra, salvo que gerencia le haya activado las
  * entregas parciales: entonces admite varias hasta completar su monto.
  */
 class UsoDeVale
@@ -46,11 +47,14 @@ class UsoDeVale
     }
 
     /**
-     * Por qué la compra no puede entrar con ese vale; null si puede.
+     * Por qué la compra no puede entrar con ese pedido; null si puede.
+     *
+     * `$menos` deja fuera una recepción del propio pedido: la que ya entró
+     * sin comprobante y ahora se está completando.
      *
      * @param  list<array{articulo_id: int, cantidad: float, bonificacion: bool}>  $lineas
      */
-    public function error(ValeCompra $vale, int $proveedorId, Moneda $moneda, string $fechaEmision, float $total, array $lineas): ?string
+    public function error(ValeCompra $vale, int $proveedorId, Moneda $moneda, string $fechaEmision, float $total, array $lineas, ?int $menos = null): ?string
     {
         $numero = $vale->numero();
 
@@ -75,8 +79,8 @@ class UsoDeVale
         }
 
         return $this->errorDeFecha($vale, $fechaEmision)
-            ?? $this->errorDeLineas($vale, $lineas)
-            ?? $this->errorDeMonto($vale, $total);
+            ?? $this->errorDeLineas($vale, $lineas, $menos)
+            ?? $this->errorDeMonto($vale, $total, $menos);
     }
 
     private function errorDeFecha(ValeCompra $vale, string $fechaEmision): ?string
@@ -90,11 +94,11 @@ class UsoDeVale
         $desde = Carbon::parse($desde?->copy()->setTimezone($zona)->toDateString());
 
         if ($emision->lt($desde)) {
-            return "El comprobante es del {$emision->format('d/m/Y')}, antes de que el {$vale->numero()} valiera ({$desde->format('d/m/Y')}): la compra se hizo sin vale.";
+            return "El comprobante es del {$emision->format('d/m/Y')}, antes de que el {$vale->numero()} valiera ({$desde->format('d/m/Y')}): la compra se hizo sin pedido aprobado.";
         }
 
         if ($vale->vencido($emision)) {
-            return "El {$vale->numero()} venció el {$vale->vence_el?->format('d/m/Y')} y el comprobante es del {$emision->format('d/m/Y')}. Pide un vale nuevo.";
+            return "El {$vale->numero()} venció el {$vale->vence_el?->format('d/m/Y')} y el comprobante es del {$emision->format('d/m/Y')}. Pide un pedido nuevo.";
         }
 
         return null;
@@ -103,13 +107,13 @@ class UsoDeVale
     /**
      * @param  list<array{articulo_id: int, cantidad: float, bonificacion: bool}>  $lineas
      */
-    private function errorDeLineas(ValeCompra $vale, array $lineas): ?string
+    private function errorDeLineas(ValeCompra $vale, array $lineas, ?int $menos = null): ?string
     {
         $autorizado = $vale->detalles->where('es_servicio', false)->keyBy('articulo_id');
 
         $yaEntro = DetalleIngreso::query()
             ->where('bonificacion', false)
-            ->whereIn('ingreso_almacen_id', $vale->ingresos()->vigentes()->select('id'))
+            ->whereIn('ingreso_almacen_id', $vale->ingresos()->vigentes()->when($menos !== null, fn ($query) => $query->whereKeyNot($menos))->select('id'))
             ->groupBy('articulo_id')
             ->selectRaw('articulo_id, sum(cantidad) as cantidad')
             ->pluck('cantidad', 'articulo_id');
@@ -123,7 +127,7 @@ class UsoDeVale
             }
 
             if (! $autorizado->has($linea['articulo_id'])) {
-                return "El {$vale->numero()} no autoriza uno de los artículos del comprobante. Si se compró algo distinto, corrige el vale para que vuelva a aprobación.";
+                return "El {$vale->numero()} no autoriza uno de los artículos del comprobante. Si se compró algo distinto, corrige el pedido para que vuelva a aprobación.";
             }
 
             $llega[$linea['articulo_id']] = ($llega[$linea['articulo_id']] ?? 0.0) + $linea['cantidad'];
@@ -141,25 +145,34 @@ class UsoDeVale
         return null;
     }
 
-    private function errorDeMonto(ValeCompra $vale, float $total): ?string
+    private function errorDeMonto(ValeCompra $vale, float $total, ?int $menos = null): ?string
     {
         $autorizado = $vale->totalArticulos();
-        $yaEntro = $vale->recibidoEnArticulos();
+        $yaEntro = round((float) $vale->ingresos()->vigentes()->when($menos !== null, fn ($query) => $query->whereKeyNot($menos))->sum('total'), 2);
         $simbolo = $vale->moneda->simbolo();
 
         if ($vale->permite_parciales) {
-            return $yaEntro + $total - $autorizado > ValeCompra::CENTIMO
-                ? sprintf('Al %s le quedan %s %s por comprar y el comprobante es por %s %s. Corrige el vale para que vuelva a aprobación.', $vale->numero(), $simbolo, number_format($autorizado - $yaEntro, 2), $simbolo, number_format($total, 2))
+            return $yaEntro + $total - $autorizado > self::tolerancia()
+                ? sprintf('Al %s le quedan %s %s por comprar y el comprobante es por %s %s. Corrige el pedido para que vuelva a aprobación.', $vale->numero(), $simbolo, number_format($autorizado - $yaEntro, 2), $simbolo, number_format($total, 2))
                 : null;
         }
 
         if ($yaEntro > 0) {
-            return "El {$vale->numero()} ya se usó en otra compra: un vale sirve para una sola.";
+            return "El {$vale->numero()} ya se usó en otra compra: un pedido sirve para una sola.";
         }
 
-        return abs($total - $autorizado) > ValeCompra::CENTIMO
-            ? sprintf('El comprobante es por %1$s %2$s y el %3$s se aprobó por %1$s %4$s. Si el precio cambió, corrige el vale: vuelve a aprobación.', $simbolo, number_format($total, 2), $vale->numero(), number_format($autorizado, 2))
+        return abs($total - $autorizado) > self::tolerancia()
+            ? sprintf('El comprobante es por %1$s %2$s y el %3$s se aprobó por %1$s %4$s. Si el precio cambió, corrige el pedido: vuelve a aprobación.', $simbolo, number_format($total, 2), $vale->numero(), number_format($autorizado, 2))
             : null;
+    }
+
+    /**
+     * La diferencia de monto que se deja pasar entre lo aprobado y el
+     * comprobante.
+     */
+    public static function tolerancia(): float
+    {
+        return max((float) config('transpaty.compras.tolerancia_monto', 0), ValeCompra::CENTIMO);
     }
 
     private function cifra(float $cantidad): string

@@ -49,6 +49,7 @@ class ProveedorController extends Controller
                 'email' => $proveedor->email,
                 'direccion' => $proveedor->direccion,
                 'condicion_pago' => $proveedor->condicion_pago,
+                'cuenta_pago' => $proveedor->cuenta_pago,
                 'notas' => $proveedor->notas,
                 'activo' => $proveedor->activo,
                 'compras' => (int) $proveedor->getAttribute('ingresos_count'),

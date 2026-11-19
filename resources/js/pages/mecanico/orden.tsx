@@ -472,7 +472,7 @@ function Empezar({ orden }: { orden: Orden }) {
         evento.preventDefault();
         post(iniciar(orden.id).url, {
             preserveScroll: true,
-            forceFormData: true,
+            forceFormData: data.fotos.length > 0,
         });
     };
 
@@ -530,7 +530,7 @@ function FotosDurante({ orden }: { orden: Orden }) {
         evento?.preventDefault();
         post(subirFotos(orden.id).url, {
             preserveScroll: true,
-            forceFormData: true,
+            forceFormData: data.fotos.length > 0,
             onSuccess: () => reset('fotos'),
         });
     };
@@ -612,7 +612,7 @@ function Terminar({ orden }: { orden: Orden }) {
         evento.preventDefault();
         post(terminar(orden.id).url, {
             preserveScroll: true,
-            forceFormData: true,
+            forceFormData: data.fotos.length > 0,
         });
     };
 

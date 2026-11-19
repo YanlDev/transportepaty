@@ -56,6 +56,7 @@ enum Permiso: string
     case ComprasAprobarEmergencia = 'compras.aprobar_emergencia';
     case ComprasParciales = 'compras.parciales';
     case ComprasAnular = 'compras.anular';
+    case ComprasPagar = 'compras.pagar';
 
     case TallerVer = 'taller.ver';
     case TallerRevisar = 'taller.revisar';
@@ -134,7 +135,7 @@ enum Permiso: string
         'conductores' => 'Conductores',
         'asistencia' => 'Asistencia',
         'almacen' => 'Almacén',
-        'compras' => 'Compras (vales de compra)',
+        'compras' => 'Compras (pedidos de compra)',
         'cotizaciones' => 'Cotizaciones',
         'clientes' => 'Clientes',
         'costos' => 'Parámetros de costo',
@@ -209,16 +210,17 @@ enum Permiso: string
             self::AlmacenVer => 'Ver el stock, el kardex y los documentos del almacén',
             self::AlmacenVerCostos => 'Ver los costos y el inventario valorizado',
             self::AlmacenCatalogo => 'Registrar y editar artículos y proveedores',
-            self::AlmacenIngresar => 'Registrar compras y devoluciones',
-            self::AlmacenDespachar => 'Emitir vales de salida',
+            self::AlmacenIngresar => 'Registrar recepciones de compra y devoluciones',
+            self::AlmacenDespachar => 'Entregar repuestos (registrar entregas)',
             self::AlmacenInventariar => 'Hacer y cerrar los conteos de inventario',
-            self::AlmacenAnular => 'Anular ingresos, vales y conteos',
-            self::ComprasVer => 'Ver los vales de compra',
+            self::AlmacenAnular => 'Anular recepciones, entregas y conteos',
+            self::ComprasVer => 'Ver los pedidos de compra',
             self::ComprasSolicitar => 'Pedir compras y confirmar servicios de terceros',
             self::ComprasAprobar => 'Aprobar y rechazar compras',
             self::ComprasAprobarEmergencia => 'Aprobar compras de emergencia en ruta',
-            self::ComprasParciales => 'Ver y activar las entregas parciales de un vale',
-            self::ComprasAnular => 'Anular vales de compra',
+            self::ComprasParciales => 'Ver y activar las compras en partes de un pedido',
+            self::ComprasAnular => 'Anular pedidos de compra',
+            self::ComprasPagar => 'Registrar los pagos a proveedores',
             self::TallerVer => 'Ver los tickets por revisar',
             self::TallerRevisar => 'Dar el apto o no apto de salida',
             self::NovedadesRegistrar => 'Registrar novedades',

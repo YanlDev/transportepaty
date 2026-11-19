@@ -9,6 +9,8 @@ import ingresos, {
 import salidas from '@/actions/App/Http/Controllers/Almacen/SalidaAlmacenController';
 import { migasAlmacen } from '@/components/almacen/almacen-nav';
 import { AnularDialog } from '@/components/almacen/anular-dialog';
+import { CompletarComprobante } from '@/components/almacen/completar-comprobante';
+import type { TipoDeComprobante } from '@/components/almacen/completar-comprobante';
 import { Dato } from '@/components/almacen/dato';
 import { EstadoDocumento } from '@/components/almacen/estado-documento';
 import { CampoArchivo } from '@/components/campo-archivo';
@@ -52,6 +54,10 @@ type Props = {
     periodoAbierto: boolean;
     puedeReemplazarComprobante: boolean;
     maximoKb: number;
+    /** Entró sin comprobante y quien mira lo puede completar. */
+    puedeCompletar: boolean;
+    tiposComprobante: TipoDeComprobante[];
+    hoy: string;
 };
 
 /** Un ingreso: el comprobante tal cual y lo que entró al kardex. */
@@ -61,6 +67,9 @@ export default function IngresoShow({
     periodoAbierto,
     puedeReemplazarComprobante,
     maximoKb,
+    puedeCompletar,
+    tiposComprobante,
+    hoy,
 }: Props) {
     const { puede } = usePermisos();
     const veCostos = puede('almacen.ver_costos');
@@ -68,7 +77,7 @@ export default function IngresoShow({
 
     setLayoutProps({
         breadcrumbs: migasAlmacen(
-            { title: 'Ingresos', href: ingresos.index().url },
+            { title: 'Recepciones', href: ingresos.index().url },
             { title: ingreso.numero, href: ingresos.show(ingreso.id).url },
         ),
     });
@@ -81,8 +90,8 @@ export default function IngresoShow({
                 titulo={`${ingreso.tipo_label} ${ingreso.numero}`}
                 descripcion={
                     compra
-                        ? `${ingreso.comprobante_tipo ?? ''} ${ingreso.serie_numero ?? ''} · ${ingreso.proveedor ?? ''}`
-                        : `Vuelve del vale ${ingreso.salida ?? ''}`
+                        ? `${ingreso.comprobante_pendiente ? 'Sin comprobante todavía' : `${ingreso.comprobante_tipo ?? ''} ${ingreso.serie_numero ?? ''}`} · ${ingreso.proveedor ?? ''}`
+                        : `Vuelve del pedido ${ingreso.salida ?? ''}`
                 }
                 icono={ArrowDownToLine}
                 acciones={
@@ -99,13 +108,14 @@ export default function IngresoShow({
                                 </a>
                             </Button>
                         )}
-                        {puedeReemplazarComprobante && (
-                            <ReemplazarComprobanteDialog
-                                ingresoId={ingreso.id}
-                                maximoKb={maximoKb}
-                                tieneArchivo={ingreso.comprobante !== null}
-                            />
-                        )}
+                        {puedeReemplazarComprobante &&
+                            !ingreso.comprobante_pendiente && (
+                                <ReemplazarComprobanteDialog
+                                    ingresoId={ingreso.id}
+                                    maximoKb={maximoKb}
+                                    tieneArchivo={ingreso.comprobante !== null}
+                                />
+                            )}
                         {puedeAnular && periodoAbierto && (
                             <AnularDialog
                                 url={anular(ingreso.id).url}
@@ -123,6 +133,22 @@ export default function IngresoShow({
                     Su mes ya cerró: no se puede anular.
                 </p>
             )}
+
+            {ingreso.comprobante_pendiente &&
+                !ingreso.anulado &&
+                (puedeCompletar ? (
+                    <CompletarComprobante
+                        ingresoId={ingreso.id}
+                        totalDelPedido={ingreso.total_pedido ?? 0}
+                        tipos={tiposComprobante}
+                        hoy={hoy}
+                    />
+                ) : (
+                    <p className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">
+                        La mercadería ya entró al stock; falta que el almacén
+                        complete el comprobante.
+                    </p>
+                ))}
 
             {ingreso.anulado && (
                 <p className="rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300">
@@ -165,7 +191,7 @@ export default function IngresoShow({
                         </Dato>
                     </>
                 ) : (
-                    <Dato titulo="Vale">
+                    <Dato titulo="Pedido de compra">
                         {ingreso.salida_id ? (
                             <Link
                                 href={salidas.show(ingreso.salida_id)}

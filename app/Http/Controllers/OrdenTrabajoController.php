@@ -6,8 +6,10 @@ use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\PrioridadOrden;
 use App\Enums\TipoOrdenTrabajo;
 use App\Enums\TipoVehiculo;
+use App\Enums\UnidadMedida;
 use App\Http\Requests\Almacen\AnularDocumentoRequest;
 use App\Http\Requests\ObservarOrdenRequest;
+use App\Http\Requests\PedirRepuestoRequest;
 use App\Http\Requests\StoreOrdenTrabajoRequest;
 use App\Http\Requests\UpdateOrdenTrabajoRequest;
 use App\Models\Articulo;
@@ -19,11 +21,13 @@ use App\Models\ServicioMantenimiento;
 use App\Models\User;
 use App\Models\ValeCompra;
 use App\Models\Vehiculo;
+use App\Services\AlertasDeTaller;
 use App\Services\EjecucionDeOrden;
 use App\Services\FileUploadService;
 use App\Services\MaterialesDeOrden;
 use App\Services\ProximoMantenimiento;
 use App\Services\RelojOperativo;
+use App\Services\RepuestosDeOrden;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -45,7 +49,10 @@ class OrdenTrabajoController extends Controller
     /** Lo que no es columna de la orden: va a sus fotos, mecánicos y tareas. */
     private const FUERA_DE_LA_ORDEN = ['fotos_antes', 'fotos_despues', 'mecanicos', 'responsable_id', 'tareas'];
 
-    public function __construct(private readonly EjecucionDeOrden $ejecucion) {}
+    public function __construct(
+        private readonly EjecucionDeOrden $ejecucion,
+        private readonly AlertasDeTaller $alertas,
+    ) {}
 
     /**
      * Todas las órdenes, con lo que hay que atender primero: las solicitudes
@@ -171,6 +178,10 @@ class OrdenTrabajoController extends Controller
             return $orden;
         });
 
+        if ($orden->estado === EstadoOrdenTrabajo::Solicitada) {
+            $this->alertas->preOrdenAsignada($orden, $request->user());
+        }
+
         return to_route('mantenimiento.show', $orden->vehiculo_id)->with('toast', [
             'type' => 'success',
             'message' => 'Orden de trabajo registrada.',
@@ -225,6 +236,14 @@ class OrdenTrabajoController extends Controller
                     ->all(),
             ],
             'ejecucion' => $this->ejecucion->vista($orden),
+            // Para agregarle repuestos a la orden y pasar al catálogo los
+            // que el mecánico escribió en texto.
+            'repuestos' => [
+                'puede_agregar' => ! $orden->estaAnulado() && $orden->estado !== EstadoOrdenTrabajo::Finalizada,
+                'puede_catalogar' => $request->user()?->can('create', Articulo::class) ?? false,
+                'articulos' => $this->ejecucion->articulosPedibles(),
+                'unidades' => UnidadMedida::options(),
+            ],
             'materiales' => [
                 'lineas' => array_map(
                     fn (array $linea): array => [...$linea, 'costo' => $veCostos ? $linea['costo'] : null],
@@ -288,9 +307,9 @@ class OrdenTrabajoController extends Controller
 
         if ($vales->isNotEmpty()) {
             throw ValidationException::withMessages([
-                'motivo' => 'La orden tiene vales de almacén vigentes ('
+                'motivo' => 'La orden tiene entregas de almacén vigentes ('
                     .$vales->map(fn (SalidaAlmacen $vale): string => $vale->numero())->implode(', ')
-                    .'): anúlalos primero para que lo despachado vuelva al stock.',
+                    .'): anúlalas primero para que lo entregado vuelva al stock.',
             ]);
         }
 
@@ -318,6 +337,7 @@ class OrdenTrabajoController extends Controller
         /** @var User $revisor */
         $revisor = $request->user();
         $this->ejecucion->observar($orden, $revisor, $request->validated('motivo'));
+        $this->alertas->trabajoObservado($orden, $request->validated('motivo'), $revisor);
 
         return to_route('mantenimiento.ordenes.index')->with('toast', [
             'type' => 'warning',
@@ -336,6 +356,7 @@ class OrdenTrabajoController extends Controller
         /** @var User $aprobador */
         $aprobador = $request->user();
         DB::transaction(fn () => $this->ejecucion->aprobarRequerimiento($orden, $aprobador));
+        $this->alertas->requerimientoAprobado($orden, $aprobador);
 
         return to_route('mantenimiento.ordenes.edit', $orden)->with('toast', [
             'type' => 'success',
@@ -353,6 +374,7 @@ class OrdenTrabajoController extends Controller
         /** @var User $aprobador */
         $aprobador = $request->user();
         $this->ejecucion->devolverRequerimiento($orden, $aprobador, $request->validated('motivo'));
+        $this->alertas->requerimientoDevuelto($orden, $request->validated('motivo'), $aprobador);
 
         return to_route('mantenimiento.ordenes.index')->with('toast', [
             'type' => 'warning',
@@ -372,8 +394,46 @@ class OrdenTrabajoController extends Controller
         /** @var User $aprobador */
         $aprobador = $request->user();
         $this->ejecucion->aprobarRepuesto($repuesto->setRelation('orden', $orden), $aprobador);
+        $this->alertas->adicionalAprobado($orden, $repuesto, $aprobador);
 
         return back()->with('toast', ['type' => 'success', 'message' => "Aprobado: {$repuesto->descripcion}."]);
+    }
+
+    /**
+     * Quien gestiona la orden le agrega un repuesto: como es quien aprueba,
+     * entra ya aprobado (si la orden ya lo está).
+     */
+    public function agregarRepuesto(PedirRepuestoRequest $request, OrdenTrabajo $orden): RedirectResponse
+    {
+        $this->authorize('update', $orden);
+
+        /** @var User $usuario */
+        $usuario = $request->user();
+
+        DB::transaction(function () use ($request, $orden, $usuario): void {
+            $repuesto = $this->ejecucion->pedirRepuesto($orden, $usuario, $request->validated());
+
+            if (! $orden->estado->sinAprobar()) {
+                $this->ejecucion->aprobarRepuesto($repuesto->setRelation('orden', $orden), $usuario);
+            }
+        });
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Repuesto agregado a la orden.']);
+    }
+
+    /**
+     * Un repuesto pedido en texto pasa al catálogo del almacén: desde ahí se
+     * puede pedir su compra y entregarlo.
+     */
+    public function pasarAlCatalogo(Request $request, OrdenTrabajo $orden, RepuestoOrden $repuesto, RepuestosDeOrden $repuestos): RedirectResponse
+    {
+        $this->authorize('create', Articulo::class);
+
+        abort_unless($repuesto->orden_trabajo_id === $orden->id && $repuesto->articulo_id === null, 404);
+
+        $articulo = $repuestos->pasarAlCatalogo($repuesto);
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Artículo {$articulo->codigo} creado: ya se puede pedir su compra."]);
     }
 
     /**

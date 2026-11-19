@@ -14,8 +14,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
- * El vale de salida: lo que se le entrega al taller, siempre con destino.
- * Cada línea sale al costo promedio del momento, así que el vale ya dice
+ * La entrega: lo que se le entrega al taller, siempre con destino.
+ * Cada línea sale al costo promedio del momento, así que la entrega ya dice
  * cuánto le costó a la unidad o a la orden.
  *
  * @property int $id
@@ -54,7 +54,7 @@ class SalidaAlmacen extends Model
     protected $table = 'salidas_almacen';
 
     /**
-     * «VS-000012»: el número del vale.
+     * «VS-000012»: el número de la entrega.
      */
     public function numero(): string
     {
@@ -70,7 +70,7 @@ class SalidaAlmacen extends Model
     }
 
     /**
-     * Las devoluciones de este vale.
+     * Las devoluciones de esta entrega.
      *
      * @return HasMany<IngresoAlmacen, $this>
      */

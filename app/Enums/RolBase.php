@@ -42,6 +42,8 @@ enum RolBase: string
                 Permiso::AbastecimientoExcederTope,
                 Permiso::AlmacenVerCostos,
                 Permiso::ComprasAprobar, Permiso::ComprasAprobarEmergencia, Permiso::ComprasParciales,
+                // Quien aprueba suele ser quien hace la transferencia.
+                Permiso::ComprasPagar,
             ],
 
             // Programa los tickets, sube y asigna las GR, registra la llegada
@@ -60,6 +62,8 @@ enum RolBase: string
                 // elige al mecánico, aprueba su requerimiento y valida el
                 // trabajo terminado.
                 Permiso::MantenimientoVer, Permiso::MantenimientoSolicitar, Permiso::MantenimientoGestionar,
+                // Ajusta los planes preventivos: renombra, cambia o quita ítems.
+                Permiso::MantenimientoConfigurar,
                 Permiso::ClientesVer, Permiso::CotizacionesVer,
                 // El jefe de operaciones pide y aprueba lo de una unidad
                 // parada en ruta.
@@ -99,6 +103,8 @@ enum RolBase: string
                 Permiso::AbastecimientoVer, Permiso::AbastecimientoViaticos,
                 Permiso::CobranzaVer, Permiso::CobranzaGestionar, Permiso::CobranzaAnular, Permiso::CobranzaCerrarMes,
                 Permiso::CuentasVer, Permiso::CuentasGestionar,
+                // Anota los pagos a proveedores de las compras aprobadas.
+                Permiso::ComprasVer, Permiso::ComprasPagar,
             ],
 
             // El padrón de conductores y la asistencia, sin borrar.

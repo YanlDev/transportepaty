@@ -114,6 +114,8 @@ export type Proveedor = {
     email: string | null;
     direccion: string | null;
     condicion_pago: string | null;
+    /** A qué cuenta se le paga: banco, número, CCI. */
+    cuenta_pago?: string | null;
     notas: string | null;
     activo: boolean;
     compras: number;
@@ -156,6 +158,9 @@ export type IngresoCabecera = {
 export type IngresoDetalle = IngresoCabecera & {
     tipo_cambio: number | null;
     precios_con_igv: boolean;
+    /** La mercadería ya entró; falta poner lo que dice el comprobante. */
+    comprobante_pendiente: boolean;
+    total_pedido: number | null;
     fecha_emision: string | null;
     descuento: number | null;
     flete: number | null;

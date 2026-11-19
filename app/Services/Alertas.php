@@ -52,14 +52,19 @@ class Alertas
 
     /**
      * Avisa que pasó algo. Quien lo hizo no recibe su propia alerta.
+     *
+     * Con `$soloA`, de los destinatarios del tipo solo se avisa a esos
+     * usuarios: la orden de un mecánico le importa a él, no a todos.
+     *
+     * @param  list<int>|null  $soloA
      */
-    public function avisar(TipoAlerta $tipo, string $titulo, string $mensaje, ?string $url = null, ?User $autor = null): void
+    public function avisar(TipoAlerta $tipo, string $titulo, string $mensaje, ?string $url = null, ?User $autor = null, ?array $soloA = null): void
     {
         if (self::$silencio > 0) {
             return;
         }
 
-        rescue(function () use ($tipo, $titulo, $mensaje, $url, $autor): void {
+        rescue(function () use ($tipo, $titulo, $mensaje, $url, $autor, $soloA): void {
             $configuracion = ConfiguracionAlerta::para($tipo);
 
             if (! $configuracion->activa) {
@@ -67,7 +72,8 @@ class Alertas
             }
 
             $usuarios = $this->destinatarios($configuracion)
-                ->reject(fn (User $usuario): bool => $usuario->id === $autor?->id);
+                ->reject(fn (User $usuario): bool => $usuario->id === $autor?->id)
+                ->when($soloA !== null, fn (Collection $usuarios) => $usuarios->whereIn('id', $soloA)->values());
 
             $this->enviar($configuracion, $usuarios, new Alerta(
                 $tipo,

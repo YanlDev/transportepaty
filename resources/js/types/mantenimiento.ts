@@ -82,7 +82,7 @@ export type RepuestoAPreparar = {
     falta_stock: boolean;
 };
 
-/** Una línea de vale de salida: lo que el almacén le puso a una orden o unidad. */
+/** Una línea de entrega: lo que el almacén le puso a una orden o unidad. */
 export type LineaMaterial = {
     id: number;
     salida_id: number;
@@ -104,7 +104,7 @@ export type MaterialesOrden = {
     lineas: LineaMaterial[];
     costo: number | null;
     requeridos: RepuestoAPreparar[];
-    /** Servicios de terceros pedidos para la orden, con su vale de compra. */
+    /** Servicios de terceros pedidos para la orden, con su pedido de compra. */
     terceros: ServicioTercero[];
     puede_pedir_compra: boolean;
     puede_despachar: boolean;

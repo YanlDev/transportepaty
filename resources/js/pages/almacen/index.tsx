@@ -20,6 +20,8 @@ import salidas from '@/actions/App/Http/Controllers/Almacen/SalidaAlmacenControl
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { AlmacenNav, migasAlmacen } from '@/components/almacen/almacen-nav';
 import { CifraAlmacen } from '@/components/almacen/estado-documento';
+import type { PorHacerAlmacen } from '@/components/almacen/por-hacer';
+import { PorHacer } from '@/components/almacen/por-hacer';
 import { EmptyState } from '@/components/empty-state';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { FiltroSelect } from '@/components/filtro-select';
@@ -74,6 +76,8 @@ type Props = {
         baja_con_stock: number;
         salidas_mes: number;
     };
+    /** Lo que hay que hacer hoy, según lo que puede quien entra. */
+    porHacer: PorHacerAlmacen;
     /** Lo que entró con vencimiento y vence pronto (o ya venció), con stock. */
     porVencer: {
         id: number;
@@ -103,6 +107,7 @@ export default function AlmacenIndex({
     ubicaciones,
     resumen,
     porVencer,
+    porHacer,
 }: Props) {
     const { puede } = usePermisos();
     const veCostos = puede('almacen.ver_costos');
@@ -127,7 +132,7 @@ export default function AlmacenIndex({
 
             <EncabezadoPantalla
                 titulo="Almacén"
-                descripcion="El stock del taller: lo que entra con su factura, lo que sale con su vale y cuánto vale."
+                descripcion="Lo que hay que hacer hoy y el stock del taller: lo que se recibe con su factura y lo que se entrega a cada orden."
                 icono={Warehouse}
                 acciones={
                     <>
@@ -139,7 +144,7 @@ export default function AlmacenIndex({
                             >
                                 <Link href={salidas.create()}>
                                     <ArrowUpFromLine className="size-4" />
-                                    Vale de salida
+                                    Entregar repuestos
                                 </Link>
                             </Button>
                         )}
@@ -147,7 +152,7 @@ export default function AlmacenIndex({
                             <Button asChild className="max-md:hidden">
                                 <Link href={ingresos.create()}>
                                     <ArrowDownToLine className="size-4" />
-                                    Registrar compra
+                                    Recibir compra
                                 </Link>
                             </Button>
                         )}
@@ -156,6 +161,8 @@ export default function AlmacenIndex({
             />
 
             <AlmacenNav actual="stock" />
+
+            <PorHacer porHacer={porHacer} />
 
             {porVencer.length > 0 && (
                 <section className="rounded-xl border border-amber-500/40 bg-amber-500/5 p-4 text-sm">
@@ -479,7 +486,7 @@ export default function AlmacenIndex({
                     href={salidas.create()}
                     icono={<ArrowUpFromLine />}
                 >
-                    Vale de salida
+                    Entrega
                 </AccionPrincipalMovil>
             )}
         </div>

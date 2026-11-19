@@ -9,12 +9,14 @@ import compras from '@/actions/App/Http/Controllers/Almacen/ValeCompraController
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import {
     anular,
+    agregarRepuesto,
     aprobarRepuesto,
     aprobarRequerimiento,
     devolverRequerimiento,
     eliminarFoto,
     index as listaDeOrdenes,
     observar,
+    pasarAlCatalogo,
     quitarRepuesto,
     rechazar,
     store,
@@ -25,6 +27,8 @@ import InputError from '@/components/input-error';
 import { formatearKm } from '@/components/mantenimiento/estado-mantenimiento';
 import { SelectorFotos } from '@/components/mantenimiento/selector-fotos';
 import { EstadoOrden } from '@/components/ordenes/estado-orden';
+import { FormularioRepuesto } from '@/components/ordenes/formulario-repuesto';
+import type { ArticuloPedible } from '@/components/ordenes/formulario-repuesto';
 import { GaleriaFotos } from '@/components/ordenes/galeria-fotos';
 import { LineaDeTiempo } from '@/components/ordenes/linea-de-tiempo';
 import { SelectorBuscable } from '@/components/selector-buscable';
@@ -82,6 +86,13 @@ type Props = {
     } | null;
     /** Lo que hicieron los mecánicos; null al crear. */
     ejecucion: EjecucionDeOrden | null;
+    /** Para agregarle repuestos a la orden; solo al editar. */
+    repuestos?: {
+        puede_agregar: boolean;
+        puede_catalogar: boolean;
+        articulos: ArticuloPedible[];
+        unidades: EnumOption[];
+    };
     /** Lo que salió del almacén para la orden; solo al editar. */
     materiales?: MaterialesOrden;
     inicial: Inicial;
@@ -180,7 +191,9 @@ export default function OrdenTrabajo({
     prioridades,
     mecanicos,
     ejecucion,
+    repuestos,
 }: Props) {
+    const [agregandoRepuesto, setAgregandoRepuesto] = useState(false);
     const editando = orden !== null;
 
     // Cada grupo de fotos avisa mientras comprime las suyas.
@@ -359,7 +372,7 @@ export default function OrdenTrabajo({
                         <AnularDialog
                             url={anular(orden.id).url}
                             titulo={`¿Anular la ${orden.numero}?`}
-                            descripcion="No se borra: queda a la vista con el motivo. Si era una preventiva, el plan vuelve a contar desde el servicio anterior. Con vales de almacén vigentes no se puede anular."
+                            descripcion="No se borra: queda a la vista con el motivo. Si era una preventiva, el plan vuelve a contar desde el servicio anterior. Con entregas de almacén vigentes no se puede anular."
                         />
                     )}
                 </div>
@@ -811,8 +824,8 @@ export default function OrdenTrabajo({
 
                         {!editando && (
                             <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-                                Los repuestos salen con vale de almacén a nombre
-                                de la orden: se sacan después de registrarla.
+                                Los repuestos los entrega el almacén a nombre de
+                                la orden: se sacan después de registrarla.
                             </p>
                         )}
                     </>
@@ -825,6 +838,33 @@ export default function OrdenTrabajo({
                                 <h2 className="text-sm font-semibold">
                                     Requerimiento y trabajo del mecánico
                                 </h2>
+                                {orden !== null &&
+                                    repuestos?.puede_agregar &&
+                                    (agregandoRepuesto ? (
+                                        <FormularioRepuesto
+                                            url={agregarRepuesto(orden.id).url}
+                                            articulos={repuestos.articulos}
+                                            unidades={repuestos.unidades}
+                                            onListo={() =>
+                                                setAgregandoRepuesto(false)
+                                            }
+                                            onCancelar={() =>
+                                                setAgregandoRepuesto(false)
+                                            }
+                                        />
+                                    ) : (
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            className="h-11 self-start"
+                                            onClick={() =>
+                                                setAgregandoRepuesto(true)
+                                            }
+                                        >
+                                            <Plus className="size-4" />
+                                            Agregar un repuesto a la orden
+                                        </Button>
+                                    ))}
                                 {ejecucion.repuestos.length > 0 && (
                                     <div className="grid gap-1 text-sm">
                                         <span className="flex items-center gap-2 font-medium">
@@ -862,8 +902,40 @@ export default function OrdenTrabajo({
                                                             </span>
                                                         </span>
                                                         {repuesto.aprobado ? (
-                                                            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
-                                                                Aprobado
+                                                            <span className="flex flex-wrap items-center gap-2">
+                                                                {orden !==
+                                                                    null &&
+                                                                    !repuesto.del_catalogo &&
+                                                                    repuestos?.puede_catalogar && (
+                                                                        <Button
+                                                                            type="button"
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            onClick={() =>
+                                                                                router.post(
+                                                                                    pasarAlCatalogo(
+                                                                                        {
+                                                                                            orden: orden.id,
+                                                                                            repuesto:
+                                                                                                repuesto.id,
+                                                                                        },
+                                                                                    )
+                                                                                        .url,
+                                                                                    {},
+                                                                                    {
+                                                                                        preserveScroll: true,
+                                                                                    },
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            Pasar
+                                                                            al
+                                                                            catálogo
+                                                                        </Button>
+                                                                    )}
+                                                                <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                                                                    Aprobado
+                                                                </span>
                                                             </span>
                                                         ) : orden !== null &&
                                                           repuesto.adicional ? (
@@ -1038,7 +1110,7 @@ export default function OrdenTrabajo({
                                 <p className="text-xs text-muted-foreground">
                                     {editando
                                         ? `Todavía no salió del almacén: ${faltantes.map((f) => f.descripcion).join(', ') || '—'}.`
-                                        : 'La orden aún no tiene vales de almacén. Si el servicio pide repuestos, regístrala «En proceso», saca el vale y después finalízala; o explica acá por qué se cierra así.'}
+                                        : 'La orden aún no tiene entregas del almacén. Si el servicio pide repuestos, regístrala «En proceso», registra la entrega y después finalízala; o explica acá por qué se cierra así.'}
                                 </p>
                                 <Textarea
                                     id="orden-justificacion"
@@ -1167,7 +1239,7 @@ export default function OrdenTrabajo({
 
 /**
  * Lo que la orden consumió del almacén. No se escribe acá: cada línea es de
- * un vale de salida a nombre de la orden, y de ahí sale el costo.
+ * una entrega a nombre de la orden, y de ahí sale el costo.
  */
 function Materiales({
     ordenId,
@@ -1333,7 +1405,7 @@ function Materiales({
                         <Link
                             href={crearVale.url({ query: { orden: ordenId } })}
                         >
-                            Sacar repuestos del almacén
+                            Entregar repuestos del almacén
                         </Link>
                     </Button>
                 )}
@@ -1351,8 +1423,8 @@ function Materiales({
             </div>
             {!materiales.puede_despachar && (
                 <p className="text-xs text-muted-foreground">
-                    Los repuestos los entrega el almacén con un vale a nombre de
-                    esta orden. Lo que no se use se devuelve desde el vale.
+                    Los repuestos los entrega el almacén a nombre de esta orden.
+                    Lo que no se use se devuelve desde el vale.
                 </p>
             )}
         </section>

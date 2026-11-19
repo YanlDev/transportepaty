@@ -1,6 +1,6 @@
 import type { StatusTone } from '@/components/ui/status-badge';
 
-/** Cómo está un vale de compra hoy. */
+/** Cómo está un pedido de compra hoy. */
 export type SituacionVale =
     | 'por_aprobar'
     | 'vigente'
@@ -38,6 +38,43 @@ export type ValeCabecera = {
     solicitado_por: string | null;
     solicitado: string | null;
     vence_el: string | null;
+    /** «Contado» o «Crédito a 30 días». */
+    forma_pago: string;
+};
+
+/** Lo que se le pagó al proveedor por un pedido aprobado y lo que falta. */
+export type PagoDelPedido = {
+    pagado: number;
+    por_pagar: number;
+    vence_el: string | null;
+    vencido: boolean;
+    /** A qué cuenta se le paga; null si el proveedor no la tiene anotada. */
+    cuenta_proveedor: string | null;
+    pagos: {
+        id: number;
+        fecha: string;
+        monto: number;
+        medio: string;
+        cuenta: string | null;
+        numero_operacion: string | null;
+        voucher_url: string | null;
+        registro: string | null;
+        anulado: boolean;
+        motivo_anulacion: string | null;
+    }[];
+};
+
+/** Un pedido aprobado con saldo por pagar. */
+export type PedidoPorPagar = {
+    id: number;
+    numero: string;
+    proveedor: string;
+    simbolo: string;
+    total: number;
+    por_pagar: number;
+    forma_pago: string;
+    vence_el: string | null;
+    vencido: boolean;
 };
 
 export type LineaVale = {
@@ -69,7 +106,7 @@ export type ValeDetalle = ValeCabecera & {
     motivo_anulacion: string | null;
     recibido: number;
     saldo: number;
-    /** Null para quien no puede ver las entregas parciales. */
+    /** Null para quien no puede ver las compras en partes. */
     permite_parciales: boolean | null;
     orden: { id: number; numero: string; trabajo: string } | null;
     detalles: LineaVale[];
@@ -83,9 +120,25 @@ export type ValeDetalle = ValeCabecera & {
         anulado: boolean;
     }[];
     consultas: number;
+    /** Null mientras el pedido no está aprobado. */
+    pago: PagoDelPedido | null;
+    /** Emergencia ya instalada: al aprobarse entra y sale a la unidad sola. */
+    directo_a_unidad: boolean;
+    /** Lo que falta recibir y se puede recibir ya, sin comprobante. */
+    por_recibir: LineaPorRecibir[];
 };
 
-/** Un vale aprobado con que todavía se puede comprar, para el ingreso. */
+/** Una línea del pedido que todavía no llegó entera. */
+export type LineaPorRecibir = {
+    articulo_id: number;
+    descripcion: string;
+    unidad: string;
+    autorizado: number;
+    recibido: number;
+    pendiente: number;
+};
+
+/** Un pedido aprobado con que todavía se puede comprar, para el ingreso. */
 export type ValeParaIngreso = {
     id: number;
     numero: string;
@@ -113,7 +166,7 @@ export type ServicioTercero = {
     atendido: boolean;
 };
 
-/** Lo que ve quien verifica un vale sin cuenta en el sistema. */
+/** Lo que ve quien verifica un pedido sin cuenta en el sistema. */
 export type ValePublico = {
     numero: string;
     codigo_verificacion: string;

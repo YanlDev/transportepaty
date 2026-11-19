@@ -116,15 +116,15 @@ class StoreIngresoRequest extends FormRequest
     }
 
     /**
-     * Toda compra entra con un vale de compra aprobado, y tiene que ser lo
-     * que el vale autorizó (ver `UsoDeVale`). Solo los comprobantes de antes
+     * Toda compra entra con un pedido de compra aprobado, y tiene que ser lo
+     * que el pedido autorizó (ver `UsoDeVale`). Solo los comprobantes de antes
      * de que existiera el circuito entran sin vale.
      */
     private function conVale(Validator $validator): void
     {
         if (! $this->filled('vale_compra_id')) {
             if (UsoDeVale::esObligatorio((string) $this->input('fecha_emision'))) {
-                $validator->errors()->add('vale_compra_id', 'Toda compra necesita un vale de compra aprobado: elige con cuál se compró.');
+                $validator->errors()->add('vale_compra_id', 'Toda compra necesita un pedido de compra aprobado: elige con cuál se compró.');
             }
 
             return;
@@ -137,11 +137,21 @@ class StoreIngresoRequest extends FormRequest
             (string) $this->input('fecha_emision'),
             round((float) $this->input('total_comprobante'), 2),
             $this->lineasParaElVale(),
+            $this->ingresoQueNoCuenta(),
         );
 
         if ($error !== null) {
             $validator->errors()->add('vale_compra_id', $error);
         }
+    }
+
+    /**
+     * Una recepción del mismo pedido que no se cuenta al comprobar: ninguna
+     * al registrar una compra nueva.
+     */
+    protected function ingresoQueNoCuenta(): ?int
+    {
+        return null;
     }
 
     /**
@@ -168,6 +178,7 @@ class StoreIngresoRequest extends FormRequest
             ->vigentes()
             ->where('proveedor_id', $this->integer('proveedor_id'))
             ->where('comprobante_clave', $clave)
+            ->when($this->ingresoQueNoCuenta() !== null, fn ($query) => $query->whereKeyNot($this->ingresoQueNoCuenta()))
             ->first();
 
         if ($repetido !== null) {

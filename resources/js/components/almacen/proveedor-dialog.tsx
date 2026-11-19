@@ -63,6 +63,7 @@ export function ProveedorDialog({
             email: proveedor?.email ?? '',
             direccion: proveedor?.direccion ?? '',
             condicion_pago: proveedor?.condicion_pago ?? '',
+            cuenta_pago: proveedor?.cuenta_pago ?? '',
             notas: proveedor?.notas ?? '',
             activo: proveedor?.activo ?? true,
         });
@@ -330,6 +331,21 @@ export function ProveedorDialog({
                                         )
                                     }
                                     placeholder="Contado, crédito 30 días…"
+                                />
+                            )}
+                        </Field>
+                        <Field
+                            label="Cuenta para pagarle"
+                            error={errors.cuenta_pago}
+                        >
+                            {(id) => (
+                                <Input
+                                    id={id}
+                                    value={data.cuenta_pago}
+                                    onChange={(e) =>
+                                        setData('cuenta_pago', e.target.value)
+                                    }
+                                    placeholder="BCP soles 215-1234567-0-12 · CCI 002215…"
                                 />
                             )}
                         </Field>

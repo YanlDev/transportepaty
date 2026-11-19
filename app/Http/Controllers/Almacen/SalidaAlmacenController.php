@@ -19,6 +19,7 @@ use App\Services\Kardex;
 use App\Services\MaterialesDeOrden;
 use App\Services\PeriodoAlmacen;
 use App\Services\RelojOperativo;
+use App\Services\RepuestosDeOrden;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +28,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Los vales de salida: lo que se le entrega al taller, a qué unidad u orden
+ * Las entregas: lo que se le entrega al taller, a qué unidad u orden
  * va y cuánto costó. También lo que vuelve sin usar.
  */
 class SalidaAlmacenController extends Controller
@@ -80,13 +81,15 @@ class SalidaAlmacenController extends Controller
         ]);
     }
 
-    public function create(Request $request, MaterialesDeOrden $materiales): Response
+    public function create(Request $request, MaterialesDeOrden $materiales, RepuestosDeOrden $repuestos): Response
     {
         $this->authorize('create', SalidaAlmacen::class);
 
-        // Desde una orden de trabajo se llega con la orden ya elegida y, si
-        // es una preventiva, con lo que su nivel pide y todavía no salió.
-        $orden = OrdenTrabajo::query()->with('servicio')->find($request->integer('orden'));
+        // Desde una orden de trabajo se llega con la orden ya elegida y con
+        // lo que le falta recibir: lo que el mecánico pidió y se le aprobó
+        // o, si es una preventiva sin pedido, lo que pide su nivel.
+        $orden = OrdenTrabajo::query()->with(['servicio', 'mecanicos:id,name'])->find($request->integer('orden'));
+        $pedido = $orden === null ? [] : $this->entregables($repuestos->pendientes($orden));
 
         return Inertia::render('almacen/salidas/create', [
             'articulos' => $this->articulosParaElegir($this->veCostos($request->user()), soloConStock: true),
@@ -97,8 +100,18 @@ class SalidaAlmacenController extends Controller
                 'destino' => $orden !== null ? DestinoSalida::OrdenTrabajo->value : DestinoSalida::Unidad->value,
                 'orden_trabajo_id' => $orden?->id,
                 'vehiculo_id' => $orden !== null ? $orden->vehiculo_id : ($request->integer('vehiculo') ?: null),
-                'entregado_a' => $orden?->tecnico,
-                'detalles' => $orden?->servicio === null ? [] : $this->pendientesDe($materiales->requeridos($orden->servicio, $orden)),
+                'entregado_a' => $orden === null ? null : ($repuestos->responsable($orden)?->name ?? $orden->tecnico),
+                'detalles' => match (true) {
+                    $pedido !== [] => $pedido,
+                    $orden?->servicio !== null => $this->pendientesDe($materiales->requeridos($orden->servicio, $orden)),
+                    default => [],
+                },
+            ],
+            // Lo que la orden pidió, para que el almacenero lo vea junto al
+            // formulario: qué falta y de qué no hay.
+            'pedido' => $orden === null ? null : [
+                'numero' => $orden->numero(),
+                'lineas' => array_values(array_filter($repuestos->pendientes($orden), fn (array $linea): bool => $linea['pendiente'] > 0.0005)),
             ],
             'hoy' => RelojOperativo::hoy(),
             'inicioPeriodo' => PeriodoAlmacen::inicio()->toDateString(),
@@ -142,7 +155,7 @@ class SalidaAlmacenController extends Controller
         });
 
         return to_route('almacen.salidas.show', $salida)
-            ->with('toast', ['type' => 'success', 'message' => "Vale {$salida->numero()} emitido."]);
+            ->with('toast', ['type' => 'success', 'message' => "Entrega {$salida->numero()} registrada."]);
     }
 
     public function show(Request $request, SalidaAlmacen $salida): Response
@@ -238,11 +251,11 @@ class SalidaAlmacenController extends Controller
         PeriodoAlmacen::exigirAbierto($salida->fecha);
 
         if ($salida->devoluciones()->vigentes()->exists()) {
-            throw ValidationException::withMessages(['motivo' => 'El vale tiene devoluciones: anúlalas primero.']);
+            throw ValidationException::withMessages(['motivo' => 'La entrega tiene devoluciones: anúlalas primero.']);
         }
 
         if (Llanta::query()->whereIn('detalle_salida_id', $salida->detalles()->select('id'))->exists()) {
-            throw ValidationException::withMessages(['motivo' => 'Con este vale ya se montaron llantas: no se puede anular. Lo que no se usó se devuelve.']);
+            throw ValidationException::withMessages(['motivo' => 'Con esta entrega ya se montaron llantas: no se puede anular. Lo que no se usó se devuelve.']);
         }
 
         DB::transaction(function () use ($request, $salida): void {
@@ -255,7 +268,7 @@ class SalidaAlmacenController extends Controller
             $this->kardex->anular($salida);
         });
 
-        return back()->with('toast', ['type' => 'success', 'message' => "Vale {$salida->numero()} anulado: lo despachado volvió al stock."]);
+        return back()->with('toast', ['type' => 'success', 'message' => "Entrega {$salida->numero()} anulada: lo entregado volvió al stock."]);
     }
 
     /**
@@ -265,6 +278,41 @@ class SalidaAlmacenController extends Controller
      * @param  list<array{articulo_id: int|null, cantidad: float|null, despachado: float, stock: float|null, falta: bool, es_servicio: bool}>  $requeridos
      * @return list<array{articulo_id: int, cantidad: float}>
      */
+    /**
+     * De lo que la orden tiene pendiente, lo que hoy se le puede entregar:
+     * las líneas del catálogo, hasta donde alcanza el stock.
+     *
+     * @param  list<array{articulo_id: int|null, pendiente: float, stock: float|null}>  $pendientes
+     * @return list<array{articulo_id: int, cantidad: float}>
+     */
+    private function entregables(array $pendientes): array
+    {
+        $porArticulo = [];
+        $queda = [];
+
+        foreach ($pendientes as $linea) {
+            $id = $linea['articulo_id'];
+
+            if ($id === null) {
+                continue;
+            }
+
+            $queda[$id] ??= max((float) $linea['stock'], 0);
+            $cantidad = min($linea['pendiente'], $queda[$id]);
+
+            if ($cantidad > 0) {
+                $queda[$id] -= $cantidad;
+                $porArticulo[$id] = ($porArticulo[$id] ?? 0.0) + $cantidad;
+            }
+        }
+
+        return array_map(
+            fn (int $id, float $cantidad): array => ['articulo_id' => $id, 'cantidad' => round($cantidad, 3)],
+            array_keys($porArticulo),
+            array_values($porArticulo),
+        );
+    }
+
     private function pendientesDe(array $requeridos): array
     {
         $pendientes = [];

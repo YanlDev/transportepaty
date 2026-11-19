@@ -134,7 +134,7 @@ class StoreOrdenTrabajoRequest extends FormRequest
                         'No salió del almacén todo lo que pide el servicio '.$servicio->codigo.': '
                             .implode('; ', array_slice($faltantes, 0, 8))
                             .(count($faltantes) > 8 ? '; y '.(count($faltantes) - 8).' más' : '')
-                            .'. Saca el vale o explica por qué se cierra así.',
+                            .'. Registra la entrega o explica por qué se cierra así.',
                     );
                 }
             },

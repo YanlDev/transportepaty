@@ -7,7 +7,7 @@ use App\Enums\Concerns\HasLabel;
 /**
  * Lo que cambia el equipamiento de una unidad sin pasar por el almacén: lo
  * que ya tenía en su primer conteo, lo que se le pasa a otra unidad y lo que
- * se da de baja. Lo que sale del almacén se lee de los vales de salida.
+ * se da de baja. Lo que sale del almacén se lee de las entregas.
  */
 enum TipoMovimientoEquipamiento: string
 {

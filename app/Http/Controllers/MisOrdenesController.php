@@ -9,11 +9,11 @@ use App\Http\Requests\IniciarOrdenRequest;
 use App\Http\Requests\PedirRepuestoRequest;
 use App\Http\Requests\SubirFotosOrdenRequest;
 use App\Http\Requests\TerminarOrdenRequest;
-use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
 use App\Models\RepuestoOrden;
 use App\Models\TareaOrden;
 use App\Models\User;
+use App\Services\AlertasDeTaller;
 use App\Services\EjecucionDeOrden;
 use App\Services\FileUploadService;
 use App\Services\MaterialesDeOrden;
@@ -39,7 +39,10 @@ class MisOrdenesController extends Controller
     /** Cuántos días se siguen viendo las que ya se finalizaron. */
     private const DIAS_DE_TERMINADAS = 14;
 
-    public function __construct(private readonly EjecucionDeOrden $ejecucion) {}
+    public function __construct(
+        private readonly EjecucionDeOrden $ejecucion,
+        private readonly AlertasDeTaller $alertas,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -115,19 +118,7 @@ class MisOrdenesController extends Controller
             'maximo_fotos' => IniciarOrdenRequest::MAXIMO_FOTOS,
             // El catálogo del almacén, para pedir repuestos por su nombre:
             // sin costos, solo si hay o no hay.
-            'articulos' => Articulo::query()
-                ->where('activo', true)
-                ->orderBy('nombre')
-                ->limit(1000)
-                ->get(['id', 'codigo', 'nombre', 'unidad', 'stock'])
-                ->map(fn (Articulo $articulo): array => [
-                    'id' => $articulo->id,
-                    'nombre' => $articulo->nombre,
-                    'codigo' => $articulo->codigo,
-                    'unidad' => $articulo->unidad->value,
-                    'hay' => (float) $articulo->stock > 0,
-                ])
-                ->all(),
+            'articulos' => $this->ejecucion->articulosPedibles(),
             'unidades' => UnidadMedida::options(),
         ]);
     }
@@ -142,6 +133,7 @@ class MisOrdenesController extends Controller
         /** @var User $mecanico */
         $mecanico = $request->user();
         $this->ejecucion->enviarRequerimiento($orden, $mecanico);
+        $this->alertas->requerimientoEnviado($orden, $mecanico);
 
         return to_route('mis-ordenes.index')->with('toast', [
             'type' => 'success',
@@ -181,6 +173,10 @@ class MisOrdenesController extends Controller
         /** @var User $mecanico */
         $mecanico = $request->user();
         $repuesto = $this->ejecucion->pedirRepuesto($orden, $mecanico, $request->validated());
+
+        if ($repuesto->adicional) {
+            $this->alertas->adicionalPedido($orden, $repuesto, $mecanico);
+        }
 
         return back()->with('toast', [
             'type' => 'success',
@@ -241,6 +237,8 @@ class MisOrdenesController extends Controller
                 $request->filled('kilometraje') ? $request->integer('kilometraje') : null,
             );
         });
+
+        $this->alertas->trabajoTerminado($orden, $mecanico);
 
         return to_route('mis-ordenes.index')->with('toast', [
             'type' => 'success',

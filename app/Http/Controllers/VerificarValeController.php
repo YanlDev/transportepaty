@@ -12,10 +12,10 @@ use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * La página pública donde un proveedor comprueba un vale de compra, sin
+ * La página pública donde un proveedor comprueba un pedido de compra, sin
  * cuenta en el sistema: llega por el QR o escribiendo el código impreso.
  *
- * Lo que muestra sale de la base en ese momento, no del papel: el vale real,
+ * Lo que muestra sale de la base en ese momento, no del papel: el pedido real,
  * si su firma sigue siendo válida y si todavía sirve para comprar. Sin el QR
  * o el código no se ve nada: no hay listado ni números que recorrer.
  */
@@ -27,13 +27,13 @@ class VerificarValeController extends Controller
     }
 
     /**
-     * Busca por el código que se escribe a mano y lleva a la página del vale.
+     * Busca por el código que se escribe a mano y lleva a la página del pedido.
      */
     public function buscar(Request $request): RedirectResponse
     {
         $request->validate(
             ['codigo' => ['required', 'string', 'max:40']],
-            ['codigo.required' => 'Escribe el código que está impreso en el vale.'],
+            ['codigo.required' => 'Escribe el código que está impreso en el pedido.'],
         );
 
         $vale = ValeCompra::query()
@@ -41,7 +41,7 @@ class VerificarValeController extends Controller
             ->first();
 
         if ($vale === null) {
-            return back()->withErrors(['codigo' => 'No existe ningún vale con ese código. Revisa que esté bien escrito.']);
+            return back()->withErrors(['codigo' => 'No existe ningún pedido con ese código. Revisa que esté bien escrito.']);
         }
 
         return to_route('vales.verificar', $vale->codigo_publico);

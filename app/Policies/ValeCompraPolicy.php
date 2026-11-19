@@ -26,7 +26,7 @@ class ValeCompraPolicy
     }
 
     /**
-     * Corregir un vale lo devuelve a aprobación. Ya usado no se corrige.
+     * Corregir un pedido lo devuelve a aprobación. Ya usado no se corrige.
      */
     public function update(User $user, ValeCompra $vale): bool
     {
@@ -65,6 +65,18 @@ class ValeCompraPolicy
         return ! $vale->estaAnulado()
             && $vale->estado === EstadoValeCompra::Aprobado
             && $user->checkPermissionTo(Permiso::ComprasSolicitar);
+    }
+
+    /**
+     * Anotar un pago al proveedor: solo de un pedido aprobado, y nunca quien
+     * lo pidió (quien pide no aprueba ni paga).
+     */
+    public function pagar(User $user, ValeCompra $vale): bool
+    {
+        return ! $vale->estaAnulado()
+            && $vale->estado === EstadoValeCompra::Aprobado
+            && $vale->solicitado_por !== $user->id
+            && $user->checkPermissionTo(Permiso::ComprasPagar);
     }
 
     /**

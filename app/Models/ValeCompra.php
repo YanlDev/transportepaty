@@ -3,12 +3,14 @@
 namespace App\Models;
 
 use App\Enums\EstadoValeCompra;
+use App\Enums\FormaPago;
 use App\Enums\Moneda;
 use App\Enums\SituacionValeCompra;
 use App\Enums\TipoValeCompra;
 use App\Models\Concerns\RegistraHistorial;
 use App\Models\Concerns\SeAnula;
 use App\Services\RelojOperativo;
+use Carbon\CarbonInterface;
 use Database\Factories\ValeCompraFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,7 +22,7 @@ use Spatie\MediaLibrary\HasMedia;
 use Spatie\MediaLibrary\InteractsWithMedia;
 
 /**
- * Un vale de compra: nace como solicitud, gerencia lo aprueba (o el jefe de
+ * Un pedido de compra: nace como solicitud, gerencia lo aprueba (o el jefe de
  * operaciones, si es una emergencia en ruta) y desde ahí es el documento con
  * que se compra. Al aprobarlo el servidor lo firma (ver `FirmaDeVales`), y
  * vale hasta `vence_el`.
@@ -36,6 +38,8 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property string $codigo_verificacion
  * @property int $proveedor_id
  * @property Moneda $moneda
+ * @property FormaPago $forma_pago
+ * @property int|null $dias_credito
  * @property string $total
  * @property string $motivo
  * @property string|null $sustento_precio
@@ -68,12 +72,15 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'codigo_verificacion',
     'proveedor_id',
     'moneda',
+    'forma_pago',
+    'dias_credito',
     'total',
     'motivo',
     'sustento_precio',
     'orden_trabajo_id',
     'vehiculo_id',
     'permite_parciales',
+    'directo_a_unidad',
     'solicitado_por',
     'aprobado_por',
     'aprobado_at',
@@ -148,7 +155,58 @@ class ValeCompra extends Model implements HasMedia
     }
 
     /**
-     * Las compras que entraron al almacén con este vale.
+     * Los pagos anotados a este pedido.
+     *
+     * @return HasMany<PagoCompra, $this>
+     */
+    public function pagos(): HasMany
+    {
+        return $this->hasMany(PagoCompra::class)->orderBy('fecha')->orderBy('id');
+    }
+
+    /**
+     * Lo ya pagado al proveedor: los pagos sin anular.
+     */
+    public function pagado(): float
+    {
+        return round((float) $this->pagos()->vigentes()->sum('monto'), 2);
+    }
+
+    /**
+     * Lo que falta pagarle al proveedor por lo aprobado.
+     */
+    public function porPagar(): float
+    {
+        return round(max((float) $this->total - $this->pagado(), 0), 2);
+    }
+
+    /**
+     * Hasta cuándo hay que pagar: al contado, desde que se aprueba; a
+     * crédito, los días pactados después. Null mientras no esté aprobado.
+     */
+    public function pagoVenceEl(): ?CarbonInterface
+    {
+        if ($this->aprobado_at === null) {
+            return null;
+        }
+
+        $aprobado = $this->aprobado_at->copy()->setTimezone(RelojOperativo::ahora()->getTimezone())->startOfDay();
+
+        return $this->forma_pago === FormaPago::Credito ? $aprobado->addDays((int) $this->dias_credito) : $aprobado;
+    }
+
+    /**
+     * Aprobado, vigente y con saldo por pagar.
+     */
+    public function tienePagoPendiente(): bool
+    {
+        return ! $this->estaAnulado()
+            && $this->estado === EstadoValeCompra::Aprobado
+            && $this->porPagar() > self::CENTIMO;
+    }
+
+    /**
+     * Las compras que entraron al almacén con este pedido.
      *
      * @return HasMany<IngresoAlmacen, $this>
      */
@@ -222,7 +280,7 @@ class ValeCompra extends Model implements HasMedia
     }
 
     /**
-     * Lo ya comprado en artículos: los ingresos vigentes que nombran el vale.
+     * Lo ya comprado en artículos: los ingresos vigentes que nombran el pedido.
      */
     public function recibidoEnArticulos(): float
     {
@@ -230,7 +288,7 @@ class ValeCompra extends Model implements HasMedia
     }
 
     /**
-     * Lo ya usado del vale: lo que entró al almacén y los servicios atendidos.
+     * Lo ya usado del pedido: lo que entró al almacén y los servicios atendidos.
      */
     public function recibido(): float
     {
@@ -246,7 +304,7 @@ class ValeCompra extends Model implements HasMedia
     }
 
     /**
-     * Si en esa fecha (hoy, por defecto) el vale ya pasó su vigencia.
+     * Si en esa fecha (hoy, por defecto) el pedido ya pasó su vigencia.
      */
     public function vencido(Carbon|string|null $fecha = null): bool
     {
@@ -287,7 +345,7 @@ class ValeCompra extends Model implements HasMedia
      */
     public function registerMediaCollections(): void
     {
-        foreach (['cotizaciones', 'comprobantes_servicio'] as $coleccion) {
+        foreach (['cotizaciones', 'comprobantes_servicio', 'vouchers_pago'] as $coleccion) {
             $this->addMediaCollection($coleccion)
                 ->useDisk('local')
                 ->acceptsMimeTypes(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
@@ -308,8 +366,11 @@ class ValeCompra extends Model implements HasMedia
             'tipo' => TipoValeCompra::class,
             'estado' => EstadoValeCompra::class,
             'moneda' => Moneda::class,
+            'forma_pago' => FormaPago::class,
+            'dias_credito' => 'integer',
             'total' => 'decimal:2',
             'permite_parciales' => 'boolean',
+            'directo_a_unidad' => 'boolean',
             'aprobado_at' => 'datetime',
             'vence_el' => 'date:Y-m-d',
             'rechazado_at' => 'datetime',

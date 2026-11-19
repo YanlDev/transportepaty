@@ -30,6 +30,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property int|null $proveedor_id
  * @property int|null $vale_compra_id
  * @property TipoComprobante|null $tipo_comprobante
+ * @property bool $comprobante_pendiente La mercadería ya entró; falta el comprobante.
  * @property string|null $serie_numero
  * @property string|null $comprobante_clave
  * @property Moneda $moneda
@@ -57,6 +58,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'proveedor_id',
     'vale_compra_id',
     'tipo_comprobante',
+    'comprobante_pendiente',
     'serie_numero',
     'comprobante_clave',
     'moneda',
@@ -141,7 +143,7 @@ class IngresoAlmacen extends Model implements HasMedia
     }
 
     /**
-     * El vale de compra con que se compró.
+     * El pedido de compra con que se compró.
      *
      * @return BelongsTo<ValeCompra, $this>
      */
@@ -198,6 +200,7 @@ class IngresoAlmacen extends Model implements HasMedia
             'moneda' => Moneda::class,
             'tipo_cambio' => 'decimal:4',
             'precios_con_igv' => 'boolean',
+            'comprobante_pendiente' => 'boolean',
             'descuento' => 'decimal:2',
             'flete' => 'decimal:2',
             'subtotal' => 'decimal:2',

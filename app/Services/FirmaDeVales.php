@@ -8,14 +8,14 @@ use Illuminate\Validation\ValidationException;
 use SodiumException;
 
 /**
- * La firma del servidor sobre un vale de compra aprobado (Ed25519).
+ * La firma del servidor sobre un pedido de compra aprobado (Ed25519).
  *
- * Se firma una huella (SHA-256) de lo que el vale autoriza: su número, a qué
+ * Se firma una huella (SHA-256) de lo que el pedido autoriza: su número, a qué
  * proveedor, cada línea con su cantidad y su precio, el total, quién lo pidió,
  * quién lo aprobó, cuándo y hasta cuándo vale. Al verificar se vuelve a
  * calcular la huella con lo que hay hoy en la base: si alguien cambió un
  * monto o una cantidad después de la aprobación —desde la pantalla o directo
- * en la base—, la huella ya no es la firmada y el vale no valida.
+ * en la base—, la huella ya no es la firmada y el pedido no valida.
  *
  * Lo que la firma no puede saber: si quien aprobó debía aprobar, ni si la
  * clave privada salió del servidor. Por eso la clave vive solo en el `.env`.
@@ -23,7 +23,7 @@ use SodiumException;
 class FirmaDeVales
 {
     /**
-     * Firma el vale con lo que tiene en este momento. Se llama al aprobarlo,
+     * Firma el pedido con lo que tiene en este momento. Se llama al aprobarlo,
      * con el aprobador, la fecha y el vencimiento ya puestos.
      *
      * @throws ValidationException si el servidor no tiene clave de firma
@@ -47,7 +47,7 @@ class FirmaDeVales
     }
 
     /**
-     * Si el vale es el que se firmó: su contenido no cambió y la firma es de
+     * Si el pedido es el que se firmó: su contenido no cambió y la firma es de
      * este servidor.
      */
     public function esAutentico(ValeCompra $vale): bool
@@ -64,8 +64,8 @@ class FirmaDeVales
     }
 
     /**
-     * La huella de lo que el vale autoriza, tal como está hoy en la base.
-     * Las líneas se leen aparte: recargar la relación del vale le quitaría
+     * La huella de lo que el pedido autoriza, tal como está hoy en la base.
+     * Las líneas se leen aparte: recargar la relación del pedido le quitaría
      * a quien lo muestra lo que ya cargó con ellas (sus artículos).
      */
     public function huella(ValeCompra $vale): string

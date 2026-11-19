@@ -131,7 +131,7 @@ class OrdenTrabajo extends Model implements HasMedia
     }
 
     /**
-     * Los vales de salida del almacén que nombran esta orden.
+     * Las entregas del almacén que nombran esta orden.
      *
      * @return HasMany<SalidaAlmacen, $this>
      */

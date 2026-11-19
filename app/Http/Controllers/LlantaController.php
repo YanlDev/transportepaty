@@ -324,7 +324,7 @@ class LlantaController extends Controller
 
             // Con la línea bloqueada: dos montajes a la vez no usan la misma llanta.
             if ($this->deAlmacen->disponibles($detalle) < 1) {
-                throw ValidationException::withMessages(['detalle_salida_id' => 'Las llantas de ese vale ya están todas montadas.']);
+                throw ValidationException::withMessages(['detalle_salida_id' => 'Las llantas de esa entrega ya están todas montadas.']);
             }
 
             $llanta = Llanta::create([

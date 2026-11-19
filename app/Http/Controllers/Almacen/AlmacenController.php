@@ -2,6 +2,10 @@
 
 namespace App\Http\Controllers\Almacen;
 
+use App\Enums\EstadoValeCompra;
+use App\Enums\Permiso;
+use App\Enums\SituacionValeCompra;
+use App\Enums\TipoValeCompra;
 use App\Http\Controllers\Almacen\Concerns\CatalogosAlmacen;
 use App\Http\Controllers\Controller;
 use App\Models\Articulo;
@@ -10,8 +14,10 @@ use App\Models\DetalleIngreso;
 use App\Models\IngresoAlmacen;
 use App\Models\SalidaAlmacen;
 use App\Models\UbicacionAlmacen;
+use App\Models\ValeCompra;
 use App\Services\ExportadorAlmacen;
 use App\Services\RelojOperativo;
+use App\Services\RepuestosDeOrden;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -25,6 +31,8 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 class AlmacenController extends Controller
 {
     use CatalogosAlmacen;
+
+    public function __construct(private readonly RepuestosDeOrden $repuestos) {}
 
     public function index(Request $request): Response
     {
@@ -57,7 +65,51 @@ class AlmacenController extends Controller
 
         $activos = Articulo::query()->where('activo', true);
 
+        $usuario = $request->user();
+        $entrega = $usuario?->can('create', SalidaAlmacen::class) ?? false;
+        $pideCompras = $usuario?->can('create', ValeCompra::class) ?? false;
+        $veCompras = $usuario?->can('viewAny', ValeCompra::class) ?? false;
+        $recibe = $usuario?->can('create', IngresoAlmacen::class) ?? false;
+
+        $pedidos = $veCompras
+            ? ValeCompra::query()->vigentes()->with('proveedor')->whereIn('estado', [EstadoValeCompra::Solicitado, EstadoValeCompra::Aprobado])->orderBy('id')->get()
+            : collect();
+        $pedido = fn (ValeCompra $vale): array => [
+            'id' => $vale->id,
+            'numero' => $vale->numero(),
+            'proveedor' => $vale->proveedor->nombre(),
+            'total' => $veCostos ? (float) $vale->total : null,
+            'moneda' => $vale->moneda->simbolo(),
+            'emergencia' => $vale->tipo === TipoValeCompra::Emergencia,
+            'puede_aprobar' => $usuario?->can('aprobar', $vale) ?? false,
+        ];
+
         return Inertia::render('almacen/index', [
+            // Lo que le toca hacer hoy a quien entra, según lo que puede
+            // hacer: entregar a las órdenes, comprar lo que falta, aprobar
+            // pedidos y recibir lo comprado.
+            'porHacer' => [
+                'entregas' => $entrega ? $this->repuestos->porEntregar() : null,
+                'por_comprar' => $pideCompras ? $this->repuestos->porComprar() : null,
+                'por_aprobar' => $veCompras
+                    ? $pedidos->filter(fn (ValeCompra $vale): bool => $vale->situacion() === SituacionValeCompra::PorAprobar)->map($pedido)->values()->all()
+                    : null,
+                'por_recibir' => $recibe
+                    ? $pedidos->filter(fn (ValeCompra $vale): bool => in_array($vale->situacion(), [SituacionValeCompra::Vigente, SituacionValeCompra::Parcial], true))->map($pedido)->values()->all()
+                    : null,
+                // Lo que ya entró y todavía no tiene su comprobante.
+                'sin_comprobante' => $recibe
+                    ? IngresoAlmacen::query()->vigentes()->where('comprobante_pendiente', true)->with('proveedor')->orderBy('id')->get()
+                        ->map(fn (IngresoAlmacen $ingreso): array => [
+                            'id' => $ingreso->id,
+                            'numero' => $ingreso->numero(),
+                            'proveedor' => $ingreso->proveedor?->nombre() ?? '',
+                            'fecha' => $ingreso->fecha->toDateString(),
+                        ])->values()->all()
+                    : null,
+                'por_pagar' => ($usuario?->checkPermissionTo(Permiso::ComprasPagar) ?? false) ? ValeCompraController::porPagar() : null,
+                'puede_catalogar' => $usuario?->can('create', Articulo::class) ?? false,
+            ],
             'articulos' => $articulos,
             'filtros' => $filtros,
             'categorias' => CategoriaArticulo::query()->orderBy('nombre')->get(['id', 'nombre']),

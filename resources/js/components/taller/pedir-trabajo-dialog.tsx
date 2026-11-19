@@ -67,7 +67,7 @@ export function PedirTrabajoDialog({
 
         post(store().url, {
             preserveScroll: true,
-            forceFormData: true,
+            forceFormData: data.fotos.length > 0,
             onSuccess: () => {
                 reset();
                 setAbierto(false);

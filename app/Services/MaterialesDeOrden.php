@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\Builder;
  * Lo que una orden de trabajo consumió del almacén, y lo que le falta.
  *
  * La orden no guarda materiales propios: sus materiales son las líneas de los
- * vales de salida vigentes que la nombran, menos lo que se devolvió. De ahí
+ * entregas vigentes que la nombran, menos lo que se devolvió. De ahí
  * sale también su costo. Así no hay forma de anotar un repuesto en una orden
  * sin que haya salido del almacén.
  *
@@ -174,7 +174,7 @@ class MaterialesDeOrden
 
     /**
      * Los servicios de terceros de las órdenes: líneas de servicio de sus
-     * vales de compra aprobados. Cuentan como costo una vez atendidos.
+     * pedidos de compra aprobados. Cuentan como costo una vez atendidos.
      *
      * @param  list<int>  $ordenIds
      * @return list<array{id: int, orden_trabajo_id: int, vale_id: int, vale: string, descripcion: string, proveedor: string, total: float, atendido: bool}>

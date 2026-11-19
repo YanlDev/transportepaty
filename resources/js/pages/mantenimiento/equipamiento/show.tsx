@@ -239,7 +239,7 @@ export default function EquipamientoCarretaShow({
                 {movimientos.length === 0 ? (
                     <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
                         Sin movimientos. Lo que salió del almacén para esta
-                        unidad está en sus vales de salida.
+                        unidad está en sus entregas.
                     </p>
                 ) : (
                     <ul className="flex flex-col divide-y rounded-xl border bg-card">

@@ -5,7 +5,7 @@ namespace App\Enums;
 use App\Enums\Concerns\HasLabel;
 
 /**
- * Cómo está un vale de compra hoy, que es lo que le importa a quien lo
+ * Cómo está un pedido de compra hoy, que es lo que le importa a quien lo
  * recibe: si todavía sirve para comprar o no, y por qué.
  */
 enum SituacionValeCompra: string
@@ -34,7 +34,7 @@ enum SituacionValeCompra: string
     }
 
     /**
-     * Si con el vale en esta situación todavía se puede comprar.
+     * Si con el pedido en esta situación todavía se puede comprar.
      */
     public function sirveParaComprar(): bool
     {

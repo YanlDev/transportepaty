@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Enums\NivelMantenimiento;
 use App\Enums\TipoVehiculo;
+use App\Enums\UnidadMedida;
 use App\Http\Requests\UpdatePlanMantenimientoRequest;
 use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
@@ -11,6 +12,7 @@ use App\Models\PlanMantenimiento;
 use App\Models\RepuestoServicio;
 use App\Models\ServicioMantenimiento;
 use App\Models\Vehiculo;
+use App\Services\ArticulosDelPlan;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -52,7 +54,7 @@ class PlanMantenimientoController extends Controller
                                 'descripcion' => $repuesto->descripcion,
                                 'codigo' => $repuesto->codigo,
                                 'cantidad' => $repuesto->cantidad === null ? null : (float) $repuesto->cantidad,
-                                'unidad' => $repuesto->unidad,
+                                'unidad' => ArticulosDelPlan::unidad($repuesto->unidad)->value,
                                 'articulo_id' => $repuesto->articulo_id,
                                 'es_servicio' => $repuesto->es_servicio,
                             ])
@@ -63,6 +65,7 @@ class PlanMantenimientoController extends Controller
                     ->all(),
             ],
             'niveles' => NivelMantenimiento::options(),
+            'unidades' => UnidadMedida::options(),
             // El catálogo del almacén, para ligar cada ítem a su artículo.
             'articulos' => Articulo::query()
                 ->orderBy('nombre')
@@ -72,7 +75,7 @@ class PlanMantenimientoController extends Controller
                     'codigo' => $articulo->codigo,
                     'nombre' => $articulo->nombre,
                     'numero_parte' => $articulo->numero_parte,
-                    'unidad' => $articulo->unidad->abreviatura(),
+                    'unidad' => $articulo->unidad->value,
                 ])
                 ->values()
                 ->all(),
@@ -83,14 +86,14 @@ class PlanMantenimientoController extends Controller
      * Guarda el plan entero. Cada nivel conserva su fila —y con ella las
      * órdenes que apuntan a él—; sus ítems se reemplazan por los que llegan.
      */
-    public function update(UpdatePlanMantenimientoRequest $request, PlanMantenimiento $plan): RedirectResponse
+    public function update(UpdatePlanMantenimientoRequest $request, PlanMantenimiento $plan, ArticulosDelPlan $articulos): RedirectResponse
     {
         $this->authorize('update', $plan);
 
         /** @var list<array{codigo: string, nombre: string, intervalo_km: int, intervalo_meses: int|null, repuestos: list<array{descripcion: string, codigo: string|null, cantidad: float|null, unidad: string|null, articulo_id?: int|null, es_servicio?: bool|null}>}> $servicios */
         $servicios = $request->validated('servicios');
 
-        DB::transaction(function () use ($request, $plan, $servicios): void {
+        DB::transaction(function () use ($request, $plan, $servicios, $articulos): void {
             $plan->update(['nombre' => $request->validated('nombre')]);
 
             $plan->servicios()->whereNotIn('codigo', array_column($servicios, 'codigo'))->delete();
@@ -120,6 +123,12 @@ class PlanMantenimientoController extends Controller
                     ]);
                 }
             }
+
+            // Cada ítem que sale del almacén queda con su artículo (se crea
+            // solo, en stock cero) y en su misma unidad; los artículos que
+            // el plan ya no usa y nunca se movieron, se van.
+            $articulos->asegurar($plan->unsetRelation('servicios'));
+            $articulos->limpiar($plan);
         });
 
         return to_route('mantenimiento.preventivo', ['marca' => $plan->marca])

@@ -3,6 +3,7 @@ import { Plus, ShoppingCart } from 'lucide-react';
 import compras from '@/actions/App/Http/Controllers/Almacen/ValeCompraController';
 import { AccionPrincipalMovil } from '@/components/accion-principal-movil';
 import { AlmacenNav, migasAlmacen } from '@/components/almacen/almacen-nav';
+import { PorPagar } from '@/components/almacen/por-pagar';
 import { EmptyState } from '@/components/empty-state';
 import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { FiltroSelect } from '@/components/filtro-select';
@@ -20,10 +21,12 @@ import {
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import { TONO_SITUACION } from '@/types/compras';
-import type { ValeCabecera } from '@/types/compras';
+import type { ValeCabecera, PedidoPorPagar } from '@/types/compras';
 import type { EnumOption, Paginator } from '@/types/fleet';
 
 type Props = {
+    /** Lo aprobado que se le debe a proveedores; null si no anota pagos. */
+    porPagar: PedidoPorPagar[] | null;
     vales: Paginator<ValeCabecera>;
     filtros: { estado: string | null };
     estados: EnumOption[];
@@ -32,10 +35,11 @@ type Props = {
 };
 
 /**
- * Los vales de compra: lo que se pidió, lo que espera aprobación y lo que ya
+ * Los pedidos de compra: lo que se pidió, lo que espera aprobación y lo que ya
  * se puede comprar. Toda compra entra al almacén con uno aprobado.
  */
 export default function ComprasIndex({
+    porPagar,
     vales,
     filtros,
     estados,
@@ -60,15 +64,15 @@ export default function ComprasIndex({
             <Head title="Compras" />
 
             <EncabezadoPantalla
-                titulo="Compras"
-                descripcion="Toda compra se pide con un vale, lo aprueba gerencia y recién entonces se compra. El vale aprobado vale 5 días."
+                titulo="Pedidos de compra"
+                descripcion="Toda compra se pide con un pedido, lo aprueba gerencia y recién entonces se compra. El pedido aprobado sirve 5 días."
                 icono={ShoppingCart}
                 acciones={
                     puedeSolicitar && (
                         <Button asChild className="max-md:hidden">
                             <Link href={compras.create()}>
                                 <Plus className="size-4" />
-                                Pedir compra
+                                Nuevo pedido
                             </Link>
                         </Button>
                     )
@@ -76,6 +80,8 @@ export default function ComprasIndex({
             />
 
             <AlmacenNav actual="compras" />
+
+            {porPagar !== null && <PorPagar pedidos={porPagar} />}
 
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <FiltroSelect
@@ -101,7 +107,7 @@ export default function ComprasIndex({
             {vales.data.length === 0 ? (
                 <EmptyState
                     icono={<ShoppingCart className="size-7" />}
-                    titulo="No hay vales de compra"
+                    titulo="No hay pedidos de compra"
                     descripcion="Cuando falte algo en el almacén o en una orden de trabajo, se pide desde acá."
                 />
             ) : (

@@ -382,7 +382,19 @@ it('takes the purchase with its vale, and the vale is used only once', function 
         ->assertInertia(fn (Assert $page) => $page->where('vale.valido', false)->where('vale.situacion', 'usado'));
 });
 
-it('sends any difference with the approved amount back to approval', function (): void {
+it('lets a rounding difference through but not a change of price', function (): void {
+    $filtro = Articulo::factory()->create();
+    $vale = valeAprobado([[$filtro, 4, 59]]);
+
+    // Diez céntimos por unidad: S/ 0.40 en total, dentro de la tolerancia.
+    actingAs(almacenDePrueba())
+        ->post(route('almacen.ingresos.store'), compraConVale($vale, [[$filtro, 4, 59.10]]))
+        ->assertSessionHasNoErrors();
+
+    expect(IngresoAlmacen::query()->count())->toBe(1);
+});
+
+it('sends a real difference with the approved amount back to approval', function (): void {
     $filtro = Articulo::factory()->create();
     $otro = Articulo::factory()->create();
     $vale = valeAprobado([[$filtro, 4, 59]]);
@@ -391,8 +403,8 @@ it('sends any difference with the approved amount back to approval', function ()
         ->post(route('almacen.ingresos.store'), $datos)
         ->assertSessionHasErrors('vale_compra_id');
 
-    // Diez céntimos más por unidad.
-    $rechaza(compraConVale($vale, [[$filtro, 4, 59.10]]));
+    // Un sol más por unidad: ya no es redondeo.
+    $rechaza(compraConVale($vale, [[$filtro, 4, 60]]));
     // Menos cantidad: el monto ya no es el aprobado.
     $rechaza(compraConVale($vale, [[$filtro, 3, 59]]));
     // Un artículo que el vale no autoriza.

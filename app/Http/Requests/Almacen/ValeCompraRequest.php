@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Almacen;
 
+use App\Enums\FormaPago;
 use App\Enums\Moneda;
 use App\Enums\TipoValeCompra;
 use App\Models\OrdenTrabajo;
@@ -37,12 +38,17 @@ class ValeCompraRequest extends FormRequest
             'tipo' => ['required', Rule::enum(TipoValeCompra::class)],
             'proveedor_id' => ['required', 'integer', Rule::exists('proveedores', 'id')->where('activo', true)],
             'moneda' => ['required', Rule::enum(Moneda::class)],
+            'forma_pago' => ['nullable', Rule::enum(FormaPago::class)],
+            'dias_credito' => ['nullable', 'required_if:forma_pago,'.FormaPago::Credito->value, 'integer', 'min:1', 'max:365'],
             'motivo' => ['required', 'string', 'min:5', 'max:1000'],
             'sustento_precio' => ['nullable', 'string', 'min:10', 'max:1000'],
             'orden_trabajo_id' => ['nullable', 'integer', Rule::exists('ordenes_trabajo', 'id')],
             'vehiculo_id' => ['nullable', 'integer', Rule::exists('vehiculos', 'id')],
             'cotizaciones' => ['nullable', 'array', 'max:5'],
             'cotizaciones.*' => ReglasDeArchivo::imagenOPdf(),
+            // Emergencia en ruta que ya se instaló: al aprobarse entra y sale
+            // a la unidad sin pasar por el almacén.
+            'directo_a_unidad' => ['boolean'],
             'detalles' => ['required', 'array', 'min:1', 'max:100'],
             'detalles.*.es_servicio' => ['boolean'],
             'detalles.*.articulo_id' => ['nullable', 'integer', 'distinct', Rule::exists('articulos', 'id')->where('activo', true)],
@@ -77,14 +83,15 @@ class ValeCompraRequest extends FormRequest
     {
         return [
             'proveedor_id.required' => 'Elige a qué proveedor se le va a comprar.',
+            'dias_credito.required_if' => 'Di a cuántos días es el crédito.',
             'motivo.required' => 'Di para qué es la compra.',
             'motivo.min' => 'Explica un poco más para qué es la compra.',
             'sustento_precio.min' => 'Explica un poco más cómo se verificó el precio.',
             'detalles.required' => 'Agrega al menos una línea.',
-            'detalles.*.articulo_id.distinct' => 'Ese artículo ya está en el vale: suma la cantidad en una sola línea.',
+            'detalles.*.articulo_id.distinct' => 'Ese artículo ya está en el pedido: suma la cantidad en una sola línea.',
             'detalles.*.cantidad.gt' => 'La cantidad tiene que ser mayor a cero.',
             'detalles.*.precio_unitario.gt' => 'Ponle el precio que se va a pagar.',
-            'cotizaciones.max' => 'Hasta :max cotizaciones por vale.',
+            'cotizaciones.max' => 'Hasta :max cotizaciones por pedido.',
             'cotizaciones.*.mimetypes' => 'Cada cotización tiene que ser un PDF o una foto (JPG, PNG, WEBP o HEIC).',
             'cotizaciones.*.max' => 'Cada cotización debe pesar menos de 10 MB.',
         ];
@@ -114,7 +121,7 @@ class ValeCompraRequest extends FormRequest
         // El costo de un servicio va directo a la orden, en soles: no pasa
         // por el kardex, que es donde se convierten los dólares.
         if ($hayServicio && $this->input('moneda') !== Moneda::Soles->value) {
-            $validator->errors()->add('moneda', 'Un vale con servicios de terceros va en soles.');
+            $validator->errors()->add('moneda', 'Un pedido con servicios de terceros va en soles.');
         }
     }
 

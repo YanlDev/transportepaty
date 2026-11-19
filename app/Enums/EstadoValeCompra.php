@@ -5,7 +5,7 @@ namespace App\Enums;
 use App\Enums\Concerns\HasLabel;
 
 /**
- * Por dónde va la decisión sobre un vale de compra. Que esté usado, vencido
+ * Por dónde va la decisión sobre un pedido de compra. Que esté usado, vencido
  * o anulado no es un estado: sale de sus ingresos, de su fecha y de su
  * anulación (ver `ValeCompra::situacion()`).
  */

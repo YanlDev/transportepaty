@@ -49,17 +49,17 @@ export default function SalidasIndex({
 
     setLayoutProps({
         breadcrumbs: migasAlmacen({
-            title: 'Vales de salida',
+            title: 'Entregas',
             href: salidas.index().url,
         }),
     });
 
     return (
         <div className="mx-auto flex h-full w-full max-w-[1400px] flex-1 flex-col gap-4 p-4 md:p-6">
-            <Head title="Vales de salida" />
+            <Head title="Entregas" />
 
             <EncabezadoPantalla
-                titulo="Vales de salida"
+                titulo="Entregas"
                 descripcion="Nada sale del almacén sin vale: cada uno dice a qué unidad u orden de trabajo fue."
                 icono={ArrowUpFromLine}
                 acciones={
@@ -67,7 +67,7 @@ export default function SalidasIndex({
                         <Button asChild className="max-md:hidden">
                             <Link href={salidas.create()}>
                                 <Plus className="size-4" />
-                                Nuevo vale
+                                Nueva entrega
                             </Link>
                         </Button>
                     )
@@ -105,8 +105,8 @@ export default function SalidasIndex({
             {paginador.data.length === 0 ? (
                 <EmptyState
                     icono={<ArrowUpFromLine className="size-7" />}
-                    titulo="No hay vales"
-                    descripcion="Cada entrega al taller se registra con un vale."
+                    titulo="No hay entregas"
+                    descripcion="Cada entrega al taller se registra con una entrega."
                 />
             ) : (
                 <>
@@ -192,7 +192,7 @@ export default function SalidasIndex({
 
             {puede('almacen.despachar') && (
                 <AccionPrincipalMovil href={salidas.create()} icono={<Plus />}>
-                    Nuevo vale
+                    Nueva entrega
                 </AccionPrincipalMovil>
             )}
         </div>

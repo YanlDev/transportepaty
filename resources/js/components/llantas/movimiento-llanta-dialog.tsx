@@ -218,14 +218,13 @@ export function MovimientoLlantaDialog({
 
                             {data.origen === 'almacen' && (
                                 <div className="grid gap-1.5">
-                                    <Label>Vale de almacén</Label>
+                                    <Label>Entrega de almacén</Label>
                                     {valesDeAlmacen.length === 0 ? (
                                         <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
                                             No hay llantas por montar en esta
                                             unidad. Pide que el almacén emita el
-                                            vale de salida a nombre de la
-                                            unidad; si no hay stock, pide la
-                                            compra.
+                                            entrega a nombre de la unidad; si no
+                                            hay stock, pide la compra.
                                         </p>
                                     ) : (
                                         <div className="grid gap-1.5">

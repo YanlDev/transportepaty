@@ -37,9 +37,21 @@ type Props = {
         orden_trabajo_id: number | null;
         vehiculo_id: number | null;
         entregado_a: string | null;
-        /** Lo que le falta salir a la preventiva y hay en stock. */
+        /** Lo que la orden tiene pendiente y hay en stock. */
         detalles: { articulo_id: number; cantidad: number }[];
     };
+    /** Lo que la orden pidió y todavía no recibió; null sin orden. */
+    pedido: {
+        numero: string;
+        lineas: {
+            repuesto_id: number;
+            articulo_id: number | null;
+            descripcion: string;
+            unidad: string | null;
+            pendiente: number;
+            stock: number | null;
+        }[];
+    } | null;
     hoy: string;
     inicioPeriodo: string;
 };
@@ -47,7 +59,7 @@ type Props = {
 type Linea = { articulo_id: number | null; cantidad: string };
 
 /**
- * El vale de salida, pensado para el mostrador: a dónde va, quién recibe y
+ * La entrega, pensado para el mostrador: a dónde va, quién recibe y
  * qué se lleva. Solo se ofrece lo que tiene stock, y la cantidad no puede
  * pasar lo que hay.
  */
@@ -57,13 +69,14 @@ export default function SalidaCreate({
     ordenes,
     destinos,
     inicial,
+    pedido,
     hoy,
     inicioPeriodo,
 }: Props) {
     setLayoutProps({
         breadcrumbs: migasAlmacen(
-            { title: 'Vales de salida', href: salidas.index().url },
-            { title: 'Nuevo vale', href: salidas.create().url },
+            { title: 'Entregas', href: salidas.index().url },
+            { title: 'Nueva entrega', href: salidas.create().url },
         ),
     });
 
@@ -118,13 +131,51 @@ export default function SalidaCreate({
 
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-4 md:p-6">
-            <Head title="Nuevo vale de salida" />
+            <Head title="Nueva entrega" />
 
             <EncabezadoPantalla
-                titulo="Nuevo vale de salida"
+                titulo="Entregar repuestos"
                 descripcion="Lo que se entrega al taller. Sale al costo promedio del día."
                 icono={ArrowUpFromLine}
             />
+
+            {pedido !== null && pedido.lineas.length > 0 && (
+                <section className="flex flex-col gap-2 rounded-xl border border-sky-500/40 bg-sky-500/5 p-4 text-sm">
+                    <h2 className="font-semibold">
+                        Lo que la {pedido.numero} tiene pendiente
+                    </h2>
+                    <ul className="grid gap-1">
+                        {pedido.lineas.map((linea) => {
+                            const hay = Math.max(linea.stock ?? 0, 0);
+
+                            return (
+                                <li
+                                    key={linea.repuesto_id}
+                                    className="flex flex-wrap items-center justify-between gap-2"
+                                >
+                                    <span>
+                                        {linea.pendiente} {linea.unidad ?? ''} ·{' '}
+                                        {linea.descripcion}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                        {linea.articulo_id === null
+                                            ? 'No está en el catálogo: hay que comprarlo'
+                                            : hay >= linea.pendiente
+                                              ? 'Hay en stock'
+                                              : hay > 0
+                                                ? `Solo hay ${hay}`
+                                                : 'Sin stock: hay que comprarlo'}
+                                    </span>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                    <p className="text-xs text-muted-foreground">
+                        Abajo ya está cargado lo que se le puede entregar hoy. A
+                        esta orden solo se le entrega lo que tiene aprobado.
+                    </p>
+                </section>
+            )}
 
             <form onSubmit={guardar} className="flex flex-col gap-6">
                 <section className="grid gap-4 rounded-xl border bg-card p-5 sm:grid-cols-2">
@@ -396,7 +447,7 @@ export default function SalidaCreate({
                 <div className="flex justify-end">
                     <Button type="submit" disabled={processing}>
                         {processing && <Spinner />}
-                        Emitir vale
+                        Registrar la entrega
                     </Button>
                 </div>
             </form>

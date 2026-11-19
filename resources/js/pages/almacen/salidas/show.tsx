@@ -52,7 +52,7 @@ type Props = {
     hoy: string;
 };
 
-/** El vale: qué salió, a dónde y cuánto costó. Se imprime para firmarlo. */
+/** La entrega: qué salió, a dónde y cuánto costó. Se imprime para firmarlo. */
 export default function SalidaShow({
     salida,
     puedeAnular,
@@ -66,7 +66,7 @@ export default function SalidaShow({
 
     setLayoutProps({
         breadcrumbs: migasAlmacen(
-            { title: 'Vales de salida', href: salidas.index().url },
+            { title: 'Entregas', href: salidas.index().url },
             { title: salida.numero, href: salidas.show(salida.id).url },
         ),
     });
@@ -76,7 +76,7 @@ export default function SalidaShow({
             <Head title={salida.numero} />
 
             <EncabezadoPantalla
-                titulo={`Vale ${salida.numero}`}
+                titulo={`Entrega ${salida.numero}`}
                 descripcion={`${salida.destino_label}${salida.placa ? ` · ${formatearPlaca(salida.placa)}` : ''}`}
                 icono={ArrowUpFromLine}
                 className="print:hidden"
@@ -96,7 +96,7 @@ export default function SalidaShow({
                             <AnularDialog
                                 url={anular(salida.id).url}
                                 titulo={`Anular ${salida.numero}`}
-                                descripcion="Lo despachado vuelve al stock y el vale sale del kardex. Para lo que solo volvió en parte, usa «Devolver»."
+                                descripcion="Lo despachado vuelve al stock y la entrega sale del kardex. Para lo que solo volvió en parte, usa «Devolver»."
                             />
                         )}
                     </>
@@ -104,7 +104,7 @@ export default function SalidaShow({
             />
 
             <h1 className="hidden text-xl font-semibold print:block">
-                Vale de salida {salida.numero}
+                Entrega {salida.numero}
             </h1>
 
             {salida.anulado && (
@@ -224,7 +224,7 @@ export default function SalidaShow({
 
             {veCostos && (
                 <p className="text-right text-sm">
-                    Costo del vale:{' '}
+                    Costo de la entrega:{' '}
                     <strong className="tabular-nums">
                         {formatearSoles(salida.costo_total)}
                     </strong>

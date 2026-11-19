@@ -6,6 +6,7 @@ use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\TipoOrdenTrabajo;
 use App\Http\Requests\SolicitarTrabajoRequest;
 use App\Models\OrdenTrabajo;
+use App\Services\AlertasDeTaller;
 use App\Services\EjecucionDeOrden;
 use App\Services\FileUploadService;
 use App\Services\RelojOperativo;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\DB;
  */
 class SolicitudTrabajoController extends Controller
 {
-    public function store(SolicitarTrabajoRequest $request, FileUploadService $subidas, EjecucionDeOrden $ejecucion): RedirectResponse
+    public function store(SolicitarTrabajoRequest $request, FileUploadService $subidas, EjecucionDeOrden $ejecucion, AlertasDeTaller $alertas): RedirectResponse
     {
         $this->authorize('solicitar', OrdenTrabajo::class);
 
@@ -46,6 +47,8 @@ class SolicitudTrabajoController extends Controller
 
             return $orden;
         });
+
+        $alertas->preOrdenAsignada($orden, $request->user());
 
         return back()->with('toast', [
             'type' => 'success',

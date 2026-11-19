@@ -32,7 +32,7 @@ const DESCRIPCIONES_ROL: Record<string, string> = {
     contador:
         'Factura, registra cobros, corrige viáticos y liquida los tickets.',
     almacen:
-        'Lleva el almacén del taller: artículos, proveedores, compras, vales de salida, conteos y kardex.',
+        'Lleva el almacén del taller: artículos, proveedores, compras, entregas, conteos y kardex.',
     mecanico:
         'Solo ve las órdenes que le asignaron: arma el requerimiento (tareas, repuestos y fotos), y con la orden aprobada la ejecuta y la termina.',
 };

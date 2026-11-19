@@ -34,6 +34,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'email',
     'direccion',
     'condicion_pago',
+    'cuenta_pago',
     'notas',
     'activo',
 ])]

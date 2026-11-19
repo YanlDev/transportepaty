@@ -24,7 +24,7 @@ export function Placa({
     return (
         <span
             className={cn(
-                'inline-flex items-center rounded-[5px] border-zinc-900 border-t-[3px] border-t-sky-700 bg-white font-mono leading-tight font-bold tracking-wider whitespace-nowrap text-zinc-900 shadow-xs',
+                'inline-flex items-center rounded-[5px] border-t-[3px] border-zinc-900 border-t-sky-700 bg-white font-mono leading-tight font-bold tracking-wider whitespace-nowrap text-zinc-900 shadow-xs',
                 TAMANOS[tamano],
                 className,
             )}

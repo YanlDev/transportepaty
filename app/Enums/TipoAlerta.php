@@ -24,6 +24,13 @@ enum TipoAlerta: string
     case TicketCerrado = 'ticket_cerrado';
     case DocumentosPorVencer = 'documentos_por_vencer';
     case FacturasVencidas = 'facturas_vencidas';
+    case PedidoPorAprobar = 'pedido_por_aprobar';
+    case PedidoResuelto = 'pedido_resuelto';
+    case PagoRegistrado = 'pago_registrado';
+    case RequerimientoPorAprobar = 'requerimiento_por_aprobar';
+    case OrdenPorValidar = 'orden_por_validar';
+    case OrdenEsperaRepuestos = 'orden_espera_repuestos';
+    case OrdenParaElMecanico = 'orden_para_el_mecanico';
 
     public function label(): string
     {
@@ -35,6 +42,13 @@ enum TipoAlerta: string
             self::TicketCerrado => 'Ticket cerrado',
             self::DocumentosPorVencer => 'Documentos vencidos o por vencer',
             self::FacturasVencidas => 'Facturas vencidas',
+            self::PedidoPorAprobar => 'Pedido de compra por aprobar',
+            self::PedidoResuelto => 'Pedido de compra aprobado o rechazado',
+            self::PagoRegistrado => 'Pago a proveedor anotado',
+            self::RequerimientoPorAprobar => 'Requerimiento del mecánico por aprobar',
+            self::OrdenPorValidar => 'Orden de trabajo por validar',
+            self::OrdenEsperaRepuestos => 'Orden aprobada que espera repuestos',
+            self::OrdenParaElMecanico => 'Novedad en una orden del mecánico',
         };
     }
 
@@ -49,6 +63,13 @@ enum TipoAlerta: string
             self::TicketCerrado => 'Cuando se le pone el candado al ticket: ya se pueden revisar sus gastos.',
             self::DocumentosPorVencer => 'Una vez al día: SOAT, revisiones y licencias vencidas o que vencen pronto.',
             self::FacturasVencidas => 'Una vez al día: las facturas vencidas que siguen sin cobrar.',
+            self::PedidoPorAprobar => 'Cuando alguien pide una compra (o la corrige): gerencia la revisa y la aprueba desde el enlace.',
+            self::PedidoResuelto => 'Cuando gerencia aprueba o rechaza un pedido: quien compra ya sabe si puede comprar, y contabilidad que hay un pago pendiente.',
+            self::PagoRegistrado => 'Cuando se anota el pago de una compra: ya se puede recoger la mercadería.',
+            self::RequerimientoPorAprobar => 'Cuando el mecánico envía su requerimiento (tareas, repuestos y fotos) o pide un repuesto adicional.',
+            self::OrdenPorValidar => 'Cuando el mecánico termina el trabajo: falta revisarlo y finalizar la orden.',
+            self::OrdenEsperaRepuestos => 'Cuando se aprueba un requerimiento (o un adicional) con repuestos: el almacén tiene que entregarlos o comprarlos.',
+            self::OrdenParaElMecanico => 'Al mecánico de la orden, cuando le asignan una pre-orden, le aprueban o devuelven el requerimiento, o le observan el trabajo.',
         };
     }
 
@@ -71,6 +92,13 @@ enum TipoAlerta: string
             self::TallerNoApto, self::TicketSalio => ['operaciones'],
             self::TicketCerrado, self::FacturasVencidas => ['contador'],
             self::DocumentosPorVencer => ['admin'],
+            self::PedidoPorAprobar => ['gerencia'],
+            self::PedidoResuelto => ['almacen', 'taller', 'contador'],
+            self::PagoRegistrado => ['almacen', 'taller'],
+            self::RequerimientoPorAprobar => ['operaciones'],
+            self::OrdenPorValidar => ['operaciones'],
+            self::OrdenEsperaRepuestos => ['almacen', 'taller'],
+            self::OrdenParaElMecanico => ['mecanico'],
         };
     }
 

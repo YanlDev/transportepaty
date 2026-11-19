@@ -8,6 +8,7 @@ use App\Http\Controllers\Almacen\ArticuloController;
 use App\Http\Controllers\Almacen\ConfiguracionAlmacenController;
 use App\Http\Controllers\Almacen\IngresoAlmacenController;
 use App\Http\Controllers\Almacen\InventarioAlmacenController;
+use App\Http\Controllers\Almacen\PagoCompraController;
 use App\Http\Controllers\Almacen\ProveedorController;
 use App\Http\Controllers\Almacen\SalidaAlmacenController;
 use App\Http\Controllers\Almacen\ValeCompraController;
@@ -345,6 +346,10 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.ordenes.requerimiento.aprobar');
     Route::post('mantenimiento/ordenes/{orden}/devolver-requerimiento', [OrdenTrabajoController::class, 'devolverRequerimiento'])
         ->name('mantenimiento.ordenes.requerimiento.devolver');
+    Route::post('mantenimiento/ordenes/{orden}/repuestos', [OrdenTrabajoController::class, 'agregarRepuesto'])
+        ->name('mantenimiento.ordenes.repuestos.store');
+    Route::post('mantenimiento/ordenes/{orden}/repuestos/{repuesto}/catalogo', [OrdenTrabajoController::class, 'pasarAlCatalogo'])
+        ->name('mantenimiento.ordenes.repuestos.catalogo');
     Route::post('mantenimiento/ordenes/{orden}/repuestos/{repuesto}/aprobar', [OrdenTrabajoController::class, 'aprobarRepuesto'])
         ->name('mantenimiento.ordenes.repuestos.aprobar');
     Route::delete('mantenimiento/ordenes/{orden}/repuestos/{repuesto}', [OrdenTrabajoController::class, 'quitarRepuesto'])
@@ -427,6 +432,7 @@ Route::middleware('auth')->group(function () {
         Route::get('ingresos/{ingreso}', [IngresoAlmacenController::class, 'show'])->name('ingresos.show');
         Route::get('ingresos/{ingreso}/comprobante', [IngresoAlmacenController::class, 'comprobante'])->name('ingresos.comprobante');
         Route::post('ingresos/{ingreso}/comprobante', [IngresoAlmacenController::class, 'reemplazarComprobante'])->name('ingresos.comprobante.update');
+        Route::post('ingresos/{ingreso}/completar', [IngresoAlmacenController::class, 'completar'])->name('ingresos.completar');
         Route::post('ingresos/{ingreso}/anular', [IngresoAlmacenController::class, 'anular'])->name('ingresos.anular');
 
         Route::get('salidas', [SalidaAlmacenController::class, 'index'])->name('salidas.index');
@@ -450,6 +456,9 @@ Route::middleware('auth')->group(function () {
         Route::post('compras/{vale}/anular', [ValeCompraController::class, 'anular'])->name('compras.anular');
         Route::post('compras/{vale}/parciales', [ValeCompraController::class, 'parciales'])->name('compras.parciales');
         Route::post('compras/{vale}/servicios/{detalle}', [ValeCompraController::class, 'confirmarServicio'])->name('compras.servicios.confirmar');
+        Route::post('compras/{vale}/recibir', [ValeCompraController::class, 'recibir'])->name('compras.recibir');
+        Route::post('compras/{vale}/pagos', [PagoCompraController::class, 'store'])->name('compras.pagos.store');
+        Route::post('compras/{vale}/pagos/{pago}/anular', [PagoCompraController::class, 'anular'])->name('compras.pagos.anular');
         Route::get('compras/{vale}/pdf', [ValeCompraController::class, 'pdf'])->name('compras.pdf');
         Route::get('compras/{vale}/archivos/{archivo}', [ValeCompraController::class, 'archivo'])->name('compras.archivo');
 

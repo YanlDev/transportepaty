@@ -13,7 +13,7 @@ use App\Models\Vehiculo;
 /**
  * Las llantas que se pueden montar en una unidad sin saltarse el almacén.
  *
- * Una llanta nueva se monta contra una línea de un vale de salida a nombre de
+ * Una llanta nueva se monta contra una línea de una entrega a nombre de
  * la unidad: el vale dice que salió del almacén, y cada unidad de esa línea
  * se monta una sola vez. Una llanta que se retiró de otra unidad se vuelve a
  * montar sin vale: ya salió del almacén la primera vez, y sigue siendo la

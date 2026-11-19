@@ -53,11 +53,11 @@ import type { EnumOption } from '@/types/fleet';
 
 type Props = {
     proveedores: ProveedorElegible[];
-    /** Los vales de compra aprobados con que todavía se puede comprar. */
+    /** Los pedidos de compra aprobados con que todavía se puede comprar. */
     vales: ValeParaIngreso[];
-    /** El vale desde el que se llegó, si se llegó desde uno. */
+    /** El pedido desde el que se llegó, si se llegó desde uno. */
     valeInicial: number | null;
-    /** Desde qué fecha de comprobante el vale es obligatorio. */
+    /** Desde qué fecha de comprobante el pedido es obligatorio. */
     valeObligatorioDesde: string | null;
     articulos: ArticuloElegible[];
     comprobantes: EnumOption[];
@@ -92,7 +92,7 @@ const lineaVacia = (): Linea => ({
     vence_el: '',
 });
 
-/** Lo que el vale autorizó, como líneas de la compra. */
+/** Lo que el pedido autorizó, como líneas de la compra. */
 const lineasDelVale = (vale: ValeParaIngreso): Linea[] =>
     vale.detalles.map((linea) => ({
         articulo_id: linea.articulo_id,
@@ -130,7 +130,7 @@ export default function IngresoCreate({
 }: Props) {
     setLayoutProps({
         breadcrumbs: migasAlmacen(
-            { title: 'Ingresos', href: ingresos.index().url },
+            { title: 'Recepciones', href: ingresos.index().url },
             { title: 'Registrar compra', href: ingresos.create().url },
         ),
     });
@@ -164,7 +164,7 @@ export default function IngresoCreate({
             serie_numero: '',
             moneda: vale?.moneda ?? 'PEN',
             tipo_cambio: '',
-            // El vale se aprobó con precios finales.
+            // El pedido se aprobó con precios finales.
             precios_con_igv: vale !== undefined,
             descuento: '',
             flete: '',
@@ -176,7 +176,7 @@ export default function IngresoCreate({
     });
     const errores = errors as Record<string, string | undefined>;
 
-    // Elegir el vale trae lo que se aprobó: proveedor, moneda, líneas y total.
+    // Elegir el pedido trae lo que se aprobó: proveedor, moneda, líneas y total.
     const elegirVale = (id: number | null) => {
         const vale = vales.find((v) => v.id === id);
 
@@ -239,14 +239,14 @@ export default function IngresoCreate({
             <Head title="Registrar compra" />
 
             <EncabezadoPantalla
-                titulo="Registrar compra"
+                titulo="Recibir una compra"
                 descripcion="Lo que llega con su comprobante. Al guardar, el stock se actualiza."
                 icono={ArrowDownToLine}
             />
 
             <form onSubmit={guardar} className="flex flex-col gap-6">
                 <section className="flex flex-col gap-2 rounded-xl border bg-card p-5">
-                    <Label htmlFor="ingreso-vale">Vale de compra</Label>
+                    <Label htmlFor="ingreso-vale">Pedido de compra</Label>
                     <div className="flex gap-2">
                         <div className="min-w-0 flex-1">
                             <SelectorBuscable
@@ -255,8 +255,8 @@ export default function IngresoCreate({
                                 onCambio={elegirVale}
                                 etiqueta={
                                     vales.length === 0
-                                        ? 'No hay vales aprobados vigentes'
-                                        : 'Elige el vale con que se compró'
+                                        ? 'No hay pedidos aprobados vigentes'
+                                        : 'Elige el pedido con que se compró'
                                 }
                                 opciones={vales.map((vale) => ({
                                     valor: vale.id,
@@ -277,9 +277,9 @@ export default function IngresoCreate({
                         )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                        Toda compra entra con un vale aprobado, por el mismo
+                        Toda compra entra con un pedido aprobado, por el mismo
                         proveedor y el mismo total. Si el comprobante salió por
-                        otro monto, corrige el vale para que vuelva a
+                        otro monto, corrige el pedido para que vuelva a
                         aprobación.
                         {valeObligatorioDesde &&
                             ` Solo los comprobantes anteriores al ${valeObligatorioDesde.split('-').reverse().join('/')} entran sin vale.`}

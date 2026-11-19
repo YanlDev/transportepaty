@@ -11,7 +11,7 @@ use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
 /**
- * Lo que no se usó y vuelve al almacén, línea por línea del vale. No puede
+ * Lo que no se usó y vuelve al almacén, línea por línea de la entrega. No puede
  * volver más de lo que salió (menos lo ya devuelto).
  */
 class StoreDevolucionRequest extends FormRequest
@@ -49,7 +49,7 @@ class StoreDevolucionRequest extends FormRequest
                 }
 
                 if ($this->date('fecha')?->lt($salida->fecha)) {
-                    $validator->errors()->add('fecha', 'La devolución no puede ser anterior al vale.');
+                    $validator->errors()->add('fecha', 'La devolución no puede ser anterior a la entrega.');
                 }
 
                 $lineas = $salida->detalles()->get()->keyBy('id');
@@ -58,7 +58,7 @@ class StoreDevolucionRequest extends FormRequest
                     $detalle = $lineas->get((int) $linea['detalle_salida_id']);
 
                     if (! $detalle instanceof DetalleSalida) {
-                        $validator->errors()->add("detalles.{$i}.detalle_salida_id", 'Esa línea no es de este vale.');
+                        $validator->errors()->add("detalles.{$i}.detalle_salida_id", 'Esa línea no es de esta entrega.');
 
                         continue;
                     }

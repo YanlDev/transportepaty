@@ -32,9 +32,10 @@ import type { EnumOption } from '@/types/fleet';
 type LineaInicial = {
     es_servicio: boolean;
     articulo_id: number | null;
-    descripcion: string;
+    descripcion: string | null;
     cantidad: number;
-    precio_unitario: number;
+    /** Null cuando la línea nace de lo que le falta a una orden. */
+    precio_unitario: number | null;
 };
 
 type Props = {
@@ -49,6 +50,9 @@ type Props = {
         tipo: string;
         proveedor_id: number | null;
         moneda: string;
+        forma_pago: string;
+        dias_credito: number | null;
+        directo_a_unidad: boolean;
         motivo: string;
         sustento_precio: string;
         orden_trabajo_id: number | null;
@@ -89,7 +93,7 @@ const lineaVacia = (esServicio = false): Linea => ({
 
 /**
  * Pedir una compra: a quién, qué, a cuánto y para qué. Queda por aprobar; al
- * aprobarse sale el vale firmado con que se compra. Corregir un vale ya
+ * aprobarse sale el pedido firmado con que se compra. Corregir un pedido ya
  * aprobado lo devuelve a aprobación.
  */
 export default function CompraForm({
@@ -126,6 +130,9 @@ export default function CompraForm({
             tipo: string;
             proveedor_id: number | null;
             moneda: string;
+            forma_pago: string;
+            dias_credito: string;
+            directo_a_unidad: boolean;
             motivo: string;
             sustento_precio: string;
             orden_trabajo_id: number | null;
@@ -136,6 +143,12 @@ export default function CompraForm({
             tipo: inicial.tipo,
             proveedor_id: inicial.proveedor_id,
             moneda: inicial.moneda,
+            forma_pago: inicial.forma_pago,
+            directo_a_unidad: inicial.directo_a_unidad,
+            dias_credito:
+                inicial.dias_credito === null
+                    ? ''
+                    : String(inicial.dias_credito),
             motivo: inicial.motivo,
             sustento_precio: inicial.sustento_precio,
             orden_trabajo_id: inicial.orden_trabajo_id,
@@ -146,9 +159,12 @@ export default function CompraForm({
                     ? inicial.detalles.map((linea) => ({
                           es_servicio: linea.es_servicio,
                           articulo_id: linea.articulo_id,
-                          descripcion: linea.descripcion,
+                          descripcion: linea.descripcion ?? '',
                           cantidad: String(linea.cantidad),
-                          precio_unitario: String(linea.precio_unitario),
+                          precio_unitario:
+                              linea.precio_unitario === null
+                                  ? ''
+                                  : String(linea.precio_unitario),
                       }))
                     : [lineaVacia()],
         });
@@ -215,15 +231,23 @@ export default function CompraForm({
     return (
         <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-6 p-4 md:p-6">
             <Head
-                title={editando ? `Corregir ${vale.numero}` : 'Pedir compra'}
+                title={
+                    editando
+                        ? `Corregir ${vale.numero}`
+                        : 'Nuevo pedido de compra'
+                }
             />
 
             <EncabezadoPantalla
-                titulo={editando ? `Corregir ${vale.numero}` : 'Pedir compra'}
+                titulo={
+                    editando
+                        ? `Corregir ${vale.numero}`
+                        : 'Nuevo pedido de compra'
+                }
                 descripcion={
                     editando && vale.aprobado
-                        ? 'Este vale ya está aprobado: al guardar pierde la aprobación y la firma, y vuelve a quien aprueba.'
-                        : 'Queda por aprobar. Recién con el vale aprobado se compra.'
+                        ? 'Este pedido ya está aprobado: al guardar pierde la aprobación y la firma, y vuelve a quien aprueba.'
+                        : 'Queda por aprobar. Recién con el pedido aprobado se compra.'
                 }
                 icono={ShoppingCart}
             />
@@ -330,6 +354,60 @@ export default function CompraForm({
                             ))}
                         </ToggleGroup>
                         <InputError message={errors.moneda} />
+                    </div>
+
+                    <div className="grid gap-1.5">
+                        <span className="text-sm font-medium">
+                            ¿Cómo se paga?
+                        </span>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <ToggleGroup
+                                type="single"
+                                variant="outline"
+                                value={data.forma_pago}
+                                onValueChange={(valor) =>
+                                    valor && setData('forma_pago', valor)
+                                }
+                                className="justify-start"
+                            >
+                                <ToggleGroupItem
+                                    value="contado"
+                                    className="px-4"
+                                >
+                                    Contado
+                                </ToggleGroupItem>
+                                <ToggleGroupItem
+                                    value="credito"
+                                    className="px-4"
+                                >
+                                    Crédito
+                                </ToggleGroupItem>
+                            </ToggleGroup>
+                            {data.forma_pago === 'credito' && (
+                                <span className="flex items-center gap-2 text-sm">
+                                    a
+                                    <Input
+                                        aria-label="Días de crédito"
+                                        inputMode="numeric"
+                                        className="h-9 w-20 tabular-nums"
+                                        value={data.dias_credito}
+                                        onChange={(evento) =>
+                                            setData(
+                                                'dias_credito',
+                                                evento.target.value.replace(
+                                                    /\D/g,
+                                                    '',
+                                                ),
+                                            )
+                                        }
+                                    />
+                                    días
+                                </span>
+                            )}
+                        </div>
+                        <InputError
+                            message={errors.forma_pago ?? errors.dias_credito}
+                        />
                     </div>
 
                     <Field
@@ -444,7 +522,7 @@ export default function CompraForm({
                     <p className="text-xs text-muted-foreground">
                         El precio es lo que se paga por unidad, con IGV si lo
                         lleva. El comprobante tendrá que ser por el mismo total:
-                        si cambia, el vale vuelve a aprobación.
+                        si cambia, el pedido vuelve a aprobación.
                     </p>
                     <InputError message={errors.detalles} />
 
@@ -635,6 +713,34 @@ export default function CompraForm({
                     </p>
                 </section>
 
+                {emergencia && (
+                    <label className="flex min-h-11 items-start gap-3 rounded-xl border border-red-500/30 bg-red-500/5 p-4 text-sm">
+                        <input
+                            type="checkbox"
+                            className="mt-0.5 size-5 accent-primary"
+                            checked={data.directo_a_unidad}
+                            onChange={(evento) =>
+                                setData(
+                                    'directo_a_unidad',
+                                    evento.target.checked,
+                                )
+                            }
+                        />
+                        <span>
+                            <span className="font-medium">
+                                Ya se instaló en la unidad (no pasa por el
+                                almacén)
+                            </span>
+                            <span className="block text-xs text-muted-foreground">
+                                Al aprobarse, lo comprado entra y sale a la
+                                unidad solo: no hay que registrar la recepción
+                                ni la entrega. Después solo se completa el
+                                comprobante.
+                            </span>
+                        </span>
+                    </label>
+                )}
+
                 {!emergencia && (
                     <section className="flex flex-col gap-4 rounded-xl border bg-card p-5">
                         <div>
@@ -646,7 +752,7 @@ export default function CompraForm({
                                 se verificó el precio.
                                 {editando &&
                                     vale.cotizaciones > 0 &&
-                                    ` Este vale ya tiene ${vale.cotizaciones} ${vale.cotizaciones === 1 ? 'cotización adjunta' : 'cotizaciones adjuntas'}.`}
+                                    ` Este pedido ya tiene ${vale.cotizaciones} ${vale.cotizaciones === 1 ? 'cotización adjunta' : 'cotizaciones adjuntas'}.`}
                             </p>
                         </div>
                         <CampoArchivo

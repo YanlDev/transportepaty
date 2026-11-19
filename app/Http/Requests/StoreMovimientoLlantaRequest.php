@@ -113,7 +113,7 @@ class StoreMovimientoLlantaRequest extends FormRequest
             'motivo_retiro.required_if' => 'Elige por qué se retira.',
             'condicion.required_if' => 'Elige si es nueva, reencauchada o usada.',
             'origen.required_if' => 'Di de dónde sale la llanta: del almacén o de otra unidad.',
-            'detalle_salida_id.required_if' => 'Elige el vale de almacén con que salió la llanta.',
+            'detalle_salida_id.required_if' => 'Elige la entrega de almacén con que salió la llanta.',
             'llanta_id.required_if' => 'Elige cuál de las llantas retiradas se monta.',
             'fecha.before_or_equal' => 'La fecha no puede ser futura.',
         ];
@@ -132,7 +132,7 @@ class StoreMovimientoLlantaRequest extends FormRequest
 
         if ($origen === OrigenLlanta::Previa) {
             if (! ($this->user()?->checkPermissionTo(Permiso::MantenimientoCargaInicial) ?? false)) {
-                $validator->errors()->add('origen', 'Una llanta se monta con su vale de almacén, o viene de otra unidad. Cargar las que ya estaban puestas es solo del administrador.');
+                $validator->errors()->add('origen', 'Una llanta se monta con su entrega de almacén, o viene de otra unidad. Cargar las que ya estaban puestas es solo del administrador.');
             }
 
             return;
@@ -154,7 +154,7 @@ class StoreMovimientoLlantaRequest extends FormRequest
         $salida = $detalle?->salida;
 
         if ($detalle === null || $salida === null || $salida->estaAnulado()) {
-            $validator->errors()->add('detalle_salida_id', 'Ese vale de almacén está anulado o no existe.');
+            $validator->errors()->add('detalle_salida_id', 'Esa entrega de almacén está anulada o no existe.');
         } elseif ($salida->vehiculo_id !== $this->vehiculo()->id) {
             $validator->errors()->add('detalle_salida_id', "El vale {$salida->numero()} no salió para {$this->vehiculo()->placa}.");
         } elseif (! $llantas->esLlanta($detalle->articulo)) {

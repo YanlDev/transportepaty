@@ -19,20 +19,20 @@ type Props = {
 };
 
 /**
- * La página que abre el proveedor, sin cuenta: llega por el QR del vale o
- * escribiendo su código. Muestra el vale tal como está hoy en el sistema, y
+ * La página que abre el proveedor, sin cuenta: llega por el QR del pedido o
+ * escribiendo su código. Muestra el pedido tal como está hoy en el sistema, y
  * bien grande si sirve o no para comprar.
  */
 export default function VerificarVale({ vale, buscado }: Props) {
     return (
         <div className="min-h-screen bg-muted/40 px-4 py-8">
-            <Head title="Verificar vale de compra" />
+            <Head title="Verificar pedido de compra" />
 
             <main className="mx-auto flex w-full max-w-2xl flex-col gap-5">
                 <header className="text-center">
                     <p className="text-lg font-semibold">Transportes Paty</p>
                     <p className="text-sm text-muted-foreground">
-                        Verificación de vales de compra
+                        Verificación de pedidos de compra
                     </p>
                 </header>
 
@@ -44,10 +44,10 @@ export default function VerificarVale({ vale, buscado }: Props) {
                             <section className="flex flex-col items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-center text-destructive">
                                 <CircleX className="size-10" />
                                 <h1 className="text-xl font-semibold">
-                                    Este vale no existe
+                                    Este pedido no existe
                                 </h1>
                                 <p className="text-sm">
-                                    No hay ningún vale de Transportes Paty con
+                                    No hay ningún pedido de Transportes Paty con
                                     ese código. No entregue mercadería con este
                                     documento.
                                 </p>
@@ -59,7 +59,7 @@ export default function VerificarVale({ vale, buscado }: Props) {
 
                 <p className="text-center text-xs text-muted-foreground">
                     Lo que vale es lo que dice esta página, no el papel. Si algo
-                    no coincide con el vale que le presentaron, no entregue.
+                    no coincide con el pedido que le presentaron, no entregue.
                 </p>
             </main>
         </div>
@@ -80,7 +80,7 @@ function Buscador() {
             className="flex flex-col gap-3 rounded-xl border bg-card p-6"
         >
             <Label htmlFor="codigo-vale">
-                Código de verificación impreso en el vale
+                Código de verificación impreso en el pedido
             </Label>
             <Input
                 id="codigo-vale"
@@ -122,7 +122,7 @@ function Vale({ vale }: { vale: ValePublico }) {
                     <CircleX className="size-12" />
                 )}
                 <h1 className="text-2xl font-semibold">
-                    {vale.valido ? 'Vale válido' : 'No válido para comprar'}
+                    {vale.valido ? 'Pedido válido' : 'No válido para comprar'}
                 </h1>
                 <p className="text-sm">{motivo(vale, monto)}</p>
             </section>
@@ -210,7 +210,7 @@ function Vale({ vale }: { vale: ValePublico }) {
             </section>
 
             <Button variant="outline" asChild className="self-center">
-                <a href={formulario().url}>Verificar otro vale</a>
+                <a href={formulario().url}>Verificar otro pedido</a>
             </Button>
         </>
     );
@@ -219,7 +219,7 @@ function Vale({ vale }: { vale: ValePublico }) {
 /** Por qué sirve o no, en una frase para quien está en el mostrador. */
 function motivo(vale: ValePublico, monto: (valor: number) => string): string {
     if (vale.firma_valida === false) {
-        return 'El vale fue modificado después de aprobarse: no coincide con lo que se firmó. No entregue.';
+        return 'El pedido fue modificado después de aprobarse: no coincide con lo que se firmó. No entregue.';
     }
 
     switch (vale.situacion) {
@@ -228,13 +228,13 @@ function motivo(vale: ValePublico, monto: (valor: number) => string): string {
         case 'parcial':
             return `Ya se compraron ${monto(vale.recibido)}. Quedan ${monto(vale.saldo)}, hasta el ${formatearFecha(vale.vence_el)}.`;
         case 'usado':
-            return 'Este vale ya se usó: la compra ya está registrada. No sirve para otra.';
+            return 'Este pedido ya se usó: la compra ya está registrada. No sirve para otra.';
         case 'vencido':
-            return `Venció el ${formatearFecha(vale.vence_el)}. Pida un vale nuevo.`;
+            return `Venció el ${formatearFecha(vale.vence_el)}. Pida un pedido nuevo.`;
         case 'anulado':
-            return 'La empresa anuló este vale.';
+            return 'La empresa anuló este pedido.';
         case 'rechazado':
-            return 'La compra fue rechazada: este vale nunca se aprobó.';
+            return 'La compra fue rechazada: este pedido nunca se aprobó.';
         default:
             return 'Todavía no está aprobado: no sirve para comprar hasta que lo esté.';
     }

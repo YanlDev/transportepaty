@@ -71,7 +71,7 @@ class Llanta extends Model
     }
 
     /**
-     * La línea del vale de salida con que salió del almacén.
+     * La línea de la entrega con que salió del almacén.
      *
      * @return BelongsTo<DetalleSalida, $this>
      */

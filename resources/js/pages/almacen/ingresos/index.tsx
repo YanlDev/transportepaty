@@ -48,7 +48,7 @@ export default function IngresosIndex({
 
     setLayoutProps({
         breadcrumbs: migasAlmacen({
-            title: 'Ingresos',
+            title: 'Recepciones',
             href: ingresos.index().url,
         }),
     });
@@ -58,8 +58,8 @@ export default function IngresosIndex({
             <Head title="Ingresos al almacén" />
 
             <EncabezadoPantalla
-                titulo="Ingresos"
-                descripcion="Las compras con su comprobante y lo que volvió de los vales."
+                titulo="Recepciones de compra"
+                descripcion="Las compras con su comprobante y lo que volvió de los pedidos."
                 icono={ArrowDownToLine}
                 acciones={
                     puede('almacen.ingresar') && (
@@ -107,7 +107,7 @@ export default function IngresosIndex({
             {paginador.data.length === 0 ? (
                 <EmptyState
                     icono={<ArrowDownToLine className="size-7" />}
-                    titulo="No hay ingresos"
+                    titulo="No hay recepciones"
                     descripcion="Cada compra que llega se registra con su comprobante."
                 />
             ) : (
@@ -119,7 +119,7 @@ export default function IngresosIndex({
                                     <TableHead>N°</TableHead>
                                     <TableHead>Fecha</TableHead>
                                     <TableHead>Comprobante</TableHead>
-                                    <TableHead>Proveedor / vale</TableHead>
+                                    <TableHead>Proveedor / pedido</TableHead>
                                     <TableHead className="text-right">
                                         Líneas
                                     </TableHead>

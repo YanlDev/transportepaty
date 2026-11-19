@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\Almacen;
 
 use App\Enums\EstadoValeCompra;
+use App\Enums\FormaPago;
+use App\Enums\MedioPago;
 use App\Enums\Moneda;
+use App\Enums\Permiso;
 use App\Enums\SituacionValeCompra;
 use App\Enums\TipoValeCompra;
 use App\Enums\UnidadMedida;
@@ -13,17 +16,23 @@ use App\Http\Requests\Almacen\AnularDocumentoRequest;
 use App\Http\Requests\Almacen\ValeCompraRequest;
 use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
+use App\Models\CuentaBancaria;
 use App\Models\DetalleValeCompra;
 use App\Models\IngresoAlmacen;
 use App\Models\OrdenTrabajo;
+use App\Models\PagoCompra;
 use App\Models\Proveedor;
 use App\Models\UbicacionAlmacen;
 use App\Models\ValeCompra;
+use App\Rules\FechaDelAlmacen;
+use App\Services\AlertasDeTaller;
 use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\CodigoQr;
 use App\Services\FileUploadService;
 use App\Services\FirmaDeVales;
+use App\Services\RecepcionDeCompra;
 use App\Services\RelojOperativo;
+use App\Services\RepuestosDeOrden;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,9 +45,9 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Los vales de compra: se piden (desde el almacén o desde una orden de
+ * Los pedidos de compra: se piden (desde el almacén o desde una orden de
  * trabajo), gerencia los aprueba y, aprobados, salen firmados en PDF con su
- * QR. La compra entra después al almacén nombrando su vale.
+ * QR. La compra entra después al almacén nombrando su pedido.
  */
 class ValeCompraController extends Controller
 {
@@ -47,6 +56,8 @@ class ValeCompraController extends Controller
     public function __construct(
         private readonly FirmaDeVales $firma,
         private readonly FileUploadService $subidas,
+        private readonly AlertasDeTaller $alertas,
+        private readonly RecepcionDeCompra $recepcion,
     ) {}
 
     public function index(Request $request): Response
@@ -64,6 +75,9 @@ class ValeCompraController extends Controller
             ->through(fn (ValeCompra $vale): array => $this->cabecera($vale));
 
         return Inertia::render('almacen/compras/index', [
+            // Lo aprobado que todavía se le debe al proveedor, para quien
+            // anota los pagos: lo que vence primero, arriba.
+            'porPagar' => ($request->user()?->checkPermissionTo(Permiso::ComprasPagar) ?? false) ? self::porPagar() : null,
             'vales' => $vales,
             'filtros' => ['estado' => $estado?->value],
             'estados' => EstadoValeCompra::options(),
@@ -72,7 +86,7 @@ class ValeCompraController extends Controller
         ]);
     }
 
-    public function create(Request $request): Response
+    public function create(Request $request, RepuestosDeOrden $repuestos): Response
     {
         $this->authorize('create', ValeCompra::class);
 
@@ -85,11 +99,18 @@ class ValeCompraController extends Controller
                 'tipo' => TipoValeCompra::Normal->value,
                 'proveedor_id' => null,
                 'moneda' => Moneda::Soles->value,
+                'forma_pago' => FormaPago::Contado->value,
+                'dias_credito' => null,
+                'directo_a_unidad' => false,
                 'motivo' => $orden === null ? '' : "Para la {$orden->numero()}: {$orden->trabajo}",
                 'sustento_precio' => '',
                 'orden_trabajo_id' => $orden?->id,
                 'vehiculo_id' => $orden?->vehiculo_id,
-                'detalles' => [],
+                // Nace con lo que a la orden le falta y el stock no cubre.
+                'detalles' => $orden === null ? [] : array_map(
+                    fn (array $linea): array => ['es_servicio' => false, 'articulo_id' => $linea['articulo_id'], 'descripcion' => null, 'cantidad' => $linea['cantidad'], 'precio_unitario' => null],
+                    $repuestos->faltanteParaComprar($orden),
+                ),
             ],
             ...$this->catalogos(),
         ]);
@@ -112,6 +133,8 @@ class ValeCompraController extends Controller
 
             return $vale;
         });
+
+        $this->alertas->pedidoPorAprobar($vale, $request->user());
 
         return to_route('almacen.compras.show', $vale)
             ->with('toast', ['type' => 'success', 'message' => "{$vale->numero()} pedido: queda por aprobar."]);
@@ -179,9 +202,39 @@ class ValeCompraController extends Controller
                     'anulado' => $ingreso->estaAnulado(),
                 ])->values()->all(),
                 'consultas' => $vale->consultas()->count(),
+                'directo_a_unidad' => $vale->directo_a_unidad,
+                // Lo que falta recibir, para recibirlo apenas llega.
+                'por_recibir' => $this->recepcion->sePuedeRecibir($vale) ? $this->recepcion->pendientes($vale) : [],
+                // Lo que se le pagó al proveedor y lo que falta.
+                'pago' => $vale->estado !== EstadoValeCompra::Aprobado ? null : [
+                    'pagado' => $vale->pagado(),
+                    'por_pagar' => $vale->porPagar(),
+                    'vence_el' => $vale->pagoVenceEl()?->toDateString(),
+                    'vencido' => $vale->tienePagoPendiente() && ($vale->pagoVenceEl()?->lt(RelojOperativo::fechaDeHoy()) ?? false),
+                    'cuenta_proveedor' => $vale->proveedor->cuenta_pago,
+                    'pagos' => $vale->pagos()->with(['cuenta:id,banco,alias', 'user:id,name'])->get()->map(fn (PagoCompra $pago): array => [
+                        'id' => $pago->id,
+                        'fecha' => $pago->fecha->toDateString(),
+                        'monto' => (float) $pago->monto,
+                        'medio' => $pago->medio->label(),
+                        'cuenta' => $pago->cuenta === null ? null : "{$pago->cuenta->banco} · {$pago->cuenta->alias}",
+                        'numero_operacion' => $pago->numero_operacion,
+                        'voucher_url' => $pago->voucher_id === null ? null : route('almacen.compras.archivo', [$vale, $pago->voucher_id]),
+                        'registro' => $pago->user?->name,
+                        'anulado' => $pago->estaAnulado(),
+                        'motivo_anulacion' => $pago->motivo_anulacion,
+                    ])->values()->all(),
+                ],
             ],
+            'medios' => MedioPago::options(),
+            'cuentas' => ($usuario?->can('pagar', $vale) ?? false)
+                ? CuentaBancaria::query()->where('activa', true)->orderBy('banco')->get(['id', 'banco', 'alias', 'moneda'])
+                    ->map(fn (CuentaBancaria $cuenta): array => ['id' => $cuenta->id, 'nombre' => "{$cuenta->banco} · {$cuenta->alias}"])->all()
+                : [],
+            'hoy' => RelojOperativo::hoy(),
             'puede' => [
                 'aprobar' => $usuario?->can('aprobar', $vale) ?? false,
+                'pagar' => $usuario?->can('pagar', $vale) ?? false,
                 'corregir' => $usuario?->can('update', $vale) ?? false,
                 'anular' => $usuario?->can('anular', $vale) ?? false,
                 'parciales' => $usuario?->can('parciales', $vale) ?? false,
@@ -215,6 +268,9 @@ class ValeCompraController extends Controller
                 'tipo' => $vale->tipo->value,
                 'proveedor_id' => $vale->proveedor_id,
                 'moneda' => $vale->moneda->value,
+                'forma_pago' => $vale->forma_pago->value,
+                'dias_credito' => $vale->dias_credito,
+                'directo_a_unidad' => $vale->directo_a_unidad,
                 'motivo' => $vale->motivo,
                 'sustento_precio' => $vale->sustento_precio ?? '',
                 'orden_trabajo_id' => $vale->orden_trabajo_id,
@@ -257,12 +313,14 @@ class ValeCompraController extends Controller
             $this->guardarLineas($vale, $request);
         });
 
+        $this->alertas->pedidoPorAprobar($vale->refresh(), $request->user());
+
         return to_route('almacen.compras.show', $vale)
             ->with('toast', ['type' => 'success', 'message' => "{$vale->numero()} corregido: vuelve a aprobación."]);
     }
 
     /**
-     * Aprobar firma el vale y le pone vencimiento. Nadie aprueba lo que él
+     * Aprobar firma el pedido y le pone vencimiento. Nadie aprueba lo que él
      * mismo pidió.
      */
     public function aprobar(Request $request, ValeCompra $vale): RedirectResponse
@@ -274,7 +332,7 @@ class ValeCompraController extends Controller
         }
 
         if ($vale->tipo === TipoValeCompra::Normal && blank($vale->sustento_precio) && $vale->getMedia('cotizaciones')->isEmpty()) {
-            throw ValidationException::withMessages(['firma' => 'El vale no tiene cotización ni sustento del precio: pide que lo completen antes de aprobarlo.']);
+            throw ValidationException::withMessages(['firma' => 'El pedido no tiene cotización ni sustento del precio: pide que lo completen antes de aprobarlo.']);
         }
 
         DB::transaction(function () use ($request, $vale): void {
@@ -286,11 +344,16 @@ class ValeCompraController extends Controller
             ]);
 
             $this->firma->firmar($vale);
+
+            // Una emergencia ya instalada en la unidad entra y sale sola.
+            $this->recepcion->directoALaUnidad($vale->refresh(), $request->user());
         });
+
+        $this->alertas->pedidoResuelto($vale, $request->user());
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "{$vale->numero()} aprobado y firmado: vale hasta el {$vale->vence_el?->format('d/m/Y')}.",
+            'message' => "{$vale->numero()} aprobado y firmado: sirve hasta el {$vale->vence_el?->format('d/m/Y')}.",
         ]);
     }
 
@@ -304,6 +367,8 @@ class ValeCompraController extends Controller
             'rechazado_at' => now(),
             'motivo_rechazo' => $request->validated('motivo'),
         ]);
+
+        $this->alertas->pedidoResuelto($vale, $request->user());
 
         return back()->with('toast', ['type' => 'success', 'message' => "{$vale->numero()} rechazado."]);
     }
@@ -322,7 +387,7 @@ class ValeCompraController extends Controller
     }
 
     /**
-     * Dejar que el vale se use en varias compras hasta completar su monto.
+     * Dejar que el pedido se use en varias compras hasta completar su monto.
      */
     public function parciales(Request $request, ValeCompra $vale): RedirectResponse
     {
@@ -333,14 +398,14 @@ class ValeCompraController extends Controller
         return back()->with('toast', [
             'type' => 'success',
             'message' => $vale->permite_parciales
-                ? "{$vale->numero()} admite entregas parciales."
+                ? "{$vale->numero()} admite compras en partes."
                 : "{$vale->numero()} vuelve a ser de una sola compra.",
         ]);
     }
 
     /**
      * El tercero hizo el servicio: con su comprobante, la línea pasa a ser
-     * costo de la orden de trabajo del vale.
+     * costo de la orden de trabajo del pedido.
      */
     public function confirmarServicio(Request $request, ValeCompra $vale, DetalleValeCompra $detalle): RedirectResponse
     {
@@ -358,7 +423,7 @@ class ValeCompraController extends Controller
         }
 
         if (! $vale->situacion()->sirveParaComprar()) {
-            throw ValidationException::withMessages(['comprobante' => "El vale está {$this->enMinuscula($vale->situacion())}: ya no sirve para pagar el servicio."]);
+            throw ValidationException::withMessages(['comprobante' => "El pedido está {$this->enMinuscula($vale->situacion())}: ya no sirve para pagar el servicio."]);
         }
 
         DB::transaction(function () use ($request, $vale, $detalle): void {
@@ -371,7 +436,7 @@ class ValeCompraController extends Controller
     }
 
     /**
-     * El vale aprobado, para imprimir o mandar: con su QR, su código y los
+     * El pedido aprobado, para imprimir o mandar: con su QR, su código y los
      * nombres de quien lo pidió y quien lo aprobó.
      */
     public function pdf(ValeCompra $vale, CodigoQr $qr): HttpResponse
@@ -389,11 +454,11 @@ class ValeCompraController extends Controller
             'url' => $url,
             'urlManual' => route('vales.verificar.formulario'),
             'qr' => $qr->celdas($url),
-        ])->download("vale-de-compra-{$vale->numero()}.pdf");
+        ])->download("pedido-de-compra-{$vale->numero()}.pdf");
     }
 
     /**
-     * Una cotización o un comprobante de servicio del vale. Están en el disco
+     * Una cotización o un comprobante de servicio del pedido. Están en el disco
      * privado: solo se abren por acá.
      */
     public function archivo(Request $request, ValeCompra $vale, Media $archivo): StreamedResponse
@@ -417,8 +482,11 @@ class ValeCompraController extends Controller
             'tipo' => $datos['tipo'],
             'proveedor_id' => $datos['proveedor_id'],
             'moneda' => $datos['moneda'],
+            'forma_pago' => $datos['forma_pago'] ?? FormaPago::Contado->value,
+            'dias_credito' => ($datos['forma_pago'] ?? null) === FormaPago::Credito->value ? (int) $datos['dias_credito'] : null,
             'motivo' => $datos['motivo'],
             'sustento_precio' => $datos['sustento_precio'] ?? null,
+            'directo_a_unidad' => $datos['tipo'] === TipoValeCompra::Emergencia->value && (bool) ($datos['directo_a_unidad'] ?? false),
             'orden_trabajo_id' => $orden?->id,
             // La orden ya dice de qué unidad es.
             'vehiculo_id' => $orden !== null ? $orden->vehiculo_id : ($datos['vehiculo_id'] ?? null),
@@ -483,7 +551,70 @@ class ValeCompraController extends Controller
             'solicitado_por' => $vale->solicitante?->name,
             'solicitado' => $vale->created_at?->toIso8601String(),
             'vence_el' => $vale->vence_el?->toDateString(),
+            'forma_pago' => $vale->forma_pago->label().($vale->forma_pago === FormaPago::Credito ? " a {$vale->dias_credito} días" : ''),
         ];
+    }
+
+    /**
+     * Llegó la mercadería: entra al stock con los precios del pedido. El
+     * comprobante se completa después, desde la recepción.
+     */
+    public function recibir(Request $request, ValeCompra $vale): RedirectResponse
+    {
+        $this->authorize('create', IngresoAlmacen::class);
+
+        $datos = $request->validate([
+            'fecha' => ['required', 'date', new FechaDelAlmacen],
+            'observacion' => ['nullable', 'string', 'max:1000'],
+            'detalles' => ['required', 'array', 'min:1', 'max:100'],
+            'detalles.*.articulo_id' => ['required', 'integer', 'distinct'],
+            'detalles.*.cantidad' => ['required', 'numeric', 'gt:0', 'max:9999999'],
+        ]);
+
+        $ingreso = DB::transaction(fn (): IngresoAlmacen => $this->recepcion->recibir(
+            $vale,
+            array_map(fn (array $linea): array => ['articulo_id' => (int) $linea['articulo_id'], 'cantidad' => (float) $linea['cantidad']], array_values($datos['detalles'])),
+            $datos['fecha'],
+            $request->user(),
+            $datos['observacion'] ?? null,
+        ));
+
+        return to_route('almacen.ingresos.show', $ingreso)->with('toast', [
+            'type' => 'success',
+            'message' => "Recepción {$ingreso->numero()} registrada: el stock ya entró. Falta completar el comprobante.",
+        ]);
+    }
+
+    /**
+     * Los pedidos aprobados con saldo por pagar, del que vence primero.
+     *
+     * @return list<array{id: int, numero: string, proveedor: string, simbolo: string, total: float, por_pagar: float, forma_pago: string, vence_el: string|null, vencido: bool}>
+     */
+    public static function porPagar(): array
+    {
+        $hoy = RelojOperativo::fechaDeHoy();
+
+        return ValeCompra::query()
+            ->vigentes()
+            ->where('estado', EstadoValeCompra::Aprobado)
+            ->with('proveedor')
+            ->orderBy('id')
+            ->get()
+            ->filter(fn (ValeCompra $vale): bool => $vale->tienePagoPendiente())
+            ->map(fn (ValeCompra $vale): array => [
+                'id' => $vale->id,
+                'numero' => $vale->numero(),
+                'proveedor' => $vale->proveedor->nombre(),
+                'simbolo' => $vale->moneda->simbolo(),
+                'total' => (float) $vale->total,
+                'por_pagar' => $vale->porPagar(),
+                'forma_pago' => $vale->forma_pago->label(),
+                'vence_el' => $vale->pagoVenceEl()?->toDateString(),
+                'vencido' => $vale->pagoVenceEl()?->lt($hoy) ?? false,
+            ])
+            ->sortBy('vence_el')
+            ->values()
+            ->all();
     }
 
     /**

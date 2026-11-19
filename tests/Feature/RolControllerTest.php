@@ -82,7 +82,7 @@ it('creates the gerencia and rrhh roles by area', function (): void {
 
     $todosLosVer = collect(Permiso::valores())
         ->filter(fn (string $permiso): bool => str_ends_with($permiso, '.ver'))
-        ->push('abastecimiento.exceder_tope', 'almacen.ver_costos', 'compras.aprobar', 'compras.aprobar_emergencia', 'compras.parciales')
+        ->push('abastecimiento.exceder_tope', 'almacen.ver_costos', 'compras.aprobar', 'compras.aprobar_emergencia', 'compras.parciales', 'compras.pagar')
         ->sort()->values()->all();
 
     expect($permisosDe('gerencia'))->toBe($todosLosVer)
