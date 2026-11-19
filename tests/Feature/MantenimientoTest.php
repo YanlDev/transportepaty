@@ -173,7 +173,7 @@ it('keeps mantenimiento for the admin only', function (string $rol): void {
     actingAs(actorConRol($rol))
         ->post(route('mantenimiento.kilometrajes.store'), ['vehiculo_id' => scania()->id, 'kilometraje' => 1000])
         ->assertForbidden();
-})->with(['visor', 'contador', 'operaciones']);
+})->with(['visor', 'contador']);
 
 it('lets the admin in', function (): void {
     actingAs(actorConRol('admin'))->get(route('mantenimiento.index'))->assertSuccessful();

@@ -4,6 +4,8 @@ use App\Enums\EstadoOrdenTrabajo;
 use App\Models\OrdenTrabajo;
 use App\Models\TareaOrden;
 use App\Models\Vehiculo;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 use function Pest\Laravel\actingAs;
 
@@ -78,4 +80,38 @@ it('muestra a taller el listado y la orden por revisar en celular', function ():
         ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
         ->assertNoJavaScriptErrors()
         ->screenshot(filename: 'movil-orden-revision');
+});
+
+it('deja al mecánico armar y enviar el requerimiento desde el celular', function (): void {
+    Storage::fake('public');
+
+    $orden = OrdenTrabajo::factory()->create([
+        'vehiculo_id' => $this->unidad->id,
+        'estado' => EstadoOrdenTrabajo::Solicitada,
+        'trabajo' => 'Fuga de aire en el eje 3',
+    ]);
+    $orden->mecanicos()->attach($this->mecanico->id, ['responsable' => true]);
+    $orden->addMedia(UploadedFile::fake()->image('antes.jpg', 600, 400))->toMediaCollection('antes');
+
+    actingAs($this->mecanico);
+
+    visit("/mis-ordenes/{$orden->id}")
+        ->on()->mobile()
+        ->assertSee('Es una pre-orden')
+        ->assertSee('Para enviar falta: al menos una tarea')
+        ->fill('[aria-label="Nueva tarea"]', 'Cambiar la válvula relé')
+        ->click('Agregar')
+        ->assertSee('1 tarea')
+        ->click('Agregar repuesto')
+        ->fill('#repuesto-descripcion', 'Válvula relé')
+        ->click('button[type=submit]:has-text("Agregar"):below(#repuesto-descripcion)')
+        ->assertSee('Por aprobar')
+        ->assertScript('document.documentElement.scrollWidth <= window.innerWidth', true)
+        ->assertNoJavaScriptErrors()
+        ->screenshot(filename: 'movil-mecanico-requerimiento')
+        ->click('Enviar a operaciones')
+        ->assertSee('Esperando a operaciones');
+
+    expect($orden->refresh()->estado)->toBe(EstadoOrdenTrabajo::Requerimiento)
+        ->and($orden->repuestos()->sole()->descripcion)->toBe('Válvula relé');
 });

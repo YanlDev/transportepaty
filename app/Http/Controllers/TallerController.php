@@ -12,10 +12,12 @@ use App\Models\LecturaKilometraje;
 use App\Models\OrdenTrabajo;
 use App\Models\ParadaVuelta;
 use App\Models\RevisionTaller;
+use App\Models\User;
 use App\Models\Vehiculo;
 use App\Models\Vuelta;
 use App\Services\AlertasDelTicket;
 use App\Services\AvisosDeTaller;
+use App\Services\EjecucionDeOrden;
 use App\Services\OdometroDeUnidad;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
@@ -39,6 +41,7 @@ class TallerController extends Controller
 
     public function __construct(
         private readonly AvisosDeTaller $avisos,
+        private readonly EjecucionDeOrden $ejecucion,
     ) {}
 
     public function index(Request $request): Response
@@ -106,6 +109,13 @@ class TallerController extends Controller
                     'llegada' => $vuelta->llegada_el?->toDateString(),
                 ])
                 ->all()),
+            // A quién se le puede dar una pre-orden.
+            'mecanicos' => $solicita
+                ? $this->ejecucion->mecanicosDisponibles()
+                    ->map(fn (User $mecanico): array => ['id' => $mecanico->id, 'nombre' => $mecanico->name])
+                    ->values()
+                    ->all()
+                : [],
             'puede' => [
                 'ver_unidad' => $veMantenimiento,
                 'registrar_km' => $registraKm,
@@ -174,14 +184,13 @@ class TallerController extends Controller
             'type' => $noApta ? 'warning' : 'success',
             'message' => $noApta
                 ? "{$vuelta->codigo}: no apta. Programación verá cuándo estará lista."
-                    .($orden === null ? '' : " Se abrió la {$orden->numero()}: asígnale mecánico.")
+                    .($orden === null ? '' : " Se abrió la pre-orden {$orden->numero()}: asígnale mecánico.")
                 : "{$vuelta->codigo}: apta. Pasa a abastecimiento.",
         ]);
     }
 
     /**
-     * El no apto abre la orden de trabajo del tracto con lo que taller
-     * escribió, para que no haya que copiarlo a mano. Solo si quien revisa
+     * El no apto abre la pre-orden del tracto con lo que taller escribió, para que no haya que copiarlo a mano. Solo si quien revisa
      * puede registrar órdenes y la unidad no tiene ya una abierta.
      */
     private function ordenDelNoApto(Request $request, Vuelta $vuelta, RevisionTaller $revision): ?OrdenTrabajo
@@ -197,7 +206,8 @@ class TallerController extends Controller
         return OrdenTrabajo::create([
             'vehiculo_id' => $vuelta->tracto_id,
             'tipo' => TipoOrdenTrabajo::Correctiva,
-            'estado' => EstadoOrdenTrabajo::Pendiente,
+            // Nace como pre-orden: falta elegirle mecánico.
+            'estado' => EstadoOrdenTrabajo::Solicitada,
             // Tiene un ticket esperando: va primero.
             'prioridad' => PrioridadOrden::Urgente,
             'fecha' => RelojOperativo::hoy(),

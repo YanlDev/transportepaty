@@ -42,6 +42,11 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property int|null $servicio_mantenimiento_id
  * @property EstadoOrdenTrabajo $estado
  * @property PrioridadOrden $prioridad
+ * @property Carbon|null $requerimiento_at
+ * @property int|null $requerimiento_por
+ * @property Carbon|null $aprobado_at
+ * @property int|null $aprobado_por
+ * @property string|null $devolucion_requerimiento
  * @property Carbon $fecha
  * @property int|null $kilometraje
  * @property Carbon|null $inicio
@@ -69,6 +74,11 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'servicio_mantenimiento_id',
     'estado',
     'prioridad',
+    'requerimiento_at',
+    'requerimiento_por',
+    'aprobado_at',
+    'aprobado_por',
+    'devolucion_requerimiento',
     'fecha',
     'kilometraje',
     'inicio',
@@ -153,6 +163,34 @@ class OrdenTrabajo extends Model implements HasMedia
     }
 
     /**
+     * Los repuestos que el mecánico pidió para la orden.
+     *
+     * @return HasMany<RepuestoOrden, $this>
+     */
+    public function repuestos(): HasMany
+    {
+        return $this->hasMany(RepuestoOrden::class)->orderBy('id');
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function requerimientoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requerimiento_por');
+    }
+
+    /**
+     * Quien aprobó el requerimiento del mecánico.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function aprobadoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'aprobado_por');
+    }
+
+    /**
      * Quien la registró o la pidió.
      *
      * @return BelongsTo<User, $this>
@@ -189,8 +227,8 @@ class OrdenTrabajo extends Model implements HasMedia
     }
 
     /**
-     * Las que tienen a la unidad en taller: vigentes, aceptadas y sin
-     * finalizar. Una solicitud todavía no cuenta.
+     * Las que tienen a la unidad en taller: vigentes y sin finalizar, desde
+     * la pre-orden.
      *
      * @param  Builder<static>  $query
      */
@@ -240,6 +278,8 @@ class OrdenTrabajo extends Model implements HasMedia
             'estado' => EstadoOrdenTrabajo::class,
             'prioridad' => PrioridadOrden::class,
             'revisado_at' => 'datetime',
+            'requerimiento_at' => 'datetime',
+            'aprobado_at' => 'datetime',
             'fecha' => 'date:Y-m-d',
             'kilometraje' => 'integer',
             'inicio' => 'datetime',

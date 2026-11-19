@@ -28,8 +28,7 @@ class OrdenTrabajoPolicy
     }
 
     /**
-     * Pedirle un trabajo a taller: queda como solicitud hasta que taller la
-     * acepta.
+     * Crear una pre-orden: el mecánico elegido arma el requerimiento.
      */
     public function solicitar(User $user): bool
     {
@@ -37,8 +36,8 @@ class OrdenTrabajoPolicy
     }
 
     /**
-     * Taller revisa lo que el mecánico terminó: lo aprueba desde la orden o
-     * lo devuelve con su observación.
+     * Validar lo que el mecánico terminó: se finaliza desde la orden o se le
+     * devuelve con su observación.
      */
     public function observar(User $user, OrdenTrabajo $orden): bool
     {
@@ -46,11 +45,19 @@ class OrdenTrabajoPolicy
     }
 
     /**
-     * Una solicitud que taller no va a atender se rechaza con su motivo.
+     * Una pre-orden que no se va a atender se rechaza con su motivo.
      */
     public function rechazar(User $user, OrdenTrabajo $orden): bool
     {
-        return $orden->estado === EstadoOrdenTrabajo::Solicitada && $this->update($user, $orden);
+        return $orden->estado->sinAprobar() && $this->update($user, $orden);
+    }
+
+    /**
+     * Aprobar (o devolver) el requerimiento que envió el mecánico.
+     */
+    public function aprobarRequerimiento(User $user, OrdenTrabajo $orden): bool
+    {
+        return $orden->estado === EstadoOrdenTrabajo::Requerimiento && $this->update($user, $orden);
     }
 
     /**
@@ -62,12 +69,12 @@ class OrdenTrabajoPolicy
     }
 
     /**
-     * El mecánico solo abre y trabaja las órdenes que taller le asignó.
+     * El mecánico solo abre y trabaja las órdenes que le asignaron, desde la
+     * pre-orden.
      */
     public function ejecutar(User $user, OrdenTrabajo $orden): bool
     {
         return ! $orden->estaAnulado()
-            && $orden->estado !== EstadoOrdenTrabajo::Solicitada
             && $user->checkPermissionTo(Permiso::MantenimientoEjecutar)
             && $orden->esDeMecanico($user);
     }

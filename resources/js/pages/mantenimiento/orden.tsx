@@ -1,5 +1,5 @@
-import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
-import { CircleDot, PackageOpen, Plus, Star, X } from 'lucide-react';
+import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/react';
+import { Check, CircleDot, PackageOpen, Plus, Star, X } from 'lucide-react';
 import { useState } from 'react';
 import {
     create as crearVale,
@@ -9,9 +9,13 @@ import compras from '@/actions/App/Http/Controllers/Almacen/ValeCompraController
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import {
     anular,
+    aprobarRepuesto,
+    aprobarRequerimiento,
+    devolverRequerimiento,
     eliminarFoto,
     index as listaDeOrdenes,
     observar,
+    quitarRepuesto,
     rechazar,
     store,
     update,
@@ -68,8 +72,10 @@ type Props = {
         puede_anular: boolean;
         /** El mecánico la terminó y taller puede devolvérsela. */
         puede_observar: boolean;
-        /** Es una solicitud que taller puede rechazar. */
+        /** Es una pre-orden que se puede rechazar. */
         puede_rechazar: boolean;
+        /** El mecánico envió su requerimiento y se puede aprobar o devolver. */
+        puede_aprobar_requerimiento: boolean;
         estado: string;
         estado_label: string;
         fotos: FotoOrden[];
@@ -144,16 +150,17 @@ const PASO_DE_CAMPO: Record<string, number> = {
 /** Lo que cada estado le dice al resto: taller, almacén y el OK de salida. */
 const QUE_SIGNIFICA: Record<string, string> = {
     solicitada:
-        'Es un pedido sin aceptar: no bloquea a la unidad. Elige «Pendiente» para aceptarlo.',
+        'Pre-orden: el mecánico arma el requerimiento (tareas, repuestos y fotos) y te lo envía. La unidad no recibe el apto.',
+    requerimiento: 'El mecánico envió su requerimiento y espera tu aprobación.',
     pendiente:
-        'Aceptada y lista para que el mecánico la empiece. La unidad no recibe el apto.',
+        'Orden aprobada y lista para que el mecánico la empiece. La unidad no recibe el apto.',
     en_proceso: 'Se está trabajando. La unidad no recibe el apto.',
     por_revisar:
-        'El mecánico la terminó y espera tu revisión. Elige «Finalizada» para aprobarla.',
+        'El mecánico la terminó y espera tu validación. Elige «Finalizada» para aprobarla.',
     observada:
         'Devuelta al mecánico para que corrija. La unidad no recibe el apto.',
     finalizada:
-        'El trabajo terminó y queda tu usuario como quien la finalizó: la unidad puede volver a salir.',
+        'El trabajo terminó y queda tu usuario como quien la validó: la unidad puede volver a salir.',
 };
 
 /**
@@ -187,7 +194,8 @@ export default function OrdenTrabajo({
     const [paso, setPaso] = useState(
         orden === null || inicial.estado === 'finalizada'
             ? 0
-            : inicial.estado === 'por_revisar'
+            : inicial.estado === 'por_revisar' ||
+                inicial.estado === 'requerimiento'
               ? 2
               : 1,
     );
@@ -357,27 +365,63 @@ export default function OrdenTrabajo({
                 </div>
             </div>
 
-            {editando && orden.puede_rechazar && (
-                <div className="flex flex-col gap-3 rounded-xl border border-violet-500/40 bg-violet-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+            {editando && orden.puede_aprobar_requerimiento && (
+                <div className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
                     <p>
                         <span className="font-semibold">
-                            Es una solicitud
-                            {ejecucion?.pasos[0]?.usuario &&
-                                ` de ${ejecucion.pasos[0].usuario}`}
-                            .{' '}
+                            El mecánico envió su requerimiento.{' '}
                         </span>
-                        Para aceptarla, asigna mecánico en «Trabajo» y déjala
-                        «Pendiente» en «Cierre».
+                        Abajo están las tareas, los repuestos que pide y las
+                        fotos de cómo llegó la unidad. Si está bien, apruébalo:
+                        ahí nace la orden de trabajo.
                     </p>
-                    <AnularDialog
-                        url={rechazar(orden.id).url}
-                        titulo={`¿Rechazar la solicitud ${orden.numero}?`}
-                        descripcion="Queda anulada con el motivo, a la vista de quien la pidió."
-                        etiqueta="Rechazar"
-                        ayuda="Por qué no se va a atender"
-                    />
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            type="button"
+                            className="h-11"
+                            onClick={() =>
+                                router.post(
+                                    aprobarRequerimiento(orden.id).url,
+                                    {},
+                                    { preserveScroll: true },
+                                )
+                            }
+                        >
+                            <Check className="size-4" />
+                            Aprobar y generar la orden
+                        </Button>
+                        <AnularDialog
+                            url={devolverRequerimiento(orden.id).url}
+                            titulo={`¿Devolver el requerimiento de la ${orden.numero}?`}
+                            descripcion="Vuelve al mecánico como pre-orden, con lo que escribas acá, para que lo corrija y lo envíe de nuevo."
+                            etiqueta="Devolver"
+                            ayuda="Qué tiene que cambiar"
+                        />
+                    </div>
                 </div>
             )}
+
+            {editando &&
+                orden.puede_rechazar &&
+                orden.estado === 'solicitada' && (
+                    <div className="flex flex-col gap-3 rounded-xl border border-violet-500/40 bg-violet-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
+                        <p>
+                            <span className="font-semibold">
+                                Es una pre-orden.{' '}
+                            </span>
+                            {(inicial.mecanicos ?? []).length === 0
+                                ? 'Todavía no tiene mecánico: elígelo en «Trabajo» para que arme el requerimiento.'
+                                : 'El mecánico está armando el requerimiento: te llega cuando lo envíe.'}
+                        </p>
+                        <AnularDialog
+                            url={rechazar(orden.id).url}
+                            titulo={`¿Rechazar la pre-orden ${orden.numero}?`}
+                            descripcion="Queda anulada con el motivo, a la vista de quien la creó."
+                            etiqueta="Rechazar"
+                            ayuda="Por qué no se va a atender"
+                        />
+                    </div>
+                )}
 
             {editando && orden.puede_observar && (
                 <div className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm sm:flex-row sm:items-center sm:justify-between">
@@ -638,9 +682,11 @@ export default function OrdenTrabajo({
                             )}
                             <p className="text-xs text-muted-foreground">
                                 {data.mecanicos.length === 0
-                                    ? 'Sin mecánico, la orden la lleva taller y no aparece en ningún celular.'
+                                    ? data.estado === 'solicitada'
+                                        ? 'Una pre-orden necesita mecánico: es quien arma el requerimiento.'
+                                        : 'Sin mecánico, la orden no aparece en ningún celular.'
                                     : data.mecanicos.length === 1
-                                      ? 'La verá en «Mis órdenes» y la empieza con la foto del antes.'
+                                      ? 'La verá en «Mis órdenes» en su celular.'
                                       : 'Todos la ven en «Mis órdenes». La estrella marca al responsable.'}
                             </p>
                             <InputError
@@ -777,8 +823,108 @@ export default function OrdenTrabajo({
                         {ejecucion && (
                             <section className="flex flex-col gap-4 rounded-xl border bg-card p-4">
                                 <h2 className="text-sm font-semibold">
-                                    Lo que hizo el taller
+                                    Requerimiento y trabajo del mecánico
                                 </h2>
+                                {ejecucion.repuestos.length > 0 && (
+                                    <div className="grid gap-1 text-sm">
+                                        <span className="flex items-center gap-2 font-medium">
+                                            <PackageOpen className="size-4 text-muted-foreground" />
+                                            Repuestos que pidió el mecánico
+                                        </span>
+                                        <ul className="divide-y">
+                                            {ejecucion.repuestos.map(
+                                                (repuesto) => (
+                                                    <li
+                                                        key={repuesto.id}
+                                                        className="flex flex-wrap items-center justify-between gap-2 py-2"
+                                                    >
+                                                        <span className="flex min-w-0 flex-col">
+                                                            <span>
+                                                                {formatearCantidad(
+                                                                    repuesto.cantidad,
+                                                                )}{' '}
+                                                                {repuesto.unidad ??
+                                                                    ''}{' '}
+                                                                ·{' '}
+                                                                {
+                                                                    repuesto.descripcion
+                                                                }
+                                                            </span>
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {repuesto.del_catalogo
+                                                                    ? `Del almacén · stock ${formatearCantidad(repuesto.stock ?? 0)}`
+                                                                    : 'En texto: no está en el catálogo (por comprar)'}
+                                                                {repuesto.entregado !==
+                                                                    null &&
+                                                                    ` · entregado ${formatearCantidad(repuesto.entregado)}`}
+                                                                {repuesto.adicional &&
+                                                                    ' · adicional'}
+                                                            </span>
+                                                        </span>
+                                                        {repuesto.aprobado ? (
+                                                            <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+                                                                Aprobado
+                                                            </span>
+                                                        ) : orden !== null &&
+                                                          repuesto.adicional ? (
+                                                            <span className="flex gap-2">
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    onClick={() =>
+                                                                        router.post(
+                                                                            aprobarRepuesto(
+                                                                                {
+                                                                                    orden: orden.id,
+                                                                                    repuesto:
+                                                                                        repuesto.id,
+                                                                                },
+                                                                            )
+                                                                                .url,
+                                                                            {},
+                                                                            {
+                                                                                preserveScroll: true,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Aprobar
+                                                                </Button>
+                                                                <Button
+                                                                    type="button"
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    onClick={() =>
+                                                                        router.delete(
+                                                                            quitarRepuesto(
+                                                                                {
+                                                                                    orden: orden.id,
+                                                                                    repuesto:
+                                                                                        repuesto.id,
+                                                                                },
+                                                                            )
+                                                                                .url,
+                                                                            {
+                                                                                preserveScroll: true,
+                                                                            },
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    No va
+                                                                </Button>
+                                                            </span>
+                                                        ) : (
+                                                            <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-xs font-medium text-amber-800 dark:text-amber-300">
+                                                                Se aprueba con
+                                                                el requerimiento
+                                                            </span>
+                                                        )}
+                                                    </li>
+                                                ),
+                                            )}
+                                        </ul>
+                                    </div>
+                                )}
                                 {ejecucion.tareas.length > 0 && (
                                     <ul className="grid gap-1 text-sm">
                                         {ejecucion.tareas.map((tarea) => (
@@ -837,7 +983,8 @@ export default function OrdenTrabajo({
                                         </ul>
                                     </div>
                                 )}
-                                {porRevisar && (
+                                {(porRevisar ||
+                                    orden?.estado === 'requerimiento') && (
                                     <GaleriaFotos
                                         titulo="Antes"
                                         fotos={(orden?.fotos ?? []).filter(

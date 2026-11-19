@@ -224,6 +224,11 @@ Route::middleware('auth')->group(function () {
     Route::post('mis-ordenes/{orden}/terminar', [MisOrdenesController::class, 'terminar'])->name('mis-ordenes.terminar');
     Route::post('mis-ordenes/{orden}/fotos', [MisOrdenesController::class, 'fotos'])->name('mis-ordenes.fotos.store');
     Route::delete('mis-ordenes/{orden}/fotos/{foto}', [MisOrdenesController::class, 'eliminarFoto'])->name('mis-ordenes.fotos.destroy');
+    Route::post('mis-ordenes/{orden}/enviar', [MisOrdenesController::class, 'enviar'])->name('mis-ordenes.enviar');
+    Route::post('mis-ordenes/{orden}/tareas', [MisOrdenesController::class, 'agregarTarea'])->name('mis-ordenes.tareas.store');
+    Route::delete('mis-ordenes/{orden}/tareas/{tarea}', [MisOrdenesController::class, 'quitarTarea'])->name('mis-ordenes.tareas.destroy');
+    Route::post('mis-ordenes/{orden}/repuestos', [MisOrdenesController::class, 'pedirRepuesto'])->name('mis-ordenes.repuestos.store');
+    Route::delete('mis-ordenes/{orden}/repuestos/{repuesto}', [MisOrdenesController::class, 'quitarRepuesto'])->name('mis-ordenes.repuestos.destroy');
     Route::post('mis-ordenes/{orden}/tareas/{tarea}', [MisOrdenesController::class, 'marcarTarea'])->name('mis-ordenes.tareas.marcar');
 
     // Abastecimiento: el tablero con lo autorizado a cada ticket (la
@@ -336,6 +341,14 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.ordenes.anular');
     Route::post('mantenimiento/ordenes/{orden}/observar', [OrdenTrabajoController::class, 'observar'])
         ->name('mantenimiento.ordenes.observar');
+    Route::post('mantenimiento/ordenes/{orden}/aprobar-requerimiento', [OrdenTrabajoController::class, 'aprobarRequerimiento'])
+        ->name('mantenimiento.ordenes.requerimiento.aprobar');
+    Route::post('mantenimiento/ordenes/{orden}/devolver-requerimiento', [OrdenTrabajoController::class, 'devolverRequerimiento'])
+        ->name('mantenimiento.ordenes.requerimiento.devolver');
+    Route::post('mantenimiento/ordenes/{orden}/repuestos/{repuesto}/aprobar', [OrdenTrabajoController::class, 'aprobarRepuesto'])
+        ->name('mantenimiento.ordenes.repuestos.aprobar');
+    Route::delete('mantenimiento/ordenes/{orden}/repuestos/{repuesto}', [OrdenTrabajoController::class, 'quitarRepuesto'])
+        ->name('mantenimiento.ordenes.repuestos.destroy');
     Route::post('mantenimiento/ordenes/{orden}/rechazar', [OrdenTrabajoController::class, 'rechazar'])
         ->name('mantenimiento.ordenes.rechazar');
     Route::delete('mantenimiento/ordenes/{orden}/fotos/{foto}', [OrdenTrabajoController::class, 'eliminarFoto'])

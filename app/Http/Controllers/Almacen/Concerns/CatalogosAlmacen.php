@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Almacen\Concerns;
 
+use App\Enums\EstadoOrdenTrabajo;
 use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
 use App\Models\Proveedor;
@@ -90,6 +91,8 @@ trait CatalogosAlmacen
         return array_values(OrdenTrabajo::query()
             ->with('vehiculo:id,placa')
             ->enTaller()
+            // Una pre-orden todavía no recibe repuestos.
+            ->whereNotIn('estado', [EstadoOrdenTrabajo::Solicitada, EstadoOrdenTrabajo::Requerimiento])
             ->orderByDesc('fecha')
             ->orderByDesc('id')
             ->limit(200)

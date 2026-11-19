@@ -6,23 +6,24 @@ use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\TipoOrdenTrabajo;
 use App\Http\Requests\SolicitarTrabajoRequest;
 use App\Models\OrdenTrabajo;
+use App\Services\EjecucionDeOrden;
 use App\Services\FileUploadService;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Operaciones le pide un trabajo a taller desde la bandeja del OK de salida.
- * Nace como orden «solicitada»: no bloquea el apto ni recibe repuestos hasta
- * que taller la acepta (y la asigna) o la rechaza con su motivo.
+ * Operaciones crea la pre-orden desde la bandeja del OK de salida y elige al
+ * mecánico. Desde ese momento la unidad está en taller (no recibe el apto);
+ * el mecánico arma el requerimiento y operaciones lo aprueba.
  */
 class SolicitudTrabajoController extends Controller
 {
-    public function store(SolicitarTrabajoRequest $request, FileUploadService $subidas): RedirectResponse
+    public function store(SolicitarTrabajoRequest $request, FileUploadService $subidas, EjecucionDeOrden $ejecucion): RedirectResponse
     {
         $this->authorize('solicitar', OrdenTrabajo::class);
 
-        $orden = DB::transaction(function () use ($request, $subidas): OrdenTrabajo {
+        $orden = DB::transaction(function () use ($request, $subidas, $ejecucion): OrdenTrabajo {
             $orden = OrdenTrabajo::create([
                 'vehiculo_id' => $request->integer('vehiculo_id'),
                 'tipo' => TipoOrdenTrabajo::Correctiva,
@@ -37,12 +38,18 @@ class SolicitudTrabajoController extends Controller
                 $subidas->guardar($orden, $foto, 'antes', "fotos.{$indice}");
             }
 
+            $ejecucion->asignar(
+                $orden,
+                array_map(intval(...), $request->validated('mecanicos')),
+                $request->integer('responsable_id') ?: null,
+            );
+
             return $orden;
         });
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "Solicitud {$orden->numero()} enviada a taller.",
+            'message' => "Pre-orden {$orden->numero()} creada: el mecánico arma el requerimiento.",
         ]);
     }
 }

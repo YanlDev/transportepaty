@@ -61,7 +61,9 @@ class StoreOrdenTrabajoRequest extends FormRequest
             'estado' => ['required', Rule::in($this->estadosElegibles())],
             'prioridad' => ['nullable', Rule::enum(PrioridadOrden::class)],
             // A quién se le asigna: uno o varios mecánicos, con su usuario.
-            'mecanicos' => ['nullable', 'array', 'max:10'],
+            // Una pre-orden es para un mecánico: sin él nadie arma el
+            // requerimiento.
+            'mecanicos' => [Rule::requiredIf($this->input('estado') === EstadoOrdenTrabajo::Solicitada->value && ($this->orden() === null || $this->has('mecanicos'))), 'nullable', 'array', 'max:10'],
             'mecanicos.*' => ['integer', 'distinct', Rule::in($this->mecanicosElegibles())],
             'responsable_id' => ['nullable', 'integer'],
             'tareas' => ['nullable', 'array', 'max:60'],
@@ -147,6 +149,7 @@ class StoreOrdenTrabajoRequest extends FormRequest
         return [
             'servicio_mantenimiento_id.required_if' => 'Elige el servicio del plan.',
             'estado.in' => 'Ese estado no se elige a mano: sale de lo que hace el mecánico.',
+            'mecanicos.required' => 'Elige al mecánico que va a armar el requerimiento.',
             'mecanicos.*.in' => 'Ese usuario no es mecánico o ya no está activo.',
             'tareas.*.descripcion.required' => 'Escribe la tarea o quítala.',
             'justificacion_materiales.min' => 'Explica un poco más por qué se cierra sin esos repuestos.',
@@ -161,9 +164,10 @@ class StoreOrdenTrabajoRequest extends FormRequest
     }
 
     /**
-     * Taller elige entre pendiente, en proceso y finalizada. Al editar
-     * también vale dejar la orden como está (solicitada, por revisar,
-     * observada): esos estados salen de una acción, no se eligen.
+     * Una orden nueva nace como pre-orden, o se registra directo como
+     * pendiente, en proceso o finalizada (un trabajo ya hecho). Al editar
+     * también vale dejarla como está: los demás estados salen de una
+     * acción, no se eligen.
      *
      * @return list<string>
      */
@@ -171,7 +175,7 @@ class StoreOrdenTrabajoRequest extends FormRequest
     {
         return array_values(array_unique(array_filter([
             ...array_map(fn (EstadoOrdenTrabajo $estado): string => $estado->value, EstadoOrdenTrabajo::deTaller()),
-            $this->orden()?->estado->value,
+            $this->orden() === null ? EstadoOrdenTrabajo::Solicitada->value : $this->orden()->estado->value,
         ])));
     }
 

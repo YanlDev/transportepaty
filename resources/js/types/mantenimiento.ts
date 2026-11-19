@@ -235,11 +235,32 @@ export type LlantaDeOrden = {
     usuario: string | null;
 };
 
+/** Un repuesto que el mecánico pidió para la orden. */
+export type RepuestoPedido = {
+    id: number;
+    descripcion: string;
+    cantidad: number;
+    unidad: string | null;
+    del_catalogo: boolean;
+    /** Lo que hay en el almacén; null si no es del catálogo. */
+    stock: number | null;
+    /** Pedido con la orden ya aprobada: se aprueba aparte. */
+    adicional: boolean;
+    aprobado: boolean;
+    /** Lo que ya salió con vale; null si no se puede cruzar. */
+    entregado: number | null;
+    pedido_por: string | null;
+};
+
 /** Lo que se ve de la ejecución de una orden, para el mecánico y para taller. */
 export type EjecucionDeOrden = {
     mecanicos: { id: number; nombre: string; responsable: boolean }[];
     tareas: TareaDeOrden[];
     fotos: FotoOrden[];
+    /** Lo que el mecánico pidió, frente a lo que el almacén entregó. */
+    repuestos: RepuestoPedido[];
+    /** Lo que operaciones pidió cambiar del requerimiento. */
+    devolucion_requerimiento: string | null;
     pasos: PasoDeOrden[];
     llantas: LlantaDeOrden[];
     nota_mecanico: string | null;
@@ -264,4 +285,5 @@ export type OrdenDeMecanico = {
     tareas_hechas: number;
     companeros: string[];
     observacion_revision: string | null;
+    devolucion_requerimiento: string | null;
 };

@@ -39,13 +39,19 @@ type Props = {
     filtros: { estado: string; mecanico: number | null; q: string };
     estados: EnumOption[];
     mecanicos: { id: number; nombre: string }[];
-    por_atender: { por_revisar: number; solicitadas: number };
+    por_atender: {
+        por_revisar: number;
+        requerimientos: number;
+        /** Repuestos adicionales que esperan aprobación. */
+        adicionales: number;
+    };
     puede: { editar: boolean };
 };
 
 /**
- * Todas las órdenes de trabajo. Abre con lo que espera a taller: lo que los
- * mecánicos terminaron (por revisar) y lo que operaciones pidió (solicitudes).
+ * Todas las órdenes de trabajo. Abre con lo que espera a operaciones: los
+ * requerimientos por aprobar, los trabajos terminados por validar y los
+ * repuestos adicionales.
  */
 export default function Ordenes({
     ordenes,
@@ -95,24 +101,35 @@ export default function Ordenes({
                 )}
             </div>
 
-            {(por_atender.por_revisar > 0 || por_atender.solicitadas > 0) && (
-                <div className="grid gap-2 sm:grid-cols-2">
+            {(por_atender.requerimientos > 0 ||
+                por_atender.por_revisar > 0 ||
+                por_atender.adicionales > 0) && (
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                    {por_atender.requerimientos > 0 && (
+                        <Atajo
+                            cantidad={por_atender.requerimientos}
+                            titulo="Requerimientos por aprobar"
+                            detalle="El mecánico dijo qué va a hacer y qué necesita: apruébalo para generar la orden."
+                            activo={filtros.estado === 'requerimiento'}
+                            onClick={() => filtrar({ estado: 'requerimiento' })}
+                        />
+                    )}
                     {por_atender.por_revisar > 0 && (
                         <Atajo
                             cantidad={por_atender.por_revisar}
-                            titulo="Por revisar"
+                            titulo="Por validar"
                             detalle="El mecánico terminó: revisa las fotos y finaliza u observa."
                             activo={filtros.estado === 'por_revisar'}
                             onClick={() => filtrar({ estado: 'por_revisar' })}
                         />
                     )}
-                    {por_atender.solicitadas > 0 && (
+                    {por_atender.adicionales > 0 && (
                         <Atajo
-                            cantidad={por_atender.solicitadas}
-                            titulo="Solicitudes"
-                            detalle="Pedidos de operaciones: acéptalos y asigna mecánico, o recházalos."
-                            activo={filtros.estado === 'solicitada'}
-                            onClick={() => filtrar({ estado: 'solicitada' })}
+                            cantidad={por_atender.adicionales}
+                            titulo="Repuestos adicionales"
+                            detalle="Pedidos durante el trabajo: se aprueban dentro de cada orden."
+                            activo={false}
+                            onClick={() => filtrar({ estado: 'abiertas' })}
                         />
                     )}
                 </div>

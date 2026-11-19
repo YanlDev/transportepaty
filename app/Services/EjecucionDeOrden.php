@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\Permiso;
 use App\Enums\RolBase;
+use App\Models\Articulo;
 use App\Models\MovimientoLlanta;
 use App\Models\OrdenTrabajo;
+use App\Models\RepuestoOrden;
 use App\Models\ServicioMantenimiento;
 use App\Models\TareaOrden;
 use App\Models\User;
@@ -16,9 +18,11 @@ use Illuminate\Validation\ValidationException;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 /**
- * El recorrido de una orden de trabajo entre taller y sus mecánicos: a quién
- * se asigna, qué tareas lleva, y los pasos que cada uno da con su usuario
- * (empezar, terminar, observar, aprobar). Cada paso deja quién y cuándo.
+ * El recorrido de una orden de trabajo entre operaciones y sus mecánicos:
+ * operaciones crea la pre-orden y elige al mecánico; el mecánico arma el
+ * requerimiento (tareas, repuestos, fotos del antes) y lo envía; operaciones
+ * lo aprueba y nace la orden; el mecánico la ejecuta y operaciones la
+ * valida. Cada paso deja quién y cuándo.
  *
  * Las reglas viven acá y no en los controladores para que la pantalla web y
  * una futura app de mecánicos apliquen exactamente las mismas.
@@ -31,6 +35,140 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  */
 class EjecucionDeOrden
 {
+    public function __construct(private readonly MaterialesDeOrden $materiales) {}
+
+    /**
+     * El mecánico suma una tarea a su requerimiento.
+     */
+    public function agregarTarea(OrdenTrabajo $orden, string $descripcion): TareaOrden
+    {
+        $this->exigirPreOrden($orden, 'tarea', 'Las tareas se definen en el requerimiento, antes de enviarlo.');
+
+        return $orden->tareas()->create([
+            'descripcion' => trim($descripcion),
+            'posicion' => ((int) $orden->tareas()->max('posicion')) + 1,
+        ]);
+    }
+
+    public function quitarTarea(TareaOrden $tarea): void
+    {
+        $this->exigirPreOrden($tarea->orden, 'tarea', 'El requerimiento ya se envió: las tareas no se quitan.');
+
+        $tarea->delete();
+    }
+
+    /**
+     * El mecánico pide un repuesto: del catálogo del almacén o en texto.
+     * En el requerimiento va con él; con la orden ya aprobada es un
+     * adicional que operaciones aprueba aparte.
+     *
+     * @param  array{articulo_id?: int|null, descripcion?: string|null, cantidad: float|int|string, unidad?: string|null}  $datos
+     */
+    public function pedirRepuesto(OrdenTrabajo $orden, User $mecanico, array $datos): RepuestoOrden
+    {
+        $enRequerimiento = $orden->estado === EstadoOrdenTrabajo::Solicitada;
+        $enTrabajo = in_array($orden->estado, [EstadoOrdenTrabajo::Pendiente, EstadoOrdenTrabajo::EnProceso, EstadoOrdenTrabajo::Observada], true);
+
+        if (! $enRequerimiento && ! $enTrabajo) {
+            $this->rechazar('descripcion', "La {$orden->numero()} está ".mb_strtolower($orden->estado->label()).': no se le piden repuestos.');
+        }
+
+        $articulo = isset($datos['articulo_id']) ? Articulo::query()->find($datos['articulo_id']) : null;
+
+        return $orden->repuestos()->create([
+            'articulo_id' => $articulo?->id,
+            'descripcion' => $articulo?->nombre ?? trim((string) ($datos['descripcion'] ?? '')),
+            'cantidad' => $datos['cantidad'],
+            'unidad' => $articulo?->unidad->value ?? ($datos['unidad'] ?? null),
+            'adicional' => $enTrabajo,
+            'user_id' => $mecanico->id,
+        ]);
+    }
+
+    /**
+     * Un repuesto pedido se quita mientras nadie lo haya aprobado.
+     */
+    public function quitarRepuesto(RepuestoOrden $repuesto): void
+    {
+        if ($repuesto->estaAprobado()) {
+            $this->rechazar('repuesto', 'Ese repuesto ya está aprobado: no se quita.');
+        }
+
+        $repuesto->delete();
+    }
+
+    /**
+     * Operaciones aprueba un repuesto adicional.
+     */
+    public function aprobarRepuesto(RepuestoOrden $repuesto, User $aprobador): void
+    {
+        if ($repuesto->orden->estado->sinAprobar()) {
+            $this->rechazar('repuesto', 'Los repuestos del requerimiento se aprueban con él.');
+        }
+
+        $repuesto->update(['aprobado_at' => now(), 'aprobado_por' => $aprobador->id]);
+    }
+
+    /**
+     * El mecánico envía su requerimiento a operaciones: tiene que decir qué
+     * va a hacer y mostrar cómo llegó la unidad. Los repuestos son
+     * opcionales: hay trabajos que no los necesitan.
+     */
+    public function enviarRequerimiento(OrdenTrabajo $orden, User $mecanico): void
+    {
+        $this->exigirPreOrden($orden, 'estado', "La {$orden->numero()} ya no es una pre-orden: el requerimiento ya se envió.");
+
+        if ($orden->tareas()->doesntExist()) {
+            $this->rechazar('tareas', 'Anota al menos una tarea: qué le vas a hacer a la unidad.');
+        }
+
+        if ($orden->getMedia('antes')->isEmpty()) {
+            $this->rechazar('fotos', 'Toma al menos una foto de cómo llegó la unidad.');
+        }
+
+        $orden->update([
+            'estado' => EstadoOrdenTrabajo::Requerimiento,
+            'requerimiento_at' => now(),
+            'requerimiento_por' => $mecanico->id,
+            'devolucion_requerimiento' => null,
+        ]);
+    }
+
+    /**
+     * Operaciones aprueba el requerimiento: nace la orden de trabajo, con
+     * sus repuestos aprobados, lista para que el mecánico la empiece.
+     */
+    public function aprobarRequerimiento(OrdenTrabajo $orden, User $aprobador): void
+    {
+        if ($orden->estado !== EstadoOrdenTrabajo::Requerimiento) {
+            $this->rechazar('estado', "La {$orden->numero()} no tiene un requerimiento por aprobar.");
+        }
+
+        $orden->update([
+            'estado' => EstadoOrdenTrabajo::Pendiente,
+            'aprobado_at' => now(),
+            'aprobado_por' => $aprobador->id,
+        ]);
+
+        $orden->repuestos()->whereNull('aprobado_at')->update(['aprobado_at' => now(), 'aprobado_por' => $aprobador->id]);
+    }
+
+    /**
+     * Operaciones no aprueba el requerimiento: vuelve al mecánico como
+     * pre-orden, con lo que hay que cambiar.
+     */
+    public function devolverRequerimiento(OrdenTrabajo $orden, User $aprobador, string $motivo): void
+    {
+        if ($orden->estado !== EstadoOrdenTrabajo::Requerimiento) {
+            $this->rechazar('motivo', "La {$orden->numero()} no tiene un requerimiento por aprobar.");
+        }
+
+        $orden->update([
+            'estado' => EstadoOrdenTrabajo::Solicitada,
+            'devolucion_requerimiento' => $motivo,
+        ]);
+    }
+
     /**
      * Quiénes pueden recibir órdenes: los usuarios activos con el permiso
      * de ejecutar. El admin lo tiene todo, pero no es mecánico.
@@ -117,8 +255,8 @@ class EjecucionDeOrden
     }
 
     /**
-     * El mecánico empieza: la orden tiene que estar aceptada y con al menos
-     * una foto de cómo llegó la unidad.
+     * El mecánico empieza: la orden tiene que estar aprobada y con al menos
+     * una foto de cómo llegó la unidad (las del requerimiento valen).
      */
     public function iniciar(OrdenTrabajo $orden, User $mecanico, ?int $kilometraje = null): void
     {
@@ -140,7 +278,7 @@ class EjecucionDeOrden
 
     /**
      * El mecánico termina: con foto de cómo quedó y, si dejó tareas sin
-     * marcar, diciendo por qué. La orden pasa a taller para su revisión.
+     * marcar, diciendo por qué. La orden pasa a operaciones para validarla.
      */
     public function terminar(OrdenTrabajo $orden, User $mecanico, ?string $nota = null, ?int $kilometraje = null): void
     {
@@ -170,7 +308,7 @@ class EjecucionDeOrden
     }
 
     /**
-     * Taller no la aprueba: vuelve al mecánico con lo que hay que corregir.
+     * No se valida: vuelve al mecánico con lo que hay que corregir.
      */
     public function observar(OrdenTrabajo $orden, User $revisor, string $motivo): void
     {
@@ -213,6 +351,7 @@ class EjecucionDeOrden
         $orden->loadMissing([
             'mecanicos:id,name', 'tareas.hechaPor:id,name', 'media',
             'creador:id,name', 'iniciadoPor:id,name', 'terminadoPor:id,name', 'revisadoPor:id,name',
+            'requerimientoPor:id,name', 'aprobadoPor:id,name', 'repuestos.articulo:id,stock', 'repuestos.pedidoPor:id,name',
         ]);
 
         return [
@@ -242,11 +381,55 @@ class EjecucionDeOrden
                 ])
                 ->values()
                 ->all(),
+            'repuestos' => $this->repuestos($orden),
+            'devolucion_requerimiento' => $orden->estado === EstadoOrdenTrabajo::Solicitada ? $orden->devolucion_requerimiento : null,
             'pasos' => $this->pasos($orden),
             'llantas' => $this->llantas($orden),
             'nota_mecanico' => $orden->nota_mecanico,
             'observacion_revision' => $orden->observacion_revision,
         ];
+    }
+
+    /**
+     * Lo que el mecánico pidió, frente a lo que el almacén ya le entregó a
+     * la orden. Solo un repuesto del catálogo se puede cruzar con los vales;
+     * lo entregado se reparte en orden entre las líneas del mismo artículo.
+     *
+     * @return list<array{id: int, descripcion: string, cantidad: float, unidad: string|null, del_catalogo: bool, stock: float|null, adicional: bool, aprobado: bool, entregado: float|null, pedido_por: string|null}>
+     */
+    private function repuestos(OrdenTrabajo $orden): array
+    {
+        $entregado = [];
+
+        foreach ($orden->repuestos->isEmpty() || $orden->estado->sinAprobar() ? [] : $this->materiales->lineas($orden) as $linea) {
+            $entregado[$linea['articulo_id']] = ($entregado[$linea['articulo_id']] ?? 0) + $linea['cantidad'] - $linea['devuelto'];
+        }
+
+        return $orden->repuestos
+            ->map(function (RepuestoOrden $repuesto) use (&$entregado): array {
+                $cantidad = (float) $repuesto->cantidad;
+                $recibido = null;
+
+                if ($repuesto->articulo_id !== null) {
+                    $recibido = min($cantidad, $entregado[$repuesto->articulo_id] ?? 0);
+                    $entregado[$repuesto->articulo_id] = ($entregado[$repuesto->articulo_id] ?? 0) - $recibido;
+                }
+
+                return [
+                    'id' => $repuesto->id,
+                    'descripcion' => $repuesto->descripcion,
+                    'cantidad' => $cantidad,
+                    'unidad' => $repuesto->unidad,
+                    'del_catalogo' => $repuesto->articulo_id !== null,
+                    'stock' => $repuesto->articulo === null ? null : (float) $repuesto->articulo->stock,
+                    'adicional' => $repuesto->adicional,
+                    'aprobado' => $repuesto->estaAprobado(),
+                    'entregado' => $recibido,
+                    'pedido_por' => $repuesto->pedidoPor?->name,
+                ];
+            })
+            ->values()
+            ->all();
     }
 
     /**
@@ -256,14 +439,26 @@ class EjecucionDeOrden
      */
     private function pasos(OrdenTrabajo $orden): array
     {
-        $solicitada = $orden->estado === EstadoOrdenTrabajo::Solicitada;
+        $preOrden = $orden->requerimiento_at !== null || $orden->estado === EstadoOrdenTrabajo::Solicitada;
         $revisada = $orden->revisado_at !== null;
 
         return array_values(array_filter([
             [
-                'paso' => $solicitada ? 'Solicitada' : 'Registrada',
+                'paso' => $preOrden ? 'Pre-orden creada' : 'Registrada',
                 'usuario' => $orden->creador?->name,
                 'cuando' => $orden->created_at?->toIso8601String(),
+                'nota' => null,
+            ],
+            $orden->requerimiento_at === null ? null : [
+                'paso' => 'Envió el requerimiento',
+                'usuario' => $orden->requerimientoPor?->name,
+                'cuando' => $orden->requerimiento_at->toIso8601String(),
+                'nota' => null,
+            ],
+            $orden->aprobado_at === null ? null : [
+                'paso' => 'Requerimiento aprobado: orden generada',
+                'usuario' => $orden->aprobadoPor?->name,
+                'cuando' => $orden->aprobado_at->toIso8601String(),
                 'nota' => null,
             ],
             $orden->inicio === null ? null : [
@@ -279,7 +474,7 @@ class EjecucionDeOrden
                 'nota' => $orden->nota_mecanico,
             ],
             ! $revisada ? null : [
-                'paso' => $orden->estado === EstadoOrdenTrabajo::Finalizada ? 'Taller la finalizó' : 'Taller la observó',
+                'paso' => $orden->estado === EstadoOrdenTrabajo::Finalizada ? 'Validada y finalizada' : 'Observada',
                 'usuario' => $orden->revisadoPor?->name,
                 'cuando' => $orden->revisado_at?->toIso8601String(),
                 'nota' => $orden->estado === EstadoOrdenTrabajo::Finalizada ? null : $orden->observacion_revision,
@@ -296,7 +491,7 @@ class EjecucionDeOrden
      */
     private function llantas(OrdenTrabajo $orden): array
     {
-        if ($orden->estado === EstadoOrdenTrabajo::Solicitada) {
+        if ($orden->estado->sinAprobar()) {
             return [];
         }
 
@@ -322,6 +517,13 @@ class EjecucionDeOrden
                 'usuario' => $movimiento->user?->name,
             ])
             ->all());
+    }
+
+    private function exigirPreOrden(OrdenTrabajo $orden, string $campo, string $mensaje): void
+    {
+        if ($orden->estado !== EstadoOrdenTrabajo::Solicitada) {
+            $this->rechazar($campo, $mensaje);
+        }
     }
 
     private function rechazar(string $campo, string $mensaje): never

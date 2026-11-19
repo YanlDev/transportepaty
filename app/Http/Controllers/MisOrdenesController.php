@@ -4,10 +4,14 @@ namespace App\Http\Controllers;
 
 use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\PrioridadOrden;
+use App\Enums\UnidadMedida;
 use App\Http\Requests\IniciarOrdenRequest;
+use App\Http\Requests\PedirRepuestoRequest;
 use App\Http\Requests\SubirFotosOrdenRequest;
 use App\Http\Requests\TerminarOrdenRequest;
+use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
+use App\Models\RepuestoOrden;
 use App\Models\TareaOrden;
 use App\Models\User;
 use App\Services\EjecucionDeOrden;
@@ -22,10 +26,11 @@ use Inertia\Response;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 /**
- * La pantalla del mecánico, hecha para el celular: las órdenes que taller le
- * asignó y nada más. Cada una se trabaja en pasos —empezar con la foto del
- * antes, marcar las tareas, terminar con la foto del después— y cada paso
- * queda con su usuario y su hora.
+ * La pantalla del mecánico, hecha para el celular: las órdenes que le
+ * asignaron y nada más. Cada una se trabaja en pasos —armar el requerimiento
+ * (tareas, repuestos, fotos del antes) y enviarlo, empezar cuando operaciones
+ * lo aprueba, marcar las tareas, terminar con la foto del después— y cada
+ * paso queda con su usuario y su hora.
  *
  * No ve costos, ni el almacén, ni las órdenes de otros.
  */
@@ -46,7 +51,6 @@ class MisOrdenesController extends Controller
         $ordenes = OrdenTrabajo::query()
             ->vigentes()
             ->deMecanico($mecanico)
-            ->where('estado', '!=', EstadoOrdenTrabajo::Solicitada)
             ->where(fn ($query) => $query
                 ->where('estado', '!=', EstadoOrdenTrabajo::Finalizada)
                 ->orWhere('revisado_at', '>=', now()->subDays(self::DIAS_DE_TERMINADAS)))
@@ -69,8 +73,12 @@ class MisOrdenesController extends Controller
                 ...$grupo([EstadoOrdenTrabajo::Observada->value]),
                 ...$grupo([EstadoOrdenTrabajo::EnProceso->value]),
                 ...$grupo([EstadoOrdenTrabajo::Pendiente->value]),
+                // Las pre-órdenes: falta armar y enviar el requerimiento.
+                ...$grupo([EstadoOrdenTrabajo::Solicitada->value]),
             ],
-            'en_revision' => $grupo([EstadoOrdenTrabajo::PorRevisar->value]),
+            // En manos de operaciones: el requerimiento por aprobar y el
+            // trabajo terminado por validar.
+            'en_revision' => $grupo([EstadoOrdenTrabajo::Requerimiento->value, EstadoOrdenTrabajo::PorRevisar->value]),
             'terminadas' => array_reverse($grupo([EstadoOrdenTrabajo::Finalizada->value])),
         ]);
     }
@@ -105,7 +113,95 @@ class MisOrdenesController extends Controller
                 'faltantes' => $orden->servicio === null ? [] : $materiales->faltantes($orden->servicio, $orden),
             ],
             'maximo_fotos' => IniciarOrdenRequest::MAXIMO_FOTOS,
+            // El catálogo del almacén, para pedir repuestos por su nombre:
+            // sin costos, solo si hay o no hay.
+            'articulos' => Articulo::query()
+                ->where('activo', true)
+                ->orderBy('nombre')
+                ->limit(1000)
+                ->get(['id', 'codigo', 'nombre', 'unidad', 'stock'])
+                ->map(fn (Articulo $articulo): array => [
+                    'id' => $articulo->id,
+                    'nombre' => $articulo->nombre,
+                    'codigo' => $articulo->codigo,
+                    'unidad' => $articulo->unidad->value,
+                    'hay' => (float) $articulo->stock > 0,
+                ])
+                ->all(),
+            'unidades' => UnidadMedida::options(),
         ]);
+    }
+
+    /**
+     * El mecánico envía su requerimiento a operaciones.
+     */
+    public function enviar(Request $request, OrdenTrabajo $orden): RedirectResponse
+    {
+        $this->authorize('ejecutar', $orden);
+
+        /** @var User $mecanico */
+        $mecanico = $request->user();
+        $this->ejecucion->enviarRequerimiento($orden, $mecanico);
+
+        return to_route('mis-ordenes.index')->with('toast', [
+            'type' => 'success',
+            'message' => "Requerimiento de la {$orden->numero()} enviado a operaciones.",
+        ]);
+    }
+
+    public function agregarTarea(Request $request, OrdenTrabajo $orden): RedirectResponse
+    {
+        $this->authorize('ejecutar', $orden);
+
+        $datos = $request->validate(
+            ['descripcion' => ['required', 'string', 'min:3', 'max:500']],
+            ['descripcion.required' => 'Escribe la tarea.', 'descripcion.min' => 'Describe un poco más la tarea.'],
+        );
+
+        $this->ejecucion->agregarTarea($orden, $datos['descripcion']);
+
+        return back();
+    }
+
+    public function quitarTarea(OrdenTrabajo $orden, TareaOrden $tarea): RedirectResponse
+    {
+        $this->authorize('ejecutar', $orden);
+
+        abort_unless($tarea->orden_trabajo_id === $orden->id, 404);
+
+        $this->ejecucion->quitarTarea($tarea->setRelation('orden', $orden));
+
+        return back();
+    }
+
+    public function pedirRepuesto(PedirRepuestoRequest $request, OrdenTrabajo $orden): RedirectResponse
+    {
+        $this->authorize('ejecutar', $orden);
+
+        /** @var User $mecanico */
+        $mecanico = $request->user();
+        $repuesto = $this->ejecucion->pedirRepuesto($orden, $mecanico, $request->validated());
+
+        return back()->with('toast', [
+            'type' => 'success',
+            'message' => $repuesto->adicional
+                ? 'Repuesto adicional pedido: operaciones lo tiene que aprobar.'
+                : 'Repuesto agregado al requerimiento.',
+        ]);
+    }
+
+    /**
+     * El mecánico quita un repuesto que él pidió y nadie aprobó todavía.
+     */
+    public function quitarRepuesto(OrdenTrabajo $orden, RepuestoOrden $repuesto): RedirectResponse
+    {
+        $this->authorize('ejecutar', $orden);
+
+        abort_unless($repuesto->orden_trabajo_id === $orden->id, 404);
+
+        $this->ejecucion->quitarRepuesto($repuesto);
+
+        return back();
     }
 
     /**
@@ -222,6 +318,7 @@ class MisOrdenesController extends Controller
                 ->values()
                 ->all(),
             'observacion_revision' => $orden->estado === EstadoOrdenTrabajo::Observada ? $orden->observacion_revision : null,
+            'devolucion_requerimiento' => $orden->estado === EstadoOrdenTrabajo::Solicitada ? $orden->devolucion_requerimiento : null,
         ];
     }
 
@@ -237,7 +334,7 @@ class MisOrdenesController extends Controller
      */
     private function exigirAbierta(OrdenTrabajo $orden): void
     {
-        if (! in_array($orden->estado, [EstadoOrdenTrabajo::Pendiente, EstadoOrdenTrabajo::EnProceso, EstadoOrdenTrabajo::Observada], true)) {
+        if (! in_array($orden->estado, [EstadoOrdenTrabajo::Solicitada, EstadoOrdenTrabajo::Pendiente, EstadoOrdenTrabajo::EnProceso, EstadoOrdenTrabajo::Observada], true)) {
             throw ValidationException::withMessages([
                 'fotos' => "La {$orden->numero()} está ".mb_strtolower($orden->estado->label()).': ya no se le cambian las fotos.',
             ]);

@@ -6,7 +6,9 @@ use App\Enums\Permiso;
 use App\Enums\PrioridadOrden;
 use App\Enums\RolBase;
 use App\Enums\TipoVehiculo;
+use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
+use App\Models\RepuestoOrden;
 use App\Models\TareaOrden;
 use App\Models\User;
 use App\Models\Vehiculo;
@@ -18,9 +20,10 @@ use Inertia\Testing\AssertableInertia as Assert;
 use function Pest\Laravel\actingAs;
 
 /*
- * Las órdenes de trabajo con mecánicos: taller asigna, el mecánico ve solo
- * las suyas y las ejecuta con evidencia (foto del antes para empezar, foto
- * del después para terminar), y taller revisa antes de finalizar.
+ * Las órdenes de trabajo con mecánicos: operaciones crea la pre-orden y
+ * elige al mecánico; el mecánico arma el requerimiento (tareas, repuestos,
+ * fotos del antes) y lo envía; operaciones lo aprueba y nace la orden; el
+ * mecánico la ejecuta con evidencia y operaciones la valida.
  */
 beforeEach(function (): void {
     Storage::fake('public');
@@ -279,7 +282,7 @@ it('records the workshop user who finalizes the order', function (): void {
         ->assertInertia(fn (Assert $page) => $page->has('por_hacer', 0)->has('terminadas', 1));
 });
 
-it('lets operations ask the workshop for a job without blocking the unit', function (): void {
+it('lets operations create a pre-order for a mechanic, and it blocks the unit', function (): void {
     $operaciones = actorConRol('operaciones');
     $vuelta = Vuelta::factory()->create([
         'tracto_id' => $this->tracto->id,
@@ -287,11 +290,17 @@ it('lets operations ask the workshop for a job without blocking the unit', funct
         'inicio' => now()->toDateString(),
     ]);
 
+    // Sin mecánico nadie arma el requerimiento.
+    actingAs($operaciones)
+        ->post(route('taller.solicitudes.store'), ['vehiculo_id' => $this->tracto->id, 'trabajo' => 'Fuga de aire en el eje 3', 'prioridad' => 'normal'])
+        ->assertSessionHasErrors('mecanicos');
+
     actingAs($operaciones)
         ->post(route('taller.solicitudes.store'), [
             'vehiculo_id' => $this->tracto->id,
             'trabajo' => 'Fuga de aire en la válvula del eje 3',
             'prioridad' => 'urgente',
+            'mecanicos' => [$this->mecanico->id],
             'fotos' => [foto()],
         ])
         ->assertSessionHasNoErrors();
@@ -300,44 +309,241 @@ it('lets operations ask the workshop for a job without blocking the unit', funct
 
     expect($orden->estado)->toBe(EstadoOrdenTrabajo::Solicitada)
         ->and($orden->user_id)->toBe($operaciones->id)
+        ->and($orden->esDeMecanico($this->mecanico))->toBeTrue()
         ->and($orden->getMedia('antes'))->toHaveCount(1);
 
     actingAs($operaciones)
         ->get(route('taller.index'))
         ->assertInertia(fn (Assert $page) => $page
             ->where('puede.solicitar_trabajo', true)
-            ->where('ordenes.0.estado_valor', 'solicitada')
-            ->where('ordenes.0.solicitante', $operaciones->name));
+            ->has('mecanicos', 1)
+            ->where('ordenes.0.estado_valor', 'solicitada'));
 
-    // Una solicitud todavía no es trabajo de taller: no frena el apto.
+    // Desde la pre-orden la unidad está en taller: no recibe el apto.
     actingAs($this->taller)
         ->post(route('taller.store', $vuelta), ['resultado' => 'apto'])
-        ->assertSessionHasNoErrors();
+        ->assertSessionHasErrors('resultado');
 
     actingAs($this->mecanico)
-        ->post(route('taller.solicitudes.store'), ['vehiculo_id' => $this->tracto->id, 'trabajo' => 'Algo que revisar', 'prioridad' => 'normal'])
+        ->post(route('taller.solicitudes.store'), ['vehiculo_id' => $this->tracto->id, 'trabajo' => 'Algo que revisar', 'prioridad' => 'normal', 'mecanicos' => [$this->mecanico->id]])
         ->assertForbidden();
 });
 
-it('lets the workshop accept or reject a request', function (): void {
-    $aceptada = OrdenTrabajo::factory()->create(['vehiculo_id' => $this->tracto->id, 'estado' => EstadoOrdenTrabajo::Solicitada]);
-    $rechazada = OrdenTrabajo::factory()->create(['vehiculo_id' => $this->tracto->id, 'estado' => EstadoOrdenTrabajo::Solicitada]);
+/** Una pre-orden de operaciones para ese mecánico. */
+function preOrden(Vehiculo $vehiculo, User $mecanico): OrdenTrabajo
+{
+    $orden = OrdenTrabajo::factory()->create([
+        'vehiculo_id' => $vehiculo->id,
+        'estado' => EstadoOrdenTrabajo::Solicitada,
+        'tecnico' => null,
+    ]);
+    $orden->mecanicos()->attach($mecanico->id, ['responsable' => true]);
 
-    actingAs($this->taller)
-        ->put(route('mantenimiento.ordenes.update', $aceptada), datosDeOrden($this->tracto, ['mecanicos' => [$this->mecanico->id]]))
+    return $orden;
+}
+
+it('lets the mechanic build the request: tasks, parts and before photos', function (): void {
+    $orden = preOrden($this->tracto, $this->mecanico);
+    $articulo = Articulo::factory()->create(['nombre' => 'Válvula relé', 'activo' => true]);
+
+    actingAs($this->mecanico)
+        ->get(route('mis-ordenes.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('por_hacer.0.id', $orden->id)->where('por_hacer.0.estado', 'solicitada'));
+
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.tareas.store', $orden), ['descripcion' => 'Cambiar la válvula relé'])
         ->assertSessionHasNoErrors();
 
-    actingAs($this->taller)
-        ->post(route('mantenimiento.ordenes.rechazar', $rechazada), ['motivo' => 'Ya se atendió ayer'])
+    // Del catálogo: toma el nombre y la unidad del artículo.
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.repuestos.store', $orden), ['articulo_id' => $articulo->id, 'cantidad' => 1])
         ->assertSessionHasNoErrors();
 
-    expect($aceptada->refresh()->estado)->toBe(EstadoOrdenTrabajo::Pendiente)
-        ->and($aceptada->esDeMecanico($this->mecanico))->toBeTrue()
-        ->and($rechazada->refresh()->estaAnulado())->toBeTrue()
-        ->and($rechazada->motivo_anulacion)->toBe('Ya se atendió ayer');
+    // En texto, si no está en el almacén.
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.repuestos.store', $orden), ['descripcion' => 'Manguera de aire 1/2', 'cantidad' => 2.5, 'unidad' => 'm'])
+        ->assertSessionHasNoErrors();
+
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.repuestos.store', $orden), ['cantidad' => 1])
+        ->assertSessionHasErrors('descripcion');
+
+    $repuestos = $orden->repuestos()->get();
+
+    expect($repuestos)->toHaveCount(2)
+        ->and($repuestos[0]->descripcion)->toBe('Válvula relé')
+        ->and($repuestos[0]->articulo_id)->toBe($articulo->id)
+        ->and($repuestos[0]->adicional)->toBeFalse()
+        ->and($repuestos[1]->articulo_id)->toBeNull()
+        ->and($repuestos[1]->unidad)->toBe('m');
+
+    // Se arrepiente de uno antes de enviar.
+    actingAs($this->mecanico)
+        ->delete(route('mis-ordenes.repuestos.destroy', [$orden, $repuestos[1]]))
+        ->assertSessionHasNoErrors();
+
+    actingAs($this->mecanico)
+        ->get(route('mis-ordenes.show', $orden))
+        ->assertInertia(fn (Assert $page) => $page
+            ->has('orden.repuestos', 1)
+            ->where('orden.repuestos.0.del_catalogo', true)
+            ->has('articulos', 1)
+            ->missing('articulos.0.costo_promedio'));
 });
 
-it('opens the work order when the unit is not fit to leave', function (): void {
+it('does not send the request without a task and a before photo', function (): void {
+    $orden = preOrden($this->tracto, $this->mecanico);
+
+    actingAs($this->mecanico)->post(route('mis-ordenes.enviar', $orden))->assertSessionHasErrors('tareas');
+
+    TareaOrden::factory()->create(['orden_trabajo_id' => $orden->id]);
+
+    actingAs($this->mecanico)->post(route('mis-ordenes.enviar', $orden))->assertSessionHasErrors('fotos');
+
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.fotos.store', $orden), ['coleccion' => 'antes', 'fotos' => [foto()]])
+        ->assertSessionHasNoErrors();
+
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.enviar', $orden))
+        ->assertRedirect(route('mis-ordenes.index'));
+
+    $orden->refresh();
+
+    expect($orden->estado)->toBe(EstadoOrdenTrabajo::Requerimiento)
+        ->and($orden->requerimiento_por)->toBe($this->mecanico->id);
+
+    // Enviado, ya no lo cambia: espera a operaciones.
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.tareas.store', $orden), ['descripcion' => 'Otra tarea más'])
+        ->assertSessionHasErrors('tarea');
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.iniciar', $orden), ['fotos' => [foto()]])
+        ->assertSessionHasErrors('estado');
+});
+
+it('lets operations approve the request and the order is born', function (): void {
+    $operaciones = actorConRol('operaciones');
+    $orden = preOrden($this->tracto, $this->mecanico);
+    $orden->update(['estado' => EstadoOrdenTrabajo::Requerimiento, 'requerimiento_at' => now(), 'requerimiento_por' => $this->mecanico->id]);
+    $repuesto = RepuestoOrden::factory()->create(['orden_trabajo_id' => $orden->id]);
+    $orden->addMedia(foto())->toMediaCollection('antes');
+
+    actingAs($this->mecanico)
+        ->post(route('mantenimiento.ordenes.requerimiento.aprobar', $orden))
+        ->assertForbidden();
+
+    actingAs($operaciones)
+        ->get(route('mantenimiento.ordenes.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('por_atender.requerimientos', 1)
+            ->where('ordenes.data.0.id', $orden->id));
+
+    actingAs($operaciones)
+        ->get(route('mantenimiento.ordenes.edit', $orden))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('orden.puede_aprobar_requerimiento', true)
+            ->has('ejecucion.repuestos', 1));
+
+    actingAs($operaciones)
+        ->post(route('mantenimiento.ordenes.requerimiento.aprobar', $orden))
+        ->assertSessionHasNoErrors();
+
+    $orden->refresh();
+
+    expect($orden->estado)->toBe(EstadoOrdenTrabajo::Pendiente)
+        ->and($orden->aprobado_por)->toBe($operaciones->id)
+        ->and($repuesto->refresh()->estaAprobado())->toBeTrue();
+
+    // Con las fotos del requerimiento, el mecánico empieza sin subir otra.
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.iniciar', $orden))
+        ->assertSessionHasNoErrors();
+
+    expect($orden->refresh()->estado)->toBe(EstadoOrdenTrabajo::EnProceso);
+});
+
+it('lets operations send the request back with what to change', function (): void {
+    $operaciones = actorConRol('operaciones');
+    $orden = preOrden($this->tracto, $this->mecanico);
+    $orden->update(['estado' => EstadoOrdenTrabajo::Requerimiento]);
+
+    actingAs($operaciones)
+        ->post(route('mantenimiento.ordenes.requerimiento.devolver', $orden), ['motivo' => 'Falta la manguera en los repuestos'])
+        ->assertSessionHasNoErrors();
+
+    expect($orden->refresh()->estado)->toBe(EstadoOrdenTrabajo::Solicitada);
+
+    actingAs($this->mecanico)
+        ->get(route('mis-ordenes.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('por_hacer.0.devolucion_requerimiento', 'Falta la manguera en los repuestos'));
+});
+
+it('treats a part asked during the job as an extra that operations approves', function (): void {
+    $operaciones = actorConRol('operaciones');
+    $orden = ordenAsignada($this->tracto, $this->mecanico);
+    $orden->update(['estado' => EstadoOrdenTrabajo::EnProceso]);
+
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.repuestos.store', $orden), ['descripcion' => 'Abrazadera de 1/2', 'cantidad' => 2])
+        ->assertSessionHasNoErrors();
+
+    $repuesto = $orden->repuestos()->sole();
+
+    expect($repuesto->adicional)->toBeTrue()
+        ->and($repuesto->estaAprobado())->toBeFalse();
+
+    actingAs($operaciones)
+        ->get(route('mantenimiento.ordenes.index'))
+        ->assertInertia(fn (Assert $page) => $page->where('por_atender.adicionales', 1));
+
+    actingAs($operaciones)
+        ->post(route('mantenimiento.ordenes.repuestos.aprobar', [$orden, $repuesto]))
+        ->assertSessionHasNoErrors();
+
+    expect($repuesto->refresh()->aprobado_por)->toBe($operaciones->id);
+
+    // Aprobado, el mecánico ya no lo quita.
+    actingAs($this->mecanico)
+        ->delete(route('mis-ordenes.repuestos.destroy', [$orden, $repuesto]))
+        ->assertSessionHasErrors('repuesto');
+});
+
+it('lets operations validate the finished job', function (): void {
+    $operaciones = actorConRol('operaciones');
+    $orden = ordenAsignada($this->tracto, $this->mecanico);
+    $orden->update(['estado' => EstadoOrdenTrabajo::PorRevisar]);
+
+    actingAs($operaciones)
+        ->put(route('mantenimiento.ordenes.update', $orden), datosDeOrden($this->tracto, ['estado' => 'finalizada']))
+        ->assertSessionHasNoErrors();
+
+    expect($orden->refresh()->estado)->toBe(EstadoOrdenTrabajo::Finalizada)
+        ->and($orden->revisado_por)->toBe($operaciones->id);
+});
+
+it('rejects a pre-order that will not be attended', function (): void {
+    $orden = preOrden($this->tracto, $this->mecanico);
+
+    actingAs($this->taller)
+        ->post(route('mantenimiento.ordenes.rechazar', $orden), ['motivo' => 'Ya se atendió ayer'])
+        ->assertSessionHasNoErrors();
+
+    expect($orden->refresh()->estaAnulado())->toBeTrue()
+        ->and($orden->motivo_anulacion)->toBe('Ya se atendió ayer');
+});
+
+it('does not hand out parts from the warehouse catalog to a pre-order', function (): void {
+    $orden = preOrden($this->tracto, $this->mecanico);
+
+    actingAs($this->taller)
+        ->get(route('almacen.salidas.create'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('ordenes', fn ($ordenes) => ! collect($ordenes)->contains('id', $orden->id)));
+});
+
+it('opens a pre-order when the unit is not fit to leave', function (): void {
     $vuelta = Vuelta::factory()->create([
         'tracto_id' => $this->tracto->id,
         'estado' => EstadoVuelta::Programada,
@@ -356,7 +562,7 @@ it('opens the work order when the unit is not fit to leave', function (): void {
     $orden = OrdenTrabajo::query()->sole();
 
     expect($orden->vehiculo_id)->toBe($this->tracto->id)
-        ->and($orden->estado)->toBe(EstadoOrdenTrabajo::Pendiente)
+        ->and($orden->estado)->toBe(EstadoOrdenTrabajo::Solicitada)
         ->and($orden->prioridad)->toBe(PrioridadOrden::Urgente)
         ->and($orden->trabajo)->toBe('Fuga de aceite en el cárter');
 });

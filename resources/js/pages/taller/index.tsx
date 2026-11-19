@@ -102,6 +102,8 @@ type Props = {
     llegadas: Llegada[];
     /** Las unidades a las que se les puede pedir un trabajo. */
     unidades: { id: number; placa: string; tipo: string }[];
+    /** A quién se le puede dar una pre-orden. */
+    mecanicos: { id: number; nombre: string }[];
     puede: {
         ver_unidad: boolean;
         registrar_km: boolean;
@@ -246,6 +248,7 @@ export default function Taller({
     ordenes,
     llegadas,
     unidades,
+    mecanicos,
     puede,
 }: Props) {
     const [kmDe, setKmDe] = useState<number | null>(null);
@@ -510,7 +513,10 @@ export default function Taller({
                             </span>
                         </h2>
                         {puede.solicitar_trabajo && (
-                            <PedirTrabajoDialog unidades={unidades} />
+                            <PedirTrabajoDialog
+                                unidades={unidades}
+                                mecanicos={mecanicos}
+                            />
                         )}
                     </div>
                     {ordenes.length === 0 ? (

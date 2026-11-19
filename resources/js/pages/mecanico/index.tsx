@@ -9,15 +9,15 @@ import type { OrdenDeMecanico } from '@/types/mantenimiento';
 type Props = {
     /** Observadas, en proceso y por empezar, en ese orden. */
     por_hacer: OrdenDeMecanico[];
-    /** Terminadas que taller todavía no revisó. */
+    /** En manos de operaciones: requerimiento por aprobar o trabajo por validar. */
     en_revision: OrdenDeMecanico[];
     /** Finalizadas en los últimos días. */
     terminadas: OrdenDeMecanico[];
 };
 
 /**
- * La pantalla del mecánico: las órdenes que taller le asignó y nada más.
- * Abre con lo que hay que hacer —primero lo que taller devolvió—, y cada
+ * La pantalla del mecánico: las órdenes que le asignaron y nada más.
+ * Abre con lo que hay que hacer —primero lo que le devolvieron—, y cada
  * tarjeta es un botón grande que lleva a la orden.
  */
 export default function MisOrdenes({
@@ -29,7 +29,7 @@ export default function MisOrdenes({
         breadcrumbs: [{ title: 'Mis órdenes', href: '#' }],
     });
 
-    // Taller asigna y revisa mientras el mecánico trabaja: la lista se
+    // Operaciones asigna y aprueba mientras el mecánico trabaja: la lista se
     // refresca sola.
     usePoll(30_000);
 
@@ -51,16 +51,12 @@ export default function MisOrdenes({
             <Grupo titulo="Por hacer" ordenes={por_hacer}>
                 <p className="flex flex-col items-center gap-2 rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
                     <CircleCheck className="size-8 text-emerald-600" />
-                    Estás al día. Cuando taller te asigne una orden, aparece
-                    acá.
+                    Estás al día. Cuando te asignen una orden, aparece acá.
                 </p>
             </Grupo>
 
             {en_revision.length > 0 && (
-                <Grupo
-                    titulo="Esperando revisión de taller"
-                    ordenes={en_revision}
-                />
+                <Grupo titulo="Esperando a operaciones" ordenes={en_revision} />
             )}
 
             {terminadas.length > 0 && (
@@ -133,9 +129,29 @@ function Tarjeta({ orden }: { orden: OrdenDeMecanico }) {
                 <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-sm">
                     <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
                     <span>
-                        <span className="font-medium">Taller observó: </span>
+                        <span className="font-medium">
+                            Operaciones observó:{' '}
+                        </span>
                         {orden.observacion_revision}
                     </span>
+                </p>
+            )}
+
+            {orden.devolucion_requerimiento && (
+                <p className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5 text-sm">
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0 text-amber-600" />
+                    <span>
+                        <span className="font-medium">
+                            Requerimiento devuelto:{' '}
+                        </span>
+                        {orden.devolucion_requerimiento}
+                    </span>
+                </p>
+            )}
+
+            {orden.estado === 'solicitada' && (
+                <p className="text-sm font-medium text-violet-700 dark:text-violet-300">
+                    Arma el requerimiento y envíalo a operaciones.
                 </p>
             )}
 

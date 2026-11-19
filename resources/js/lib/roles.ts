@@ -24,7 +24,7 @@ const DESCRIPCIONES_ROL: Record<string, string> = {
     gerencia:
         'Ve todo el sistema y aprueba las excepciones (combustible por encima del tope).',
     operaciones:
-        'Programa los tickets, sube y asigna las GR, registra la llegada y avisa.',
+        'Programa los tickets, sube y asigna las GR, registra la llegada y avisa. Crea las pre-órdenes de trabajo, aprueba el requerimiento del mecánico y valida el trabajo.',
     abastecimiento:
         'Autoriza el combustible, registra los vouchers, deposita viáticos y liquida los tickets.',
     taller: 'Da el OK de salida y lleva el mantenimiento de la flota.',
@@ -34,7 +34,7 @@ const DESCRIPCIONES_ROL: Record<string, string> = {
     almacen:
         'Lleva el almacén del taller: artículos, proveedores, compras, vales de salida, conteos y kardex.',
     mecanico:
-        'Solo ve las órdenes de trabajo que taller le asignó: las empieza, sube las fotos y las termina.',
+        'Solo ve las órdenes que le asignaron: arma el requerimiento (tareas, repuestos y fotos), y con la orden aprobada la ejecuta y la termina.',
 };
 
 export function descripcionRol(rol: string): string | null {

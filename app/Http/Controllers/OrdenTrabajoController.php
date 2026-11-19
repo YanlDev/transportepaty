@@ -13,6 +13,7 @@ use App\Http\Requests\UpdateOrdenTrabajoRequest;
 use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
 use App\Models\PlanMantenimiento;
+use App\Models\RepuestoOrden;
 use App\Models\SalidaAlmacen;
 use App\Models\ServicioMantenimiento;
 use App\Models\User;
@@ -66,7 +67,7 @@ class OrdenTrabajoController extends Controller
             ->when(EstadoOrdenTrabajo::tryFrom($estado) !== null, fn (Builder $query) => $query->vigentes()->where('estado', $estado))
             ->when($mecanico !== null, fn (Builder $query) => $query->whereHas('mecanicos', fn (Builder $mecanicos) => $mecanicos->whereKey($mecanico)))
             ->when($placa !== '', fn (Builder $query) => $query->whereHas('vehiculo', fn (Builder $vehiculo) => $vehiculo->withTrashed()->where('placa', 'like', "%{$placa}%")))
-            ->orderByRaw("case estado when 'por_revisar' then 0 when 'solicitada' then 1 when 'observada' then 2 when 'en_proceso' then 3 when 'pendiente' then 4 else 5 end")
+            ->orderByRaw("case estado when 'requerimiento' then 0 when 'por_revisar' then 1 when 'observada' then 2 when 'en_proceso' then 3 when 'pendiente' then 4 when 'solicitada' then 5 else 6 end")
             ->orderByRaw("case prioridad when 'urgente' then 0 else 1 end")
             ->orderByDesc('fecha')
             ->orderByDesc('id')
@@ -105,7 +106,11 @@ class OrdenTrabajoController extends Controller
             // mirando otro filtro.
             'por_atender' => [
                 'por_revisar' => OrdenTrabajo::query()->vigentes()->where('estado', EstadoOrdenTrabajo::PorRevisar)->count(),
-                'solicitadas' => OrdenTrabajo::query()->vigentes()->where('estado', EstadoOrdenTrabajo::Solicitada)->count(),
+                'requerimientos' => OrdenTrabajo::query()->vigentes()->where('estado', EstadoOrdenTrabajo::Requerimiento)->count(),
+                'adicionales' => RepuestoOrden::query()
+                    ->whereNull('aprobado_at')
+                    ->whereHas('orden', fn (Builder $orden) => $orden->enTaller()->whereNotIn('estado', [EstadoOrdenTrabajo::Solicitada, EstadoOrdenTrabajo::Requerimiento]))
+                    ->count(),
             ],
             'puede' => ['editar' => $puedeEditar],
         ]);
@@ -129,7 +134,9 @@ class OrdenTrabajoController extends Controller
                 'trabajo' => $estado['proximo']['nombre'] ?? '',
                 'kilometraje' => $estado['km_actual'] ?? null,
                 'fecha' => RelojOperativo::hoy(),
-                'estado' => EstadoOrdenTrabajo::Pendiente->value,
+                // Lo normal es una pre-orden: el mecánico arma el
+                // requerimiento y operaciones lo aprueba.
+                'estado' => EstadoOrdenTrabajo::Solicitada->value,
                 'prioridad' => PrioridadOrden::Normal->value,
                 'mecanicos' => [],
                 'responsable_id' => null,
@@ -185,6 +192,7 @@ class OrdenTrabajoController extends Controller
                 'puede_anular' => $request->user()?->can('anular', $orden) ?? false,
                 'puede_observar' => $request->user()?->can('observar', $orden) ?? false,
                 'puede_rechazar' => $request->user()?->can('rechazar', $orden) ?? false,
+                'puede_aprobar_requerimiento' => $request->user()?->can('aprobarRequerimiento', $orden) ?? false,
                 'estado' => $orden->estado->value,
                 'estado_label' => $orden->estado->label(),
                 'fotos' => $orden->media
@@ -318,8 +326,74 @@ class OrdenTrabajoController extends Controller
     }
 
     /**
-     * Una solicitud que taller no va a atender: queda anulada con el motivo,
-     * a la vista de quien la pidió.
+     * Operaciones aprueba el requerimiento del mecánico: la pre-orden pasa a
+     * ser una orden de trabajo, lista para empezar.
+     */
+    public function aprobarRequerimiento(Request $request, OrdenTrabajo $orden): RedirectResponse
+    {
+        $this->authorize('aprobarRequerimiento', $orden);
+
+        /** @var User $aprobador */
+        $aprobador = $request->user();
+        DB::transaction(fn () => $this->ejecucion->aprobarRequerimiento($orden, $aprobador));
+
+        return to_route('mantenimiento.ordenes.edit', $orden)->with('toast', [
+            'type' => 'success',
+            'message' => "Requerimiento aprobado: la {$orden->numero()} ya es una orden de trabajo.",
+        ]);
+    }
+
+    /**
+     * El requerimiento vuelve al mecánico con lo que hay que cambiar.
+     */
+    public function devolverRequerimiento(ObservarOrdenRequest $request, OrdenTrabajo $orden): RedirectResponse
+    {
+        $this->authorize('aprobarRequerimiento', $orden);
+
+        /** @var User $aprobador */
+        $aprobador = $request->user();
+        $this->ejecucion->devolverRequerimiento($orden, $aprobador, $request->validated('motivo'));
+
+        return to_route('mantenimiento.ordenes.index')->with('toast', [
+            'type' => 'warning',
+            'message' => "Requerimiento de la {$orden->numero()} devuelto al mecánico.",
+        ]);
+    }
+
+    /**
+     * Un repuesto que el mecánico pidió con la orden ya aprobada.
+     */
+    public function aprobarRepuesto(Request $request, OrdenTrabajo $orden, RepuestoOrden $repuesto): RedirectResponse
+    {
+        $this->authorize('update', $orden);
+
+        abort_unless($repuesto->orden_trabajo_id === $orden->id, 404);
+
+        /** @var User $aprobador */
+        $aprobador = $request->user();
+        $this->ejecucion->aprobarRepuesto($repuesto->setRelation('orden', $orden), $aprobador);
+
+        return back()->with('toast', ['type' => 'success', 'message' => "Aprobado: {$repuesto->descripcion}."]);
+    }
+
+    /**
+     * Un repuesto pedido que no se va a dar: se quita mientras no esté
+     * aprobado.
+     */
+    public function quitarRepuesto(OrdenTrabajo $orden, RepuestoOrden $repuesto): RedirectResponse
+    {
+        $this->authorize('update', $orden);
+
+        abort_unless($repuesto->orden_trabajo_id === $orden->id, 404);
+
+        $this->ejecucion->quitarRepuesto($repuesto);
+
+        return back()->with('toast', ['type' => 'success', 'message' => 'Repuesto quitado del pedido.']);
+    }
+
+    /**
+     * Una pre-orden que no se va a atender: queda anulada con el motivo, a
+     * la vista de quien la pidió.
      */
     public function rechazar(AnularDocumentoRequest $request, OrdenTrabajo $orden): RedirectResponse
     {
@@ -333,7 +407,7 @@ class OrdenTrabajoController extends Controller
 
         return to_route('mantenimiento.ordenes.index')->with('toast', [
             'type' => 'success',
-            'message' => "Solicitud {$orden->numero()} rechazada.",
+            'message' => "Pre-orden {$orden->numero()} rechazada.",
         ]);
     }
 
@@ -426,7 +500,9 @@ class OrdenTrabajoController extends Controller
         // sale de una acción (por revisar, observada…), se puede dejar así.
         $estados = EstadoOrdenTrabajo::deTaller();
 
-        if ($orden !== null && ! in_array($orden->estado, $estados, true)) {
+        if ($orden === null) {
+            $estados = [EstadoOrdenTrabajo::Solicitada, ...$estados];
+        } elseif (! in_array($orden->estado, $estados, true)) {
             $estados = [$orden->estado, ...$estados];
         }
 

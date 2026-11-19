@@ -59,8 +59,8 @@ class StoreSalidaRequest extends FormRequest
 
                 if ($orden?->estaAnulado()) {
                     $validator->errors()->add('orden_trabajo_id', "La {$orden->numero()} está anulada: no puede recibir repuestos.");
-                } elseif ($orden?->estado === EstadoOrdenTrabajo::Solicitada) {
-                    $validator->errors()->add('orden_trabajo_id', "La {$orden->numero()} todavía es una solicitud: taller tiene que aceptarla antes de sacarle repuestos.");
+                } elseif ($orden?->estado->sinAprobar()) {
+                    $validator->errors()->add('orden_trabajo_id', "La {$orden->numero()} todavía es una pre-orden: operaciones tiene que aprobar el requerimiento antes de sacarle repuestos.");
                 } elseif ($orden?->estado === EstadoOrdenTrabajo::Finalizada) {
                     $validator->errors()->add('orden_trabajo_id', "La {$orden->numero()} ya está finalizada: reábrela en Mantenimiento para cargarle más repuestos.");
                 }

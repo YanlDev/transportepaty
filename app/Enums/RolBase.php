@@ -56,8 +56,10 @@ enum RolBase: string
                 Permiso::VehiculosVer, Permiso::VehiculosCrear, Permiso::VehiculosEditar,
                 Permiso::ConductoresVer,
                 Permiso::NovedadesRegistrar, Permiso::NovedadesLevantar,
-                // Pide trabajos a taller; taller los acepta y los asigna.
-                Permiso::MantenimientoSolicitar,
+                // Lleva el ciclo de la orden de trabajo: crea la pre-orden y
+                // elige al mecánico, aprueba su requerimiento y valida el
+                // trabajo terminado.
+                Permiso::MantenimientoVer, Permiso::MantenimientoSolicitar, Permiso::MantenimientoGestionar,
                 Permiso::ClientesVer, Permiso::CotizacionesVer,
                 // El jefe de operaciones pide y aprueba lo de una unidad
                 // parada en ruta.

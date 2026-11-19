@@ -302,7 +302,7 @@ export function RevisionTallerDialog({
                             />
                             <span>
                                 <span className="font-medium">
-                                    Abrir la orden de trabajo
+                                    Abrir la pre-orden de trabajo
                                 </span>
                                 <span className="block text-xs text-muted-foreground">
                                     Se crea como urgente con el motivo y los

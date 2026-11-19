@@ -25,18 +25,22 @@ type Formulario = {
     vehiculo_id: number | null;
     trabajo: string;
     prioridad: 'normal' | 'urgente';
+    mecanicos: number[];
     fotos: File[];
 };
 
 /**
- * Pedirle un trabajo a taller: la unidad, qué le pasa y qué tan urgente es,
- * con fotos si las hay. Queda como solicitud hasta que taller la acepta y le
- * asigna mecánico; mientras tanto no bloquea a la unidad.
+ * Crear una pre-orden: la unidad, qué le pasa, qué tan urgente es y qué
+ * mecánico la va a ver, con fotos si las hay. El mecánico arma el
+ * requerimiento (tareas, repuestos, fotos) y lo envía para aprobarlo. Desde
+ * la pre-orden la unidad no recibe el apto de salida.
  */
 export function PedirTrabajoDialog({
     unidades,
+    mecanicos,
 }: {
     unidades: { id: number; placa: string; tipo: string }[];
+    mecanicos: { id: number; nombre: string }[];
 }) {
     const [abierto, setAbierto] = useState(false);
     const [preparando, setPreparando] = useState(false);
@@ -53,6 +57,7 @@ export function PedirTrabajoDialog({
         vehiculo_id: null,
         trabajo: '',
         prioridad: 'normal',
+        mecanicos: [],
         fotos: [],
     });
 
@@ -84,16 +89,18 @@ export function PedirTrabajoDialog({
             <DialogTrigger asChild>
                 <Button variant="outline" className="h-11">
                     <Hammer className="size-4" />
-                    Pedir trabajo a taller
+                    Nueva pre-orden
                 </Button>
             </DialogTrigger>
             <DialogContent>
                 <form onSubmit={enviar} className="flex flex-col gap-4">
                     <DialogHeader>
-                        <DialogTitle>Pedir un trabajo a taller</DialogTitle>
+                        <DialogTitle>Nueva pre-orden de trabajo</DialogTitle>
                         <DialogDescription>
-                            Taller lo acepta y le asigna mecánico. Verás en qué
-                            va desde esta misma pantalla.
+                            El mecánico revisa la unidad y te envía su
+                            requerimiento: tareas, repuestos y fotos. Al
+                            aprobarlo nace la orden. Desde ahora la unidad no
+                            recibe el apto.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -158,6 +165,67 @@ export function PedirTrabajoDialog({
                     </div>
 
                     <div className="grid gap-1.5">
+                        <Label>Mecánico</Label>
+                        {mecanicos.length === 0 ? (
+                            <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                                Todavía no hay usuarios con el rol Mecánico:
+                                créalos en Configuración → Usuarios.
+                            </p>
+                        ) : (
+                            <div className="flex flex-wrap gap-2">
+                                {mecanicos.map((mecanico) => {
+                                    const elegido = data.mecanicos.includes(
+                                        mecanico.id,
+                                    );
+
+                                    return (
+                                        <button
+                                            key={mecanico.id}
+                                            type="button"
+                                            aria-pressed={elegido}
+                                            onClick={() =>
+                                                setData(
+                                                    'mecanicos',
+                                                    elegido
+                                                        ? data.mecanicos.filter(
+                                                              (id) =>
+                                                                  id !==
+                                                                  mecanico.id,
+                                                          )
+                                                        : [
+                                                              ...data.mecanicos,
+                                                              mecanico.id,
+                                                          ],
+                                                )
+                                            }
+                                            className={cn(
+                                                'min-h-11 rounded-full border px-4 text-sm font-medium transition-colors',
+                                                elegido
+                                                    ? 'border-primary bg-primary text-primary-foreground'
+                                                    : 'hover:bg-accent',
+                                            )}
+                                        >
+                                            {mecanico.nombre}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        )}
+                        <p className="text-xs text-muted-foreground">
+                            Puede ser uno o varios; el primero que elijas
+                            responde por la orden.
+                        </p>
+                        <InputError
+                            message={
+                                errors.mecanicos ??
+                                Object.entries(errors).find(([clave]) =>
+                                    clave.startsWith('mecanicos.'),
+                                )?.[1]
+                            }
+                        />
+                    </div>
+
+                    <div className="grid gap-1.5">
                         <Label>Fotos (opcional)</Label>
                         <CampoArchivo
                             acepta="imagen"
@@ -182,7 +250,7 @@ export function PedirTrabajoDialog({
                             disabled={processing || preparando}
                         >
                             {processing && <Spinner />}
-                            Enviar a taller
+                            Crear pre-orden
                         </Button>
                     </DialogFooter>
                 </form>

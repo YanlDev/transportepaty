@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 /** El color de cada estado, igual en la lista del mecánico y en la de taller. */
 const TONOS: Record<string, string> = {
     solicitada: 'bg-violet-500/15 text-violet-700 dark:text-violet-300',
+    requerimiento: 'bg-amber-500/20 text-amber-800 dark:text-amber-300',
     pendiente: 'bg-slate-500/15 text-slate-700 dark:text-slate-300',
     en_proceso: 'bg-sky-500/15 text-sky-700 dark:text-sky-300',
     por_revisar: 'bg-amber-500/20 text-amber-800 dark:text-amber-300',
