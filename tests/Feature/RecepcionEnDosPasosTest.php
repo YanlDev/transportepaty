@@ -195,3 +195,25 @@ it('takes an emergency already fitted on the road straight to the unit', functio
         // Entró y salió: el almacén queda como estaba.
         ->and((float) $this->filtro->refresh()->stock)->toBe(0.0);
 });
+
+it('opens the warehouse home with an approved order that was already received', function (): void {
+    // Con más de un pedido en la lista es cuando la carga perezosa salta.
+    pedidoAprobadoDeFiltros($this->almacen, $this->gerencia, Articulo::factory()->create());
+    $pedido = pedidoAprobadoDeFiltros($this->almacen, $this->gerencia, $this->filtro);
+    actingAs($this->almacen)
+        ->post(route('almacen.compras.recibir', $pedido), ['fecha' => '2026-11-19', 'detalles' => [['articulo_id' => $this->filtro->id, 'cantidad' => 4]]])
+        ->assertSessionHasNoErrors();
+
+    // El pedido ya se usó: la portada lo saca de «por recibir» sin tropezar
+    // al calcular en qué va (con la carga perezosa prohibida, como en local).
+    foreach ([$this->almacen, $this->gerencia] as $quien) {
+        actingAs($quien)
+            ->get(route('almacen.index'))
+            ->assertSuccessful()
+            ->assertInertia(fn (Assert $page) => $page->where('porHacer.por_aprobar', []));
+    }
+
+    actingAs($this->almacen)
+        ->get(route('almacen.index'))
+        ->assertInertia(fn (Assert $page) => $page->has('porHacer.por_recibir', 1)->has('porHacer.sin_comprobante', 1));
+});

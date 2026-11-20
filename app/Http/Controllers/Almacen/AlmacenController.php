@@ -72,7 +72,7 @@ class AlmacenController extends Controller
         $recibe = $usuario?->can('create', IngresoAlmacen::class) ?? false;
 
         $pedidos = $veCompras
-            ? ValeCompra::query()->vigentes()->with('proveedor')->whereIn('estado', [EstadoValeCompra::Solicitado, EstadoValeCompra::Aprobado])->orderBy('id')->get()
+            ? ValeCompra::query()->vigentes()->with(['proveedor', 'detalles'])->whereIn('estado', [EstadoValeCompra::Solicitado, EstadoValeCompra::Aprobado])->orderBy('id')->get()
             : collect();
         $pedido = fn (ValeCompra $vale): array => [
             'id' => $vale->id,
