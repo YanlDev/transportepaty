@@ -262,7 +262,11 @@ class ValeCompraController extends Controller
                 'id' => $vale->id,
                 'numero' => $vale->numero(),
                 'aprobado' => $vale->estado === EstadoValeCompra::Aprobado,
-                'cotizaciones' => $vale->getMedia('cotizaciones')->count(),
+                'cotizaciones' => $vale->getMedia('cotizaciones')->map(fn (Media $archivo): array => [
+                    'id' => $archivo->id,
+                    'nombre' => $archivo->file_name,
+                    'url' => route('almacen.compras.archivo', [$vale, $archivo]),
+                ])->values()->all(),
             ],
             'inicial' => [
                 'tipo' => $vale->tipo->value,
@@ -310,6 +314,10 @@ class ValeCompraController extends Controller
             ]);
 
             $vale->detalles()->delete();
+            // Solo las suyas: un id de otro pedido no quita nada.
+            $vale->getMedia('cotizaciones')
+                ->whereIn('id', array_map(intval(...), $request->validated('quitar_cotizaciones') ?? []))
+                ->each(fn (Media $archivo) => $archivo->delete());
             $this->guardarLineas($vale, $request);
         });
 

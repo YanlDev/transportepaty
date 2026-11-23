@@ -1,5 +1,13 @@
 import { Head, setLayoutProps, useForm } from '@inertiajs/react';
-import { Plus, ShoppingCart, Trash2, UserPlus, Wrench } from 'lucide-react';
+import {
+    Paperclip,
+    Plus,
+    ShoppingCart,
+    Trash2,
+    Undo2,
+    UserPlus,
+    Wrench,
+} from 'lucide-react';
 import { useState } from 'react';
 import compras, {
     store,
@@ -20,6 +28,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { errorDeLinea, opcionesArticulo } from '@/lib/almacen';
 import { formatearPlaca } from '@/lib/format';
+import { cn } from '@/lib/utils';
 import type {
     ArticuloElegible,
     Opcion,
@@ -44,7 +53,8 @@ type Props = {
         id: number;
         numero: string;
         aprobado: boolean;
-        cotizaciones: number;
+        /** Las cotizaciones que ya tiene adjuntas. */
+        cotizaciones: { id: number; nombre: string; url: string }[];
     } | null;
     inicial: {
         tipo: string;
@@ -138,6 +148,7 @@ export default function CompraForm({
             orden_trabajo_id: number | null;
             vehiculo_id: number | null;
             cotizaciones: File[];
+            quitar_cotizaciones: number[];
             detalles: Linea[];
         }>({
             tipo: inicial.tipo,
@@ -154,6 +165,7 @@ export default function CompraForm({
             orden_trabajo_id: inicial.orden_trabajo_id,
             vehiculo_id: inicial.vehiculo_id,
             cotizaciones: [],
+            quitar_cotizaciones: [],
             detalles:
                 inicial.detalles.length > 0
                     ? inicial.detalles.map((linea) => ({
@@ -750,11 +762,85 @@ export default function CompraForm({
                             <p className="text-xs text-muted-foreground">
                                 Al menos una cotización. Si no hay, explica cómo
                                 se verificó el precio.
-                                {editando &&
-                                    vale.cotizaciones > 0 &&
-                                    ` Este pedido ya tiene ${vale.cotizaciones} ${vale.cotizaciones === 1 ? 'cotización adjunta' : 'cotizaciones adjuntas'}.`}
                             </p>
                         </div>
+                        {editando && vale.cotizaciones.length > 0 && (
+                            <div className="flex flex-col gap-2">
+                                <p className="text-xs text-muted-foreground">
+                                    Ya adjuntas. Para cambiar una, quítala y
+                                    sube la nueva.
+                                </p>
+                                <ul className="flex flex-col divide-y rounded-lg border">
+                                    {vale.cotizaciones.map((archivo) => {
+                                        const quitada =
+                                            data.quitar_cotizaciones.includes(
+                                                archivo.id,
+                                            );
+
+                                        return (
+                                            <li
+                                                key={archivo.id}
+                                                className="flex items-center justify-between gap-3 px-3 py-2"
+                                            >
+                                                <a
+                                                    href={archivo.url}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className={cn(
+                                                        'flex min-w-0 items-center gap-2 text-sm underline underline-offset-2',
+                                                        quitada &&
+                                                            'text-muted-foreground line-through',
+                                                    )}
+                                                >
+                                                    <Paperclip className="size-4 shrink-0" />
+                                                    <span className="truncate">
+                                                        {archivo.nombre}
+                                                    </span>
+                                                </a>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="shrink-0"
+                                                    onClick={() =>
+                                                        setData(
+                                                            'quitar_cotizaciones',
+                                                            quitada
+                                                                ? data.quitar_cotizaciones.filter(
+                                                                      (id) =>
+                                                                          id !==
+                                                                          archivo.id,
+                                                                  )
+                                                                : [
+                                                                      ...data.quitar_cotizaciones,
+                                                                      archivo.id,
+                                                                  ],
+                                                        )
+                                                    }
+                                                >
+                                                    {quitada ? (
+                                                        <>
+                                                            <Undo2 />
+                                                            Dejarla
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Trash2 />
+                                                            Quitar
+                                                        </>
+                                                    )}
+                                                </Button>
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
+                                {data.quitar_cotizaciones.length > 0 && (
+                                    <p className="text-xs text-amber-700 dark:text-amber-400">
+                                        Se quitan al guardar el pedido.
+                                    </p>
+                                )}
+                            </div>
+                        )}
                         <CampoArchivo
                             archivos={data.cotizaciones}
                             onArchivos={(lista) =>

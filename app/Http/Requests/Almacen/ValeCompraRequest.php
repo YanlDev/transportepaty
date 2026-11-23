@@ -46,6 +46,9 @@ class ValeCompraRequest extends FormRequest
             'vehiculo_id' => ['nullable', 'integer', Rule::exists('vehiculos', 'id')],
             'cotizaciones' => ['nullable', 'array', 'max:5'],
             'cotizaciones.*' => ReglasDeArchivo::imagenOPdf(),
+            // Al corregir: las cotizaciones ya adjuntas que se quitan.
+            'quitar_cotizaciones' => ['nullable', 'array'],
+            'quitar_cotizaciones.*' => ['integer'],
             // Emergencia en ruta que ya se instaló: al aprobarse entra y sale
             // a la unidad sin pasar por el almacén.
             'directo_a_unidad' => ['boolean'],
@@ -145,7 +148,9 @@ class ValeCompraRequest extends FormRequest
         }
 
         $vale = $this->route('vale');
-        $yaTiene = $vale instanceof ValeCompra && $vale->getMedia('cotizaciones')->isNotEmpty();
+        $yaTiene = $vale instanceof ValeCompra && $vale->getMedia('cotizaciones')
+            ->whereNotIn('id', array_map(intval(...), (array) $this->input('quitar_cotizaciones', [])))
+            ->isNotEmpty();
 
         if (! $yaTiene && ! $this->hasFile('cotizaciones') && ! $this->filled('sustento_precio')) {
             $validator->errors()->add(

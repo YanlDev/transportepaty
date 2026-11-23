@@ -264,6 +264,47 @@ it('rejects with a reason, and a corrected request goes back to approval without
         ->and($vale->motivo_rechazo)->toBe('El precio subió demasiado');
 });
 
+it('lets a correction remove a quotation already attached, and still asks for a price support', function (): void {
+    $filtro = Articulo::factory()->create();
+    $taller = actorConRol('taller');
+    $pedido = pedidoDeCompra([[$filtro, 4, 59]], ['sustento_precio' => null]);
+
+    actingAs($taller)
+        ->post(route('almacen.compras.store'), [...$pedido, 'cotizaciones' => [documentoDePrueba('vieja.pdf')]])
+        ->assertSessionHasNoErrors();
+
+    $vale = ValeCompra::query()->sole();
+    $vieja = $vale->getMedia('cotizaciones')->sole();
+
+    actingAs($taller)->get(route('almacen.compras.edit', $vale))
+        ->assertInertia(fn (Assert $page) => $page->where('vale.cotizaciones.0.id', $vieja->id));
+
+    // Quitar la única sin poner otra ni decir cómo se verificó: no pasa.
+    actingAs($taller)
+        ->put(route('almacen.compras.update', $vale), [...$pedido, 'quitar_cotizaciones' => [$vieja->id]])
+        ->assertSessionHasErrors('sustento_precio');
+
+    expect($vale->refresh()->getMedia('cotizaciones'))->toHaveCount(1);
+
+    // La cotización de otro pedido no se toca.
+    $ajeno = valeAprobado([[Articulo::factory()->create(), 1, 10]]);
+    $ajena = $ajeno->addMedia(documentoDePrueba('ajena.pdf'))->toMediaCollection('cotizaciones');
+
+    actingAs($taller)
+        ->put(route('almacen.compras.update', $vale), [
+            ...$pedido,
+            'quitar_cotizaciones' => [$vieja->id, $ajena->id],
+            'cotizaciones' => [documentoDePrueba('nueva.pdf')],
+        ])
+        ->assertSessionHasNoErrors();
+
+    $quedan = $vale->refresh()->getMedia('cotizaciones');
+
+    expect($quedan)->toHaveCount(1)
+        ->and($quedan->first()->id)->not->toBe($vieja->id)
+        ->and($ajeno->refresh()->getMedia('cotizaciones'))->toHaveCount(1);
+});
+
 // ─── Verificar ──────────────────────────────────────────────────────────────
 
 it('shows the real vale to whoever has its QR, without logging in', function (): void {
