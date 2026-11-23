@@ -114,8 +114,11 @@ class HistorialLlantas
 
         DB::transaction(function () use ($movimiento): void {
             match ($movimiento->tipo) {
-                // La llanta se va con su único movimiento, por la cascada.
-                TipoMovimientoLlanta::Instalacion => $movimiento->llanta->delete(),
+                // La llanta se va con su único movimiento, por la cascada. La
+                // que tiene lote no se pierde: vuelve a estar sin montar.
+                TipoMovimientoLlanta::Instalacion => $movimiento->llanta->detalle_ingreso_id === null
+                    ? $movimiento->llanta->delete()
+                    : $movimiento->llanta->update(['vehiculo_id' => null, 'posicion' => null, 'instalada_el' => null, 'km_instalacion' => null]),
                 TipoMovimientoLlanta::Retiro => $movimiento->llanta->update([
                     'retirada_el' => null,
                     'km_retiro' => null,
@@ -124,7 +127,7 @@ class HistorialLlantas
                 default => null,
             };
 
-            if ($movimiento->tipo !== TipoMovimientoLlanta::Instalacion) {
+            if ($movimiento->tipo !== TipoMovimientoLlanta::Instalacion || $movimiento->llanta->detalle_ingreso_id !== null) {
                 $movimiento->delete();
             }
         });

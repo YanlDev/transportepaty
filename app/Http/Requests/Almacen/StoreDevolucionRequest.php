@@ -64,7 +64,7 @@ class StoreDevolucionRequest extends FormRequest
                     }
 
                     // Una llanta ya montada no puede volver al almacén.
-                    $montadas = Llanta::query()->where('detalle_salida_id', $detalle->id)->count();
+                    $montadas = Llanta::query()->whereNotNull('vehiculo_id')->where('detalle_salida_id', $detalle->id)->count();
                     $pendiente = round((float) $detalle->cantidad - $detalle->cantidadDevuelta() - $montadas, 3);
 
                     if ((float) $linea['cantidad'] - $pendiente > 0.0005) {

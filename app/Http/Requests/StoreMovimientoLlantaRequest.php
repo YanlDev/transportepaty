@@ -7,10 +7,8 @@ use App\Enums\MotivoRetiroLlanta;
 use App\Enums\OrigenLlanta;
 use App\Enums\Permiso;
 use App\Enums\TipoMovimientoLlanta;
-use App\Models\DetalleSalida;
 use App\Models\Llanta;
 use App\Models\Vehiculo;
-use App\Services\LlantasDeAlmacen;
 use App\Services\PosicionesLlanta;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
@@ -30,7 +28,7 @@ class StoreMovimientoLlantaRequest extends FormRequest
      */
     public function authorize(): bool
     {
-        return $this->user()?->can('create', Llanta::class) ?? false;
+        return $this->user()?->can('registrarEnUnidad', [Llanta::class, $this->vehiculo()]) ?? false;
     }
 
     /**
@@ -58,8 +56,10 @@ class StoreMovimientoLlantaRequest extends FormRequest
             'condicion' => ['nullable', 'required_if:tipo,instalacion', 'prohibited_unless:tipo,instalacion', Rule::enum(CondicionLlanta::class)],
             // De dónde sale la llanta que se monta (ver `OrigenLlanta`).
             'origen' => ['nullable', 'required_if:tipo,instalacion', 'prohibited_unless:tipo,instalacion', Rule::enum(OrigenLlanta::class)],
-            'detalle_salida_id' => ['nullable', 'required_if:origen,almacen', 'prohibited_unless:origen,almacen', 'integer', Rule::exists('detalles_salida', 'id')],
-            'llanta_id' => ['nullable', 'required_if:origen,retirada', 'prohibited_unless:origen,retirada', 'integer', Rule::exists('llantas', 'id')],
+            // La llanta con código que se monta: del almacén o retirada de otra unidad.
+            'llanta_id' => ['nullable', 'required_if:origen,almacen,retirada', 'prohibited_if:origen,previa', 'integer', Rule::exists('llantas', 'id')],
+            // A quién se le entrega, si la llanta sale del almacén con un vale nuevo.
+            'entregado_a' => ['nullable', 'prohibited_unless:origen,almacen', 'string', 'min:3', 'max:255'],
             'motivo_retiro' => ['nullable', 'required_if:tipo,retiro', 'prohibited_unless:tipo,retiro', Rule::enum(MotivoRetiroLlanta::class)],
             'observacion' => ['nullable', 'required_if:tipo,reparacion', 'string', 'max:500'],
         ];
@@ -113,26 +113,26 @@ class StoreMovimientoLlantaRequest extends FormRequest
             'motivo_retiro.required_if' => 'Elige por qué se retira.',
             'condicion.required_if' => 'Elige si es nueva, reencauchada o usada.',
             'origen.required_if' => 'Di de dónde sale la llanta: del almacén o de otra unidad.',
-            'detalle_salida_id.required_if' => 'Elige la entrega de almacén con que salió la llanta.',
-            'llanta_id.required_if' => 'Elige cuál de las llantas retiradas se monta.',
+            'llanta_id.required_if' => 'Elige por su código la llanta que se monta.',
             'fecha.before_or_equal' => 'La fecha no puede ser futura.',
         ];
     }
 
     /**
-     * Una llanta nueva sale del almacén: se monta contra una línea de un vale
-     * a nombre de esta unidad que todavía tenga llantas por montar. Una
-     * retirada de otra unidad se vuelve a montar sin vale. Cargar una que ya
-     * estaba puesta antes del almacén es solo para quien tiene ese permiso.
+     * Una llanta nueva sale del almacén: se elige por su código, y sale con
+     * el vale de esta unidad. Una retirada de otra unidad se vuelve a montar
+     * sin vale. Cargar una que ya estaba puesta antes del almacén es solo
+     * para quien tiene ese permiso, y también lleva su código.
      */
     private function validarOrigen(Validator $validator): void
     {
         $origen = OrigenLlanta::from((string) $this->input('origen'));
-        $llantas = app(LlantasDeAlmacen::class);
 
         if ($origen === OrigenLlanta::Previa) {
             if (! ($this->user()?->checkPermissionTo(Permiso::MantenimientoCargaInicial) ?? false)) {
-                $validator->errors()->add('origen', 'Una llanta se monta con su entrega de almacén, o viene de otra unidad. Cargar las que ya estaban puestas es solo del administrador.');
+                $validator->errors()->add('origen', 'Una llanta se monta desde el almacén, o viene de otra unidad. Cargar las que ya estaban puestas es solo de quien tiene ese permiso.');
+            } else {
+                $this->validarCodigo($validator);
             }
 
             return;
@@ -141,7 +141,7 @@ class StoreMovimientoLlantaRequest extends FormRequest
         if ($origen === OrigenLlanta::Retirada) {
             $llanta = Llanta::query()->find($this->integer('llanta_id'));
 
-            if ($llanta === null || $llanta->retirada_el === null) {
+            if ($llanta === null || $llanta->vehiculo_id === null || $llanta->retirada_el === null) {
                 $validator->errors()->add('llanta_id', 'Esa llanta sigue montada: retírala primero de su unidad.');
             } elseif ($llanta->motivo_retiro === MotivoRetiroLlanta::Dano) {
                 $validator->errors()->add('llanta_id', 'Esa llanta se retiró por daño: no se vuelve a montar.');
@@ -150,19 +150,32 @@ class StoreMovimientoLlantaRequest extends FormRequest
             return;
         }
 
-        $detalle = DetalleSalida::query()->with(['salida', 'articulo'])->find($this->integer('detalle_salida_id'));
-        $salida = $detalle?->salida;
+        $llanta = Llanta::query()->with(['detalleSalida.salida.vehiculo', 'detalleIngreso.ingreso'])->find($this->integer('llanta_id'));
+        $salida = $llanta?->detalleSalida?->salida;
+        $entro = $llanta?->detalleIngreso?->ingreso->fecha;
 
-        if ($detalle === null || $salida === null || $salida->estaAnulado()) {
-            $validator->errors()->add('detalle_salida_id', 'Esa entrega de almacén está anulada o no existe.');
-        } elseif ($salida->vehiculo_id !== $this->vehiculo()->id) {
-            $validator->errors()->add('detalle_salida_id', "El vale {$salida->numero()} no salió para {$this->vehiculo()->placa}.");
-        } elseif (! $llantas->esLlanta($detalle->articulo)) {
-            $validator->errors()->add('detalle_salida_id', "{$detalle->articulo->nombre} no es una llanta del almacén.");
-        } elseif ($llantas->disponibles($detalle) < 1) {
-            $validator->errors()->add('detalle_salida_id', "Las llantas del vale {$salida->numero()} ya están todas montadas o devueltas. Saca otro vale de almacén.");
-        } elseif ($this->date('fecha')?->lt($salida->fecha)) {
+        if ($llanta === null || ! $llanta->estaSinMontar()) {
+            $validator->errors()->add('llanta_id', 'Esa llanta no está en el almacén: ya está montada o se retiró de una unidad.');
+        } elseif ($salida !== null && $salida->vehiculo_id !== $this->vehiculo()->id) {
+            $validator->errors()->add('llanta_id', "La llanta {$llanta->codigo} salió del almacén con {$salida->numero()} para {$salida->vehiculo?->placa}: devuélvela primero.");
+        } elseif ($entro !== null && $this->date('fecha')?->lt($entro)) {
+            $validator->errors()->add('fecha', "La llanta entró al almacén el {$entro->format('d/m/Y')}: no se pudo montar antes.");
+        } elseif ($salida !== null && $this->date('fecha')?->lt($salida->fecha)) {
             $validator->errors()->add('fecha', "La llanta salió del almacén el {$salida->fecha->format('d/m/Y')}: no se pudo montar antes.");
+        }
+    }
+
+    /**
+     * El código es de una sola llanta, sin distinguir mayúsculas.
+     */
+    private function validarCodigo(Validator $validator): void
+    {
+        $codigo = trim((string) $this->input('codigo'));
+
+        if ($codigo === '') {
+            $validator->errors()->add('codigo', 'Ponle a la llanta el código con que la marcaron.');
+        } elseif (Llanta::query()->whereRaw('lower(codigo) = ?', [mb_strtolower($codigo)])->exists()) {
+            $validator->errors()->add('codigo', "Ya hay una llanta con el código {$codigo}.");
         }
     }
 

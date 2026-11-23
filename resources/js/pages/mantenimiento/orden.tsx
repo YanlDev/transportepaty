@@ -6,6 +6,7 @@ import {
     show as verVale,
 } from '@/actions/App/Http/Controllers/Almacen/SalidaAlmacenController';
 import compras from '@/actions/App/Http/Controllers/Almacen/ValeCompraController';
+import { show as llantasDeUnidad } from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import {
     anular,
@@ -37,6 +38,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
+import { usePermisos } from '@/hooks/use-permisos';
 import { formatearCantidad } from '@/lib/almacen';
 import { formatearFecha, formatearPlaca, formatearSoles } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -193,6 +195,7 @@ export default function OrdenTrabajo({
     ejecucion,
     repuestos,
 }: Props) {
+    const { puede } = usePermisos();
     const [agregandoRepuesto, setAgregandoRepuesto] = useState(false);
     const editando = orden !== null;
 
@@ -1025,6 +1028,18 @@ export default function OrdenTrabajo({
                                             </li>
                                         ))}
                                     </ul>
+                                )}
+                                {orden && puede('mantenimiento.ver') && (
+                                    <Link
+                                        href={llantasDeUnidad(
+                                            orden.vehiculo_id,
+                                        )}
+                                        className="flex items-center gap-2 text-sm font-medium underline underline-offset-2"
+                                    >
+                                        <CircleDot className="size-4 text-muted-foreground" />
+                                        Llantas de la unidad: montar, rotar o
+                                        retirar
+                                    </Link>
                                 )}
                                 {ejecucion.llantas.length > 0 && (
                                     <div className="grid gap-1 text-sm">

@@ -71,7 +71,7 @@ it('installs a tire on an empty position, never on an occupied one', function ()
     $datos = ['tipo' => 'instalacion', 'origen' => 'previa', 'fecha' => now()->toDateString(), 'condicion' => 'reencauchada', 'marca' => 'Bridgestone', 'medida' => '295/80R22.5', 'profundidad_mm' => 14];
 
     actingAs(llantero())
-        ->post(route('mantenimiento.llantas.store', $carreta), [...$datos, 'posicion' => 'R1'])
+        ->post(route('mantenimiento.llantas.store', $carreta), [...$datos, 'posicion' => 'R1', 'codigo' => 'F-01'])
         ->assertSessionHasNoErrors();
 
     $llanta = Llanta::query()->sole();

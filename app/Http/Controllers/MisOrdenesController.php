@@ -9,6 +9,7 @@ use App\Http\Requests\IniciarOrdenRequest;
 use App\Http\Requests\PedirRepuestoRequest;
 use App\Http\Requests\SubirFotosOrdenRequest;
 use App\Http\Requests\TerminarOrdenRequest;
+use App\Models\Llanta;
 use App\Models\OrdenTrabajo;
 use App\Models\RepuestoOrden;
 use App\Models\TareaOrden;
@@ -98,6 +99,9 @@ class MisOrdenesController extends Controller
             'orden' => [
                 ...$this->resumen($orden->loadCount(['tareas', 'tareas as tareas_hechas_count' => fn ($query) => $query->whereNotNull('hecha_at')]), $mecanico),
                 'kilometraje' => $orden->kilometraje,
+                'vehiculo_id' => $orden->vehiculo_id,
+                // Con la orden aprobada, el mecánico ve las llantas de la unidad.
+                'puede_ver_llantas' => ! $orden->estado->sinAprobar() && $mecanico->can('verUnidad', [Llanta::class, $orden->vehiculo]),
                 'pide_km' => $orden->servicio !== null,
                 'observacion' => $orden->observacion,
                 ...$this->ejecucion->vista($orden),

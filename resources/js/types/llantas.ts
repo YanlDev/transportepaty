@@ -85,3 +85,47 @@ export type LlantaRetirada = {
     retirada_el: string;
     motivo: string;
 };
+
+/** Una llanta con código, sin montar: en el almacén o ya entregada a la unidad. */
+export type LlantaEnAlmacen = {
+    id: number;
+    codigo: string | null;
+    /** Marca y medida. */
+    descripcion: string;
+    /** La recepción con que entró: su lote. */
+    lote: string | null;
+    /** La entrega con que ya salió para la unidad, si salió. */
+    vale: string | null;
+};
+
+/** Dónde está una llanta: `almacen`, `entregada`, `montada`, `retirada` o `baja`. */
+export type SituacionLlanta =
+    | 'almacen'
+    | 'entregada'
+    | 'montada'
+    | 'retirada'
+    | 'baja';
+
+/** Una recepción con llantas: el lote. */
+export type LoteLlantas = {
+    id: number;
+    numero: string;
+    fecha: string;
+    proveedor: string | null;
+    documento: string | null;
+    lineas: {
+        detalle_ingreso_id: number;
+        articulo: string;
+        marca: string | null;
+        cantidad: number;
+        por_codificar: number;
+        costo: number;
+    }[];
+    llantas: {
+        id: number;
+        codigo: string | null;
+        articulo: string | null;
+        situacion: SituacionLlanta;
+        donde: string;
+    }[];
+};

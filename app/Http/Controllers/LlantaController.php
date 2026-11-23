@@ -14,7 +14,6 @@ use App\Http\Requests\StoreMovimientoLlantaRequest;
 use App\Http\Requests\UpdateLlantaRequest;
 use App\Http\Requests\UpdateMovimientoLlantaRequest;
 use App\Http\Requests\UpdateParametrosLlantasRequest;
-use App\Models\DetalleSalida;
 use App\Models\Llanta;
 use App\Models\MovimientoLlanta;
 use App\Models\ParametroMantenimiento;
@@ -60,6 +59,7 @@ class LlantaController extends Controller
         $estados = $this->llantas->paraFlota($vehiculos);
 
         return Inertia::render('mantenimiento/llantas/index', [
+            'resumen' => $this->deAlmacen->resumen(),
             'unidades' => $vehiculos
                 ->map(fn (Vehiculo $vehiculo): array => [
                     'id' => $vehiculo->id,
@@ -80,7 +80,7 @@ class LlantaController extends Controller
 
     public function show(Request $request, Vehiculo $vehiculo, ProximoMantenimiento $mantenimiento): Response
     {
-        $this->authorize('viewAny', Llanta::class);
+        $this->authorize('verUnidad', [Llanta::class, $vehiculo]);
 
         $movimientos = MovimientoLlanta::query()
             ->where('vehiculo_id', $vehiculo->id)
@@ -129,8 +129,15 @@ class LlantaController extends Controller
             'hoy' => RelojOperativo::hoy(),
             // De dónde puede salir una llanta para montarla acá.
             'valesDeAlmacen' => $this->deAlmacen->lineasPara($vehiculo),
+            'enAlmacen' => $this->deAlmacen->montablesEn($vehiculo),
+            // La orden de trabajo abierta de la unidad: lo que se monte queda en ella.
+            'orden' => $this->ordenDe($vehiculo, $request),
             'retiradas' => $this->deAlmacen->retiradas(),
             'puedeCargaInicial' => $request->user()?->checkPermissionTo(Permiso::MantenimientoCargaInicial) ?? false,
+            'puedeRegistrar' => $request->user()?->can('registrarEnUnidad', [Llanta::class, $vehiculo]) ?? false,
+            // Corregir el historial y abrir las fichas es de quien lleva las llantas.
+            'puedeCorregir' => $request->user()?->can('update', Llanta::class) ?? false,
+            'puedeVerFichas' => $request->user()?->can('viewAny', Llanta::class) ?? false,
             'condiciones' => CondicionLlanta::options(),
             'motivos' => MotivoRetiroLlanta::options(),
             'umbrales' => $this->umbrales(),
@@ -139,7 +146,7 @@ class LlantaController extends Controller
 
     public function store(StoreMovimientoLlantaRequest $request, Vehiculo $vehiculo): RedirectResponse
     {
-        $this->authorize('create', Llanta::class);
+        $this->authorize('registrarEnUnidad', [Llanta::class, $vehiculo]);
 
         $datos = $request->validated();
         $tipo = TipoMovimientoLlanta::from($datos['tipo']);
@@ -191,7 +198,7 @@ class LlantaController extends Controller
      */
     public function medir(StoreMedicionLlantasRequest $request, Vehiculo $vehiculo): RedirectResponse
     {
-        $this->authorize('create', Llanta::class);
+        $this->authorize('registrarEnUnidad', [Llanta::class, $vehiculo]);
 
         $datos = $request->validated();
 
@@ -242,7 +249,7 @@ class LlantaController extends Controller
 
         $llanta->update($request->validated());
 
-        return back()->with('toast', ['type' => 'success', 'message' => "Datos de la llanta de la posición {$llanta->posicion} corregidos."]);
+        return back()->with('toast', ['type' => 'success', 'message' => "Datos de la llanta {$llanta->codigo} corregidos."]);
     }
 
     public function corregirMovimiento(UpdateMovimientoLlantaRequest $request, MovimientoLlanta $movimiento): RedirectResponse
@@ -293,8 +300,8 @@ class LlantaController extends Controller
     /**
      * Monta una llanta en una posición libre. Según de dónde sale:
      *
-     * - del almacén: es una llanta nueva en el sistema, ligada a la línea
-     *   del vale con que salió; su marca sale del artículo;
+     * - del almacén: una llanta con código, que sale con el vale de la
+     *   orden de trabajo que la pidió (el que ya tiene o uno que se emite);
      * - retirada de otra unidad: es la misma llanta, que cambia de unidad y
      *   sigue con su historial;
      * - previa: ya estaba puesta antes del almacén, sin vale.
@@ -320,22 +327,17 @@ class LlantaController extends Controller
 
             $llanta->update([...$montaje, 'retirada_el' => null, 'km_retiro' => null, 'motivo_retiro' => null]);
         } elseif ($origen === OrigenLlanta::Almacen) {
-            $detalle = DetalleSalida::query()->lockForUpdate()->with('articulo')->findOrFail((int) $datos['detalle_salida_id']);
+            // Con la llanta bloqueada: dos montajes a la vez no usan la misma.
+            $llanta = Llanta::query()->lockForUpdate()->findOrFail((int) $datos['llanta_id']);
 
-            // Con la línea bloqueada: dos montajes a la vez no usan la misma llanta.
-            if ($this->deAlmacen->disponibles($detalle) < 1) {
-                throw ValidationException::withMessages(['detalle_salida_id' => 'Las llantas de esa entrega ya están todas montadas.']);
+            if (! $llanta->estaSinMontar()) {
+                throw ValidationException::withMessages(['llanta_id' => 'Esa llanta ya está montada.']);
             }
 
-            $llanta = Llanta::create([
-                ...$montaje,
-                'origen' => $origen,
-                'articulo_id' => $detalle->articulo_id,
-                'detalle_salida_id' => $detalle->id,
-                'marca' => $detalle->articulo->marca,
-                'medida' => $datos['medida'] ?? $detalle->articulo->nombre,
-                'codigo' => $datos['codigo'] ?? null,
-            ]);
+            $vale = $this->deAlmacen->valePara($llanta, $vehiculo, $datos['fecha'], $datos['entregado_a'] ?? null, request()->user());
+
+            // Nueva o reencauchada ya lo dice la llanta desde que se codificó.
+            $llanta->update([...Arr::except($montaje, ['condicion']), 'detalle_salida_id' => $vale->id]);
         } else {
             $llanta = Llanta::create([
                 ...$montaje,
@@ -378,6 +380,25 @@ class LlantaController extends Controller
         $otra->movimientos()->create([...$comun, 'posicion' => $destino, 'posicion_destino' => $origen]);
 
         return "Llantas de las posiciones {$origen} y {$destino} intercambiadas.";
+    }
+
+    /**
+     * @return array{id: int, numero: string, estado: string, url: string|null}|null
+     */
+    private function ordenDe(Vehiculo $vehiculo, Request $request): ?array
+    {
+        $orden = $this->deAlmacen->ordenAbierta($vehiculo);
+
+        return $orden === null ? null : [
+            'id' => $orden->id,
+            'numero' => $orden->numero(),
+            'estado' => $orden->estado->label(),
+            'url' => match (true) {
+                $request->user()?->can('ejecutar', $orden) ?? false => route('mis-ordenes.show', $orden),
+                $request->user()?->can('update', $orden) ?? false => route('mantenimiento.ordenes.edit', $orden),
+                default => null,
+            },
+        ];
     }
 
     private function montadaEn(Vehiculo $vehiculo, string $posicion): Llanta

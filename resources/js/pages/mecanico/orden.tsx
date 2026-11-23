@@ -12,6 +12,7 @@ import {
     X,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { show as llantasDeUnidad } from '@/actions/App/Http/Controllers/LlantaController';
 import {
     agregarTarea,
     eliminarFoto,
@@ -51,6 +52,9 @@ import type {
 type Orden = OrdenDeMecanico &
     EjecucionDeOrden & {
         kilometraje: number | null;
+        vehiculo_id: number;
+        /** La orden ya está aprobada: puede abrir las llantas de la unidad. */
+        puede_ver_llantas: boolean;
         /** Una preventiva necesita el km para cerrar. */
         pide_km: boolean;
         observacion: string | null;
@@ -278,6 +282,24 @@ export default function OrdenDeMecanicoPagina({
                         </div>
                     )}
                 </Seccion>
+            )}
+
+            {orden.puede_ver_llantas && (
+                <Link
+                    href={llantasDeUnidad(orden.vehiculo_id)}
+                    className="flex min-h-12 items-center justify-between gap-3 rounded-xl border bg-card px-4 py-3 text-sm font-medium"
+                >
+                    <span className="flex items-center gap-2">
+                        <CircleDot className="size-4 text-muted-foreground" />
+                        Llantas de la unidad
+                    </span>
+                    <span className="text-xs font-normal text-muted-foreground">
+                        {orden.estado === 'en_proceso' ||
+                        orden.estado === 'observada'
+                            ? 'Montar, rotar o retirar'
+                            : 'Ver cómo están'}
+                    </span>
+                </Link>
             )}
 
             {orden.llantas.length > 0 && (

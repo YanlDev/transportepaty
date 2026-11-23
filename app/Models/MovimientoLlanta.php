@@ -61,6 +61,16 @@ class MovimientoLlanta extends Model
     }
 
     /**
+     * La unidad en que estaba la llanta cuando se le hizo esto.
+     *
+     * @return BelongsTo<Vehiculo, $this>
+     */
+    public function vehiculo(): BelongsTo
+    {
+        return $this->belongsTo(Vehiculo::class)->withTrashed();
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function user(): BelongsTo

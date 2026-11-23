@@ -1,6 +1,7 @@
-import { Head, setLayoutProps } from '@inertiajs/react';
+import { Head, Link, setLayoutProps } from '@inertiajs/react';
 import {
     ArrowLeftRight,
+    History,
     Pencil,
     Plus,
     Ruler,
@@ -8,6 +9,7 @@ import {
     Wrench,
 } from 'lucide-react';
 import { useState } from 'react';
+import { ficha } from '@/actions/App/Http/Controllers/LlantaAlmacenController';
 import llantas, {
     eliminarMovimiento,
 } from '@/actions/App/Http/Controllers/LlantaController';
@@ -26,11 +28,11 @@ import { MovimientoLlantaDialog } from '@/components/llantas/movimiento-llanta-d
 import type { TipoMovimiento } from '@/components/llantas/movimiento-llanta-dialog';
 import { formatearKm } from '@/components/mantenimiento/estado-mantenimiento';
 import { Button } from '@/components/ui/button';
-import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption } from '@/types/fleet';
 import type {
+    LlantaEnAlmacen,
     LlantaRetirada,
     MovimientoLlanta,
     PosicionLlanta,
@@ -56,9 +58,24 @@ type Props = {
     umbrales: UmbralesLlanta;
     /** Los vales de almacén con llantas por montar en esta unidad. */
     valesDeAlmacen: ValeDeLlantas[];
+    /** Las llantas con código que se pueden montar desde el almacén. */
+    enAlmacen: LlantaEnAlmacen[];
     /** Las llantas retiradas que se pueden volver a montar. */
     retiradas: LlantaRetirada[];
     puedeCargaInicial: boolean;
+    /** Puede montar, rotar, reparar, retirar y medir en esta unidad. */
+    puedeRegistrar: boolean;
+    /** Puede corregir o eliminar lo ya anotado. */
+    puedeCorregir: boolean;
+    /** Puede abrir la ficha de cada llanta. */
+    puedeVerFichas: boolean;
+    /** La orden de trabajo abierta de la unidad, si tiene. */
+    orden: {
+        id: number;
+        numero: string;
+        estado: string;
+        url: string | null;
+    } | null;
 };
 
 /**
@@ -74,12 +91,14 @@ export default function LlantasUnidad({
     condiciones,
     motivos,
     umbrales,
-    valesDeAlmacen,
+    enAlmacen,
     retiradas,
     puedeCargaInicial,
+    puedeRegistrar,
+    puedeCorregir,
+    puedeVerFichas,
+    orden,
 }: Props) {
-    const { puede } = usePermisos();
-    const puedeRegistrar = puede('mantenimiento.llantas');
     const esTracto = unidad.tipo === 'tracto';
     const placa = formatearPlaca(unidad.placa);
 
@@ -157,14 +176,54 @@ export default function LlantasUnidad({
                 )}
             </div>
 
+            {orden && (
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-xl border border-sky-500/40 bg-sky-500/5 p-3 text-sm">
+                    <Wrench className="size-4 shrink-0 text-sky-700 dark:text-sky-400" />
+                    <span>
+                        La unidad está en taller con la{' '}
+                        {orden.url ? (
+                            <Link
+                                href={orden.url}
+                                className="font-medium underline underline-offset-2"
+                            >
+                                {orden.numero}
+                            </Link>
+                        ) : (
+                            <strong>{orden.numero}</strong>
+                        )}{' '}
+                        ({orden.estado.toLowerCase()}). Las llantas que salgan
+                        del almacén para esta unidad van con esa orden.
+                    </span>
+                </p>
+            )}
+
+            {montadas === 0 && (
+                <p className="rounded-xl border border-dashed p-3 text-sm text-muted-foreground">
+                    Esta unidad todavía no tiene llantas cargadas. Toca cada
+                    posición del esquema para registrar la llanta que tiene
+                    puesta, con su código.
+                </p>
+            )}
+
             <div className="grid gap-6 md:grid-cols-[auto_minmax(0,1fr)]">
                 <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
                     <EsquemaLlantas
                         posiciones={posiciones}
                         seleccionada={elegida}
-                        onElegir={(codigo) =>
-                            setElegida(codigo === elegida ? null : codigo)
-                        }
+                        onElegir={(codigo) => {
+                            setElegida(codigo === elegida ? null : codigo);
+
+                            // Una posición vacía solo sirve para montar:
+                            // se abre directo, sin un segundo toque.
+                            if (
+                                puedeRegistrar &&
+                                codigo !== elegida &&
+                                posiciones.find((p) => p.codigo === codigo)
+                                    ?.llanta === null
+                            ) {
+                                setAccion('instalacion');
+                            }
+                        }}
                     />
                     <LeyendaLlantas umbrales={umbrales} />
                 </div>
@@ -175,6 +234,8 @@ export default function LlantasUnidad({
                         esTracto={esTracto}
                         kmActual={unidad.km_actual}
                         puedeRegistrar={puedeRegistrar}
+                        puedeCorregir={puedeCorregir}
+                        puedeVerFichas={puedeVerFichas}
                         onAccion={setAccion}
                     />
 
@@ -204,7 +265,7 @@ export default function LlantasUnidad({
                                     <FilaMovimiento
                                         key={movimiento.id}
                                         movimiento={movimiento}
-                                        puedeCorregir={puedeRegistrar}
+                                        puedeCorregir={puedeCorregir}
                                         onCorregir={() =>
                                             setCorrigiendo(movimiento)
                                         }
@@ -251,7 +312,8 @@ export default function LlantasUnidad({
                     posiciones={posiciones}
                     condiciones={condiciones}
                     motivos={motivos}
-                    valesDeAlmacen={valesDeAlmacen}
+                    enAlmacen={enAlmacen}
+                    ordenNumero={orden?.numero ?? null}
                     retiradas={retiradas}
                     puedeCargaInicial={puedeCargaInicial}
                     abierto
@@ -280,12 +342,16 @@ function DetallePosicion({
     esTracto,
     kmActual,
     puedeRegistrar,
+    puedeCorregir,
+    puedeVerFichas,
     onAccion,
 }: {
     posicion: PosicionLlanta | null;
     esTracto: boolean;
     kmActual: number | null;
     puedeRegistrar: boolean;
+    puedeCorregir: boolean;
+    puedeVerFichas: boolean;
     onAccion: (accion: TipoMovimiento | 'editar') => void;
 }) {
     if (posicion === null) {
@@ -332,9 +398,25 @@ function DetallePosicion({
                         }
                     />
                     <Dato etiqueta="Condición" valor={llanta.condicion_label} />
-                    {llanta.codigo && (
-                        <Dato etiqueta="Código" valor={llanta.codigo} />
-                    )}
+                    <div className="flex flex-col">
+                        <dt className="text-xs text-muted-foreground">
+                            Código
+                        </dt>
+                        <dd className="font-medium">
+                            {puedeVerFichas ? (
+                                <Link
+                                    href={ficha(llanta.id)}
+                                    className="font-mono underline underline-offset-2"
+                                >
+                                    {llanta.codigo ?? 'Sin código'}
+                                </Link>
+                            ) : (
+                                <span className="font-mono">
+                                    {llanta.codigo ?? 'Sin código'}
+                                </span>
+                            )}
+                        </dd>
+                    </div>
                     <Dato
                         etiqueta="Instalada"
                         valor={formatearFecha(llanta.instalada_el)}
@@ -389,13 +471,23 @@ function DetallePosicion({
                                 <Trash2 className="size-4" />
                                 Retirar
                             </Button>
-                            <Button
-                                variant="ghost"
-                                onClick={() => onAccion('editar')}
-                            >
-                                <Pencil className="size-4" />
-                                Editar datos
-                            </Button>
+                            {puedeCorregir && (
+                                <Button
+                                    variant="ghost"
+                                    onClick={() => onAccion('editar')}
+                                >
+                                    <Pencil className="size-4" />
+                                    Editar datos
+                                </Button>
+                            )}
+                            {puedeVerFichas && (
+                                <Button asChild variant="ghost">
+                                    <Link href={ficha(llanta.id)}>
+                                        <History className="size-4" />
+                                        Ficha de la llanta
+                                    </Link>
+                                </Button>
+                            )}
                         </>
                     )}
                 </div>

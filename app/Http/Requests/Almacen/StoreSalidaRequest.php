@@ -7,6 +7,7 @@ use App\Enums\EstadoOrdenTrabajo;
 use App\Models\Articulo;
 use App\Models\OrdenTrabajo;
 use App\Rules\FechaDelAlmacen;
+use App\Services\LlantasDeAlmacen;
 use App\Services\MaterialesDeOrden;
 use App\Services\RepuestosDeOrden;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -62,6 +63,7 @@ class StoreSalidaRequest extends FormRequest
                 $orden = $paraOrden ? OrdenTrabajo::query()->find($this->integer('orden_trabajo_id')) : null;
 
                 $this->respetarReservas($validator, $orden);
+                $this->llantasSoloConOrden($validator, $paraOrden);
 
                 if ($orden === null) {
                     return;
@@ -107,6 +109,28 @@ class StoreSalidaRequest extends FormRequest
                 $validator->errors()->add("detalles.{$i}.cantidad", $queda <= 0.0005
                     ? "La {$orden->numero()} no tiene pedido ese repuesto (o ya lo recibió). Si lo necesita, que se pida como adicional en la orden."
                     : "A la {$orden->numero()} solo le falta recibir {$this->cifra($queda)} de ese repuesto. Lo demás se pide como adicional en la orden.");
+            }
+        }
+    }
+
+    /**
+     * Una llanta solo sale del almacén para una orden de trabajo: así queda
+     * pedida, aprobada y con sus fotos.
+     */
+    private function llantasSoloConOrden(Validator $validator, bool $paraOrden): void
+    {
+        if ($paraOrden) {
+            return;
+        }
+
+        $llantas = app(LlantasDeAlmacen::class);
+        $articulos = Articulo::query()->whereIn('id', array_column((array) $this->input('detalles', []), 'articulo_id'))->get()->keyBy('id');
+
+        foreach ((array) $this->input('detalles', []) as $i => $linea) {
+            $articulo = $articulos->get((int) ($linea['articulo_id'] ?? 0));
+
+            if ($articulo !== null && $llantas->esLlanta($articulo)) {
+                $validator->errors()->add("detalles.{$i}.articulo_id", 'Una llanta solo sale del almacén para una orden de trabajo que la tenga pedida.');
             }
         }
     }

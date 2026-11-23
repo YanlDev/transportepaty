@@ -1,14 +1,17 @@
 <?php
 
 use App\Enums\EstadoEquipamiento;
+use App\Enums\EstadoOrdenTrabajo;
 use App\Enums\OrigenLlanta;
 use App\Models\Articulo;
 use App\Models\CategoriaArticulo;
 use App\Models\ConteoEquipamiento;
+use App\Models\DetalleIngreso;
 use App\Models\IngresoAlmacen;
 use App\Models\ItemEquipamiento;
 use App\Models\Llanta;
 use App\Models\MovimientoEquipamiento;
+use App\Models\OrdenTrabajo;
 use App\Models\Proveedor;
 use App\Models\SalidaAlmacen;
 use App\Models\Vehiculo;
@@ -23,8 +26,8 @@ use Inertia\Testing\AssertableInertia as Assert;
 use function Pest\Laravel\actingAs;
 
 /*
- * Las llantas y el equipamiento de las unidades salen del almacén: una llanta
- * se monta contra su vale, y lo que sale con vale a nombre de una unidad queda
+ * Las llantas y el equipamiento de las unidades salen del almacén: cada llanta
+ * tiene su código desde la recepción y se monta con su vale, y lo que sale con vale a nombre de una unidad queda
  * asignado a ella. Entre unidades se mueven sin volver al almacén, con
  * historial. El reloj queda en noviembre de 2026, el mes abierto del almacén.
  */
@@ -82,6 +85,34 @@ function valeALaUnidad(Vehiculo $unidad, Articulo $articulo, float $cantidad): S
 }
 
 /**
+ * La orden de trabajo en ejecución de la unidad, con esas llantas pedidas y
+ * aprobadas: sin ella ninguna llanta sale del almacén.
+ */
+function ordenQuePideLlantas(Vehiculo $unidad, Articulo $articulo, float $cantidad = 1, EstadoOrdenTrabajo $estado = EstadoOrdenTrabajo::EnProceso): OrdenTrabajo
+{
+    $orden = OrdenTrabajo::factory()->create(['vehiculo_id' => $unidad->id, 'estado' => $estado, 'aprobado_at' => now()]);
+    $orden->repuestos()->create(['articulo_id' => $articulo->id, 'descripcion' => $articulo->nombre, 'cantidad' => $cantidad, 'aprobado_at' => now()]);
+
+    return $orden;
+}
+
+/** Una entrega del almacén a la orden, como la emite el almacén. */
+function valeALaOrden(OrdenTrabajo $orden, Articulo $articulo, float $cantidad): SalidaAlmacen
+{
+    actingAs(actorConRol('admin'))
+        ->post(route('almacen.salidas.store'), [
+            'fecha' => '2026-11-05',
+            'entregado_a' => 'Juan Quispe',
+            'destino' => 'orden_trabajo',
+            'orden_trabajo_id' => $orden->id,
+            'detalles' => [['articulo_id' => $articulo->id, 'cantidad' => $cantidad]],
+        ])
+        ->assertSessionHasNoErrors();
+
+    return SalidaAlmacen::query()->latest('id')->firstOrFail();
+}
+
+/**
  * @return array<string, mixed>
  */
 function montaje(string $posicion, array $extra): array
@@ -118,76 +149,305 @@ function asignadoDe(Vehiculo $unidad, string $nombre): int
 
 // ─── Llantas ────────────────────────────────────────────────────────────────
 
-it('does not mount a tire that did not leave the warehouse with a vale for that unit', function (): void {
-    $tracto = Vehiculo::factory()->create();
-    $otro = Vehiculo::factory()->create();
-    $llanta = llantaDeAlmacen();
+/**
+ * Las llantas de la recepción del artículo, ya con su código: quedan en el
+ * almacén, listas para montar.
+ *
+ * @param  list<string>  $codigos
+ * @return list<Llanta>
+ */
+function llantasCodificadas(Articulo $articulo, array $codigos): array
+{
+    $linea = DetalleIngreso::query()->where('articulo_id', $articulo->id)->latest('id')->firstOrFail();
+
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.almacen.store'), ['detalle_ingreso_id' => $linea->id, 'condicion' => 'nueva', 'codigos' => $codigos])
+        ->assertSessionHasNoErrors();
+
+    return array_map(fn (string $codigo): Llanta => Llanta::query()->where('codigo', $codigo)->sole(), $codigos);
+}
+
+it('gives each tire of a reception its own code, and the reception is its lot', function (): void {
+    $articulo = llantaDeAlmacen(3);
+    $linea = DetalleIngreso::query()->where('articulo_id', $articulo->id)->sole();
     $filtro = Articulo::factory()->create();
     stockDe($filtro, 5);
 
-    // Sin vale, taller no puede: cargar una que «ya estaba» es del administrador.
     actingAs(actorConRol('taller'))
-        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'previa', 'marca' => 'Michelin']))
-        ->assertSessionHasErrors('origen');
+        ->get(route('mantenimiento.llantas.almacen'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('mantenimiento/llantas/almacen')
+            ->has('lotes', 1)
+            ->where('lotes.0.lineas.0.detalle_ingreso_id', $linea->id)
+            ->where('lotes.0.lineas.0.cantidad', 3)
+            ->where('lotes.0.lineas.0.por_codificar', 3));
+
+    // Ni repetidos entre sí, ni de un artículo que no es llanta.
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.almacen.store'), ['detalle_ingreso_id' => $linea->id, 'condicion' => 'nueva', 'codigos' => ['P-01', 'p-01']])
+        ->assertSessionHasErrors('codigos.1');
 
     actingAs(actorConRol('taller'))
-        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen']))
-        ->assertSessionHasErrors('detalle_salida_id');
+        ->post(route('mantenimiento.llantas.almacen.store'), [
+            'detalle_ingreso_id' => DetalleIngreso::query()->where('articulo_id', $filtro->id)->sole()->id, 'condicion' => 'nueva', 'codigos' => ['P-09'],
+        ])
+        ->assertSessionHasErrors('detalle_ingreso_id');
 
-    // Con el vale de otra unidad, tampoco; ni con un artículo que no es llanta.
-    $ajeno = valeALaUnidad($otro, $llanta, 1)->detalles()->sole();
-    $noEsLlanta = valeALaUnidad($tracto, $filtro, 1)->detalles()->sole();
+    [$primera] = llantasCodificadas($articulo, ['P-01', 'P-02']);
 
-    foreach ([$ajeno, $noEsLlanta] as $linea) {
-        actingAs(actorConRol('taller'))
-            ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'detalle_salida_id' => $linea->id]))
-            ->assertSessionHasErrors('detalle_salida_id');
-    }
+    expect($primera->estaSinMontar())->toBeTrue()
+        ->and($primera->detalle_ingreso_id)->toBe($linea->id)
+        ->and($primera->articulo_id)->toBe($articulo->id)
+        ->and($primera->marca)->toBe('Michelin')
+        ->and((float) $primera->costo)->toBe(1450.0)
+        ->and($primera->origen)->toBe(OrigenLlanta::Almacen);
 
-    expect(Llanta::query()->count())->toBe(0);
+    // El código es de una sola llanta; y no se codifican más de las que entraron.
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.almacen.store'), ['detalle_ingreso_id' => $linea->id, 'condicion' => 'nueva', 'codigos' => ['p-02']])
+        ->assertSessionHasErrors('codigos.0');
+
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.almacen.store'), ['detalle_ingreso_id' => $linea->id, 'condicion' => 'nueva', 'codigos' => ['P-03', 'P-04']])
+        ->assertSessionHasErrors('codigos');
+
+    actingAs(actorConRol('taller'))
+        ->get(route('mantenimiento.llantas.almacen'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('lotes.0.lineas.0.por_codificar', 1)
+            ->has('lotes.0.llantas', 2)
+            ->where('lotes.0.llantas.0.codigo', 'P-01')
+            ->where('lotes.0.llantas.0.situacion', 'almacen'));
+
+    // La que se codificó por error se quita mientras no haya salido.
+    actingAs(actorConRol('taller'))
+        ->delete(route('mantenimiento.llantas.almacen.destroy', $primera))
+        ->assertSessionHasNoErrors();
+
+    expect(Llanta::query()->pluck('codigo')->all())->toBe(['P-02']);
 });
 
-it('mounts each tire of a vale once, with the data of its article', function (): void {
-    $tracto = Vehiculo::factory()->create();
-    $articulo = llantaDeAlmacen();
-    $linea = valeALaUnidad($tracto, $articulo, 2)->detalles()->sole();
+it('mounts a coded tire in one step: the warehouse vale is issued by itself', function (): void {
+    $tracto = Vehiculo::factory()->create(['placa' => 'AAA-111']);
+    $articulo = llantaDeAlmacen(2);
+    [$llanta, $otra] = llantasCodificadas($articulo, ['P-01', 'P-02']);
 
     actingAs(actorConRol('taller'))
         ->get(route('mantenimiento.llantas.show', $tracto))
         ->assertInertia(fn (Assert $page) => $page
-            ->where('valesDeAlmacen.0.detalle_salida_id', $linea->id)
-            ->where('valesDeAlmacen.0.disponibles', 2)
+            ->has('enAlmacen', 2)
+            ->where('enAlmacen.0.codigo', 'P-01')
             ->where('puedeCargaInicial', false));
 
-    foreach (['1', '2'] as $posicion) {
-        actingAs(actorConRol('taller'))
-            ->post(route('mantenimiento.llantas.store', $tracto), montaje($posicion, ['origen' => 'almacen', 'detalle_salida_id' => $linea->id, 'codigo' => "DOT-{$posicion}"]))
-            ->assertSessionHasNoErrors();
-    }
-
-    $montada = Llanta::query()->where('posicion', '1')->sole();
-
-    expect($montada->origen)->toBe(OrigenLlanta::Almacen)
-        ->and($montada->articulo_id)->toBe($articulo->id)
-        ->and($montada->detalle_salida_id)->toBe($linea->id)
-        ->and($montada->marca)->toBe('Michelin')
-        ->and($montada->codigo)->toBe('DOT-1');
-
-    // Salieron dos: la tercera necesita otro vale.
+    // Sin una orden de trabajo que la pida, la llanta no sale del almacén:
+    // ni al montarla, ni con una entrega a nombre de la unidad.
     actingAs(actorConRol('taller'))
-        ->post(route('mantenimiento.llantas.store', $tracto), montaje('3', ['origen' => 'almacen', 'detalle_salida_id' => $linea->id]))
-        ->assertSessionHasErrors('detalle_salida_id');
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen']))
+        ->assertSessionHasErrors('llanta_id');
 
-    expect(Llanta::query()->count())->toBe(2);
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'llanta_id' => $llanta->id]))
+        ->assertSessionHasErrors('llanta_id');
+
+    actingAs(actorConRol('admin'))
+        ->post(route('almacen.salidas.store'), [
+            'fecha' => '2026-11-05', 'entregado_a' => 'Juan Quispe', 'destino' => 'unidad', 'vehiculo_id' => $tracto->id,
+            'detalles' => [['articulo_id' => $articulo->id, 'cantidad' => 1]],
+        ])
+        ->assertSessionHasErrors('detalles.0.articulo_id');
+
+    expect(SalidaAlmacen::query()->count())->toBe(0);
+
+    // Con la orden aprobada pero sin empezar (sin la foto del antes), tampoco.
+    $orden = ordenQuePideLlantas($tracto, $articulo, 1, EstadoOrdenTrabajo::Pendiente);
+
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'llanta_id' => $llanta->id]))
+        ->assertSessionHasErrors('llanta_id');
+
+    $orden->update(['estado' => EstadoOrdenTrabajo::EnProceso]);
+
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'llanta_id' => $llanta->id, 'entregado_a' => 'Juan Quispe', 'kilometraje' => 100000]))
+        ->assertSessionHasNoErrors();
+
+    $llanta->refresh();
+    $vale = SalidaAlmacen::query()->sole();
+
+    expect($llanta->estaMontada())->toBeTrue()
+        ->and($llanta->vehiculo_id)->toBe($tracto->id)
+        ->and($llanta->posicion)->toBe('1')
+        ->and($llanta->detalle_salida_id)->toBe($vale->detalles()->sole()->id)
+        ->and($vale->vehiculo_id)->toBe($tracto->id)
+        ->and($vale->orden_trabajo_id)->toBe($orden->id)
+        ->and($vale->entregado_a)->toBe('Juan Quispe')
+        ->and((float) $articulo->refresh()->stock)->toBe(1.0);
+
+    // Ya montada, no se monta de nuevo ni en otra unidad.
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', Vehiculo::factory()->create()), montaje('1', ['origen' => 'almacen', 'llanta_id' => $llanta->id, 'entregado_a' => 'Juan Quispe']))
+        ->assertSessionHasErrors('llanta_id');
+
+    // La ficha la encuentra por su código y dice dónde está y cuánto rodó.
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), ['tipo' => 'retiro', 'posicion' => '1', 'fecha' => '2026-11-08', 'motivo_retiro' => 'otro', 'kilometraje' => 112500])
+        ->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('taller'))
+        ->get(route('mantenimiento.llantas.buscar', ['codigo' => 'p-01']))
+        ->assertRedirect(route('mantenimiento.llantas.ficha', $llanta));
+
+    actingAs(actorConRol('taller'))
+        ->get(route('mantenimiento.llantas.ficha', $llanta))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('mantenimiento/llantas/ficha')
+            ->where('llanta.codigo', 'P-01')
+            ->where('llanta.situacion', 'retirada')
+            ->where('llanta.km_recorridos', 12500)
+            ->where('llanta.km_incompleto', false)
+            ->where('llanta.lote.numero', IngresoAlmacen::query()->sole()->numero())
+            ->where('llanta.vale', $vale->numero())
+            ->has('movimientos', 2));
+
+    actingAs(actorConRol('taller'))
+        ->get(route('mantenimiento.llantas.buscar', ['codigo' => 'P-0']))
+        ->assertInertia(fn (Assert $page) => $page->component('mantenimiento/llantas/buscar')->has('llantas', 2));
+
+    expect($otra->refresh()->estaSinMontar())->toBeTrue();
+});
+
+it('uses the vale the orden already has before issuing another one', function (): void {
+    $tracto = Vehiculo::factory()->create();
+    $otro = Vehiculo::factory()->create();
+    $articulo = llantaDeAlmacen(3);
+    [$primera, $segunda, $tercera] = llantasCodificadas($articulo, ['P-01', 'P-02', 'P-03']);
+    $orden = ordenQuePideLlantas($tracto, $articulo, 2);
+    ordenQuePideLlantas($otro, $articulo, 1);
+    $linea = valeALaOrden($orden, $articulo, 1)->detalles()->sole();
+
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'llanta_id' => $primera->id]))
+        ->assertSessionHasNoErrors();
+
+    expect($primera->refresh()->detalle_salida_id)->toBe($linea->id)
+        ->and(SalidaAlmacen::query()->count())->toBe(1);
+
+    // La línea ya no tiene llantas por montar: la segunda saca su propio vale.
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('2', ['origen' => 'almacen', 'llanta_id' => $segunda->id, 'entregado_a' => 'Juan Quispe']))
+        ->assertSessionHasNoErrors();
+
+    expect(SalidaAlmacen::query()->count())->toBe(2);
+
+    // Se cargó por error: la instalación se elimina y la llanta no se pierde.
+    actingAs(actorConRol('taller'))
+        ->delete(route('mantenimiento.llantas.movimientos.destroy', $segunda->movimientos()->sole()))
+        ->assertSessionHasNoErrors();
+
+    $segunda->refresh();
+
+    expect($segunda->estaSinMontar())->toBeTrue()
+        ->and($segunda->detalle_salida_id)->not->toBeNull()
+        ->and($segunda->movimientos()->count())->toBe(0);
+
+    // Entregada a esta unidad, no se monta en otra; anulado su vale, vuelve al almacén.
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $otro), montaje('1', ['origen' => 'almacen', 'llanta_id' => $segunda->id, 'entregado_a' => 'Juan Quispe']))
+        ->assertSessionHasErrors('llanta_id');
+
+    actingAs(actorConRol('admin'))
+        ->post(route('almacen.salidas.anular', $segunda->detalleSalida->salida), ['motivo' => 'Se emitió por error'])
+        ->assertSessionHasNoErrors();
+
+    expect($segunda->refresh()->detalle_salida_id)->toBeNull()
+        ->and((float) $articulo->refresh()->stock)->toBe(2.0)
+        ->and($tercera->refresh()->estaSinMontar())->toBeTrue();
+});
+
+it('charges the tire to the orden that asked for it, and shows what there is to do', function (): void {
+    $tracto = Vehiculo::factory()->create();
+    $articulo = llantaDeAlmacen(2);
+    [$pedida, $suelta] = llantasCodificadas($articulo, ['P-01', 'P-02']);
+    $orden = ordenQuePideLlantas($tracto, $articulo, 1);
+
+    actingAs(actorConRol('taller'))
+        ->get(route('mantenimiento.llantas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('resumen.sin_codigo', 0)
+            ->where('resumen.en_almacen', 2)
+            ->where('resumen.entregadas', 0));
+
+    actingAs(actorConRol('taller'))
+        ->get(route('mantenimiento.llantas.show', $tracto))
+        ->assertInertia(fn (Assert $page) => $page->where('orden.numero', $orden->numero()));
+
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'llanta_id' => $pedida->id]))
+        ->assertSessionHasNoErrors();
+
+    // La orden pidió una: la segunda no sale sin pedirla como adicional.
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('2', ['origen' => 'almacen', 'llanta_id' => $suelta->id]))
+        ->assertSessionHasErrors('llanta_id');
+
+    expect($pedida->refresh()->detalleSalida->salida->orden_trabajo_id)->toBe($orden->id)
+        ->and($pedida->detalleSalida->salida->destino->value)->toBe('orden_trabajo')
+        ->and($suelta->refresh()->estaSinMontar())->toBeTrue()
+        ->and(SalidaAlmacen::query()->count())->toBe(1);
+});
+
+it('lets the mechanic change the tires of the unit only while he works its orden, with what the orden asked for', function (): void {
+    $tracto = Vehiculo::factory()->create();
+    $articulo = llantaDeAlmacen(2);
+    [$pedida, $otra] = llantasCodificadas($articulo, ['P-01', 'P-02']);
+    $mecanico = actorConRol('mecanico');
+    $ajeno = actorConRol('mecanico');
+    $orden = OrdenTrabajo::factory()->create(['vehiculo_id' => $tracto->id, 'estado' => EstadoOrdenTrabajo::Pendiente, 'aprobado_at' => now()]);
+    $orden->mecanicos()->attach($mecanico->id, ['responsable' => true]);
+    $orden->repuestos()->create(['articulo_id' => $articulo->id, 'descripcion' => $articulo->nombre, 'cantidad' => 1, 'aprobado_at' => now()]);
+    $monta = fn (string $posicion, Llanta $llanta): array => montaje($posicion, ['origen' => 'almacen', 'llanta_id' => $llanta->id]);
+
+    // Asignado, ve las llantas; sin empezar la orden (sin la foto del antes) no las toca.
+    actingAs($mecanico)->get(route('mantenimiento.llantas.show', $tracto))
+        ->assertInertia(fn (Assert $page) => $page->where('puedeRegistrar', false)->where('puedeCorregir', false)->where('orden.numero', $orden->numero()));
+    actingAs($ajeno)->get(route('mantenimiento.llantas.show', $tracto))->assertForbidden();
+    actingAs($mecanico)->post(route('mantenimiento.llantas.store', $tracto), $monta('1', $pedida))->assertForbidden();
+
+    $orden->update(['estado' => EstadoOrdenTrabajo::EnProceso]);
+
+    actingAs($ajeno)->post(route('mantenimiento.llantas.store', $tracto), $monta('1', $pedida))->assertForbidden();
+    actingAs($mecanico)->post(route('mantenimiento.llantas.store', $tracto), $monta('1', $pedida))->assertSessionHasNoErrors();
+
+    $vale = $pedida->refresh()->detalleSalida->salida;
+
+    expect($pedida->estaMontada())->toBeTrue()
+        ->and($vale->orden_trabajo_id)->toBe($orden->id)
+        ->and($vale->entregado_a)->toBe($mecanico->name);
+
+    // La orden pidió una sola: la segunda no sale del almacén sin pedirla.
+    actingAs($mecanico)->post(route('mantenimiento.llantas.store', $tracto), $monta('2', $otra))->assertSessionHasErrors('llanta_id');
+
+    expect($otra->refresh()->estaSinMontar())->toBeTrue()
+        ->and(SalidaAlmacen::query()->count())->toBe(1);
+
+    // Retirar la que cambia sí puede; corregir el historial, no.
+    actingAs($mecanico)
+        ->post(route('mantenimiento.llantas.store', $tracto), ['tipo' => 'retiro', 'posicion' => '1', 'fecha' => '2026-11-08', 'motivo_retiro' => 'desgaste'])
+        ->assertSessionHasNoErrors();
+    actingAs($mecanico)
+        ->delete(route('mantenimiento.llantas.movimientos.destroy', $pedida->movimientos()->latest('id')->firstOrFail()))
+        ->assertForbidden();
 });
 
 it('does not return or void in the warehouse a tire that is already mounted', function (): void {
     $tracto = Vehiculo::factory()->create();
-    $vale = valeALaUnidad($tracto, llantaDeAlmacen(), 2);
+    $articulo = llantaDeAlmacen();
+    [$llanta] = llantasCodificadas($articulo, ['P-01', 'P-02']);
+    $vale = valeALaOrden(ordenQuePideLlantas($tracto, $articulo, 2), $articulo, 2);
     $linea = $vale->detalles()->sole();
 
     actingAs(actorConRol('taller'))
-        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'detalle_salida_id' => $linea->id]))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'llanta_id' => $llanta->id]))
         ->assertSessionHasNoErrors();
 
     // Salieron 2 y hay 1 montada: solo puede volver 1.
@@ -203,19 +463,24 @@ it('does not return or void in the warehouse a tire that is already mounted', fu
         ->post(route('almacen.salidas.devolver', $vale), ['fecha' => '2026-11-07', 'detalles' => [['detalle_salida_id' => $linea->id, 'cantidad' => 1]]])
         ->assertSessionHasNoErrors();
 
-    // Devuelta la otra, a esa línea ya no le queda ninguna por montar.
-    actingAs(actorConRol('taller'))
-        ->post(route('mantenimiento.llantas.store', $tracto), montaje('2', ['origen' => 'almacen', 'detalle_salida_id' => $linea->id]))
-        ->assertSessionHasErrors('detalle_salida_id');
+    // Una recepción con llantas ya codificadas no se anula.
+    actingAs(actorConRol('admin'))
+        ->post(route('almacen.ingresos.anular', IngresoAlmacen::query()->where('tipo', 'compra')->sole()), ['motivo' => 'Se registró por error'])
+        ->assertSessionHasErrors('motivo');
 });
 
 it('moves a tire from one unit to another without the warehouse, keeping its history', function (): void {
     $tracto = Vehiculo::factory()->create(['placa' => 'AAA-111']);
     $carreta = Vehiculo::factory()->carreta()->create(['placa' => 'BBB-222']);
-    $linea = valeALaUnidad($tracto, llantaDeAlmacen(), 1)->detalles()->sole();
+    $articulo = llantaDeAlmacen(1);
+    [$llanta] = llantasCodificadas($articulo, ['P-01']);
+    ordenQuePideLlantas($tracto, $articulo);
 
-    actingAs(actorConRol('taller'))->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'detalle_salida_id' => $linea->id]));
-    $llanta = Llanta::query()->sole();
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'almacen', 'llanta_id' => $llanta->id, 'entregado_a' => 'Juan Quispe']))
+        ->assertSessionHasNoErrors();
+
+    $linea = SalidaAlmacen::query()->sole()->detalles()->sole();
 
     // Montada no se puede llevar a otra unidad: primero se retira.
     actingAs(actorConRol('taller'))
@@ -261,17 +526,33 @@ it('does not remount a tire that was retired because of damage', function (): vo
         ->assertSessionHasErrors('llanta_id');
 });
 
-it('lets only the admin load the tires that were already mounted before the warehouse', function (): void {
+it('lets only the admin load the tires that were already mounted before the warehouse, each with its code', function (): void {
     $tracto = Vehiculo::factory()->create();
+    $previa = ['origen' => 'previa', 'marca' => 'Goodyear', 'medida' => '295/80R22.5', 'condicion' => 'usada', 'fecha' => '2026-11-01'];
+
+    // Sin vale, taller no puede: cargar una que «ya estaba» es de quien tiene ese permiso.
+    actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', [...$previa, 'codigo' => 'F-01']))
+        ->assertSessionHasErrors('origen');
 
     actingAs(actorConRol('admin'))
-        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', ['origen' => 'previa', 'marca' => 'Goodyear', 'medida' => '295/80R22.5', 'condicion' => 'usada', 'fecha' => '2026-11-01']))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', $previa))
+        ->assertSessionHasErrors('codigo');
+
+    actingAs(actorConRol('admin'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('1', [...$previa, 'codigo' => 'F-01']))
         ->assertSessionHasNoErrors();
+
+    // El mismo código no va en otra llanta.
+    actingAs(actorConRol('admin'))
+        ->post(route('mantenimiento.llantas.store', $tracto), montaje('2', [...$previa, 'codigo' => 'f-01']))
+        ->assertSessionHasErrors('codigo');
 
     $llanta = Llanta::query()->sole();
 
     expect($llanta->origen)->toBe(OrigenLlanta::Previa)
         ->and($llanta->detalle_salida_id)->toBeNull()
+        ->and($llanta->codigo)->toBe('F-01')
         ->and($llanta->marca)->toBe('Goodyear');
 });
 

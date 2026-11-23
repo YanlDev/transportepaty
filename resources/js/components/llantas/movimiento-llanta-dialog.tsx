@@ -1,4 +1,6 @@
-import { useForm } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
+import { useState } from 'react';
+import { index as almacen } from '@/actions/App/Http/Controllers/LlantaAlmacenController';
 import { store } from '@/actions/App/Http/Controllers/LlantaController';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -18,9 +20,9 @@ import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import type { EnumOption } from '@/types/fleet';
 import type {
+    LlantaEnAlmacen,
     LlantaRetirada,
     PosicionLlanta,
-    ValeDeLlantas,
 } from '@/types/llantas';
 
 export type TipoMovimiento =
@@ -41,7 +43,6 @@ type Formulario = {
     codigo: string;
     condicion: string;
     origen: 'almacen' | 'retirada' | 'previa';
-    detalle_salida_id: number | null;
     llanta_id: number | null;
     motivo_retiro: string;
     observacion: string;
@@ -69,7 +70,8 @@ export function MovimientoLlantaDialog({
     posiciones,
     condiciones,
     motivos,
-    valesDeAlmacen = [],
+    enAlmacen = [],
+    ordenNumero = null,
     retiradas = [],
     puedeCargaInicial = false,
     abierto,
@@ -85,8 +87,10 @@ export function MovimientoLlantaDialog({
     posiciones: PosicionLlanta[];
     condiciones: EnumOption[];
     motivos: EnumOption[];
-    /** Los vales de almacén con llantas por montar en esta unidad. */
-    valesDeAlmacen?: ValeDeLlantas[];
+    /** Las llantas con código que se pueden montar desde el almacén. */
+    enAlmacen?: LlantaEnAlmacen[];
+    /** La orden de trabajo abierta de la unidad: sin ella no sale del almacén. */
+    ordenNumero?: string | null;
     /** Las llantas retiradas que se pueden volver a montar. */
     retiradas?: LlantaRetirada[];
     /** Solo el administrador carga las que ya estaban puestas. */
@@ -107,16 +111,17 @@ export function MovimientoLlantaDialog({
             codigo: '',
             condicion: 'nueva',
             origen: 'almacen',
-            detalle_salida_id:
-                valesDeAlmacen.length === 1
-                    ? valesDeAlmacen[0].detalle_salida_id
-                    : null,
             llanta_id: null,
             motivo_retiro: '',
             observacion: '',
         });
 
     const errores = errors as Record<string, string | undefined>;
+    const [buscar, setBuscar] = useState('');
+    const texto = buscar.trim().toLowerCase();
+    const encontradas = enAlmacen.filter((llanta) =>
+        (llanta.codigo ?? '').toLowerCase().includes(texto),
+    );
 
     const guardar = (evento: React.FormEvent) => {
         evento.preventDefault();
@@ -139,16 +144,16 @@ export function MovimientoLlantaDialog({
             }),
             ...(datos.tipo === 'instalacion' && {
                 origen: datos.origen,
-                codigo: datos.codigo || null,
                 condicion: datos.condicion,
                 // La marca y la medida de una del almacén salen del artículo;
                 // una retirada ya las tiene.
                 ...(datos.origen === 'previa' && {
+                    codigo: datos.codigo || null,
                     marca: datos.marca || null,
                     medida: datos.medida || null,
                 }),
                 ...(datos.origen === 'almacen' && {
-                    detalle_salida_id: datos.detalle_salida_id,
+                    llanta_id: datos.llanta_id,
                 }),
                 ...(datos.origen === 'retirada' && {
                     llanta_id: datos.llanta_id,
@@ -207,6 +212,7 @@ export function MovimientoLlantaDialog({
                                     setData((previo) => ({
                                         ...previo,
                                         origen: valor as Formulario['origen'],
+                                        llanta_id: null,
                                         condicion:
                                             valor === 'almacen'
                                                 ? 'nueva'
@@ -218,56 +224,92 @@ export function MovimientoLlantaDialog({
 
                             {data.origen === 'almacen' && (
                                 <div className="grid gap-1.5">
-                                    <Label>Entrega de almacén</Label>
-                                    {valesDeAlmacen.length === 0 ? (
+                                    <Label htmlFor="llanta-buscar">
+                                        Llanta del almacén, por su código
+                                    </Label>
+                                    {enAlmacen.length === 0 ? (
                                         <p className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
-                                            No hay llantas por montar en esta
-                                            unidad. Pide que el almacén emita el
-                                            entrega a nombre de la unidad; si no
-                                            hay stock, pide la compra.
+                                            No hay llantas con código en el
+                                            almacén. Regístralas primero en{' '}
+                                            <Link
+                                                href={almacen().url}
+                                                className="font-medium underline underline-offset-2"
+                                            >
+                                                Llantas en almacén
+                                            </Link>
+                                            ; si no hay stock, pide la compra.
                                         </p>
                                     ) : (
-                                        <div className="grid gap-1.5">
-                                            {valesDeAlmacen.map((vale) => (
-                                                <button
-                                                    key={vale.detalle_salida_id}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setData(
-                                                            'detalle_salida_id',
-                                                            vale.detalle_salida_id,
-                                                        )
-                                                    }
-                                                    aria-pressed={
-                                                        data.detalle_salida_id ===
-                                                        vale.detalle_salida_id
-                                                    }
-                                                    className={cn(
-                                                        'rounded-lg border px-3 py-2 text-left text-sm transition-colors',
-                                                        data.detalle_salida_id ===
-                                                            vale.detalle_salida_id
-                                                            ? 'border-primary bg-primary/10'
-                                                            : 'hover:bg-accent',
-                                                    )}
-                                                >
-                                                    <span className="font-medium">
-                                                        {vale.nombre}
-                                                    </span>
-                                                    <span className="block text-xs text-muted-foreground">
-                                                        {vale.vale} ·{' '}
-                                                        {formatearFecha(
-                                                            vale.fecha,
-                                                        )}{' '}
-                                                        · {vale.disponibles} por
-                                                        montar
-                                                    </span>
-                                                </button>
-                                            ))}
-                                        </div>
+                                        <>
+                                            <Input
+                                                id="llanta-buscar"
+                                                placeholder="Escribe el código"
+                                                value={buscar}
+                                                onChange={(e) =>
+                                                    setBuscar(e.target.value)
+                                                }
+                                            />
+                                            <div className="grid max-h-48 gap-1.5 overflow-y-auto">
+                                                {encontradas.map((llanta) => (
+                                                    <button
+                                                        key={llanta.id}
+                                                        type="button"
+                                                        onClick={() =>
+                                                            setData(
+                                                                'llanta_id',
+                                                                llanta.id,
+                                                            )
+                                                        }
+                                                        aria-pressed={
+                                                            data.llanta_id ===
+                                                            llanta.id
+                                                        }
+                                                        className={cn(
+                                                            'rounded-lg border px-3 py-2 text-left text-sm transition-colors',
+                                                            data.llanta_id ===
+                                                                llanta.id
+                                                                ? 'border-primary bg-primary/10'
+                                                                : 'hover:bg-accent',
+                                                        )}
+                                                    >
+                                                        <span className="font-mono font-semibold">
+                                                            {llanta.codigo}
+                                                        </span>
+                                                        <span className="block text-xs text-muted-foreground">
+                                                            {[
+                                                                llanta.descripcion,
+                                                                llanta.lote &&
+                                                                    `lote ${llanta.lote}`,
+                                                                llanta.vale &&
+                                                                    `ya entregada con ${llanta.vale}`,
+                                                            ]
+                                                                .filter(Boolean)
+                                                                .join(' · ')}
+                                                        </span>
+                                                    </button>
+                                                ))}
+                                                {encontradas.length === 0 && (
+                                                    <p className="text-sm text-muted-foreground">
+                                                        Ninguna llanta del
+                                                        almacén con ese código.
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </>
                                     )}
-                                    <InputError
-                                        message={errores.detalle_salida_id}
-                                    />
+                                    <InputError message={errores.llanta_id} />
+                                    <p
+                                        className={cn(
+                                            'rounded-lg border p-3 text-xs',
+                                            ordenNumero
+                                                ? 'text-muted-foreground'
+                                                : 'border-amber-500/40 bg-amber-500/5 text-foreground',
+                                        )}
+                                    >
+                                        {ordenNumero
+                                            ? `Sale del almacén con el vale de la ${ordenNumero}, que tiene que estar en ejecución y tener pedida la llanta.`
+                                            : 'Esta unidad no tiene una orden de trabajo abierta. Una llanta solo sale del almacén para una orden que la tenga pedida y aprobada: crea primero la orden.'}
+                                    </p>
                                 </div>
                             )}
 
@@ -325,15 +367,19 @@ export function MovimientoLlantaDialog({
                                 </div>
                             )}
 
-                            <Opciones
-                                etiqueta="La llanta es"
-                                opciones={condiciones}
-                                valor={data.condicion}
-                                onCambio={(valor) =>
-                                    setData('condicion', valor)
-                                }
-                            />
-                            <InputError message={errors.condicion} />
+                            {data.origen !== 'almacen' && (
+                                <>
+                                    <Opciones
+                                        etiqueta="La llanta es"
+                                        opciones={condiciones}
+                                        valor={data.condicion}
+                                        onCambio={(valor) =>
+                                            setData('condicion', valor)
+                                        }
+                                    />
+                                    <InputError message={errors.condicion} />
+                                </>
+                            )}
                             {data.origen === 'previa' && (
                                 <div className="grid grid-cols-2 gap-3">
                                     <Campo
@@ -369,10 +415,10 @@ export function MovimientoLlantaDialog({
                                     </Campo>
                                 </div>
                             )}
-                            {data.origen !== 'retirada' && (
+                            {data.origen === 'previa' && (
                                 <Campo
                                     id="llanta-codigo"
-                                    etiqueta="Código o serie (opcional)"
+                                    etiqueta="Código con que la marcaron"
                                     error={errors.codigo}
                                 >
                                     <Input

@@ -1,9 +1,11 @@
 import { Head, Link, setLayoutProps } from '@inertiajs/react';
 import { ChevronRight, CircleCheck, CircleDot, Search } from 'lucide-react';
 import { useState } from 'react';
+import { index as almacen } from '@/actions/App/Http/Controllers/LlantaAlmacenController';
 import llantas from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import { EmptyState } from '@/components/empty-state';
+import { BuscarLlanta } from '@/components/llantas/buscar-llanta';
 import { CortesLlantasDialog } from '@/components/llantas/cortes-llantas-dialog';
 import { formatearMm } from '@/components/llantas/esquema-llantas';
 import { GrupoDeUnidades } from '@/components/mantenimiento/grupo-de-unidades';
@@ -17,6 +19,17 @@ type Props = {
     /** Ordenadas: las que tienen llantas para cambiar primero. */
     unidades: UnidadLlantas[];
     umbrales: UmbralesLlanta;
+    /** Lo que hay que hacer con las llantas, en números. */
+    resumen: {
+        /** Recibidas en el almacén que siguen sin código. */
+        sin_codigo: number;
+        /** Con código, listas para montar. */
+        en_almacen: number;
+        /** Salieron con vale y todavía no se montan. */
+        entregadas: number;
+        /** Retiradas de una unidad que se pueden volver a montar. */
+        retiradas: number;
+    };
 };
 
 const tipos = [
@@ -29,7 +42,7 @@ const tipos = [
  * con llantas para cambiar, después las de revisar y las que falta medir.
  * Las que están al día y las que nunca se cargaron quedan plegadas.
  */
-export default function LlantasIndex({ unidades, umbrales }: Props) {
+export default function LlantasIndex({ unidades, umbrales, resumen }: Props) {
     const { puede } = usePermisos();
     const [tipo, setTipo] = useState<'tracto' | 'carreta'>('tracto');
     const [buscar, setBuscar] = useState('');
@@ -42,6 +55,8 @@ export default function LlantasIndex({ unidades, umbrales }: Props) {
     });
 
     const delTipo = unidades.filter((unidad) => unidad.tipo === tipo);
+    const porCambiar = unidades.filter((unidad) => unidad.cambiar > 0).length;
+    const cargadas = unidades.filter((unidad) => unidad.montadas > 0).length;
     const texto = buscar.replace(/[\s-]/g, '').toUpperCase();
     const visibles = delTipo.filter((unidad) =>
         unidad.placa.replace(/[\s-]/g, '').toUpperCase().includes(texto),
@@ -50,6 +65,75 @@ export default function LlantasIndex({ unidades, umbrales }: Props) {
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
             <Head title="Llantas" />
+
+            <section className="flex flex-col gap-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <h1 className="text-lg font-semibold">Llantas</h1>
+                    <BuscarLlanta />
+                </div>
+                <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+                    <Pendiente
+                        href={almacen().url}
+                        cantidad={resumen.sin_codigo}
+                        titulo="Sin código"
+                        ayuda={
+                            resumen.sin_codigo > 0
+                                ? 'Recibidas en almacén: ponles su código'
+                                : 'Todo lo recibido tiene código'
+                        }
+                        tono={resumen.sin_codigo > 0 ? 'aviso' : 'neutro'}
+                    />
+                    <Pendiente
+                        href={almacen().url}
+                        cantidad={resumen.en_almacen}
+                        titulo="En almacén"
+                        ayuda="Con código, listas para montar"
+                        tono="neutro"
+                    />
+                    <Pendiente
+                        href={almacen().url}
+                        cantidad={resumen.entregadas}
+                        titulo="Entregadas sin montar"
+                        ayuda={
+                            resumen.entregadas > 0
+                                ? 'Salieron con vale: falta montarlas'
+                                : 'Nada pendiente de montar'
+                        }
+                        tono={resumen.entregadas > 0 ? 'aviso' : 'neutro'}
+                    />
+                    <Pendiente
+                        cantidad={porCambiar}
+                        titulo="Unidades con llantas por cambiar"
+                        ayuda={`${cargadas} de ${unidades.length} unidades con llantas cargadas`}
+                        tono={porCambiar > 0 ? 'mal' : 'neutro'}
+                    />
+                </div>
+                <ol className="flex flex-wrap gap-x-4 gap-y-1 rounded-xl border border-dashed p-3 text-xs text-muted-foreground">
+                    <li>
+                        <strong className="text-foreground">1.</strong> El
+                        almacén recibe la compra
+                    </li>
+                    <li>
+                        <strong className="text-foreground">2.</strong> Se le
+                        pone código a cada llanta en{' '}
+                        <Link
+                            href={almacen().url}
+                            className="font-medium text-foreground underline underline-offset-2"
+                        >
+                            Lotes de llantas
+                        </Link>
+                    </li>
+                    <li>
+                        <strong className="text-foreground">3.</strong> Taller
+                        crea la orden de trabajo y el mecánico pide la llanta
+                    </li>
+                    <li>
+                        <strong className="text-foreground">4.</strong> Con la
+                        orden en ejecución, en la unidad se toca la posición
+                        vacía y se elige la llanta por su código
+                    </li>
+                </ol>
+            </section>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="grid w-full grid-cols-2 gap-2 sm:w-72">
@@ -196,6 +280,51 @@ export default function LlantasIndex({ unidades, umbrales }: Props) {
                 })
             )}
         </div>
+    );
+}
+
+/** Un número de lo que hay que hacer; con `href`, lleva a donde se hace. */
+function Pendiente({
+    cantidad,
+    titulo,
+    ayuda,
+    tono,
+    href,
+}: {
+    cantidad: number;
+    titulo: string;
+    ayuda: string;
+    tono: 'mal' | 'aviso' | 'neutro';
+    href?: string;
+}) {
+    const contenido = (
+        <>
+            <span
+                className={cn(
+                    'text-2xl font-semibold tabular-nums',
+                    tono === 'mal' && 'text-red-700 dark:text-red-400',
+                    tono === 'aviso' && 'text-amber-700 dark:text-amber-400',
+                )}
+            >
+                {cantidad}
+            </span>
+            <span className="text-sm font-medium">{titulo}</span>
+            <span className="text-xs text-muted-foreground">{ayuda}</span>
+        </>
+    );
+    const clase = cn(
+        'flex flex-col gap-0.5 rounded-xl border border-l-4 bg-card p-3',
+        tono === 'mal' && 'border-l-red-500',
+        tono === 'aviso' && 'border-l-amber-500',
+        tono === 'neutro' && 'border-l-zinc-300 dark:border-l-zinc-600',
+    );
+
+    return href ? (
+        <Link href={href} className={cn(clase, 'hover:bg-accent/50')}>
+            {contenido}
+        </Link>
+    ) : (
+        <div className={clase}>{contenido}</div>
     );
 }
 

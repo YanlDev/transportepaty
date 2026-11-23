@@ -38,6 +38,7 @@ use App\Http\Controllers\GalonesPorTramoController;
 use App\Http\Controllers\GuiaPorAsignarController;
 use App\Http\Controllers\HistorialController;
 use App\Http\Controllers\LecturaKilometrajeController;
+use App\Http\Controllers\LlantaAlmacenController;
 use App\Http\Controllers\LlantaController;
 use App\Http\Controllers\MantenimientoController;
 use App\Http\Controllers\MisOrdenesController;
@@ -360,6 +361,17 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.ordenes.fotos.destroy');
     Route::get('mantenimiento/llantas', [LlantaController::class, 'index'])
         ->name('mantenimiento.llantas.index');
+    // Antes que `{vehiculo}`: los lotes del almacén, el buscador y la ficha.
+    Route::get('mantenimiento/llantas/almacen', [LlantaAlmacenController::class, 'index'])
+        ->name('mantenimiento.llantas.almacen');
+    Route::post('mantenimiento/llantas/almacen', [LlantaAlmacenController::class, 'store'])
+        ->name('mantenimiento.llantas.almacen.store');
+    Route::delete('mantenimiento/llantas/almacen/{llanta}', [LlantaAlmacenController::class, 'destroy'])
+        ->name('mantenimiento.llantas.almacen.destroy');
+    Route::get('mantenimiento/llantas/buscar', [LlantaAlmacenController::class, 'buscar'])
+        ->name('mantenimiento.llantas.buscar');
+    Route::get('mantenimiento/llantas/ficha/{llanta}', [LlantaAlmacenController::class, 'ficha'])
+        ->name('mantenimiento.llantas.ficha');
     Route::get('mantenimiento/llantas/{vehiculo}', [LlantaController::class, 'show'])
         ->name('mantenimiento.llantas.show');
     Route::post('mantenimiento/llantas/{vehiculo}/movimientos', [LlantaController::class, 'store'])

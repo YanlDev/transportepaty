@@ -16,6 +16,7 @@ use App\Models\Llanta;
 use App\Models\OrdenTrabajo;
 use App\Models\SalidaAlmacen;
 use App\Services\Kardex;
+use App\Services\LlantasDeAlmacen;
 use App\Services\MaterialesDeOrden;
 use App\Services\PeriodoAlmacen;
 use App\Services\RelojOperativo;
@@ -235,6 +236,8 @@ class SalidaAlmacenController extends Controller
                     'costo_unitario' => $origen->costo_unitario,
                     'costo_total' => round($cantidad * (float) $origen->costo_unitario, 2),
                 ]);
+
+                app(LlantasDeAlmacen::class)->soltar($origen, (int) ceil($cantidad));
             }
 
             $this->kardex->registrarIngreso($devolucion, $request->user()?->id);
@@ -254,7 +257,7 @@ class SalidaAlmacenController extends Controller
             throw ValidationException::withMessages(['motivo' => 'La entrega tiene devoluciones: anúlalas primero.']);
         }
 
-        if (Llanta::query()->whereIn('detalle_salida_id', $salida->detalles()->select('id'))->exists()) {
+        if (Llanta::query()->whereNotNull('vehiculo_id')->whereIn('detalle_salida_id', $salida->detalles()->select('id'))->exists()) {
             throw ValidationException::withMessages(['motivo' => 'Con esta entrega ya se montaron llantas: no se puede anular. Lo que no se usó se devuelve.']);
         }
 
@@ -266,6 +269,9 @@ class SalidaAlmacenController extends Controller
             ]);
 
             $this->kardex->anular($salida);
+
+            // Las llantas entregadas y sin montar vuelven a figurar en el almacén.
+            $salida->detalles()->get()->each(fn (DetalleSalida $detalle) => app(LlantasDeAlmacen::class)->soltar($detalle));
         });
 
         return back()->with('toast', ['type' => 'success', 'message' => "Entrega {$salida->numero()} anulada: lo entregado volvió al stock."]);

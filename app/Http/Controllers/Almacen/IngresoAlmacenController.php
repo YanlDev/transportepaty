@@ -17,6 +17,7 @@ use App\Models\CategoriaArticulo;
 use App\Models\DetalleIngreso;
 use App\Models\DetalleValeCompra;
 use App\Models\IngresoAlmacen;
+use App\Models\Llanta;
 use App\Models\Proveedor;
 use App\Models\UbicacionAlmacen;
 use App\Models\ValeCompra;
@@ -380,6 +381,10 @@ class IngresoAlmacenController extends Controller
     {
         $this->authorize('anular', $ingreso);
         PeriodoAlmacen::exigirAbierto($ingreso->fecha);
+
+        if (Llanta::query()->whereIn('detalle_ingreso_id', $ingreso->detalles()->select('id'))->exists()) {
+            throw ValidationException::withMessages(['motivo' => 'Las llantas de esta recepción ya tienen código: quítaselo primero desde Llantas en almacén.']);
+        }
 
         DB::transaction(function () use ($request, $ingreso): void {
             $ingreso->update([
