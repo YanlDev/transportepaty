@@ -71,6 +71,8 @@ it('asks for the odometer of a unit that arrived and has no reading since', func
     $conKm = Vuelta::factory()->create(['llegada_el' => now()->subDay()->toDateString()]);
     LecturaKilometraje::factory()->create(['vehiculo_id' => $conKm->tracto_id, 'leido_en' => now()]);
     Vuelta::factory()->create(['llegada_el' => now()->subDays(20)->toDateString()]);
+    // La llegada deducida es de una unidad que ya volvió a salir: no se pide.
+    Vuelta::factory()->create(['llegada_el' => now()->subDay()->toDateString(), 'llegada_deducida' => true]);
 
     actingAs(actorConRol('taller'))
         ->get(route('taller.index'))

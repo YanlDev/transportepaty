@@ -185,27 +185,43 @@ class AsignadorVueltas
 
     private function paradaNoProgramada(Vuelta $vuelta, Viaje $guia, SentidoTramo $sentido): ParadaVuelta
     {
-        // Va al final de su tramo: las de ida antes que las de regreso.
         $paradas = $vuelta->paradas()->get();
+        $origen = ZonaRuta::desdeDireccion($guia->origen);
+        $destino = ZonaRuta::desdeDireccion($guia->destino);
+
+        // Otra carga del mismo trayecto que el ticket ya lleva (la de un
+        // segundo cliente en el mismo viaje): va junto a esa, y no es nada
+        // fuera de programa.
+        $delMismoTrayecto = $paradas
+            ->filter(fn (ParadaVuelta $parada): bool => $parada->sentido === $sentido
+                && ! $parada->esContinuacion()
+                && ! $parada->esVacio()
+                && $parada->zona_origen === $origen
+                && $parada->zona_destino === $destino)
+            ->max('orden');
+
+        // Si no, va al final de su tramo: las de ida antes que las de regreso.
         $ultimaDelTramo = $paradas->where('sentido', $sentido)->max('orden');
-        $orden = $ultimaDelTramo === null
-            ? ($sentido === SentidoTramo::Ida ? 1 : (int) $paradas->max('orden') + 1)
-            : (int) $ultimaDelTramo + 1;
+        $orden = match (true) {
+            $delMismoTrayecto !== null => (int) $delMismoTrayecto + 1,
+            $ultimaDelTramo === null => $sentido === SentidoTramo::Ida ? 1 : (int) $paradas->max('orden') + 1,
+            default => (int) $ultimaDelTramo + 1,
+        };
 
         $vuelta->paradas()->where('orden', '>=', $orden)->increment('orden');
 
         return $vuelta->paradas()->create([
             'sentido' => $sentido,
             'orden' => $orden,
-            'zona_origen' => ZonaRuta::desdeDireccion($guia->origen),
-            'zona_destino' => ZonaRuta::desdeDireccion($guia->destino),
+            'zona_origen' => $origen,
+            'zona_destino' => $destino,
             'lugar_origen' => $this->lugar($guia->origen),
             'lugar_destino' => $this->lugar($guia->destino),
             'tipo_carga' => $guia->tipo_carga,
             'cliente_id' => $guia->cliente_id,
             'cliente' => $guia->cliente,
             'fecha' => $guia->fecha_traslado,
-            'fuera_de_programa' => true,
+            'fuera_de_programa' => $delMismoTrayecto === null,
         ]);
     }
 

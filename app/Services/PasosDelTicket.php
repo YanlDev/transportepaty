@@ -286,7 +286,9 @@ class PasosDelTicket
     {
         if ($vuelta->llegoABase()) {
             return $this->paso('llego', 'Llegó a base', 'hecho',
-                $vuelta->km_llegada === null ? null : number_format($vuelta->km_llegada, 0, '.', ',').' km',
+                $vuelta->llegada_deducida
+                    ? 'Deducida: volvió a salir'
+                    : ($vuelta->km_llegada === null ? null : number_format($vuelta->km_llegada, 0, '.', ',').' km'),
                 $vuelta->llegada_el->toDateString(),
                 $vuelta->llegadaRegistradaPor?->name,
             );

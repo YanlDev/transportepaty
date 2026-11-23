@@ -25,7 +25,7 @@ function hoy(): string {
 /**
  * Registrar que la unidad volvió a la base, con el día y el kilometraje. La
  * llegada no se calcula: la marca una persona. Desde ahí el ticket está en
- * base y se puede programar el siguiente.
+ * base. Si nadie la registra y la unidad vuelve a salir, se deduce sola.
  */
 export function LlegadaDialog({
     ticket,

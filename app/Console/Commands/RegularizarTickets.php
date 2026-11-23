@@ -16,6 +16,7 @@ use App\Models\Vuelta;
 use App\Services\Alertas;
 use App\Services\AlertasDelTicket;
 use App\Services\AsignadorVueltas;
+use App\Services\LlegadaDeducida;
 use App\Services\ProgramadorVueltas;
 use Carbon\CarbonInterface;
 use Illuminate\Console\Attributes\Description;
@@ -245,12 +246,14 @@ class RegularizarTickets extends Command
                     }
 
                     $notas[] = "GR {$guia->numero_gr} sin trayecto en la guía: se puso como {$origen->label()} → {$destino->label()}";
-                } elseif ($parada === null) {
-                    $notas[] = "GR {$guia->numero_gr} entra como parada no programada";
                 }
 
                 $lugares = $parada?->only(['lugar_origen', 'lugar_destino']);
                 $parada = $asignador->asignar($guia, $ticket, $parada, $sentido, $this->usuario);
+
+                if ($parada->fuera_de_programa && ! isset($this->trayectos[$guia->numero_gr])) {
+                    $notas[] = "GR {$guia->numero_gr} entra como parada no programada";
+                }
 
                 // Con el trayecto dicho a mano, la dirección de la GR no es
                 // el lugar real: la parada conserva los suyos.
@@ -605,8 +608,8 @@ class RegularizarTickets extends Command
 
     /**
      * Si la unidad volvió a salir es que llegó: al ticket anterior que sigue
-     * en ruta se le anota la llegada el día de la primera GR del siguiente
-     * (sin km: nadie lo anotó).
+     * en ruta se le anota la llegada el día antes de la primera GR del
+     * siguiente (sin km: nadie lo anotó).
      *
      * @param  list<array{guias: Collection<int, Viaje>, manuales: Collection<int, Viaje>, fase: SentidoTramo}>  $viajes
      * @param  array<int, Vuelta|null>  $tickets
@@ -624,8 +627,9 @@ class RegularizarTickets extends Command
             $ticket->refresh();
 
             if ($ticket->estado === EstadoVuelta::EnCurso && $ticket->llegada_el === null) {
-                $llegada = Carbon::parse($siguiente['guias']->min('fecha_traslado'));
-                $ticket->update(['llegada_el' => $llegada->toDateString(), 'llegada_por' => $this->usuario->id]);
+                $llegada = app(LlegadaDeducida::class)
+                    ->anotar($ticket, Carbon::parse($siguiente['guias']->min('fecha_traslado')), $this->usuario)
+                    ->llegada_el;
                 $this->line("     ↳ {$ticket->codigo}: llegada deducida el {$llegada->format('d/m')} (volvió a salir)");
             }
         }

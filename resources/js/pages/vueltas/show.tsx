@@ -301,7 +301,10 @@ export default function ExpedienteTicket({
                             {formatearFecha(ticket.llegada.fecha)}
                             {ticket.llegada.km !== null &&
                                 ` con ${ticket.llegada.km.toLocaleString('es-PE')} km`}
-                            {ticket.llegada.por && ` · ${ticket.llegada.por}`}
+                            {ticket.llegada.deducida
+                                ? ' · deducida: volvió a salir'
+                                : ticket.llegada.por &&
+                                  ` · ${ticket.llegada.por}`}
                         </p>
                     ) : (
                         ticket.llegada_prevista && (

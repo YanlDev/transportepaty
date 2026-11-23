@@ -98,7 +98,7 @@ it('checks the day and the odometer of the arrival', function (): void {
         ->assertForbidden();
 });
 
-it('does not program the next ticket while the unit is still on the road', function (): void {
+it('programs the next ticket while the unit is still on the road and deduces its arrival', function (): void {
     $vuelta = ticketConRansa($this->tracto, now()->subDays(2)->toDateString());
     $datos = [
         'tracto_id' => $this->tracto->id,
@@ -107,14 +107,13 @@ it('does not program the next ticket while the unit is still on the road', funct
         'rutas' => [['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Concentrado a Pisco')->id, 'variante_ruta_id' => null]],
     ];
 
-    actingAs(actorConRol('admin'))->post(route('vueltas.store'), $datos)->assertSessionHasErrors('tracto_id');
-
-    llegar($vuelta, now()->toDateString());
-
     actingAs(actorConRol('admin'))->post(route('vueltas.store'), $datos)->assertSessionHasNoErrors();
 
-    // Programar el siguiente no cierra el anterior: eso es de la liquidación.
-    expect($vuelta->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
+    // Si vuelve a salir es que llegó; pero programar el siguiente no cierra
+    // el anterior: eso es de la liquidación.
+    expect($vuelta->fresh()->llegada_deducida)->toBeTrue()
+        ->and($vuelta->fresh()->etapa())->toBe('en_base')
+        ->and($vuelta->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
 });
 
 it('still lets fuel be registered at Kio after the Ransa GR', function (): void {

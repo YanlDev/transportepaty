@@ -108,7 +108,9 @@ it('starts a new ticket when the unit goes down again, and notes the arrival of 
 
     expect(Vuelta::query()->count())->toBe(2)
         ->and($primero->topeDe(SentidoTramo::Regreso))->toBe(130.0)
-        ->and($primero->llegada_el->toDateString())->toBe('2026-11-14')
+        // El día antes de volver a salir.
+        ->and($primero->llegada_el->toDateString())->toBe('2026-11-13')
+        ->and($primero->llegada_deducida)->toBeTrue()
         // Sube con la escoria que trajo: 10 galones más.
         ->and($segundo->topeDe(SentidoTramo::Ida))->toBe(230.0)
         ->and($segundo->llegada_el)->toBeNull();

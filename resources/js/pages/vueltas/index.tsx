@@ -14,6 +14,12 @@ import { EncabezadoPantalla } from '@/components/encabezado-pantalla';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DetalleVuelta } from '@/components/vueltas/detalle-vuelta';
+import {
+    FiltroSalida,
+    saleEnRango,
+    SIN_RANGO,
+} from '@/components/vueltas/filtro-salida';
+import type { RangoSalida } from '@/components/vueltas/filtro-salida';
 import { GanttVueltas } from '@/components/vueltas/gantt-vueltas';
 import { ListaProgramacion } from '@/components/vueltas/lista-programacion';
 import { ParaAtender, pendienteDe } from '@/components/vueltas/para-atender';
@@ -48,18 +54,20 @@ type Dialogo = { vuelta: Vuelta | null } | null;
 
 const sinGuion = (texto: string) => texto.toLowerCase().replace(/-/g, '');
 
-function filtrar(lista: TarjetaVuelta[], buscar: string): TarjetaVuelta[] {
+function filtrar(
+    lista: TarjetaVuelta[],
+    buscar: string,
+    salida: RangoSalida,
+): TarjetaVuelta[] {
     const texto = sinGuion(buscar.trim());
-
-    if (texto === '') {
-        return lista;
-    }
 
     return lista.filter(
         (vuelta) =>
-            sinGuion(vuelta.placa).includes(texto) ||
-            sinGuion(vuelta.codigo ?? '').includes(texto) ||
-            (vuelta.conductor ?? '').toLowerCase().includes(texto),
+            saleEnRango(vuelta.inicio, salida) &&
+            (texto === '' ||
+                sinGuion(vuelta.placa).includes(texto) ||
+                sinGuion(vuelta.codigo ?? '').includes(texto) ||
+                (vuelta.conductor ?? '').toLowerCase().includes(texto)),
     );
 }
 
@@ -82,6 +90,7 @@ export default function Programacion({
     // Un grupo de «Para atender»: deja solo los tickets que esperan eso.
     const [pendiente, setPendiente] = useState<string | null>(null);
     const [buscar, setBuscar] = useState('');
+    const [salida, setSalida] = useState<RangoSalida>(SIN_RANGO);
     const [dialogo, setDialogo] = useState<Dialogo>(null);
     const [abiertaId, setAbiertaId] = useState<number | null>(null);
 
@@ -109,8 +118,8 @@ export default function Programacion({
     }, [firmaTablero, tablero]);
 
     const filtradas = useMemo(
-        () => filtrar(tablero, buscar),
-        [buscar, tablero],
+        () => filtrar(tablero, buscar, salida),
+        [buscar, salida, tablero],
     );
     const deClase = (vuelta: TarjetaVuelta, buscada: ClaseCarga) =>
         clasesDeTicket([...vuelta.ida, ...vuelta.regreso]).includes(buscada);
@@ -247,6 +256,7 @@ export default function Programacion({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
+                    <FiltroSalida rango={salida} onCambiar={setSalida} />
                     {/* Mina o particular: un ticket con las dos cuenta en
                         las dos. Se combina con la etapa. */}
                     {CLASES.map((opcion) => {

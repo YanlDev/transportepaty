@@ -46,6 +46,16 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import { EtapaBadge } from '@/components/vueltas/etapa-badge';
+import type {
+    CriterioFecha,
+    RangoSalida,
+} from '@/components/vueltas/filtro-salida';
+import {
+    FiltroSalida,
+    saleEnRango,
+    SIN_RANGO,
+    sinRango,
+} from '@/components/vueltas/filtro-salida';
 import { usePermisos } from '@/hooks/use-permisos';
 import { formatearFecha, formatearPlaca } from '@/lib/format';
 import { cn } from '@/lib/utils';
@@ -193,6 +203,29 @@ const TRAMOS = [
 ] as const;
 
 /**
+ * Si el ticket entra en el rango: por su día de salida o porque alguno de
+ * sus combustibles vigentes se autorizó en esos días.
+ */
+function enFecha(
+    vuelta: VueltaAbastecimiento,
+    rango: RangoSalida,
+    criterio: CriterioFecha,
+): boolean {
+    if (criterio === 'salida' || sinRango(rango)) {
+        return saleEnRango(vuelta.inicio, rango);
+    }
+
+    return vuelta.abastecimientos.some(
+        (registro) => !registro.anulado && saleEnRango(registro.fecha, rango),
+    );
+}
+
+/** El día de salida del ticket: «sale» si todavía no salió. */
+function salidaDe(vuelta: VueltaAbastecimiento): string {
+    return `${vuelta.etapa === 'programada' ? 'sale' : 'salió'} ${formatearFecha(vuelta.inicio)}`;
+}
+
+/**
  * El tablero de abastecimiento como tabla: una fila por unidad con su ticket
  * abierto, lo que le toca según la pizarra, lo autorizado y lo que falta.
  * Clic en la fila abre el detalle por punto, desde donde se registra.
@@ -207,6 +240,10 @@ export default function AbastecimientoIndex({
     const { puede } = usePermisos();
     const puedeRegistrar = puede('abastecimiento.registrar');
     const [buscar, setBuscar] = useState('');
+    const [salida, setSalida] = useState<RangoSalida>(SIN_RANGO);
+    // La fecha que se busca: la salida del ticket o la de sus despachos
+    // (para cuadrar con el grifo lo de un día).
+    const [criterio, setCriterio] = useState<CriterioFecha>('salida');
     const [soloPendientes, setSoloPendientes] = useState(false);
     // La pantalla se parte por el tramo que cada ticket tiene en curso: la
     // ida y la vuelta se abastecen en momentos y lugares distintos.
@@ -248,6 +285,10 @@ export default function AbastecimientoIndex({
                 return false;
             }
 
+            if (!enFecha(vuelta, salida, criterio)) {
+                return false;
+            }
+
             return (
                 texto === '' ||
                 sinGuion(vuelta.tracto.placa).includes(texto) ||
@@ -255,14 +296,18 @@ export default function AbastecimientoIndex({
                 (vuelta.conductor ?? '').toLowerCase().includes(texto)
             );
         });
-    }, [buscar, soloPendientes, vueltas]);
+    }, [buscar, criterio, salida, soloPendientes, vueltas]);
 
     const pendientes = vueltas.filter(
         (vuelta) => (faltaTotal(vuelta) ?? 1) > 0,
     ).length;
-    const delTramo = filtradas.filter(
-        (vuelta) => tramoEnCurso(vuelta) === sentido,
-    );
+    // La salida más reciente arriba; sin fecha, al final.
+    const delTramo = filtradas
+        .filter((vuelta) => tramoEnCurso(vuelta) === sentido)
+        .sort(
+            (a, b) =>
+                (b.inicio ?? '').localeCompare(a.inicio ?? '') || b.id - a.id,
+        );
     const abierta = vueltas.find((vuelta) => vuelta.id === abiertaId) ?? null;
 
     /**
@@ -359,6 +404,12 @@ export default function AbastecimientoIndex({
                     >
                         Solo con combustible pendiente · {pendientes}
                     </button>
+                    <FiltroSalida
+                        rango={salida}
+                        onCambiar={setSalida}
+                        criterio={criterio}
+                        onCriterio={setCriterio}
+                    />
                 </div>
                 <div className="flex gap-2">
                     <div className="relative flex-1 lg:w-64">
@@ -427,6 +478,11 @@ export default function AbastecimientoIndex({
                                     {vuelta.codigo}
                                 </span>
                                 <EtapaBadge etapa={vuelta.etapa} />
+                                {vuelta.inicio && (
+                                    <span className="text-xs text-muted-foreground">
+                                        {salidaDe(vuelta)}
+                                    </span>
+                                )}
                             </span>
                         </button>
                         <BarraCombustible
@@ -550,6 +606,11 @@ export default function AbastecimientoIndex({
                                         >
                                             {vuelta.codigo}
                                         </Link>
+                                        {vuelta.inicio && (
+                                            <span className="mt-0.5 block font-sans whitespace-nowrap">
+                                                {salidaDe(vuelta)}
+                                            </span>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <EtapaBadge etapa={vuelta.etapa} />

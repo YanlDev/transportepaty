@@ -48,6 +48,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $llegada_el El día en que alguien registró que llegó a la base.
  * @property int|null $km_llegada
  * @property int|null $llegada_por
+ * @property bool $llegada_deducida Nadie la registró: se dedujo porque la unidad volvió a salir.
  * @property string|null $por_revisar Por qué una persona tiene que mirar este ticket; null si no hace falta.
  * @property-read Vehiculo $tracto
  * @property-read Vehiculo|null $carreta
@@ -63,7 +64,7 @@ use Illuminate\Support\Carbon;
  * @property-read bool|null $abastecimientos_exists Solo si se cargó con `withExists`.
  * @property-read bool|null $viaticos_exists Solo si se cargó con `withExists`.
  */
-#[Fillable(['tracto_id', 'carreta_id', 'conductor_id', 'tipo', 'estado', 'origen', 'inicio', 'fin', 'llegada_el', 'km_llegada', 'llegada_por', 'por_revisar'])]
+#[Fillable(['tracto_id', 'carreta_id', 'conductor_id', 'tipo', 'estado', 'origen', 'inicio', 'fin', 'llegada_el', 'km_llegada', 'llegada_por', 'llegada_deducida', 'por_revisar'])]
 class Vuelta extends Model
 {
     /** @use HasFactory<VueltaFactory> */
@@ -387,6 +388,7 @@ class Vuelta extends Model
             'fin' => 'date',
             'llegada_el' => 'date',
             'km_llegada' => 'integer',
+            'llegada_deducida' => 'boolean',
         ];
     }
 }

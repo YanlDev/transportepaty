@@ -92,6 +92,15 @@ function Tiempo({ vuelta }: { vuelta: TarjetaVuelta }) {
     ) : null;
 }
 
+/** El día en que salió: el del ticket por salir ya lo dice su tiempo. */
+function Salida({ vuelta }: { vuelta: TarjetaVuelta }) {
+    return vuelta.inicio && vuelta.etapa !== 'programada' ? (
+        <span className="block truncate text-xs text-muted-foreground">
+            salió {formatearFecha(vuelta.inicio)}
+        </span>
+    ) : null;
+}
+
 function Sigue({ vuelta }: { vuelta: TarjetaVuelta }) {
     const siguiente = vuelta.siguiente;
     const saltados = vuelta.saltados ?? [];
@@ -175,11 +184,13 @@ function Fila({
                 <div className="flex flex-col items-end gap-1 xl:hidden">
                     <Etapa vuelta={vuelta} />
                     <Tiempo vuelta={vuelta} />
+                    <Salida vuelta={vuelta} />
                 </div>
             </div>
             <div className="flex min-w-0 flex-col gap-0.5 max-xl:hidden">
                 <Etapa vuelta={vuelta} />
                 <Tiempo vuelta={vuelta} />
+                <Salida vuelta={vuelta} />
             </div>
             <div className="flex min-w-0 flex-wrap gap-1">
                 {rutas.length > 0 ? (
@@ -213,7 +224,8 @@ function Fila({
 }
 
 /**
- * La programación como lista: un ticket por fila, el más nuevo arriba, con
+ * La programación como lista: un ticket por fila, la salida más reciente
+ * arriba, con
  * su avance en el circuito, lo que sigue y el botón para hacerlo. En el
  * celular y en pantallas angostas cada fila es una tarjeta.
  */
@@ -226,7 +238,11 @@ export function ListaProgramacion({
     onAbrir: (vuelta: TarjetaVuelta) => void;
     onEditar: (vuelta: Vuelta) => void;
 }) {
-    const ordenadas = [...vueltas].sort((a, b) => b.id - a.id);
+    // Por día de salida: los tickets que se regularizaron después tienen
+    // número alto aunque hayan salido antes.
+    const ordenadas = [...vueltas].sort(
+        (a, b) => (b.inicio ?? '').localeCompare(a.inicio ?? '') || b.id - a.id,
+    );
 
     if (ordenadas.length === 0) {
         return (

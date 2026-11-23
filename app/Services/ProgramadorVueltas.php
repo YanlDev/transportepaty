@@ -25,6 +25,8 @@ use Illuminate\Support\Str;
  */
 class ProgramadorVueltas
 {
+    public function __construct(private readonly LlegadaDeducida $llegada) {}
+
     /**
      * @param  array{tracto_id: int, carreta_id: int|null, conductor_id: int|null, inicio: string, paradas: list<array<string, mixed>>, rutas?: list<array{sentido: string, ruta_id: int, variante_ruta_id: int|null}>}  $datos
      */
@@ -43,6 +45,10 @@ class ProgramadorVueltas
 
             $this->guardarParadas($vuelta, $datos['paradas']);
             $this->guardarRutas($vuelta, $datos['rutas'] ?? [], $usuario);
+
+            // Si vuelve a salir es que llegó: el ticket que seguía en ruta
+            // queda con la llegada el día antes de esta salida.
+            $this->llegada->alSalirDeNuevo($vuelta->tracto_id, $vuelta->inicio, $usuario, $vuelta->id);
 
             return $vuelta;
         });

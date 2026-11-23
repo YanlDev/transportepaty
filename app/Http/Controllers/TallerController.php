@@ -128,6 +128,7 @@ class TallerController extends Controller
     /**
      * Las unidades que llegaron a la base en la última semana y a las que
      * nadie les anotó el km desde entonces: de ese km sale el preventivo.
+     * La llegada deducida no cuenta: esa unidad ya volvió a salir.
      *
      * @return Collection<int, Vuelta>
      */
@@ -135,6 +136,7 @@ class TallerController extends Controller
     {
         $llegadas = Vuelta::query()
             ->whereNotNull('llegada_el')
+            ->where('llegada_deducida', false)
             ->where('llegada_el', '>=', now()->subDays(self::DIAS_DE_LLEGADA)->toDateString())
             ->with('tracto:id,placa,marca,tipo')
             ->orderByDesc('llegada_el')

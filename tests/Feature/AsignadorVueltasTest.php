@@ -112,6 +112,27 @@ it('assigns the GR to the stop the person chose and the ticket leaves', function
         ->and($vuelta->fresh()->estado)->toBe(EstadoVuelta::EnCurso);
 });
 
+it('puts a second load of the same route next to the first one, not as an unplanned stop', function (): void {
+    $vuelta = programarVuelta($this->tracto, '2026-11-05');
+    $particular = registrarGuia($this->tracto, '2026-11-09', DIR_HUARAL, DIR_JULIACA, TipoCarga::Particular);
+    $materiales = registrarGuia($this->tracto, '2026-11-10', DIR_CALLAO, DIR_JULIACA, TipoCarga::Materiales);
+
+    actingAs($this->admin)
+        ->post(route('viajes.ticket.asignar', $particular), ['vuelta_id' => $vuelta->id, 'parada_vuelta_id' => paradaDe($vuelta, 3)->id])
+        ->assertSessionHasNoErrors();
+    actingAs($this->admin)
+        ->post(route('viajes.ticket.asignar', $materiales), ['vuelta_id' => $vuelta->id, 'sentido' => 'regreso'])
+        ->assertSessionHasNoErrors();
+
+    $parada = $materiales->fresh()->parada;
+
+    // Otro cliente en el mismo viaje a Juliaca: es parte del recorrido.
+    expect($parada->id)->not->toBe(paradaDe($vuelta, 3)->id)
+        ->and($parada->fuera_de_programa)->toBeFalse()
+        ->and($parada->orden)->toBe(4)
+        ->and($parada->tipo_carga)->toBe(TipoCarga::Materiales);
+});
+
 it('adds what was not programmed as an unplanned stop at the end of the leg the person chose', function (): void {
     $vuelta = programarVuelta($this->tracto, '2026-11-05');
     $guia = registrarGuia($this->tracto, '2026-11-07', DIR_PISCO, DIR_CALLAO, TipoCarga::Metalico);

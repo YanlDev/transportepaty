@@ -214,8 +214,16 @@ export type TarjetaVuelta = Vuelta & {
     taller_anteriores: RevisionTaller[];
     /** Si el usuario puede dar el apto o no apto. */
     revisable: boolean;
-    /** La llegada a la base, como la registró una persona. */
-    llegada: { fecha: string; km: number | null; por: string | null } | null;
+    /**
+     * La llegada a la base: la registró una persona o, si nadie lo hizo y la
+     * unidad volvió a salir, se dedujo sola (`deducida`).
+     */
+    llegada: {
+        fecha: string;
+        km: number | null;
+        por: string | null;
+        deducida: boolean;
+    } | null;
     /** Cuándo debería llegar (solo en vuelta): referencia para el atraso. */
     llegada_prevista: string | null;
     /** Ya pasó el día en que debía llegar y nadie registró la llegada. */

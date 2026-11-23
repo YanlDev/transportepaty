@@ -168,7 +168,8 @@ class VueltaController extends Controller
 
     /**
      * Que la unidad volvió a la base, con el día y el kilometraje: desde ahí
-     * el ticket está «en base» y se puede programar el siguiente.
+     * el ticket está «en base». También corrige la llegada que se dedujo
+     * sola porque la unidad volvió a salir.
      */
     public function registrarLlegada(RegistrarLlegadaRequest $request, Vuelta $vuelta, OdometroDeUnidad $odometro): RedirectResponse
     {
@@ -181,6 +182,7 @@ class VueltaController extends Controller
             'llegada_el' => $request->date('llegada_el'),
             'km_llegada' => $kilometraje,
             'llegada_por' => $request->user()?->id,
+            'llegada_deducida' => false,
         ]);
 
         if ($kmNuevo) {
@@ -380,6 +382,7 @@ class VueltaController extends Controller
                 'fecha' => $vuelta->llegada_el->toDateString(),
                 'km' => $vuelta->km_llegada,
                 'por' => $vuelta->llegadaRegistradaPor?->name,
+                'deducida' => $vuelta->llegada_deducida,
             ] : null,
             // Referencia para avisar de un atraso; la llegada la marca una
             // persona, nunca esta fecha.
