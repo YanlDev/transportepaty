@@ -3,6 +3,7 @@
 use App\Enums\TipoAlerta;
 use App\Models\Articulo;
 use App\Models\CuentaBancaria;
+use App\Models\PagoCompra;
 use App\Models\Proveedor;
 use App\Models\User;
 use App\Models\ValeCompra;
@@ -173,4 +174,69 @@ it('pays a credit purchase in parts, by its due date, and voids a wrong payment'
             'detalles' => [['es_servicio' => false, 'articulo_id' => Articulo::factory()->create()->id, 'cantidad' => 1, 'precio_unitario' => 10]],
         ])
         ->assertSessionHasErrors('dias_credito');
+});
+
+it('tells whoever scans the QR how much of the order is already paid', function (): void {
+    $pedido = pedidoDe400($this->almacen, $this->proveedor);
+    actingAs($this->gerencia)->post(route('almacen.compras.aprobar', $pedido))->assertSessionHasNoErrors();
+
+    $pagoEn = fn (): array => \Pest\Laravel\get(route('vales.verificar', $pedido->codigo_publico))->viewData('page')['props']['vale'];
+
+    expect($pagoEn())->toMatchArray(['pagado' => 0.0, 'por_pagar' => 400.0, 'pagado_completo' => false, 'ultimo_pago_el' => null]);
+
+    $parcial = PagoCompra::factory()->create(['vale_compra_id' => $pedido->id, 'monto' => 150, 'fecha' => '2026-11-19']);
+
+    expect($pagoEn())->toMatchArray(['pagado' => 150.0, 'por_pagar' => 250.0, 'pagado_completo' => false]);
+
+    PagoCompra::factory()->create(['vale_compra_id' => $pedido->id, 'monto' => 250, 'fecha' => '2026-11-20']);
+
+    // Pagado entero y sin recibir: sigue sirviendo para entregar, pero avisa que no se cobra otra vez.
+    expect($pagoEn())->toMatchArray(['pagado' => 400.0, 'por_pagar' => 0.0, 'pagado_completo' => true, 'valido' => true])
+        ->and(substr((string) $pagoEn()['ultimo_pago_el'], 0, 10))->toBe('2026-11-20');
+
+    // Un pago anulado deja de contar.
+    $parcial->update(['anulado_at' => now(), 'motivo_anulacion' => 'Se anotó dos veces']);
+
+    expect($pagoEn())->toMatchArray(['pagado' => 250.0, 'por_pagar' => 150.0, 'pagado_completo' => false]);
+});
+
+it('records a payment made in several bank operations, each with its own voucher', function (): void {
+    Notification::fake();
+
+    $pedido = pedidoDe400($this->almacen, $this->proveedor);
+    actingAs($this->gerencia)->post(route('almacen.compras.aprobar', $pedido))->assertSessionHasNoErrors();
+
+    $pago = fn (array $operaciones): array => ['fecha' => '2026-11-19', 'medio' => 'deposito', 'operaciones' => $operaciones];
+    $operacion = fn (float $monto, ?string $numero): array => ['monto' => $monto, 'numero_operacion' => $numero, 'voucher' => voucherDePrueba()];
+
+    // Cada operación lleva su número y su voucher, sin repetirse, y entre todas no pasan lo que falta.
+    actingAs($this->gerencia)
+        ->post(route('almacen.compras.pagos.store', $pedido), $pago([$operacion(250, '405005'), ['monto' => 150]]))
+        ->assertSessionHasErrors(['operaciones.1.numero_operacion', 'operaciones.1.voucher']);
+    actingAs($this->gerencia)
+        ->post(route('almacen.compras.pagos.store', $pedido), $pago([$operacion(250, '405005'), $operacion(150, '405005')]))
+        ->assertSessionHasErrors('operaciones.1.numero_operacion');
+    actingAs($this->gerencia)
+        ->post(route('almacen.compras.pagos.store', $pedido), $pago([$operacion(250, '405005'), $operacion(200, '405003')]))
+        ->assertSessionHasErrors('operaciones');
+
+    expect($pedido->pagos()->count())->toBe(0);
+
+    actingAs($this->gerencia)
+        ->post(route('almacen.compras.pagos.store', $pedido), $pago([$operacion(250, '405005'), $operacion(150, '405003')]))
+        ->assertSessionHasNoErrors();
+
+    $pagos = $pedido->refresh()->pagos()->get();
+
+    expect($pedido->porPagar())->toBe(0.0)
+        ->and($pagos->pluck('numero_operacion')->all())->toBe(['405005', '405003'])
+        ->and($pagos->map(fn (PagoCompra $anotado): float => (float) $anotado->monto)->all())->toBe([250.0, 150.0])
+        ->and($pagos->pluck('voucher_id')->filter()->unique())->toHaveCount(2)
+        ->and($pagos->every(fn (PagoCompra $anotado): bool => $anotado->medio->value === 'deposito'))->toBeTrue();
+
+    // Un solo aviso, por el total de lo anotado.
+    $avisos = Notification::sent($this->almacen, Alerta::class, fn (Alerta $alerta): bool => $alerta->tipo === TipoAlerta::PagoRegistrado);
+
+    expect($avisos)->toHaveCount(1)
+        ->and($avisos->first()->titulo)->toContain('400.00');
 });

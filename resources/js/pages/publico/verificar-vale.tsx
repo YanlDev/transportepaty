@@ -1,5 +1,5 @@
 import { Head, useForm } from '@inertiajs/react';
-import { BadgeCheck, CircleX, Search } from 'lucide-react';
+import { BadgeCheck, CircleDollarSign, CircleX, Search } from 'lucide-react';
 import {
     buscar,
     formulario,
@@ -127,6 +127,30 @@ function Vale({ vale }: { vale: ValePublico }) {
                 <p className="text-sm">{motivo(vale, monto)}</p>
             </section>
 
+            {vale.pagado > 0 && (
+                <section
+                    className={
+                        vale.pagado_completo
+                            ? 'flex items-start gap-3 rounded-xl border border-sky-600/40 bg-sky-600/10 p-5 text-sky-800 dark:text-sky-300'
+                            : 'flex items-start gap-3 rounded-xl border border-amber-600/40 bg-amber-500/10 p-5 text-amber-800 dark:text-amber-300'
+                    }
+                >
+                    <CircleDollarSign className="mt-0.5 size-8 shrink-0" />
+                    <div className="flex flex-col gap-1">
+                        <h2 className="text-lg font-semibold">
+                            {vale.pagado_completo
+                                ? 'Pedido ya pagado en su totalidad'
+                                : 'Pedido pagado en parte'}
+                        </h2>
+                        <p className="text-sm">
+                            {vale.pagado_completo
+                                ? `Transportes Paty ya pagó ${monto(vale.pagado)} por este pedido${vale.ultimo_pago_el ? ` (último pago: ${formatearFecha(vale.ultimo_pago_el)})` : ''}. No corresponde cobrar ni entregar más dinero por él.`
+                                : `Ya se pagaron ${monto(vale.pagado)} de ${monto(vale.total)}. Solo falta pagar ${monto(vale.por_pagar)}: no cobre ni entregue más que eso.`}
+                        </p>
+                    </div>
+                </section>
+            )}
+
             <section className="flex flex-col gap-4 rounded-xl border bg-card p-6 text-sm">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <span className="text-lg font-semibold">{vale.numero}</span>
@@ -144,10 +168,19 @@ function Vale({ vale }: { vale: ValePublico }) {
                             </span>
                         )}
                     </Campo>
-                    <Campo titulo="Total a pagar">
+                    <Campo titulo="Total del pedido">
                         <span className="text-lg font-semibold tabular-nums">
                             {monto(vale.total)}
                         </span>
+                        {vale.aprobado && (
+                            <span className="block text-xs text-muted-foreground">
+                                {vale.pagado_completo
+                                    ? 'Pagado por completo'
+                                    : vale.pagado > 0
+                                      ? `Pagado ${monto(vale.pagado)} · falta ${monto(vale.por_pagar)}`
+                                      : 'Todavía sin pagos registrados'}
+                            </span>
+                        )}
                     </Campo>
                     <Campo titulo="Pidió">{vale.solicitado_por ?? '—'}</Campo>
                     <Campo titulo="Aprobó">
@@ -224,7 +257,9 @@ function motivo(vale: ValePublico, monto: (valor: number) => string): string {
 
     switch (vale.situacion) {
         case 'vigente':
-            return `Sirve para una compra por ${monto(vale.total)}, hasta el ${formatearFecha(vale.vence_el)}.`;
+            return vale.pagado_completo
+                ? `Sirve para entregar lo del pedido hasta el ${formatearFecha(vale.vence_el)}. Ya está pagado: no cobre de nuevo.`
+                : `Sirve para una compra por ${monto(vale.total)}, hasta el ${formatearFecha(vale.vence_el)}.`;
         case 'parcial':
             return `Ya se compraron ${monto(vale.recibido)}. Quedan ${monto(vale.saldo)}, hasta el ${formatearFecha(vale.vence_el)}.`;
         case 'usado':

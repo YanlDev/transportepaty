@@ -182,6 +182,11 @@ export type ValePublico = {
     total: number;
     saldo: number;
     recibido: number;
+    /** Lo ya pagado al proveedor (pagos sin anular). */
+    pagado: number;
+    por_pagar: number;
+    pagado_completo: boolean;
+    ultimo_pago_el: string | null;
     placa: string | null;
     solicitado_por: string | null;
     aprobado_por: string | null;

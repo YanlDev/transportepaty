@@ -1,5 +1,5 @@
 import { useForm } from '@inertiajs/react';
-import { Banknote, CircleCheck, FileText } from 'lucide-react';
+import { Banknote, CircleCheck, FileText, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import {
     anular,
@@ -192,6 +192,14 @@ export function PagoDeCompra({
     );
 }
 
+type Operacion = {
+    monto: string;
+    numero_operacion: string;
+    voucher: File | null;
+};
+
+const soloMonto = (texto: string) => texto.replace(/[^0-9.]/g, '');
+
 function RegistrarPago({
     valeId,
     numero,
@@ -215,6 +223,7 @@ function RegistrarPago({
         data,
         setData,
         post,
+        transform,
         processing,
         progress,
         errors,
@@ -222,29 +231,74 @@ function RegistrarPago({
         clearErrors,
     } = useForm<{
         fecha: string;
-        monto: string;
         medio: string;
         cuenta_bancaria_id: string;
-        numero_operacion: string;
-        voucher: File | null;
+        operaciones: Operacion[];
     }>({
         fecha: hoy,
-        monto: porPagar.toFixed(2),
         medio: 'transferencia',
         cuenta_bancaria_id: '',
-        numero_operacion: '',
-        voucher: null,
+        operaciones: [
+            { monto: porPagar.toFixed(2), numero_operacion: '', voucher: null },
+        ],
     });
     const efectivo = data.medio === 'efectivo';
+    // El efectivo no tiene operaciones: es un solo monto.
+    const operaciones = efectivo
+        ? data.operaciones.slice(0, 1)
+        : data.operaciones;
+    const varias = operaciones.length > 1;
+    const suma = operaciones.reduce(
+        (total, operacion) => total + (Number(operacion.monto) || 0),
+        0,
+    );
+    const sePasa = suma - porPagar > 0.005;
+    const fallos = errors as Record<string, string | undefined>;
+    const dinero = (valor: number) =>
+        `${simbolo} ${valor.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    const cambiar = (indice: number, cambio: Partial<Operacion>) =>
+        setData(
+            'operaciones',
+            data.operaciones.map((operacion, posicion) =>
+                posicion === indice ? { ...operacion, ...cambio } : operacion,
+            ),
+        );
+
+    const agregar = () =>
+        setData('operaciones', [
+            ...data.operaciones,
+            {
+                // La nueva operación arranca con lo que falta para completar.
+                monto: Math.max(porPagar - suma, 0).toFixed(2),
+                numero_operacion: '',
+                voucher: null,
+            },
+        ]);
+
+    const quitar = (indice: number) =>
+        setData(
+            'operaciones',
+            data.operaciones.filter((_, posicion) => posicion !== indice),
+        );
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
         evento.stopPropagation();
 
+        transform((datos) => ({
+            ...datos,
+            operaciones: efectivo
+                ? [{ monto: datos.operaciones[0].monto }]
+                : datos.operaciones,
+        }));
+
         post(store(valeId).url, {
             preserveScroll: true,
             // Sin voucher (efectivo) viaja como un formulario normal.
-            forceFormData: data.voucher !== null,
+            forceFormData: operaciones.some(
+                (operacion) => operacion.voucher !== null,
+            ),
             onSuccess: () => {
                 reset();
                 setAbierto(false);
@@ -275,47 +329,10 @@ function RegistrarPago({
                         <DialogTitle>Anotar el pago del {numero}</DialogTitle>
                         <DialogDescription>
                             La transferencia se hace en el banco, como siempre.
-                            Acá solo queda anotada, con su voucher.
+                            Acá solo queda anotada, con su voucher. Si se pagó
+                            en varias operaciones, agrega una por cada voucher.
                         </DialogDescription>
                     </DialogHeader>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="pago-monto">
-                                Monto ({simbolo})
-                            </Label>
-                            <Input
-                                id="pago-monto"
-                                inputMode="decimal"
-                                className="h-11 text-lg tabular-nums"
-                                value={data.monto}
-                                onChange={(evento) =>
-                                    setData(
-                                        'monto',
-                                        evento.target.value.replace(
-                                            /[^0-9.]/g,
-                                            '',
-                                        ),
-                                    )
-                                }
-                            />
-                            <InputError message={errors.monto} />
-                        </div>
-                        <div className="grid gap-1.5">
-                            <Label htmlFor="pago-fecha">Fecha</Label>
-                            <Input
-                                id="pago-fecha"
-                                type="date"
-                                className="h-11"
-                                max={hoy}
-                                value={data.fecha}
-                                onChange={(evento) =>
-                                    setData('fecha', evento.target.value)
-                                }
-                            />
-                            <InputError message={errors.fecha} />
-                        </div>
-                    </div>
 
                     <div className="grid gap-1.5">
                         <Label>¿Cómo se pagó?</Label>
@@ -342,80 +359,203 @@ function RegistrarPago({
                         <InputError message={errors.medio} />
                     </div>
 
-                    {!efectivo && (
-                        <>
-                            {cuentas.length > 0 && (
-                                <div className="grid gap-1.5">
-                                    <Label htmlFor="pago-cuenta">
-                                        De qué cuenta salió (opcional)
-                                    </Label>
-                                    <select
-                                        id="pago-cuenta"
-                                        value={data.cuenta_bancaria_id}
-                                        onChange={(evento) =>
-                                            setData(
-                                                'cuenta_bancaria_id',
-                                                evento.target.value,
-                                            )
-                                        }
-                                        className="h-11 rounded-md border bg-background px-3 text-sm"
-                                    >
-                                        <option value="">Sin indicar</option>
-                                        {cuentas.map((cuenta) => (
-                                            <option
-                                                key={cuenta.id}
-                                                value={cuenta.id}
-                                            >
-                                                {cuenta.nombre}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="pago-fecha">Fecha</Label>
+                            <Input
+                                id="pago-fecha"
+                                type="date"
+                                className="h-11"
+                                max={hoy}
+                                value={data.fecha}
+                                onChange={(evento) =>
+                                    setData('fecha', evento.target.value)
+                                }
+                            />
+                            <InputError message={errors.fecha} />
+                        </div>
+                        {!efectivo && cuentas.length > 0 && (
                             <div className="grid gap-1.5">
-                                <Label htmlFor="pago-operacion">
-                                    Número de operación
+                                <Label htmlFor="pago-cuenta">
+                                    Cuenta de salida (opcional)
                                 </Label>
-                                <Input
-                                    id="pago-operacion"
-                                    inputMode="numeric"
-                                    className="h-11 tabular-nums"
-                                    value={data.numero_operacion}
+                                <select
+                                    id="pago-cuenta"
+                                    value={data.cuenta_bancaria_id}
                                     onChange={(evento) =>
                                         setData(
-                                            'numero_operacion',
+                                            'cuenta_bancaria_id',
                                             evento.target.value,
                                         )
                                     }
-                                />
-                                <InputError message={errors.numero_operacion} />
+                                    className="h-11 rounded-md border bg-background px-3 text-sm"
+                                >
+                                    <option value="">Sin indicar</option>
+                                    {cuentas.map((cuenta) => (
+                                        <option
+                                            key={cuenta.id}
+                                            value={cuenta.id}
+                                        >
+                                            {cuenta.nombre}
+                                        </option>
+                                    ))}
+                                </select>
                             </div>
-                            <div className="grid gap-1.5">
-                                <Label>Voucher (captura o PDF)</Label>
-                                <CampoArchivo
-                                    acepta="imagen-pdf"
-                                    archivos={
-                                        data.voucher ? [data.voucher] : []
-                                    }
-                                    onArchivos={(archivos) =>
-                                        setData('voucher', archivos[0] ?? null)
-                                    }
-                                    progreso={progress?.percentage ?? null}
-                                    error={errors.voucher}
-                                    onPreparando={setPreparando}
-                                />
+                        )}
+                    </div>
+
+                    {operaciones.map((operacion, indice) => (
+                        <fieldset
+                            key={indice}
+                            className={cn(
+                                'flex flex-col gap-3',
+                                varias && 'rounded-lg border p-3',
+                            )}
+                        >
+                            {varias && (
+                                <div className="flex items-center justify-between">
+                                    <legend className="text-sm font-semibold">
+                                        Operación {indice + 1}
+                                    </legend>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={() => quitar(indice)}
+                                    >
+                                        <Trash2 className="size-4" />
+                                        Quitar
+                                    </Button>
+                                </div>
+                            )}
+                            <div
+                                className={cn(
+                                    'grid gap-3',
+                                    !efectivo && 'grid-cols-2',
+                                )}
+                            >
+                                <div className="grid gap-1.5">
+                                    <Label htmlFor={`pago-monto-${indice}`}>
+                                        Monto ({simbolo})
+                                    </Label>
+                                    <Input
+                                        id={`pago-monto-${indice}`}
+                                        inputMode="decimal"
+                                        className="h-11 text-lg tabular-nums"
+                                        value={operacion.monto}
+                                        onChange={(evento) =>
+                                            cambiar(indice, {
+                                                monto: soloMonto(
+                                                    evento.target.value,
+                                                ),
+                                            })
+                                        }
+                                    />
+                                    <InputError
+                                        message={
+                                            fallos[
+                                                `operaciones.${indice}.monto`
+                                            ]
+                                        }
+                                    />
+                                </div>
+                                {!efectivo && (
+                                    <div className="grid gap-1.5">
+                                        <Label
+                                            htmlFor={`pago-operacion-${indice}`}
+                                        >
+                                            N.º de operación
+                                        </Label>
+                                        <Input
+                                            id={`pago-operacion-${indice}`}
+                                            className="h-11 tabular-nums"
+                                            value={operacion.numero_operacion}
+                                            onChange={(evento) =>
+                                                cambiar(indice, {
+                                                    numero_operacion:
+                                                        evento.target.value,
+                                                })
+                                            }
+                                        />
+                                        <InputError
+                                            message={
+                                                fallos[
+                                                    `operaciones.${indice}.numero_operacion`
+                                                ]
+                                            }
+                                        />
+                                    </div>
+                                )}
                             </div>
-                        </>
+                            {!efectivo && (
+                                <div className="grid gap-1.5">
+                                    <Label>Voucher (captura o PDF)</Label>
+                                    <CampoArchivo
+                                        acepta="imagen-pdf"
+                                        archivos={
+                                            operacion.voucher
+                                                ? [operacion.voucher]
+                                                : []
+                                        }
+                                        onArchivos={(archivos) =>
+                                            cambiar(indice, {
+                                                voucher: archivos[0] ?? null,
+                                            })
+                                        }
+                                        progreso={progress?.percentage ?? null}
+                                        error={
+                                            fallos[
+                                                `operaciones.${indice}.voucher`
+                                            ]
+                                        }
+                                        onPreparando={setPreparando}
+                                    />
+                                </div>
+                            )}
+                        </fieldset>
+                    ))}
+
+                    {!efectivo && (
+                        <Button
+                            type="button"
+                            variant="outline"
+                            className="h-11"
+                            onClick={agregar}
+                        >
+                            <Plus className="size-4" />
+                            Agregar otra operación
+                        </Button>
                     )}
+
+                    {(varias || sePasa) && (
+                        <p
+                            className={cn(
+                                'text-sm tabular-nums',
+                                sePasa
+                                    ? 'text-red-700 dark:text-red-400'
+                                    : 'text-muted-foreground',
+                            )}
+                        >
+                            Suma {dinero(suma)} de {dinero(porPagar)} por pagar
+                            {sePasa
+                                ? ': es más de lo que falta.'
+                                : porPagar - suma > 0.005
+                                  ? ` · quedarán ${dinero(porPagar - suma)} pendientes.`
+                                  : ' · el pedido queda pagado.'}
+                        </p>
+                    )}
+                    <InputError message={fallos.operaciones} />
 
                     <DialogFooter>
                         <Button
                             type="submit"
                             className="h-12"
-                            disabled={processing || preparando}
+                            disabled={processing || preparando || sePasa}
                         >
                             {processing && <Spinner />}
-                            Anotar el pago
+                            {varias
+                                ? `Anotar las ${operaciones.length} operaciones`
+                                : 'Anotar el pago'}
                         </Button>
                     </DialogFooter>
                 </form>

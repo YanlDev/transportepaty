@@ -15,7 +15,8 @@ use Illuminate\Support\Facades\DB;
 /**
  * Los pagos a proveedores de las compras aprobadas. Transpaty no mueve
  * dinero: quien hizo la transferencia (o pagó en efectivo) lo anota acá con
- * su voucher, y el pedido pasa de «por pagar» a «pagado».
+ * su voucher, y el pedido pasa de «por pagar» a «pagado». Si salió en varias
+ * operaciones, cada una queda como un pago aparte, con su voucher.
  */
 class PagoCompraController extends Controller
 {
@@ -23,19 +24,27 @@ class PagoCompraController extends Controller
     {
         $this->authorize('pagar', $vale);
 
-        $pago = DB::transaction(function () use ($request, $vale, $subidas): PagoCompra {
-            $voucher = $request->hasFile('voucher')
-                ? $subidas->guardar($vale, $request->file('voucher'), 'vouchers_pago', 'voucher')
-                : null;
+        $anotado = DB::transaction(function () use ($request, $vale, $subidas): float {
+            $comunes = $request->datosComunes();
 
-            return $vale->pagos()->create([
-                ...$request->safe()->except('voucher'),
-                'voucher_id' => $voucher?->id,
-                'user_id' => $request->user()?->id,
-            ]);
+            foreach ($request->pagos() as $pago) {
+                $voucher = $pago['voucher'] !== null
+                    ? $subidas->guardar($vale, $pago['voucher'], 'vouchers_pago', 'voucher')
+                    : null;
+
+                $vale->pagos()->create([
+                    ...$comunes,
+                    'monto' => $pago['monto'],
+                    'numero_operacion' => $pago['numero_operacion'],
+                    'voucher_id' => $voucher?->id,
+                    'user_id' => $request->user()?->id,
+                ]);
+            }
+
+            return round(array_sum(array_column($request->pagos(), 'monto')), 2);
         });
 
-        $alertas->pagoRegistrado($vale, $pago, $request->user());
+        $alertas->pagoRegistrado($vale, $anotado, $request->user());
 
         $falta = $vale->porPagar();
 

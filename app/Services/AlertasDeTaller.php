@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Enums\EstadoValeCompra;
 use App\Enums\TipoAlerta;
 use App\Models\OrdenTrabajo;
-use App\Models\PagoCompra;
 use App\Models\RepuestoOrden;
 use App\Models\User;
 use App\Models\ValeCompra;
@@ -59,13 +58,13 @@ class AlertasDeTaller
         );
     }
 
-    public function pagoRegistrado(ValeCompra $vale, PagoCompra $pago, ?User $autor): void
+    public function pagoRegistrado(ValeCompra $vale, float $anotado, ?User $autor): void
     {
         $falta = $vale->porPagar();
 
         $this->alertas->avisar(
             TipoAlerta::PagoRegistrado,
-            "Pago anotado al {$vale->numero()}: {$this->monto($vale, (float) $pago->monto)}",
+            "Pago anotado al {$vale->numero()}: {$this->monto($vale, $anotado)}",
             $falta > ValeCompra::CENTIMO
                 ? "Falta pagar {$this->monto($vale, $falta)}."
                 : 'El pedido quedó pagado: ya se puede recoger la mercadería.',

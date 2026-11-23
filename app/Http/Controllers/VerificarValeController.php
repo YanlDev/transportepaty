@@ -64,6 +64,8 @@ class VerificarValeController extends Controller
         $aprobado = $vale->estado === EstadoValeCompra::Aprobado;
         $autentico = $aprobado && $firma->esAutentico($vale);
 
+        $pagado = $vale->pagado();
+
         $vale->consultas()->create([
             'ip' => $request->ip(),
             'navegador' => mb_substr((string) $request->userAgent(), 0, 255),
@@ -89,6 +91,11 @@ class VerificarValeController extends Controller
                 'total' => (float) $vale->total,
                 'saldo' => $vale->saldo(),
                 'recibido' => $vale->recibido(),
+                // Para que nadie cobre ni pague dos veces el mismo pedido.
+                'pagado' => $pagado,
+                'por_pagar' => $vale->porPagar(),
+                'pagado_completo' => $pagado > 0 && $vale->porPagar() < ValeCompra::CENTIMO,
+                'ultimo_pago_el' => $vale->pagos()->vigentes()->max('fecha'),
                 'placa' => $vale->vehiculo?->placa,
                 'solicitado_por' => $vale->solicitante?->name,
                 'aprobado_por' => $vale->aprobador?->name,
