@@ -140,3 +140,21 @@ it('catches up the tickets whose unit already left again, only with --aplicar', 
         ->and($siguiente->fresh()->llegada_el)->toBeNull()
         ->and($otro->fresh()->llegada_el)->toBeNull();
 });
+
+it('corrects a deduced arrival that was left after the next departure of the unit', function (): void {
+    $primero = ticketEnRuta($this->tracto, '2026-11-01', '2026-11-01');
+    $primero->update(['llegada_el' => '2026-11-20', 'llegada_deducida' => true]);
+    $segundo = ticketEnRuta($this->tracto, '2026-11-09', '2026-11-15');
+    $segundo->update(['llegada_el' => '2026-11-20', 'llegada_deducida' => true]);
+    ticketEnRuta($this->tracto, '2026-11-21');
+    // La que registró una persona no se toca, aunque quede después.
+    $aMano = ticketEnRuta($otro = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Tracto]), '2026-11-01');
+    $aMano->update(['llegada_el' => '2026-11-12']);
+    ticketEnRuta($otro, '2026-11-11');
+
+    artisan('transpaty:deducir-llegadas', ['--aplicar' => true])->assertSuccessful();
+
+    expect($primero->fresh()->llegada_el->toDateString())->toBe('2026-11-08')
+        ->and($segundo->fresh()->llegada_el->toDateString())->toBe('2026-11-20')
+        ->and($aMano->fresh()->llegada_el->toDateString())->toBe('2026-11-12');
+});

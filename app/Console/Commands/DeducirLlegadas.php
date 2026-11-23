@@ -12,8 +12,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Pone la llegada a los tickets que siguen «en ruta» aunque su unidad ya
- * volvió a salir con otro ticket: el día antes de esa nueva salida. Los que
- * no tienen un ticket posterior no se tocan: esos los registra una persona.
+ * volvió a salir con otro ticket: el día antes de esa nueva salida. También
+ * corrige la llegada deducida que quedó después de esa salida. Los que no
+ * tienen un ticket posterior no se tocan: esos los registra una persona.
  *
  * Sin `--aplicar` solo muestra lo que haría.
  */
@@ -23,10 +24,12 @@ class DeducirLlegadas extends Command
 {
     public function handle(LlegadaDeducida $llegada): int
     {
-        $sinLlegada = Vuelta::query()
+        // Los que no tienen llegada y los que la tienen deducida: si quedó
+        // después de la siguiente salida de la unidad, se corrige.
+        $tickets = Vuelta::query()
             ->with('tracto:id,placa')
             ->where('estado', EstadoVuelta::EnCurso)
-            ->whereNull('llegada_el')
+            ->where(fn ($query) => $query->whereNull('llegada_el')->orWhere('llegada_deducida', true))
             ->whereNotNull('inicio')
             ->orderBy('inicio')
             ->get();
@@ -35,23 +38,25 @@ class DeducirLlegadas extends Command
 
         DB::beginTransaction();
 
-        foreach ($sinLlegada as $ticket) {
-            $siguiente = Vuelta::query()
-                ->where('tracto_id', $ticket->tracto_id)
-                ->whereKeyNot($ticket->id)
-                ->whereDate('inicio', '>', $ticket->inicio->toDateString())
-                ->orderBy('inicio')
-                ->first();
+        foreach ($tickets as $ticket) {
+            $salida = $llegada->siguienteSalida($ticket);
 
-            if ($siguiente === null) {
+            if ($salida === null) {
                 continue;
             }
 
-            $llegada->anotar($ticket, $siguiente->inicio);
+            $antes = $ticket->llegada_el;
+
+            if ($antes !== null && $antes->isSameDay($llegada->dia($ticket, $salida))) {
+                continue;
+            }
+
+            $llegada->anotar($ticket, $salida);
             $anotadas++;
 
-            $this->line(sprintf('<info>%s</info> · %s llegó el %s (volvió a salir el %s con %s)',
-                $ticket->tracto?->placa, $ticket->codigo, $ticket->llegada_el->format('d/m'), $siguiente->inicio->format('d/m'), $siguiente->codigo));
+            $this->line(sprintf('<info>%s</info> · %s llegó el %s (volvió a salir el %s)%s',
+                $ticket->tracto?->placa, $ticket->codigo, $ticket->llegada_el->format('d/m'), $salida->format('d/m'),
+                $antes === null ? '' : ' — decía '.$antes->format('d/m')));
         }
 
         if ($this->option('aplicar')) {

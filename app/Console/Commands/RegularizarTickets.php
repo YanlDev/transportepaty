@@ -627,9 +627,17 @@ class RegularizarTickets extends Command
             $ticket->refresh();
 
             if ($ticket->estado === EstadoVuelta::EnCurso && $ticket->llegada_el === null) {
-                $llegada = app(LlegadaDeducida::class)
-                    ->anotar($ticket, Carbon::parse($siguiente['guias']->min('fecha_traslado')), $this->usuario)
-                    ->llegada_el;
+                // Entre este viaje y el siguiente puede haber un ticket que ya
+                // existía: la unidad volvió a salir con ese, no con el nuevo.
+                $deducida = app(LlegadaDeducida::class);
+                $salida = Carbon::parse($siguiente['guias']->min('fecha_traslado'));
+                $conOtroTicket = $deducida->siguienteSalida($ticket);
+
+                if ($conOtroTicket !== null && $conOtroTicket->lt($salida)) {
+                    $salida = $conOtroTicket;
+                }
+
+                $llegada = $deducida->anotar($ticket, $salida, $this->usuario)->llegada_el;
                 $this->line("     ↳ {$ticket->codigo}: llegada deducida el {$llegada->format('d/m')} (volvió a salir)");
             }
         }

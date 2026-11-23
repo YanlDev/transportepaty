@@ -62,6 +62,26 @@ class LlegadaDeducida
         return $dia;
     }
 
+    /**
+     * El día en que la unidad volvió a salir después de ese ticket: la
+     * salida de su siguiente ticket, si tiene alguno.
+     */
+    public function siguienteSalida(Vuelta $ticket): ?Carbon
+    {
+        if ($ticket->inicio === null) {
+            return null;
+        }
+
+        $salida = Vuelta::query()
+            ->where('tracto_id', $ticket->tracto_id)
+            ->whereKeyNot($ticket->id)
+            ->where('estado', '!=', EstadoVuelta::Anulada)
+            ->whereDate('inicio', '>', $ticket->inicio->toDateString())
+            ->min('inicio');
+
+        return $salida === null ? null : Carbon::parse($salida);
+    }
+
     public function anotar(Vuelta $anterior, CarbonInterface $salida, ?User $usuario = null): Vuelta
     {
         $anterior->update([
