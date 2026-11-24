@@ -70,14 +70,15 @@ class ValeCompraPolicy
     }
 
     /**
-     * Anotar un pago al proveedor: solo de un pedido aprobado, y nunca quien
-     * lo pidió (quien pide no aprueba ni paga).
+     * Anotar un pago al proveedor: solo de un pedido aprobado. Quien lo pidió
+     * también puede anotarlo, siempre que lo haya aprobado otra persona: el
+     * control está en la aprobación, que nunca es de quien pide.
      */
     public function pagar(User $user, ValeCompra $vale): bool
     {
         return ! $vale->estaAnulado()
             && $vale->estado === EstadoValeCompra::Aprobado
-            && $vale->solicitado_por !== $user->id
+            && ! ($vale->solicitado_por === $user->id && $vale->aprobado_por === $user->id)
             && $user->checkPermissionTo(Permiso::ComprasPagar);
     }
 
