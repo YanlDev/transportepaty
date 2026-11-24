@@ -15,6 +15,7 @@ class Alerta extends Notification
     /**
      * @param  bool  $porApp  si queda en la campanita
      * @param  bool  $porWhatsapp  si sale por WhatsApp (a quien tenga celular)
+     * @param  string|null  $whatsapp  el mensaje de WhatsApp ya armado, cuando el aviso tiene su propio formato
      */
     public function __construct(
         public readonly TipoAlerta $tipo,
@@ -23,6 +24,7 @@ class Alerta extends Notification
         public readonly ?string $url = null,
         public readonly bool $porApp = true,
         public readonly bool $porWhatsapp = false,
+        public readonly ?string $whatsapp = null,
     ) {}
 
     /**
@@ -54,10 +56,13 @@ class Alerta extends Notification
         ];
     }
 
-    /** El mensaje de WhatsApp: el título en negrita y el enlace al final. */
+    /**
+     * El mensaje de WhatsApp: el propio del aviso si lo trae; si no, el
+     * título en negrita y el enlace al final.
+     */
     public function textoWhatsapp(): string
     {
-        return implode("\n", array_filter([
+        return $this->whatsapp ?? implode("\n", array_filter([
             "🔔 *{$this->titulo}*",
             $this->mensaje,
             $this->url,

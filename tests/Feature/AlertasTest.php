@@ -8,6 +8,7 @@ use App\Enums\TipoDocumento;
 use App\Enums\TipoVehiculo;
 use App\Jobs\EnviarAvisoWhatsapp;
 use App\Models\AreaAviso;
+use App\Models\Conductor;
 use App\Models\ConfiguracionAlerta;
 use App\Models\EnvioWhatsapp;
 use App\Models\Factura;
@@ -21,6 +22,7 @@ use App\Services\Alertas;
 use App\Services\AvisosPorWhatsapp;
 use App\Services\ContactoWhatsapp;
 use Carbon\CarbonImmutable;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -418,4 +420,31 @@ it('sends the overdue invoices to accounting with what is still owed', function 
     expect($alerta->data['titulo'])->toBe('1 factura vencida sin cobrar')
         // Lo que debe es el neto: la detracción la deposita el cliente y no se le reclama.
         ->and($alerta->data['mensaje'])->toContain('E001-00100 · DECORA HOGAR S.R.L. · S/ 8,496.00');
+});
+
+it('sends the workshop its own WhatsApp message when a ticket is programmed', function (): void {
+    $this->travelTo(Carbon::parse('2026-11-21 09:00:00'));
+
+    $taller = actorConRol('taller');
+    $taller->update(['celular' => '987654321']);
+    ConfiguracionAlerta::factory()->create(['tipo' => TipoAlerta::TicketProgramado, 'por_app' => true, 'por_whatsapp' => true, 'roles' => ['taller']]);
+    $carreta = Vehiculo::factory()->create(['tipo' => TipoVehiculo::Carreta, 'placa' => 'BVA-997']);
+    $conductor = Conductor::factory()->create(['nombres' => 'Fran Gregorio', 'apellidos' => 'Vilca Challapa']);
+
+    actingAs(actorConRol('admin'))->post(route('vueltas.store'), [
+        'tracto_id' => $this->tracto->id,
+        'carreta_id' => $carreta->id,
+        'conductor_id' => $conductor->id,
+        'inicio' => '2026-11-22',
+        'paradas' => [['sentido' => 'ida', 'zona_origen' => 'mina', 'zona_destino' => 'pisco', 'tipo_carga' => 'concentrado']],
+        'rutas' => [['sentido' => 'ida', 'ruta_id' => rutaDelCatalogo('Concentrado a Pisco')->id, 'variante_ruta_id' => null]],
+    ])->assertSessionHasNoErrors();
+
+    $vuelta = Vuelta::query()->latest('id')->firstOrFail();
+    $texto = EnvioWhatsapp::query()->sole()->texto;
+
+    expect($texto)->toStartWith("🔧 *Revisión de taller pendiente*\nTicket *{$vuelta->codigo}* · sale *dom 22/11*\n\n🚛 *VEP-897* + carreta BVA-997\n👤 Fran Gregorio Vilca Challapa\n📍 ")
+        ->and($texto)->toEndWith("\n\nDar el apto o no apto:\n".route('taller.index'))
+        // La campanita sigue con su título corto.
+        ->and($taller->fresh()->notifications->sole()->data['titulo'])->toContain("Ticket {$vuelta->codigo} programado");
 });

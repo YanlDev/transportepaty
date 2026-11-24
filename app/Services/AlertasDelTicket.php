@@ -25,7 +25,33 @@ class AlertasDelTicket
             $this->resumen($vuelta),
             route('taller.index'),
             $autor,
+            whatsapp: $this->paraTaller($vuelta),
         );
+    }
+
+    /**
+     * El aviso a taller por WhatsApp: qué ticket, cuándo sale, con qué
+     * unidad y conductor, por dónde, y el enlace para dar el apto.
+     */
+    public function paraTaller(Vuelta $vuelta): string
+    {
+        $vuelta->loadMissing(['tracto:id,placa', 'carreta:id,placa', 'conductor:id,nombres,apellidos', 'paradas']);
+        $primera = $vuelta->paradas->first();
+        $ultima = $vuelta->paradas->last();
+        // «dom 22/11», sin el punto de la abreviatura.
+        $sale = $vuelta->inicio === null ? null : str_replace('.', '', $vuelta->inicio->locale('es')->isoFormat('ddd DD/MM'));
+
+        return implode("\n", array_filter([
+            '🔧 *Revisión de taller pendiente*',
+            "Ticket *{$vuelta->codigo}*".($sale === null ? '' : " · sale *{$sale}*"),
+            '',
+            "🚛 *{$vuelta->tracto->placa}*".($vuelta->carreta ? " + carreta {$vuelta->carreta->placa}" : ''),
+            $vuelta->conductor ? "👤 {$vuelta->conductor->nombres} {$vuelta->conductor->apellidos}" : null,
+            $primera && $ultima ? '📍 '.$this->lugar($primera, true).' → '.$this->lugar($ultima, false) : null,
+            '',
+            'Dar el apto o no apto:',
+            route('taller.index'),
+        ], fn (?string $linea): bool => $linea !== null));
     }
 
     public function revisado(Vuelta $vuelta, RevisionTaller $revision, ?User $autor): void

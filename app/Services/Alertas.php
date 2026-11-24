@@ -56,15 +56,17 @@ class Alertas
      * Con `$soloA`, de los destinatarios del tipo solo se avisa a esos
      * usuarios: la orden de un mecánico le importa a él, no a todos.
      *
+     * Con `$whatsapp`, por WhatsApp sale ese texto en vez del genérico.
+     *
      * @param  list<int>|null  $soloA
      */
-    public function avisar(TipoAlerta $tipo, string $titulo, string $mensaje, ?string $url = null, ?User $autor = null, ?array $soloA = null): void
+    public function avisar(TipoAlerta $tipo, string $titulo, string $mensaje, ?string $url = null, ?User $autor = null, ?array $soloA = null, ?string $whatsapp = null): void
     {
         if (self::$silencio > 0) {
             return;
         }
 
-        rescue(function () use ($tipo, $titulo, $mensaje, $url, $autor, $soloA): void {
+        rescue(function () use ($tipo, $titulo, $mensaje, $url, $autor, $soloA, $whatsapp): void {
             $configuracion = ConfiguracionAlerta::para($tipo);
 
             if (! $configuracion->activa) {
@@ -82,6 +84,7 @@ class Alertas
                 $url,
                 porApp: $configuracion->por_app,
                 porWhatsapp: $configuracion->por_whatsapp,
+                whatsapp: $whatsapp,
             ));
         });
     }
