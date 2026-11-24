@@ -14,7 +14,7 @@ use Illuminate\Support\Carbon;
  * Si una compra puede entrar al almacén con un pedido de compra.
  *
  * El comprobante tiene que ser lo que se aprobó: del mismo proveedor, en la
- * misma moneda, emitido mientras el pedido valía, con artículos del pedido y sin
+ * misma moneda, emitido después de aprobado, con artículos del pedido y sin
  * pasarse de sus cantidades. Y por el mismo monto, con una tolerancia
  * pequeña para los redondeos (`transpaty.compras.tolerancia_monto`): si el
  * comprobante dice otra cosa, el pedido se corrige y vuelve a aprobación.
@@ -95,11 +95,6 @@ class UsoDeVale
 
         if ($emision->lt($desde)) {
             return "El comprobante es del {$emision->format('d/m/Y')}, antes de que el {$vale->numero()} valiera ({$desde->format('d/m/Y')}): la compra se hizo sin pedido aprobado.";
-        }
-
-        // Lo ya pagado no vence: la plata salió, la mercadería tiene que poder entrar.
-        if ($vale->vencido($emision) && $vale->pagado() <= 0) {
-            return "El {$vale->numero()} venció el {$vale->vence_el?->format('d/m/Y')} y el comprobante es del {$emision->format('d/m/Y')}. Pide un pedido nuevo.";
         }
 
         return null;

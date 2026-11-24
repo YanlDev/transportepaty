@@ -27,6 +27,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $mensaje_id
  * @property string|null $error
  * @property int|null $enviado_por
+ * @property int|null $adjunto_media_id El archivo que acompaña al aviso (una cotización, por ejemplo).
  * @property CarbonImmutable|null $enviado_at
  * @property CarbonImmutable|null $entregado_at
  * @property CarbonImmutable|null $leido_at
@@ -43,6 +44,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
     'destino',
     'numero',
     'texto',
+    'adjunto_media_id',
     'estado',
     'mensaje_id',
     'error',

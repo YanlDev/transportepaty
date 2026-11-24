@@ -235,7 +235,7 @@ class IngresoAlmacenController extends Controller
                 'proveedor' => $vale->proveedor->nombre(),
                 'moneda' => $vale->moneda->value,
                 'total' => $vale->totalArticulos(),
-                'vence_el' => $vale->vence_el?->toDateString(),
+                'vence_el' => null,
                 'detalles' => $vale->detalles->where('es_servicio', false)->map(fn (DetalleValeCompra $detalle): array => [
                     'articulo_id' => $detalle->articulo_id,
                     'cantidad' => (float) $detalle->cantidad,

@@ -16,6 +16,7 @@ class Alerta extends Notification
      * @param  bool  $porApp  si queda en la campanita
      * @param  bool  $porWhatsapp  si sale por WhatsApp (a quien tenga celular)
      * @param  string|null  $whatsapp  el mensaje de WhatsApp ya armado, cuando el aviso tiene su propio formato
+     * @param  int|null  $adjunto  el id del archivo (media) que acompaña al mensaje de WhatsApp
      */
     public function __construct(
         public readonly TipoAlerta $tipo,
@@ -25,6 +26,7 @@ class Alerta extends Notification
         public readonly bool $porApp = true,
         public readonly bool $porWhatsapp = false,
         public readonly ?string $whatsapp = null,
+        public readonly ?int $adjunto = null,
     ) {}
 
     /**

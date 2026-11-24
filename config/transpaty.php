@@ -159,9 +159,8 @@ return [
     | Compras
     |--------------------------------------------------------------------------
     |
-    | Toda compra entra al almacén con un vale de compra aprobado. Un vale
-    | aprobado vale `vigencia_dias` días: el comprobante tiene que ser de esos
-    | días. Los comprobantes emitidos antes de `vale_obligatorio_desde` son de
+    | Toda compra entra al almacén con un pedido de compra aprobado, que vale
+    | hasta que se use o se anule (`vigencia_dias` ya no se usa). Los comprobantes emitidos antes de `vale_obligatorio_desde` son de
     | antes de que existiera el circuito y entran sin vale.
     |
     | `clave_firma` es la clave privada (Ed25519, en base64) con que el

@@ -56,17 +56,18 @@ class Alertas
      * Con `$soloA`, de los destinatarios del tipo solo se avisa a esos
      * usuarios: la orden de un mecánico le importa a él, no a todos.
      *
-     * Con `$whatsapp`, por WhatsApp sale ese texto en vez del genérico.
+     * Con `$whatsapp`, por WhatsApp sale ese texto en vez del genérico; con
+     * `$adjunto`, lo acompaña ese archivo del sistema (el id de su media).
      *
      * @param  list<int>|null  $soloA
      */
-    public function avisar(TipoAlerta $tipo, string $titulo, string $mensaje, ?string $url = null, ?User $autor = null, ?array $soloA = null, ?string $whatsapp = null): void
+    public function avisar(TipoAlerta $tipo, string $titulo, string $mensaje, ?string $url = null, ?User $autor = null, ?array $soloA = null, ?string $whatsapp = null, ?int $adjunto = null): void
     {
         if (self::$silencio > 0) {
             return;
         }
 
-        rescue(function () use ($tipo, $titulo, $mensaje, $url, $autor, $soloA, $whatsapp): void {
+        rescue(function () use ($tipo, $titulo, $mensaje, $url, $autor, $soloA, $whatsapp, $adjunto): void {
             $configuracion = ConfiguracionAlerta::para($tipo);
 
             if (! $configuracion->activa) {
@@ -85,6 +86,7 @@ class Alertas
                 porApp: $configuracion->por_app,
                 porWhatsapp: $configuracion->por_whatsapp,
                 whatsapp: $whatsapp,
+                adjunto: $adjunto,
             ));
         });
     }
@@ -154,7 +156,7 @@ class Alertas
                 $numero = $this->contacto->numeroWhatsapp($area->numero);
 
                 if ($numero !== null) {
-                    $this->avisos->encolarAlerta($alerta->tipo, $numero, $area->nombre, $alerta->textoWhatsapp(), area: $area);
+                    $this->avisos->encolarAlerta($alerta->tipo, $numero, $area->nombre, $alerta->textoWhatsapp(), area: $area, adjunto: $alerta->adjunto);
                 }
             });
     }

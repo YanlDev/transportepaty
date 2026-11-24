@@ -253,20 +253,19 @@ it('receives an order in dollars in two steps, asking only for the exchange rate
         ->and((float) $this->filtro->refresh()->costo_promedio)->toBe(380.0);
 });
 
-it('lets a paid order be received after its validity, but not an unpaid one', function (): void {
+it('receives an approved order weeks later, paid or not: orders do not expire', function (): void {
     $pagado = pedidoAprobadoDeFiltros($this->almacen, $this->gerencia, $this->filtro);
     $sinPagar = pedidoAprobadoDeFiltros($this->almacen, $this->gerencia, $this->filtro);
     PagoCompra::factory()->create(['vale_compra_id' => $pagado->id, 'monto' => 472, 'fecha' => '2026-11-19']);
 
-    // Los pedidos valen 5 días: el 30 ya pasaron.
     $this->travelTo(Carbon::parse('2026-11-30 10:00:00'));
     $recibir = ['fecha' => '2026-11-30', 'detalles' => [['articulo_id' => $this->filtro->id, 'cantidad' => 4]]];
 
     expect($pagado->refresh()->situacion()->sirveParaComprar())->toBeTrue()
-        ->and($sinPagar->refresh()->situacion()->sirveParaComprar())->toBeFalse();
+        ->and($sinPagar->refresh()->situacion()->sirveParaComprar())->toBeTrue();
 
-    actingAs($this->almacen)->post(route('almacen.compras.recibir', $sinPagar), $recibir)->assertSessionHasErrors('recepcion');
     actingAs($this->almacen)->post(route('almacen.compras.recibir', $pagado), $recibir)->assertSessionHasNoErrors();
+    actingAs($this->almacen)->post(route('almacen.compras.recibir', $sinPagar), $recibir)->assertSessionHasNoErrors();
 
-    expect((float) $this->filtro->refresh()->stock)->toBe(4.0);
+    expect((float) $this->filtro->refresh()->stock)->toBe(8.0);
 });

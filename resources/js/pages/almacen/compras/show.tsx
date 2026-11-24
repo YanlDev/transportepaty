@@ -159,11 +159,6 @@ export default function CompraShow({
                     label={vale.situacion_label}
                     tone={TONO_SITUACION[vale.situacion]}
                 />
-                {vale.vence_el && (
-                    <span className="text-sm text-muted-foreground">
-                        Sirve hasta el {formatearFecha(vale.vence_el)}
-                    </span>
-                )}
                 {vale.firma_valida === true && (
                     <span className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400">
                         <ShieldCheck className="size-4" />
@@ -219,8 +214,8 @@ export default function CompraShow({
                                 <strong className="text-foreground">
                                     {monto(vale.total)}
                                 </strong>{' '}
-                                a {vale.proveedor} y vale 5 días. Si después
-                                cambia el monto, vuelve a ti.
+                                a {vale.proveedor}. Si después cambia el monto,
+                                vuelve a ti.
                             </p>
                             <div className="flex flex-wrap gap-2">
                                 <Button
@@ -358,7 +353,7 @@ export default function CompraShow({
                             rel="noreferrer"
                             className="text-xs text-muted-foreground underline underline-offset-2"
                         >
-                            Ver como lo ve el proveedor
+                            Ver su estado (lo que abre el QR)
                         </a>
                     </div>
                 )}

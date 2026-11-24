@@ -24,8 +24,9 @@ use Spatie\MediaLibrary\InteractsWithMedia;
 /**
  * Un pedido de compra: nace como solicitud, gerencia lo aprueba (o el jefe de
  * operaciones, si es una emergencia en ruta) y desde ahí es el documento con
- * que se compra. Al aprobarlo el servidor lo firma (ver `FirmaDeVales`), y
- * vale hasta `vence_el`.
+ * que se compra. Al aprobarlo el servidor lo firma (ver `FirmaDeVales`). No
+ * tiene vigencia: vale hasta que se use o se anule (`vence_el` queda solo en
+ * los pedidos viejos, porque es parte de lo que se firmó).
  *
  * Que esté usado no se anota: sale de los ingresos al almacén que lo nombran
  * y de sus servicios confirmados. Así, anular un ingreso lo deja otra vez
@@ -303,15 +304,6 @@ class ValeCompra extends Model implements HasMedia
         return round(max((float) $this->total - $this->recibido(), 0), 2);
     }
 
-    /**
-     * Si en esa fecha (hoy, por defecto) el pedido ya pasó su vigencia.
-     */
-    public function vencido(Carbon|string|null $fecha = null): bool
-    {
-        return $this->vence_el !== null
-            && Carbon::parse($fecha ?? RelojOperativo::hoy())->startOfDay()->gt($this->vence_el->copy()->startOfDay());
-    }
-
     public function situacion(): SituacionValeCompra
     {
         if ($this->estaAnulado()) {
@@ -330,11 +322,6 @@ class ValeCompra extends Model implements HasMedia
 
         if ($recibido > 0 && (! $this->permite_parciales || (float) $this->total - $recibido < self::CENTIMO)) {
             return SituacionValeCompra::Usado;
-        }
-
-        // Un pedido con pagos no vence: lo pagado se tiene que poder recibir.
-        if ($this->vencido() && $this->pagado() <= 0) {
-            return SituacionValeCompra::Vencido;
         }
 
         return $recibido > 0 ? SituacionValeCompra::Parcial : SituacionValeCompra::Vigente;

@@ -167,7 +167,7 @@ it('keeps the purchase requests away from who has no permission', function (): v
 
 // ─── Aprobar ────────────────────────────────────────────────────────────────
 
-it('is approved by gerencia, signed, and valid for five days', function (): void {
+it('is approved by gerencia and signed, with no expiry date', function (): void {
     $filtro = Articulo::factory()->create();
     actingAs(actorConRol('taller'))->post(route('almacen.compras.store'), pedidoDeCompra([[$filtro, 4, 59]]));
     $vale = ValeCompra::query()->sole();
@@ -182,7 +182,8 @@ it('is approved by gerencia, signed, and valid for five days', function (): void
 
     expect($vale->estado)->toBe(EstadoValeCompra::Aprobado)
         ->and($vale->aprobado_por)->toBe($gerente->id)
-        ->and($vale->vence_el->toDateString())->toBe('2026-11-14')
+        // Un pedido aprobado vale hasta que se use o se anule.
+        ->and($vale->vence_el)->toBeNull()
         ->and($vale->firma)->not->toBeNull()
         ->and(app(FirmaDeVales::class)->esAutentico($vale))->toBeTrue()
         ->and($vale->situacion())->toBe(SituacionValeCompra::Vigente);
@@ -321,7 +322,8 @@ it('shows the real vale to whoever has its QR, without logging in', function ():
             ->where('vale.total', 2900)
             ->where('vale.detalles.0.descripcion', 'LLANTA 295/80R22.5')
             ->where('vale.aprobado_por', $vale->aprobador->name)
-            ->where('vale.vence_el', '2026-11-14'));
+            // Aprobado y sin pagos: el QR dice en qué paso va.
+            ->where('vale.etapa', 'por_pagar'));
 
     expect(ConsultaValeCompra::query()->sole()->situacion)->toBe(SituacionValeCompra::Vigente);
 });
@@ -355,7 +357,7 @@ it('finds the vale by the code typed by hand and says so when there is none', fu
         ->assertInertia(fn (Assert $page) => $page->where('vale', null)->where('buscado', true));
 });
 
-it('says a vale is not valid before approval, once expired and once voided', function (): void {
+it('says a vale is not valid before approval and once voided, and it never expires', function (): void {
     actingAs(actorConRol('taller'))->post(route('almacen.compras.store'), pedidoDeCompra([[Articulo::factory()->create(), 1, 10]]));
     $vale = ValeCompra::query()->sole();
 
@@ -366,15 +368,11 @@ it('says a vale is not valid before approval, once expired and once voided', fun
     actingAs(actorConRol('gerencia'))->post(route('almacen.compras.aprobar', $vale));
     expect($valido())->toBeTrue();
 
-    // Vale hasta el 14 inclusive.
-    $this->travelTo(Carbon::parse('2026-11-14 17:00:00'));
-    expect($valido())->toBeTrue();
+    // Pasan las semanas y sigue sirviendo: ya no hay vigencia.
+    $this->travelTo(Carbon::parse('2026-11-28 17:00:00'));
+    expect($valido())->toBeTrue()
+        ->and($vale->refresh()->situacion())->toBe(SituacionValeCompra::Vigente);
 
-    $this->travelTo(Carbon::parse('2026-11-15 17:00:00'));
-    expect($valido())->toBeFalse()
-        ->and($vale->refresh()->situacion())->toBe(SituacionValeCompra::Vencido);
-
-    $this->travelTo(Carbon::parse('2026-11-10 17:00:00'));
     actingAs(actorConRol('gerencia'))->post(route('almacen.compras.anular', $vale), ['motivo' => 'Ya no hace falta'])->assertForbidden();
     actingAs(actorConRol('admin'))->post(route('almacen.compras.anular', $vale), ['motivo' => 'Ya no hace falta'])->assertSessionHasNoErrors();
 
@@ -459,19 +457,14 @@ it('sends a real difference with the approved amount back to approval', function
         ->and(session('errors')->first('vale_compra_id'))->toContain('antes de que');
 });
 
-it('does not take a comprobante issued after the vale expired', function (): void {
+it('takes a comprobante issued long after the approval: orders do not expire', function (): void {
     $filtro = Articulo::factory()->create();
     $vale = valeAprobado([[$filtro, 4, 59]]);
 
-    $this->travelTo(Carbon::parse('2026-11-16 17:00:00'));
+    $this->travelTo(Carbon::parse('2026-11-28 17:00:00'));
 
     actingAs(almacenDePrueba())
-        ->post(route('almacen.ingresos.store'), compraConVale($vale, [[$filtro, 4, 59]], ['fecha' => '2026-11-16', 'fecha_emision' => '2026-11-15']))
-        ->assertSessionHasErrors('vale_compra_id');
-
-    // Comprado el último día de vigencia e ingresado después: entra.
-    actingAs(almacenDePrueba())
-        ->post(route('almacen.ingresos.store'), compraConVale($vale, [[$filtro, 4, 59]], ['fecha' => '2026-11-16', 'fecha_emision' => '2026-11-14']))
+        ->post(route('almacen.ingresos.store'), compraConVale($vale, [[$filtro, 4, 59]], ['fecha' => '2026-11-28', 'fecha_emision' => '2026-11-27']))
         ->assertSessionHasNoErrors();
 
     expect($vale->refresh()->situacion())->toBe(SituacionValeCompra::Usado);

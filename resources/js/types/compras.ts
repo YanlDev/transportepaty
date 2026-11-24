@@ -173,6 +173,16 @@ export type ValePublico = {
     tipo_label: string;
     situacion: SituacionVale;
     situacion_label: string;
+    /** En qué paso del circuito está el pedido. */
+    etapa:
+        | 'por_aprobar'
+        | 'por_pagar'
+        | 'por_recibir'
+        | 'recibido_por_pagar'
+        | 'completo'
+        | 'modificado'
+        | 'anulado'
+        | 'rechazado';
     valido: boolean;
     aprobado: boolean;
     firma_valida: boolean | null;
@@ -191,7 +201,6 @@ export type ValePublico = {
     solicitado_por: string | null;
     aprobado_por: string | null;
     aprobado_at: string | null;
-    vence_el: string | null;
     detalles: {
         descripcion: string;
         unidad: string;

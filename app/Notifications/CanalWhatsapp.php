@@ -26,6 +26,6 @@ class CanalWhatsapp
             return;
         }
 
-        $this->avisos->encolarAlerta($alerta->tipo, $numero, $notifiable->name, $alerta->textoWhatsapp(), usuario: $notifiable);
+        $this->avisos->encolarAlerta($alerta->tipo, $numero, $notifiable->name, $alerta->textoWhatsapp(), usuario: $notifiable, adjunto: $alerta->adjunto);
     }
 }

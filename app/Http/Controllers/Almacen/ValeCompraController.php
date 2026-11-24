@@ -30,6 +30,7 @@ use App\Services\Archivos\ReglasDeArchivo;
 use App\Services\CodigoQr;
 use App\Services\FileUploadService;
 use App\Services\FirmaDeVales;
+use App\Services\PdfDelPedido;
 use App\Services\RecepcionDeCompra;
 use App\Services\RelojOperativo;
 use App\Services\RepuestosDeOrden;
@@ -349,7 +350,8 @@ class ValeCompraController extends Controller
                 'estado' => EstadoValeCompra::Aprobado,
                 'aprobado_por' => $request->user()?->id,
                 'aprobado_at' => now()->startOfSecond(),
-                'vence_el' => RelojOperativo::fechaDeHoy()->addDays((int) config('transpaty.compras.vigencia_dias'))->toDateString(),
+                // Un pedido aprobado vale hasta que se use o se anule.
+                'vence_el' => null,
             ]);
 
             $this->firma->firmar($vale);
@@ -362,7 +364,7 @@ class ValeCompraController extends Controller
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => "{$vale->numero()} aprobado y firmado: sirve hasta el {$vale->vence_el?->format('d/m/Y')}.",
+            'message' => "{$vale->numero()} aprobado: ya se puede pagar y comprar.",
         ]);
     }
 
@@ -448,22 +450,13 @@ class ValeCompraController extends Controller
      * El pedido aprobado, para imprimir o mandar: con su QR, su código y los
      * nombres de quien lo pidió y quien lo aprobó.
      */
-    public function pdf(ValeCompra $vale, CodigoQr $qr): HttpResponse
+    public function pdf(ValeCompra $vale, PdfDelPedido $pdf): HttpResponse
     {
         $this->authorize('view', $vale);
 
         abort_unless($vale->estado === EstadoValeCompra::Aprobado && ! $vale->estaAnulado(), 404);
 
-        $vale->load(['proveedor', 'solicitante:id,name', 'aprobador:id,name', 'detalles.articulo', 'vehiculo:id,placa', 'ordenTrabajo']);
-
-        $url = route('vales.verificar', $vale->codigo_publico);
-
-        return Pdf::loadView('pdf.vale-compra', [
-            'vale' => $vale,
-            'url' => $url,
-            'urlManual' => route('vales.verificar.formulario'),
-            'qr' => $qr->celdas($url),
-        ])->download("pedido-de-compra-{$vale->numero()}.pdf");
+        return $pdf->documento($vale)->download($pdf->nombre($vale));
     }
 
     /**
@@ -559,7 +552,7 @@ class ValeCompraController extends Controller
             'orden_trabajo_id' => $vale->orden_trabajo_id,
             'solicitado_por' => $vale->solicitante?->name,
             'solicitado' => $vale->created_at?->toIso8601String(),
-            'vence_el' => $vale->vence_el?->toDateString(),
+            'vence_el' => null,
             'forma_pago' => $vale->forma_pago->label().($vale->forma_pago === FormaPago::Credito ? " a {$vale->dias_credito} días" : ''),
         ];
     }

@@ -15,6 +15,7 @@ use App\Services\Imagenes\ImagenesDeAviso;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
 use RuntimeException;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 /**
  * Los avisos de un ticket por el número de la empresa: se anotan, se ponen
@@ -23,6 +24,9 @@ use RuntimeException;
  */
 class AvisosPorWhatsapp
 {
+    /** El servicio acepta 10 MB de cuerpo y el archivo viaja en base64. */
+    private const PESO_MAXIMO_ADJUNTO = 6 * 1024 * 1024;
+
     public function __construct(
         private readonly ImagenesDeAviso $imagenes,
         private readonly WhatsappServicio $whatsapp,
@@ -69,7 +73,7 @@ class AvisosPorWhatsapp
      * Anota una alerta para el número de un usuario o de un área y la encola.
      * El texto va ya armado: una alerta cuenta lo que pasó en ese momento.
      */
-    public function encolarAlerta(TipoAlerta $alerta, string $numero, string $destino, string $texto, ?User $usuario = null, ?AreaAviso $area = null): EnvioWhatsapp
+    public function encolarAlerta(TipoAlerta $alerta, string $numero, string $destino, string $texto, ?User $usuario = null, ?AreaAviso $area = null, ?int $adjunto = null): EnvioWhatsapp
     {
         return $this->encolar([
             'tipo' => EnvioWhatsapp::TIPO_ALERTA,
@@ -79,6 +83,7 @@ class AvisosPorWhatsapp
             'destino' => mb_substr($destino, 0, 60),
             'numero' => $numero,
             'texto' => $texto,
+            'adjunto_media_id' => $adjunto,
         ]);
     }
 
@@ -127,7 +132,7 @@ class AvisosPorWhatsapp
         if ($envio->tipo === EnvioWhatsapp::TIPO_ALERTA) {
             $envio->update([
                 'estado' => EstadoEnvio::Enviado,
-                'mensaje_id' => $this->whatsapp->enviar($envio->numero, (string) $envio->texto),
+                'mensaje_id' => $this->mandarAlerta($envio),
                 'error' => null,
                 'enviado_at' => now(),
             ]);
@@ -148,6 +153,27 @@ class AvisosPorWhatsapp
         }
 
         throw new RuntimeException('Este aviso era de la pantalla de salidas de antes: ya no se manda.');
+    }
+
+    /**
+     * La alerta sale con su archivo si lo tiene: una foto va como imagen y
+     * lo demás como documento. Si el archivo ya no está o pesa demasiado,
+     * sale solo el texto: el aviso importa más que el adjunto.
+     */
+    private function mandarAlerta(EnvioWhatsapp $envio): ?string
+    {
+        $texto = (string) $envio->texto;
+        $archivo = $envio->adjunto_media_id === null ? null : Media::query()->find($envio->adjunto_media_id);
+
+        if ($archivo === null || $archivo->size > self::PESO_MAXIMO_ADJUNTO || ! is_file($archivo->getPath())) {
+            return $this->whatsapp->enviar($envio->numero, $texto);
+        }
+
+        $binario = (string) file_get_contents($archivo->getPath());
+
+        return str_starts_with((string) $archivo->mime_type, 'image/')
+            ? $this->whatsapp->enviar($envio->numero, $texto, $binario)
+            : $this->whatsapp->enviarDocumento($envio->numero, $texto, $binario, $archivo->file_name, (string) $archivo->mime_type);
     }
 
     /**

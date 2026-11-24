@@ -2,16 +2,23 @@
 
 use App\Enums\TipoAlerta;
 use App\Models\Articulo;
+use App\Models\ConfiguracionAlerta;
 use App\Models\CuentaBancaria;
+use App\Models\EnvioWhatsapp;
 use App\Models\PagoCompra;
 use App\Models\Proveedor;
 use App\Models\User;
 use App\Models\ValeCompra;
 use App\Notifications\Alerta;
+use App\Services\AvisosPorWhatsapp;
 use App\Services\FirmaDeVales;
+use App\Services\PdfDelPedido;
+use App\Services\WhatsappServicio;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 
@@ -258,4 +265,99 @@ it('does not let a paid order be corrected or voided until its payments are void
 
     actingAs($this->almacen)->get(route('almacen.compras.edit', $pedido))->assertOk();
     actingAs($admin)->post(route('almacen.compras.anular', $pedido), ['motivo' => 'Ya no hace falta'])->assertSessionHasNoErrors();
+});
+
+it('builds the PDF of an approved order and sends it as a WhatsApp document', function (): void {
+    config(['transpaty.whatsapp.url' => 'http://whatsapp.test', 'transpaty.whatsapp.token' => 'token-de-prueba']);
+    Http::fake(['whatsapp.test/enviar' => Http::response(['id' => 'DOC1'])]);
+
+    $pedido = pedidoDe400($this->almacen, $this->proveedor);
+    actingAs($this->gerencia)->post(route('almacen.compras.aprobar', $pedido))->assertSessionHasNoErrors();
+
+    $pdf = app(PdfDelPedido::class);
+    $binario = $pdf->binario($pedido->refresh());
+
+    expect($binario)->toStartWith('%PDF')
+        ->and($pdf->nombre($pedido))->toBe("pedido-de-compra-{$pedido->numero()}.pdf");
+
+    // La descarga del pedido sigue saliendo igual.
+    actingAs($this->almacen)->get(route('almacen.compras.pdf', $pedido))->assertOk()->assertHeader('content-type', 'application/pdf');
+
+    expect(app(WhatsappServicio::class)->enviarDocumento('51987654321', 'Pedido aprobado', $binario, $pdf->nombre($pedido)))->toBe('DOC1');
+
+    Http::assertSent(fn ($request): bool => $request->url() === 'http://whatsapp.test/enviar'
+        && $request['numero'] === '51987654321'
+        && $request['texto'] === 'Pedido aprobado'
+        && $request['documento']['nombre'] === $pdf->nombre($pedido)
+        && $request['documento']['mime'] === 'application/pdf'
+        && str_starts_with((string) base64_decode($request['documento']['base64']), '%PDF'));
+});
+
+it('tells whoever scans the QR which step the order is at: approve, pay or receive', function (): void {
+    $pedido = pedidoDe400($this->almacen, $this->proveedor);
+    $etapa = fn (): string => \Pest\Laravel\get(route('vales.verificar', $pedido->codigo_publico))->viewData('page')['props']['vale']['etapa'];
+
+    expect($etapa())->toBe('por_aprobar');
+
+    actingAs($this->gerencia)->post(route('almacen.compras.aprobar', $pedido))->assertSessionHasNoErrors();
+    expect($etapa())->toBe('por_pagar');
+
+    $pago = PagoCompra::factory()->create(['vale_compra_id' => $pedido->id, 'monto' => 400, 'fecha' => '2026-11-19']);
+    expect($etapa())->toBe('por_recibir');
+
+    $articulo = $pedido->detalles()->sole()->articulo_id;
+    actingAs($this->almacen)
+        ->post(route('almacen.compras.recibir', $pedido), ['fecha' => '2026-11-19', 'detalles' => [['articulo_id' => $articulo, 'cantidad' => 4]]])
+        ->assertSessionHasNoErrors();
+    expect($etapa())->toBe('completo');
+
+    // A crédito la mercadería llega antes que el pago.
+    $pago->update(['anulado_at' => now(), 'motivo_anulacion' => 'Se anotó por error']);
+    expect($etapa())->toBe('recibido_por_pagar');
+});
+
+it('sends gerencia the order to approve by WhatsApp with its quotation attached', function (): void {
+    Queue::fake();
+    config(['transpaty.whatsapp.url' => 'http://whatsapp.test', 'transpaty.whatsapp.token' => 'token-de-prueba']);
+    Http::fake(['whatsapp.test/enviar' => Http::response(['id' => 'WA1'])]);
+    $this->gerencia->update(['celular' => '987654321']);
+    $this->contador->update(['celular' => '987654322']);
+
+    foreach ([[TipoAlerta::PedidoPorAprobar, 'gerencia'], [TipoAlerta::PedidoResuelto, 'contador'], [TipoAlerta::PagoRegistrado, 'contador']] as [$tipo, $rol]) {
+        ConfiguracionAlerta::factory()->create(['tipo' => $tipo, 'por_app' => true, 'por_whatsapp' => true, 'roles' => [$rol]]);
+    }
+
+    $pedido = pedidoDe400($this->almacen, $this->proveedor, ['cotizaciones' => [UploadedFile::fake()->createWithContent('cotizacion.pdf', "%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\ntrailer << /Root 1 0 R >>\n%%EOF\n")]]);
+    $cotizacion = $pedido->getMedia('cotizaciones')->sole();
+    $porAprobar = EnvioWhatsapp::query()->sole();
+
+    expect($porAprobar->numero)->toBe('51987654321')
+        ->and($porAprobar->adjunto_media_id)->toBe($cotizacion->id)
+        ->and($porAprobar->texto)->toStartWith("🛒 *Pedido de compra por aprobar*\n*{$pedido->numero()}* · *S/ 400.00* · Contado\n\n🏪 ")
+        ->and($porAprobar->texto)->toContain("👤 Pidió: {$this->almacen->name}")
+        ->and($porAprobar->texto)->toContain('— S/ 100.00')
+        ->and($porAprobar->texto)->toContain('📎 Va adjunta la cotización.')
+        ->and($porAprobar->texto)->toEndWith("Aprobar o rechazar:\n".route('almacen.compras.show', $pedido));
+
+    // Al mandarlo, la cotización viaja como documento con el mensaje de leyenda.
+    app(AvisosPorWhatsapp::class)->mandar($porAprobar);
+
+    Http::assertSent(fn ($request): bool => $request['numero'] === '51987654321'
+        && $request['documento']['nombre'] === $cotizacion->file_name
+        && $request['documento']['mime'] === 'application/pdf'
+        && str_starts_with((string) $request['texto'], '🛒 *Pedido de compra por aprobar*'));
+
+    // Aprobado: a quien paga. Pagado: a quien recibe.
+    actingAs($this->gerencia)->post(route('almacen.compras.aprobar', $pedido))->assertSessionHasNoErrors();
+    actingAs($this->gerencia)
+        ->post(route('almacen.compras.pagos.store', $pedido), ['fecha' => '2026-11-19', 'monto' => 400, 'medio' => 'efectivo'])
+        ->assertSessionHasNoErrors();
+
+    $textos = EnvioWhatsapp::query()->where('numero', '51987654322')->orderBy('id')->pluck('texto');
+
+    expect($textos)->toHaveCount(2)
+        ->and($textos[0])->toStartWith("✅ *Pedido de compra aprobado*\n*{$pedido->numero()}* · por pagar *S/ 400.00* · Contado")
+        ->and($textos[0])->toContain('🏦 Se le paga a: BCP soles 215-1234567-0-12')
+        ->and($textos[1])->toStartWith("💵 *Pedido pagado: ya se puede recibir*\n*{$pedido->numero()}* · pagado S/ 400.00")
+        ->and($textos[1])->not->toContain('S/ 100.00');
 });

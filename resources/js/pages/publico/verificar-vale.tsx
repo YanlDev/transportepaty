@@ -1,5 +1,14 @@
 import { Head, useForm } from '@inertiajs/react';
-import { BadgeCheck, CircleDollarSign, CircleX, Search } from 'lucide-react';
+import {
+    BadgeCheck,
+    Banknote,
+    CircleDollarSign,
+    CircleX,
+    Hourglass,
+    PackageCheck,
+    Search,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import {
     buscar,
     formulario,
@@ -19,9 +28,9 @@ type Props = {
 };
 
 /**
- * La página que abre el proveedor, sin cuenta: llega por el QR del pedido o
- * escribiendo su código. Muestra el pedido tal como está hoy en el sistema, y
- * bien grande si sirve o no para comprar.
+ * La página que abre el QR del pedido, sin cuenta: es para la propia empresa
+ * (gerencia, quien paga, quien recibe). Muestra el pedido tal como está hoy
+ * en el sistema y, bien grande, en qué paso va: aprobar, pagar o recibir.
  */
 export default function VerificarVale({ vale, buscado }: Props) {
     return (
@@ -32,7 +41,7 @@ export default function VerificarVale({ vale, buscado }: Props) {
                 <header className="text-center">
                     <p className="text-lg font-semibold">Transportes Paty</p>
                     <p className="text-sm text-muted-foreground">
-                        Verificación de pedidos de compra
+                        Estado de un pedido de compra
                     </p>
                 </header>
 
@@ -48,8 +57,7 @@ export default function VerificarVale({ vale, buscado }: Props) {
                                 </h1>
                                 <p className="text-sm">
                                     No hay ningún pedido de Transportes Paty con
-                                    ese código. No entregue mercadería con este
-                                    documento.
+                                    ese código. Revisa que esté bien escrito.
                                 </p>
                             </section>
                         )}
@@ -58,8 +66,8 @@ export default function VerificarVale({ vale, buscado }: Props) {
                 )}
 
                 <p className="text-center text-xs text-muted-foreground">
-                    Lo que vale es lo que dice esta página, no el papel. Si algo
-                    no coincide con el pedido que le presentaron, no entregue.
+                    Uso interno de Transportes Paty. Lo que vale es lo que dice
+                    esta página: es el estado del pedido en este momento.
                 </p>
             </main>
         </div>
@@ -80,7 +88,7 @@ function Buscador() {
             className="flex flex-col gap-3 rounded-xl border bg-card p-6"
         >
             <Label htmlFor="codigo-vale">
-                Código de verificación impreso en el pedido
+                Código del pedido (está junto al QR)
             </Label>
             <Input
                 id="codigo-vale"
@@ -94,7 +102,7 @@ function Buscador() {
             <InputError message={errors.codigo} />
             <Button type="submit" className="h-11" disabled={processing}>
                 {processing ? <Spinner /> : <Search className="size-4" />}
-                Verificar
+                Ver el estado
             </Button>
         </form>
     );
@@ -109,47 +117,7 @@ function Vale({ vale }: { vale: ValePublico }) {
 
     return (
         <>
-            <section
-                className={
-                    vale.valido
-                        ? 'flex flex-col items-center gap-2 rounded-xl border border-emerald-600/40 bg-emerald-600/10 p-6 text-center text-emerald-700 dark:text-emerald-400'
-                        : 'flex flex-col items-center gap-2 rounded-xl border border-destructive/40 bg-destructive/5 p-6 text-center text-destructive'
-                }
-            >
-                {vale.valido ? (
-                    <BadgeCheck className="size-12" />
-                ) : (
-                    <CircleX className="size-12" />
-                )}
-                <h1 className="text-2xl font-semibold">
-                    {vale.valido ? 'Pedido válido' : 'No válido para comprar'}
-                </h1>
-                <p className="text-sm">{motivo(vale, monto)}</p>
-            </section>
-
-            {vale.pagado > 0 && (
-                <section
-                    className={
-                        vale.pagado_completo
-                            ? 'flex items-start gap-3 rounded-xl border border-sky-600/40 bg-sky-600/10 p-5 text-sky-800 dark:text-sky-300'
-                            : 'flex items-start gap-3 rounded-xl border border-amber-600/40 bg-amber-500/10 p-5 text-amber-800 dark:text-amber-300'
-                    }
-                >
-                    <CircleDollarSign className="mt-0.5 size-8 shrink-0" />
-                    <div className="flex flex-col gap-1">
-                        <h2 className="text-lg font-semibold">
-                            {vale.pagado_completo
-                                ? 'Pedido ya pagado en su totalidad'
-                                : 'Pedido pagado en parte'}
-                        </h2>
-                        <p className="text-sm">
-                            {vale.pagado_completo
-                                ? `Transportes Paty ya pagó ${monto(vale.pagado)} por este pedido${vale.ultimo_pago_el ? ` (último pago: ${formatearFecha(vale.ultimo_pago_el)})` : ''}. No corresponde cobrar ni entregar más dinero por él.`
-                                : `Ya se pagaron ${monto(vale.pagado)} de ${monto(vale.total)}. Solo falta pagar ${monto(vale.por_pagar)}: no cobre ni entregue más que eso.`}
-                        </p>
-                    </div>
-                </section>
-            )}
+            <Etapa vale={vale} monto={monto} />
 
             <section className="flex flex-col gap-4 rounded-xl border bg-card p-6 text-sm">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -160,7 +128,7 @@ function Vale({ vale }: { vale: ValePublico }) {
                 </div>
 
                 <dl className="grid gap-3 sm:grid-cols-2">
-                    <Campo titulo="Proveedor autorizado">
+                    <Campo titulo="Proveedor">
                         {vale.proveedor}
                         {vale.proveedor_ruc && (
                             <span className="block text-xs text-muted-foreground">
@@ -178,7 +146,9 @@ function Vale({ vale }: { vale: ValePublico }) {
                                     ? 'Pagado por completo'
                                     : vale.pagado > 0
                                       ? `Pagado ${monto(vale.pagado)} · falta ${monto(vale.por_pagar)}`
-                                      : 'Todavía sin pagos registrados'}
+                                      : 'Todavía sin pagos anotados'}
+                                {vale.ultimo_pago_el &&
+                                    ` · último pago ${formatearFecha(vale.ultimo_pago_el)}`}
                             </span>
                         )}
                     </Campo>
@@ -191,9 +161,10 @@ function Vale({ vale }: { vale: ValePublico }) {
                             </span>
                         )}
                     </Campo>
-                    <Campo titulo="Estado">{vale.situacion_label}</Campo>
-                    <Campo titulo="Vale hasta">
-                        {vale.vence_el ? formatearFecha(vale.vence_el) : '—'}
+                    <Campo titulo="Recibido en el almacén">
+                        {vale.recibido > 0
+                            ? `${monto(vale.recibido)} de ${monto(vale.total)}`
+                            : 'Todavía nada'}
                     </Campo>
                     {vale.placa && (
                         <Campo titulo="Para la unidad">{vale.placa}</Campo>
@@ -243,35 +214,112 @@ function Vale({ vale }: { vale: ValePublico }) {
             </section>
 
             <Button variant="outline" asChild className="self-center">
-                <a href={formulario().url}>Verificar otro pedido</a>
+                <a href={formulario().url}>Ver otro pedido</a>
             </Button>
         </>
     );
 }
 
-/** Por qué sirve o no, en una frase para quien está en el mostrador. */
-function motivo(vale: ValePublico, monto: (valor: number) => string): string {
-    if (vale.firma_valida === false) {
-        return 'El pedido fue modificado después de aprobarse: no coincide con lo que se firmó. No entregue.';
+const ETAPAS: Record<
+    ValePublico['etapa'],
+    {
+        titulo: string;
+        icono: LucideIcon;
+        tono: 'verde' | 'azul' | 'ambar' | 'gris' | 'rojo';
     }
+> = {
+    por_aprobar: {
+        titulo: 'Falta la aprobación de gerencia',
+        icono: Hourglass,
+        tono: 'gris',
+    },
+    por_pagar: {
+        titulo: 'Aprobado: falta pagar',
+        icono: Banknote,
+        tono: 'ambar',
+    },
+    por_recibir: {
+        titulo: 'Pagado: falta recibir',
+        icono: CircleDollarSign,
+        tono: 'azul',
+    },
+    recibido_por_pagar: {
+        titulo: 'Recibido: falta pagar',
+        icono: Banknote,
+        tono: 'ambar',
+    },
+    completo: {
+        titulo: 'Pagado y recibido',
+        icono: PackageCheck,
+        tono: 'verde',
+    },
+    modificado: {
+        titulo: 'Fue modificado después de aprobarse',
+        icono: CircleX,
+        tono: 'rojo',
+    },
+    anulado: { titulo: 'Pedido anulado', icono: CircleX, tono: 'rojo' },
+    rechazado: { titulo: 'Pedido rechazado', icono: CircleX, tono: 'rojo' },
+};
 
-    switch (vale.situacion) {
-        case 'vigente':
-            return vale.pagado_completo
-                ? `Sirve para entregar lo del pedido hasta el ${formatearFecha(vale.vence_el)}. Ya está pagado: no cobre de nuevo.`
-                : `Sirve para una compra por ${monto(vale.total)}, hasta el ${formatearFecha(vale.vence_el)}.`;
-        case 'parcial':
-            return `Ya se compraron ${monto(vale.recibido)}. Quedan ${monto(vale.saldo)}, hasta el ${formatearFecha(vale.vence_el)}.`;
-        case 'usado':
-            return 'Este pedido ya se usó: la compra ya está registrada. No sirve para otra.';
-        case 'vencido':
-            return `Venció el ${formatearFecha(vale.vence_el)}. Pida un pedido nuevo.`;
+const TONOS = {
+    verde: 'border-emerald-600/40 bg-emerald-600/10 text-emerald-700 dark:text-emerald-400',
+    azul: 'border-sky-600/40 bg-sky-600/10 text-sky-800 dark:text-sky-300',
+    ambar: 'border-amber-600/40 bg-amber-500/10 text-amber-800 dark:text-amber-300',
+    gris: 'border-border bg-card text-foreground',
+    rojo: 'border-destructive/40 bg-destructive/5 text-destructive',
+};
+
+/** En qué paso va el pedido, bien grande, y qué falta. */
+function Etapa({
+    vale,
+    monto,
+}: {
+    vale: ValePublico;
+    monto: (valor: number) => string;
+}) {
+    const etapa = ETAPAS[vale.etapa];
+    const Icono = vale.etapa === 'completo' ? BadgeCheck : etapa.icono;
+
+    return (
+        <section
+            className={`flex flex-col items-center gap-2 rounded-xl border p-6 text-center ${TONOS[etapa.tono]}`}
+        >
+            <Icono className="size-12" />
+            <h1 className="text-2xl font-semibold">{etapa.titulo}</h1>
+            <p className="text-sm">{detalleDeEtapa(vale, monto)}</p>
+        </section>
+    );
+}
+
+function detalleDeEtapa(
+    vale: ValePublico,
+    monto: (valor: number) => string,
+): string {
+    const pagado =
+        vale.pagado > 0
+            ? `Se pagaron ${monto(vale.pagado)}${vale.ultimo_pago_el ? ` (último pago: ${formatearFecha(vale.ultimo_pago_el)})` : ''}`
+            : '';
+
+    switch (vale.etapa) {
+        case 'por_aprobar':
+            return `Pedido por ${monto(vale.total)}. Todavía no se puede pagar ni comprar.`;
+        case 'por_pagar':
+            return vale.pagado > 0
+                ? `${pagado}. Faltan ${monto(vale.por_pagar)} de ${monto(vale.total)}.`
+                : `Gerencia lo aprobó por ${monto(vale.total)}. Todavía no hay pagos anotados.`;
+        case 'por_recibir':
+            return `${pagado}. No corresponde pagar más: falta que el almacén reciba la mercadería.`;
+        case 'recibido_por_pagar':
+            return `La mercadería ya entró al almacén. Faltan pagar ${monto(vale.por_pagar)} de ${monto(vale.total)}.`;
+        case 'completo':
+            return `${pagado} y la mercadería ya entró al almacén. No queda nada pendiente.`;
+        case 'modificado':
+            return 'Lo que hay hoy en el sistema no coincide con lo que gerencia aprobó. Hay que corregirlo y volver a aprobar.';
         case 'anulado':
             return 'La empresa anuló este pedido.';
-        case 'rechazado':
-            return 'La compra fue rechazada: este pedido nunca se aprobó.';
         default:
-            return 'Todavía no está aprobado: no sirve para comprar hasta que lo esté.';
+            return 'Gerencia rechazó esta compra.';
     }
 }
 

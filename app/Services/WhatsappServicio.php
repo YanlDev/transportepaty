@@ -97,6 +97,19 @@ class WhatsappServicio
         ])->json('id');
     }
 
+    /**
+     * Manda un archivo (un PDF, por ejemplo) con el texto como leyenda.
+     * Devuelve el id del mensaje en WhatsApp.
+     */
+    public function enviarDocumento(string $numero, string $texto, string $binario, string $nombre, string $mime = 'application/pdf'): ?string
+    {
+        return $this->pedir('post', '/enviar', [
+            'numero' => $numero,
+            'texto' => $texto,
+            'documento' => ['base64' => base64_encode($binario), 'nombre' => $nombre, 'mime' => $mime],
+        ])->json('id');
+    }
+
     /** Cierra la sesión del número en WhatsApp y la borra del servidor. */
     public function desvincular(): void
     {

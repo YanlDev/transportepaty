@@ -65,7 +65,7 @@ export default function ComprasIndex({
 
             <EncabezadoPantalla
                 titulo="Pedidos de compra"
-                descripcion="Toda compra se pide con un pedido, lo aprueba gerencia y recién entonces se compra. El pedido aprobado sirve 5 días."
+                descripcion="Toda compra se pide con un pedido, lo aprueba gerencia y recién entonces se paga y se compra."
                 icono={ShoppingCart}
                 acciones={
                     puedeSolicitar && (
@@ -176,17 +176,6 @@ export default function ComprasIndex({
                                                     ]
                                                 }
                                             />
-                                            {vale.vence_el &&
-                                                (vale.situacion === 'vigente' ||
-                                                    vale.situacion ===
-                                                        'parcial') && (
-                                                    <span className="block text-xs text-muted-foreground">
-                                                        hasta el{' '}
-                                                        {formatearFecha(
-                                                            vale.vence_el,
-                                                        )}
-                                                    </span>
-                                                )}
                                         </TableCell>
                                     </TableRow>
                                 ))}

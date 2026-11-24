@@ -8,7 +8,8 @@
  *
  *   GET  /estado        → { estado, qr, numero }
  *   POST /vincular      → { telefono? } → { codigo? }   (sin teléfono: por QR)
- *   POST /enviar        → { numero, texto, imagen? }   → { id }
+ *   POST /enviar        → { numero, texto, imagen?, documento? } → { id }
+ *                         documento: { base64, nombre, mime } (un PDF, por ejemplo)
  *   POST /desvincular   → cierra la sesión y la borra del disco
  *
  * Cuando un aviso llega al celular o lo leen, le avisa a Laravel en
@@ -215,14 +216,14 @@ async function vincular(telefono) {
     return { codigo: await sock.requestPairingCode(telefono) };
 }
 
-async function enviar({ numero: destino, texto, imagen }) {
+async function enviar({ numero: destino, texto, imagen, documento }) {
     if (estado !== 'conectado' || !sock) {
         throw new ErrorHttp(503, 'WhatsApp no está conectado.');
     }
 
     const digitos = String(destino ?? '').replace(/\D/g, '');
 
-    if (digitos.length < 9 || (!texto && !imagen)) {
+    if (digitos.length < 9 || (!texto && !imagen && !documento?.base64)) {
         throw new ErrorHttp(422, 'Falta el número o el mensaje.');
     }
 
@@ -234,9 +235,19 @@ async function enviar({ numero: destino, texto, imagen }) {
         throw new ErrorHttp(422, `El número ${digitos} no tiene WhatsApp.`);
     }
 
-    const contenido = imagen
-        ? { image: Buffer.from(imagen, 'base64'), caption: texto ?? undefined }
-        : { text: texto };
+    const contenido = documento?.base64
+        ? {
+              document: Buffer.from(documento.base64, 'base64'),
+              mimetype: documento.mime ?? 'application/pdf',
+              fileName: documento.nombre ?? 'documento.pdf',
+              caption: texto ?? undefined,
+          }
+        : imagen
+          ? {
+                image: Buffer.from(imagen, 'base64'),
+                caption: texto ?? undefined,
+            }
+          : { text: texto };
 
     const mensaje = await sock.sendMessage(contacto.jid, contenido);
 
