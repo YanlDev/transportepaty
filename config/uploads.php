@@ -6,6 +6,7 @@ use App\Models\Factura;
 use App\Models\IngresoAlmacen;
 use App\Models\LecturaKilometraje;
 use App\Models\OrdenTrabajo;
+use App\Models\ValeGasto;
 use App\Models\VehiculoDocumento;
 use App\Models\Viaje;
 
@@ -124,6 +125,7 @@ return [
         LecturaKilometraje::class => 'kilometraje',
         OrdenTrabajo::class => 'mantenimiento',
         IngresoAlmacen::class => 'almacen',
+        ValeGasto::class => 'gastos',
     ],
 
 ];

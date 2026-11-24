@@ -15,6 +15,7 @@ use App\Http\Controllers\Almacen\ValeCompraController;
 use App\Http\Controllers\AreaAvisoController;
 use App\Http\Controllers\AsistenciaController;
 use App\Http\Controllers\BuscadorGlobalController;
+use App\Http\Controllers\CategoriaGastoController;
 use App\Http\Controllers\CierreDeMesController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\CobroController;
@@ -53,6 +54,7 @@ use App\Http\Controllers\RutaController;
 use App\Http\Controllers\SolicitudTrabajoController;
 use App\Http\Controllers\TallerController;
 use App\Http\Controllers\UserController;
+use App\Http\Controllers\ValeGastoController;
 use App\Http\Controllers\VehiculoController;
 use App\Http\Controllers\VehiculoDocumentoController;
 use App\Http\Controllers\VerificarValeController;
@@ -408,6 +410,20 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.planes.edit');
     Route::put('mantenimiento/planes/{plan}', [PlanMantenimientoController::class, 'update'])
         ->name('mantenimiento.planes.update');
+
+    // Vales de gasto: cualquier área pide, gerencia aprueba. No pasan por
+    // el almacén. Las rutas fijas (`categorias`) van antes que las de un vale.
+    Route::prefix('gastos')->name('gastos.')->group(function () {
+        Route::get('/', [ValeGastoController::class, 'index'])->name('index');
+        Route::post('/', [ValeGastoController::class, 'store'])->name('store');
+        Route::post('categorias', [CategoriaGastoController::class, 'store'])->name('categorias.store');
+        Route::put('categorias/{categoria}', [CategoriaGastoController::class, 'update'])->name('categorias.update');
+        Route::get('{vale}', [ValeGastoController::class, 'show'])->name('show');
+        Route::post('{vale}/aprobar', [ValeGastoController::class, 'aprobar'])->name('aprobar');
+        Route::post('{vale}/rechazar', [ValeGastoController::class, 'rechazar'])->name('rechazar');
+        Route::post('{vale}/anular', [ValeGastoController::class, 'anular'])->name('anular');
+        Route::get('{vale}/archivos/{archivo}', [ValeGastoController::class, 'archivo'])->name('archivo');
+    });
 
     // Almacén del taller: el stock, el catálogo, lo que entra (compras y
     // devoluciones), lo que sale (vales) y los conteos. Las rutas fijas

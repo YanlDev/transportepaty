@@ -44,6 +44,8 @@ enum RolBase: string
                 Permiso::ComprasAprobar, Permiso::ComprasAprobarEmergencia, Permiso::ComprasParciales,
                 // Quien aprueba suele ser quien hace la transferencia.
                 Permiso::ComprasPagar,
+                // Aprueba todos los vales de gasto y lleva sus categorías.
+                Permiso::GastosAprobar, Permiso::GastosAnular, Permiso::GastosCategorias,
             ],
 
             // Programa los tickets, sube y asigna las GR, registra la llegada
@@ -68,6 +70,7 @@ enum RolBase: string
                 // El jefe de operaciones pide y aprueba lo de una unidad
                 // parada en ruta.
                 Permiso::ComprasVer, Permiso::ComprasSolicitar, Permiso::ComprasAprobarEmergencia,
+                Permiso::GastosSolicitar,
             ],
 
             // El OK de salida de cada ticket, el mantenimiento de la flota y
@@ -84,6 +87,7 @@ enum RolBase: string
                 Permiso::AlmacenVer, Permiso::AlmacenCatalogo,
                 Permiso::AlmacenIngresar, Permiso::AlmacenDespachar, Permiso::AlmacenInventariar,
                 Permiso::ComprasVer, Permiso::ComprasSolicitar,
+                Permiso::GastosSolicitar,
             ],
 
             // Autoriza el combustible, registra los vouchers, deposita los
@@ -94,6 +98,7 @@ enum RolBase: string
                 Permiso::TallerVer, Permiso::VehiculosVer,
                 Permiso::AbastecimientoVer, Permiso::AbastecimientoRegistrar,
                 Permiso::AbastecimientoConfigurar, Permiso::AbastecimientoViaticos,
+                Permiso::GastosSolicitar,
             ],
 
             // Factura, cobra, corrige viáticos y liquida los tickets.
@@ -105,6 +110,8 @@ enum RolBase: string
                 Permiso::CuentasVer, Permiso::CuentasGestionar,
                 // Anota los pagos a proveedores de las compras aprobadas.
                 Permiso::ComprasVer, Permiso::ComprasPagar,
+                // Ve los vales de todas las áreas: es quien después los paga.
+                Permiso::GastosVer, Permiso::GastosSolicitar,
             ],
 
             // El padrón de conductores y la asistencia, sin borrar.
@@ -112,6 +119,7 @@ enum RolBase: string
                 Permiso::TableroVer,
                 Permiso::ConductoresVer, Permiso::ConductoresCrear, Permiso::ConductoresEditar,
                 Permiso::AsistenciaVer, Permiso::AsistenciaMarcar, Permiso::AsistenciaAjustar,
+                Permiso::GastosSolicitar,
             ],
 
             // El almacén del taller: el catálogo, lo que entra y lo que sale,
@@ -122,6 +130,7 @@ enum RolBase: string
                 Permiso::AlmacenIngresar, Permiso::AlmacenDespachar,
                 Permiso::AlmacenInventariar, Permiso::AlmacenAnular,
                 Permiso::ComprasVer, Permiso::ComprasSolicitar,
+                Permiso::GastosSolicitar,
             ],
 
             // Solo ve las órdenes de trabajo que taller le asignó: las

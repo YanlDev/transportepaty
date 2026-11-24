@@ -7,6 +7,7 @@ import {
     ClipboardCheck,
     ClipboardList,
     Fuel,
+    HandCoins,
     IdCard,
     LayoutGrid,
     ChartNoAxesColumn,
@@ -30,6 +31,7 @@ import misOrdenes from '@/actions/App/Http/Controllers/MisOrdenesController';
 import parametrosCosto from '@/actions/App/Http/Controllers/ParametroCostoController';
 import reporteCobranza from '@/actions/App/Http/Controllers/ReporteCobranzaController';
 import taller from '@/actions/App/Http/Controllers/TallerController';
+import valesGasto from '@/actions/App/Http/Controllers/ValeGastoController';
 import vehiculos from '@/actions/App/Http/Controllers/VehiculoController';
 import viajes from '@/actions/App/Http/Controllers/ViajeController';
 import vueltas from '@/actions/App/Http/Controllers/VueltaController';
@@ -174,6 +176,13 @@ const resumenCobranzaNavItem: NavItem = {
     icon: ChartNoAxesColumn,
 };
 
+/** Lo que cada área pide para gastar fuera del almacén. */
+const valesGastoNavItem: NavItem = {
+    title: 'Vales de gasto',
+    href: valesGasto.index(),
+    icon: HandCoins,
+};
+
 export function AppSidebar() {
     const { puede } = usePermisos();
     const { isCurrentUrl } = useCurrentUrl();
@@ -272,9 +281,23 @@ export function AppSidebar() {
     // Cotizaciones antes que Clientes: es lo que se usa a diario.
     const comercial = [...gestion].reverse();
 
-    const finanzas = puede('cobranza.ver')
-        ? [resumenCobranzaNavItem, contabilidadNavItem]
-        : [];
+    // Los vales de gasto los pide cualquier área: quien no cobra ve solo
+    // esa entrada.
+    const finanzas = [
+        ...(puede('cobranza.ver')
+            ? [resumenCobranzaNavItem, contabilidadNavItem]
+            : []),
+        ...(puede('gastos.ver') ||
+        puede('gastos.solicitar') ||
+        puede('gastos.aprobar')
+            ? [
+                  {
+                      ...valesGastoNavItem,
+                      isActive: isCurrentUrl('/gastos', undefined, true),
+                  },
+              ]
+            : []),
+    ];
 
     // Con roles armados a mano una sección puede quedar vacía: no se pinta
     // el título solo.

@@ -58,6 +58,12 @@ enum Permiso: string
     case ComprasAnular = 'compras.anular';
     case ComprasPagar = 'compras.pagar';
 
+    case GastosVer = 'gastos.ver';
+    case GastosSolicitar = 'gastos.solicitar';
+    case GastosAprobar = 'gastos.aprobar';
+    case GastosAnular = 'gastos.anular';
+    case GastosCategorias = 'gastos.categorias';
+
     case TallerVer = 'taller.ver';
     case TallerRevisar = 'taller.revisar';
 
@@ -136,6 +142,7 @@ enum Permiso: string
         'asistencia' => 'Asistencia',
         'almacen' => 'Almacén',
         'compras' => 'Compras (pedidos de compra)',
+        'gastos' => 'Vales de gasto',
         'cotizaciones' => 'Cotizaciones',
         'clientes' => 'Clientes',
         'costos' => 'Parámetros de costo',
@@ -161,7 +168,7 @@ enum Permiso: string
         'flota' => ['nombre' => 'Flota', 'modulos' => ['vehiculos', 'mantenimiento', 'novedades', 'conductores', 'asistencia']],
         'almacen' => ['nombre' => 'Almacén', 'modulos' => ['almacen', 'compras']],
         'comercial' => ['nombre' => 'Comercial', 'modulos' => ['cotizaciones', 'clientes', 'costos']],
-        'finanzas' => ['nombre' => 'Finanzas', 'modulos' => ['cobranza', 'cuentas']],
+        'finanzas' => ['nombre' => 'Finanzas', 'modulos' => ['cobranza', 'cuentas', 'gastos']],
         'sistema' => ['nombre' => 'Sistema', 'modulos' => ['whatsapp', 'alertas', 'historial']],
     ];
 
@@ -221,6 +228,11 @@ enum Permiso: string
             self::ComprasParciales => 'Ver y activar las compras en partes de un pedido',
             self::ComprasAnular => 'Anular pedidos de compra',
             self::ComprasPagar => 'Registrar los pagos a proveedores',
+            self::GastosVer => 'Ver los vales de gasto de todas las áreas',
+            self::GastosSolicitar => 'Pedir vales de gasto y ver los propios',
+            self::GastosAprobar => 'Aprobar y rechazar vales de gasto',
+            self::GastosAnular => 'Anular vales de gasto',
+            self::GastosCategorias => 'Administrar las categorías de gasto',
             self::TallerVer => 'Ver los tickets por revisar',
             self::TallerRevisar => 'Dar el apto o no apto de salida',
             self::NovedadesRegistrar => 'Registrar novedades',

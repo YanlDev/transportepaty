@@ -27,6 +27,8 @@ enum TipoAlerta: string
     case PedidoPorAprobar = 'pedido_por_aprobar';
     case PedidoResuelto = 'pedido_resuelto';
     case PagoRegistrado = 'pago_registrado';
+    case ValeGastoPorAprobar = 'vale_gasto_por_aprobar';
+    case ValeGastoResuelto = 'vale_gasto_resuelto';
     case RequerimientoPorAprobar = 'requerimiento_por_aprobar';
     case OrdenPorValidar = 'orden_por_validar';
     case OrdenEsperaRepuestos = 'orden_espera_repuestos';
@@ -45,6 +47,8 @@ enum TipoAlerta: string
             self::PedidoPorAprobar => 'Pedido de compra por aprobar',
             self::PedidoResuelto => 'Pedido de compra aprobado o rechazado',
             self::PagoRegistrado => 'Pago a proveedor anotado',
+            self::ValeGastoPorAprobar => 'Vale de gasto por aprobar',
+            self::ValeGastoResuelto => 'Vale de gasto aprobado o rechazado',
             self::RequerimientoPorAprobar => 'Requerimiento del mecánico por aprobar',
             self::OrdenPorValidar => 'Orden de trabajo por validar',
             self::OrdenEsperaRepuestos => 'Orden aprobada que espera repuestos',
@@ -66,6 +70,8 @@ enum TipoAlerta: string
             self::PedidoPorAprobar => 'Cuando alguien pide una compra (o la corrige): gerencia la revisa y la aprueba desde el enlace.',
             self::PedidoResuelto => 'Cuando gerencia aprueba o rechaza un pedido: quien compra ya sabe si puede comprar, y contabilidad que hay un pago pendiente.',
             self::PagoRegistrado => 'Cuando se anota el pago de una compra: ya se puede recoger la mercadería.',
+            self::ValeGastoPorAprobar => 'Cuando un área pide un vale de gasto: gerencia lo revisa y lo aprueba desde el enlace.',
+            self::ValeGastoResuelto => 'A quien pidió el vale de gasto, cuando gerencia lo aprueba o lo rechaza.',
             self::RequerimientoPorAprobar => 'Cuando el mecánico envía su requerimiento (tareas, repuestos y fotos) o pide un repuesto adicional.',
             self::OrdenPorValidar => 'Cuando el mecánico termina el trabajo: falta revisarlo y finalizar la orden.',
             self::OrdenEsperaRepuestos => 'Cuando se aprueba un requerimiento (o un adicional) con repuestos: el almacén tiene que entregarlos o comprarlos.',
@@ -92,7 +98,8 @@ enum TipoAlerta: string
             self::TallerNoApto, self::TicketSalio => ['operaciones'],
             self::TicketCerrado, self::FacturasVencidas => ['contador'],
             self::DocumentosPorVencer => ['admin'],
-            self::PedidoPorAprobar => ['gerencia'],
+            self::PedidoPorAprobar, self::ValeGastoPorAprobar => ['gerencia'],
+            self::ValeGastoResuelto => ['operaciones', 'taller', 'abastecimiento', 'contador', 'rrhh', 'almacen'],
             self::PedidoResuelto => ['almacen', 'taller', 'contador'],
             self::PagoRegistrado => ['almacen', 'taller'],
             self::RequerimientoPorAprobar => ['operaciones'],
