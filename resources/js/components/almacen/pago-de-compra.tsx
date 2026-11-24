@@ -188,6 +188,12 @@ export function PagoDeCompra({
                     ))}
                 </ul>
             )}
+            {pago.pagado > 0 && (
+                <p className="text-xs text-muted-foreground">
+                    Con pagos anotados el pedido no vence, y no se puede
+                    corregir ni anular: primero hay que anular el pago.
+                </p>
+            )}
         </section>
     );
 }

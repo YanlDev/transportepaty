@@ -27,11 +27,14 @@ export function CompletarComprobante({
     totalDelPedido,
     tipos,
     hoy,
+    tipoCambio = null,
 }: {
     ingresoId: number;
     totalDelPedido: number;
     tipos: TipoDeComprobante[];
     hoy: string;
+    /** Solo en dólares: el tipo de cambio con que entró la recepción. */
+    tipoCambio?: number | null;
 }) {
     const [preparando, setPreparando] = useState(false);
     const { data, setData, post, processing, progress, errors } = useForm<{
@@ -40,6 +43,7 @@ export function CompletarComprobante({
         fecha_emision: string;
         precios_con_igv: boolean;
         total_comprobante: string;
+        tipo_cambio: string;
         comprobante: File | null;
     }>({
         tipo_comprobante: 'factura',
@@ -47,6 +51,7 @@ export function CompletarComprobante({
         fecha_emision: hoy,
         precios_con_igv: true,
         total_comprobante: totalDelPedido.toFixed(2),
+        tipo_cambio: tipoCambio === null ? '' : String(tipoCambio),
         comprobante: null,
     });
     const errores = errors as Record<string, string | undefined>;
@@ -156,6 +161,27 @@ export function CompletarComprobante({
                     <InputError message={errors.total_comprobante} />
                 </div>
             </div>
+
+            {tipoCambio !== null && (
+                <div className="grid gap-1.5">
+                    <Label htmlFor="completar-tipo-cambio">
+                        Tipo de cambio del comprobante
+                    </Label>
+                    <Input
+                        id="completar-tipo-cambio"
+                        inputMode="decimal"
+                        className="h-11 w-32 bg-background tabular-nums"
+                        value={data.tipo_cambio}
+                        onChange={(evento) =>
+                            setData(
+                                'tipo_cambio',
+                                evento.target.value.replace(/[^0-9.]/g, ''),
+                            )
+                        }
+                    />
+                    <InputError message={errores.tipo_cambio} />
+                </div>
+            )}
 
             <div className="grid gap-1.5">
                 <Label>Foto o PDF del comprobante</Label>

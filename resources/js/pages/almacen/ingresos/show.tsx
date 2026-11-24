@@ -142,6 +142,7 @@ export default function IngresoShow({
                         totalDelPedido={ingreso.total_pedido ?? 0}
                         tipos={tiposComprobante}
                         hoy={hoy}
+                        tipoCambio={ingreso.tipo_cambio ?? null}
                     />
                 ) : (
                     <p className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-4 py-3 text-sm">

@@ -97,7 +97,8 @@ class UsoDeVale
             return "El comprobante es del {$emision->format('d/m/Y')}, antes de que el {$vale->numero()} valiera ({$desde->format('d/m/Y')}): la compra se hizo sin pedido aprobado.";
         }
 
-        if ($vale->vencido($emision)) {
+        // Lo ya pagado no vence: la plata salió, la mercadería tiene que poder entrar.
+        if ($vale->vencido($emision) && $vale->pagado() <= 0) {
             return "El {$vale->numero()} venció el {$vale->vence_el?->format('d/m/Y')} y el comprobante es del {$emision->format('d/m/Y')}. Pide un pedido nuevo.";
         }
 

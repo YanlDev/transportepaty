@@ -981,3 +981,17 @@ it('nets the returns out of the consumption per unit', function (): void {
             ->where('consumo.0.cantidad', 3)
             ->where('consumo.0.costo', 30));
 });
+
+it('keeps a single count open at a time', function (): void {
+    $usuario = almacenero();
+
+    actingAs($usuario)->post(route('almacen.inventarios.store'), ['fecha' => '2026-11-03'])->assertSessionHasNoErrors();
+    $abierto = InventarioAlmacen::query()->sole();
+
+    actingAs($usuario)->post(route('almacen.inventarios.store'), ['fecha' => '2026-11-04'])->assertSessionHasErrors('fecha');
+    expect(InventarioAlmacen::query()->count())->toBe(1);
+
+    // Anulado (o cerrado) el primero, se puede abrir otro.
+    actingAs($usuario)->post(route('almacen.inventarios.anular', $abierto), ['motivo' => 'Se abrió por error'])->assertSessionHasNoErrors();
+    actingAs($usuario)->post(route('almacen.inventarios.store'), ['fecha' => '2026-11-04'])->assertSessionHasNoErrors();
+});

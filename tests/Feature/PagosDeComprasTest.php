@@ -240,3 +240,22 @@ it('records a payment made in several bank operations, each with its own voucher
     expect($avisos)->toHaveCount(1)
         ->and($avisos->first()->titulo)->toContain('400.00');
 });
+
+it('does not let a paid order be corrected or voided until its payments are voided', function (): void {
+    $pedido = pedidoDe400($this->almacen, $this->proveedor);
+    actingAs($this->gerencia)->post(route('almacen.compras.aprobar', $pedido))->assertSessionHasNoErrors();
+    $pago = PagoCompra::factory()->create(['vale_compra_id' => $pedido->id, 'monto' => 400, 'fecha' => '2026-11-19']);
+    $admin = actorConRol('admin');
+
+    actingAs($this->almacen)->get(route('almacen.compras.edit', $pedido))->assertForbidden();
+    actingAs($admin)->post(route('almacen.compras.anular', $pedido), ['motivo' => 'Ya no hace falta'])->assertForbidden();
+    actingAs($this->almacen)
+        ->get(route('almacen.compras.show', $pedido))
+        ->assertInertia(fn (Assert $page) => $page->where('puede.corregir', false)->where('puede.anular', false));
+
+    // Anulado el pago, el pedido vuelve a poder corregirse y anularse.
+    actingAs($this->gerencia)->post(route('almacen.compras.pagos.anular', [$pedido, $pago]), ['motivo' => 'Se anotó por error'])->assertSessionHasNoErrors();
+
+    actingAs($this->almacen)->get(route('almacen.compras.edit', $pedido))->assertOk();
+    actingAs($admin)->post(route('almacen.compras.anular', $pedido), ['motivo' => 'Ya no hace falta'])->assertSessionHasNoErrors();
+});

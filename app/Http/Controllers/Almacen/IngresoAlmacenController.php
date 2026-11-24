@@ -271,7 +271,7 @@ class IngresoAlmacenController extends Controller
         $calculo = $this->costoDeCompra->calcular(
             TipoComprobante::from($datos['tipo_comprobante']),
             $ingreso->moneda,
-            null,
+            isset($datos['tipo_cambio']) ? (float) $datos['tipo_cambio'] : null,
             $request->boolean('precios_con_igv'),
             $lineas,
             (float) ($datos['descuento'] ?? 0),

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests\Almacen;
 
+use App\Enums\Moneda;
 use App\Enums\TipoComprobante;
 use App\Models\DetalleIngreso;
 use App\Models\IngresoAlmacen;
@@ -33,6 +34,8 @@ class CompletarIngresoRequest extends StoreIngresoRequest
             'proveedor_id' => $ingreso->proveedor_id,
             'vale_compra_id' => $ingreso->vale_compra_id,
             'moneda' => $ingreso->moneda->value,
+            // En dólares vale el del comprobante; si no lo cambian, el de la recepción.
+            'tipo_cambio' => $this->filled('tipo_cambio') ? $this->input('tipo_cambio') : $ingreso->tipo_cambio,
             'detalles' => $ingreso->detalles()->orderBy('id')->get()
                 ->map(fn (DetalleIngreso $detalle): array => [
                     'articulo_id' => $detalle->articulo_id,
@@ -62,6 +65,7 @@ class CompletarIngresoRequest extends StoreIngresoRequest
                 'max:30',
             ],
             'moneda' => ['required'],
+            'tipo_cambio' => ['nullable', 'required_if:moneda,'.Moneda::Dolares->value, 'numeric', 'gt:0', 'max:99'],
             'precios_con_igv' => ['boolean'],
             'descuento' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
             'flete' => ['nullable', 'numeric', 'min:0', 'max:99999999'],

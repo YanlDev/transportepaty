@@ -332,7 +332,8 @@ class ValeCompra extends Model implements HasMedia
             return SituacionValeCompra::Usado;
         }
 
-        if ($this->vencido()) {
+        // Un pedido con pagos no vence: lo pagado se tiene que poder recibir.
+        if ($this->vencido() && $this->pagado() <= 0) {
             return SituacionValeCompra::Vencido;
         }
 

@@ -32,6 +32,8 @@ class ValeCompraPolicy
     {
         return ! $vale->estaAnulado()
             && $vale->recibido() <= 0
+            // Con pagos anotados no se corrige: primero se anulan los pagos.
+            && $vale->pagado() <= 0
             && $user->checkPermissionTo(Permiso::ComprasSolicitar);
     }
 
@@ -81,11 +83,13 @@ class ValeCompraPolicy
 
     /**
      * Con compras ya ingresadas no se anula: primero se anulan los ingresos.
+     * Con pagos anotados tampoco: primero se anulan los pagos.
      */
     public function anular(User $user, ValeCompra $vale): bool
     {
         return ! $vale->estaAnulado()
             && $vale->recibido() <= 0
+            && $vale->pagado() <= 0
             && $user->checkPermissionTo(Permiso::ComprasAnular);
     }
 }

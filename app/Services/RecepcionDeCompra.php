@@ -65,14 +65,12 @@ class RecepcionDeCompra
     }
 
     /**
-     * Si el pedido se puede recibir sin comprobante: aprobado, vigente, en
-     * soles (en dólares hace falta el tipo de cambio del comprobante) y con
-     * algo por recibir.
+     * Si el pedido se puede recibir sin comprobante: aprobado, vigente y con
+     * algo por recibir. En dólares se pide el tipo de cambio del día.
      */
     public function sePuedeRecibir(ValeCompra $vale): bool
     {
         return $vale->situacion()->sirveParaComprar()
-            && $vale->moneda === Moneda::Soles
             && $this->pendientes($vale) !== [];
     }
 
@@ -80,14 +78,19 @@ class RecepcionDeCompra
      * Paso 1: llega la mercadería. Entra al stock con los precios del pedido
      * y queda marcada «falta el comprobante».
      *
+     * En dólares hace falta el tipo de cambio: el kardex va en soles. Se
+     * puede corregir al completar el comprobante.
+     *
      * @param  list<array{articulo_id: int, cantidad: float}>  $lineas
      */
-    public function recibir(ValeCompra $vale, array $lineas, string $fecha, ?User $usuario, ?string $observacion = null): IngresoAlmacen
+    public function recibir(ValeCompra $vale, array $lineas, string $fecha, ?User $usuario, ?string $observacion = null, ?float $tipoCambio = null): IngresoAlmacen
     {
         $vale = ValeCompra::query()->lockForUpdate()->with(['detalles', 'proveedor'])->findOrFail($vale->id);
 
-        if ($vale->moneda !== Moneda::Soles) {
-            $this->rechazar("El {$vale->numero()} es en dólares: regístralo con su comprobante, que trae el tipo de cambio.");
+        $enDolares = $vale->moneda === Moneda::Dolares;
+
+        if ($enDolares && ($tipoCambio === null || $tipoCambio <= 0)) {
+            $this->rechazar("El {$vale->numero()} es en dólares: pon el tipo de cambio del día.");
         }
 
         $precios = $vale->detalles->where('es_servicio', false)->keyBy('articulo_id');
@@ -117,7 +120,7 @@ class RecepcionDeCompra
 
         // Sin comprobante todavía: lo pagado es el costo, como en una nota
         // de venta. Si después llega una factura, el costo baja.
-        $calculo = $this->costo->calcular(TipoComprobante::NotaVenta, $vale->moneda, null, true, $calculables);
+        $calculo = $this->costo->calcular(TipoComprobante::NotaVenta, $vale->moneda, $enDolares ? $tipoCambio : null, true, $calculables);
 
         $error = $this->usoDeVale->error($vale, $vale->proveedor_id, $vale->moneda, $fecha, $calculo['total'], array_map(
             fn (array $linea): array => ['articulo_id' => $linea['articulo_id'], 'cantidad' => $linea['cantidad'], 'bonificacion' => false],
@@ -137,6 +140,7 @@ class RecepcionDeCompra
             'tipo_comprobante' => null,
             'comprobante_pendiente' => true,
             'moneda' => $vale->moneda,
+            'tipo_cambio' => $enDolares ? $tipoCambio : null,
             'precios_con_igv' => true,
             'descuento' => 0,
             'flete' => 0,
@@ -184,6 +188,7 @@ class RecepcionDeCompra
             'comprobante_pendiente' => false,
             'serie_numero' => $datos['serie_numero'] ?? null,
             'comprobante_clave' => IngresoAlmacen::claveComprobante($datos['serie_numero'] ?? null),
+            'tipo_cambio' => $ingreso->moneda === Moneda::Dolares ? ($datos['tipo_cambio'] ?? $ingreso->tipo_cambio) : null,
             'precios_con_igv' => (bool) ($datos['precios_con_igv'] ?? false),
             'descuento' => (float) ($datos['descuento'] ?? 0),
             'flete' => (float) ($datos['flete'] ?? 0),

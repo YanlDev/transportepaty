@@ -481,6 +481,7 @@ export default function CompraShow({
                                     lineas={vale.por_recibir}
                                     hoy={hoy}
                                     enPartes={vale.permite_parciales === true}
+                                    enDolares={vale.moneda === 'USD'}
                                 />
                             )}
                             <Button asChild variant="outline" className="h-12">

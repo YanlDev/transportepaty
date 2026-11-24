@@ -3,6 +3,7 @@
 use App\Enums\TipoComprobante;
 use App\Models\Articulo;
 use App\Models\IngresoAlmacen;
+use App\Models\PagoCompra;
 use App\Models\Proveedor;
 use App\Models\SalidaAlmacen;
 use App\Models\User;
@@ -216,4 +217,56 @@ it('opens the warehouse home with an approved order that was already received', 
     actingAs($this->almacen)
         ->get(route('almacen.index'))
         ->assertInertia(fn (Assert $page) => $page->has('porHacer.por_recibir', 1)->has('porHacer.sin_comprobante', 1));
+});
+
+it('receives an order in dollars in two steps, asking only for the exchange rate', function (): void {
+    $pedido = pedidoAprobadoDeFiltros($this->almacen, $this->gerencia, $this->filtro, ['moneda' => 'USD']);
+    $recibir = fn (array $extra = []): array => ['fecha' => '2026-11-19', 'detalles' => [['articulo_id' => $this->filtro->id, 'cantidad' => 4]], ...$extra];
+
+    actingAs($this->almacen)
+        ->get(route('almacen.compras.show', $pedido))
+        ->assertInertia(fn (Assert $page) => $page->where('vale.por_recibir.0.pendiente', 4));
+
+    // Sin tipo de cambio no entra: el kardex va en soles.
+    actingAs($this->almacen)->post(route('almacen.compras.recibir', $pedido), $recibir())->assertSessionHasErrors('tipo_cambio');
+
+    actingAs($this->almacen)->post(route('almacen.compras.recibir', $pedido), $recibir(['tipo_cambio' => 3.75]))->assertSessionHasNoErrors();
+
+    $ingreso = IngresoAlmacen::query()->sole();
+
+    // US$ 472 a 3.75 = S/ 1,770 mientras no llega la factura.
+    expect($ingreso->comprobante_pendiente)->toBeTrue()
+        ->and((float) $ingreso->tipo_cambio)->toBe(3.75)
+        ->and((float) $ingreso->costo_total)->toBe(1770.0)
+        ->and((float) $this->filtro->refresh()->stock)->toBe(4.0);
+
+    // La factura trae otro tipo de cambio: el costo queda sin IGV y a ese cambio (400 × 3.80).
+    actingAs($this->almacen)
+        ->post(route('almacen.ingresos.completar', $ingreso), [
+            'tipo_comprobante' => 'factura', 'serie_numero' => 'F001-00090', 'fecha_emision' => '2026-11-19',
+            'precios_con_igv' => true, 'total_comprobante' => 472, 'tipo_cambio' => 3.8, 'comprobante' => facturaDePrueba(),
+        ])
+        ->assertSessionHasNoErrors();
+
+    expect((float) $ingreso->refresh()->tipo_cambio)->toBe(3.8)
+        ->and((float) $ingreso->costo_total)->toBe(1520.0)
+        ->and((float) $this->filtro->refresh()->costo_promedio)->toBe(380.0);
+});
+
+it('lets a paid order be received after its validity, but not an unpaid one', function (): void {
+    $pagado = pedidoAprobadoDeFiltros($this->almacen, $this->gerencia, $this->filtro);
+    $sinPagar = pedidoAprobadoDeFiltros($this->almacen, $this->gerencia, $this->filtro);
+    PagoCompra::factory()->create(['vale_compra_id' => $pagado->id, 'monto' => 472, 'fecha' => '2026-11-19']);
+
+    // Los pedidos valen 5 días: el 30 ya pasaron.
+    $this->travelTo(Carbon::parse('2026-11-30 10:00:00'));
+    $recibir = ['fecha' => '2026-11-30', 'detalles' => [['articulo_id' => $this->filtro->id, 'cantidad' => 4]]];
+
+    expect($pagado->refresh()->situacion()->sirveParaComprar())->toBeTrue()
+        ->and($sinPagar->refresh()->situacion()->sirveParaComprar())->toBeFalse();
+
+    actingAs($this->almacen)->post(route('almacen.compras.recibir', $sinPagar), $recibir)->assertSessionHasErrors('recepcion');
+    actingAs($this->almacen)->post(route('almacen.compras.recibir', $pagado), $recibir)->assertSessionHasNoErrors();
+
+    expect((float) $this->filtro->refresh()->stock)->toBe(4.0);
 });

@@ -14,6 +14,7 @@ import {
     DialogTrigger,
 } from '@/components/ui/dialogo-responsivo';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import type { LineaPorRecibir } from '@/types/compras';
 
@@ -28,6 +29,7 @@ export function RecibirMercaderia({
     lineas,
     hoy,
     enPartes,
+    enDolares = false,
 }: {
     valeId: number;
     numero: string;
@@ -35,11 +37,18 @@ export function RecibirMercaderia({
     hoy: string;
     /** El pedido admite recibir menos de lo pedido. */
     enPartes: boolean;
+    /** El pedido es en dólares: hace falta el tipo de cambio del día. */
+    enDolares?: boolean;
 }) {
     const [abierto, setAbierto] = useState(false);
     const { data, setData, post, processing, errors, clearErrors, transform } =
-        useForm<{ fecha: string; cantidades: Record<number, string> }>({
+        useForm<{
+            fecha: string;
+            tipo_cambio: string;
+            cantidades: Record<number, string>;
+        }>({
             fecha: hoy,
+            tipo_cambio: '',
             cantidades: Object.fromEntries(
                 lineas.map((linea) => [
                     linea.articulo_id,
@@ -55,6 +64,7 @@ export function RecibirMercaderia({
 
         transform((datos) => ({
             fecha: datos.fecha,
+            tipo_cambio: enDolares ? datos.tipo_cambio : null,
             detalles: lineas
                 .map((linea) => ({
                     articulo_id: linea.articulo_id,
@@ -126,6 +136,35 @@ export function RecibirMercaderia({
                             </li>
                         ))}
                     </ul>
+                    {enDolares && (
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="recibir-tipo-cambio">
+                                Tipo de cambio del día
+                            </Label>
+                            <Input
+                                id="recibir-tipo-cambio"
+                                inputMode="decimal"
+                                placeholder="3.750"
+                                className="h-11 w-32 tabular-nums"
+                                value={data.tipo_cambio}
+                                onChange={(evento) =>
+                                    setData(
+                                        'tipo_cambio',
+                                        evento.target.value.replace(
+                                            /[^0-9.]/g,
+                                            '',
+                                        ),
+                                    )
+                                }
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                El pedido es en dólares y el stock se valoriza
+                                en soles. Si el comprobante trae otro, se
+                                corrige al completarlo.
+                            </p>
+                            <InputError message={errores.tipo_cambio} />
+                        </div>
+                    )}
                     {!enPartes && (
                         <p className="text-xs text-muted-foreground">
                             Este pedido es de una sola compra: se recibe todo

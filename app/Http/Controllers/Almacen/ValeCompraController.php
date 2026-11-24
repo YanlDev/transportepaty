@@ -38,6 +38,7 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response as HttpResponse;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -577,7 +578,8 @@ class ValeCompraController extends Controller
             'detalles' => ['required', 'array', 'min:1', 'max:100'],
             'detalles.*.articulo_id' => ['required', 'integer', 'distinct'],
             'detalles.*.cantidad' => ['required', 'numeric', 'gt:0', 'max:9999999'],
-        ]);
+            'tipo_cambio' => [Rule::requiredIf($vale->moneda === Moneda::Dolares), 'nullable', 'numeric', 'gt:0', 'max:99'],
+        ], ['tipo_cambio.required' => 'El pedido es en dólares: pon el tipo de cambio del día.']);
 
         $ingreso = DB::transaction(fn (): IngresoAlmacen => $this->recepcion->recibir(
             $vale,
@@ -585,6 +587,7 @@ class ValeCompraController extends Controller
             $datos['fecha'],
             $request->user(),
             $datos['observacion'] ?? null,
+            isset($datos['tipo_cambio']) ? (float) $datos['tipo_cambio'] : null,
         ));
 
         return to_route('almacen.ingresos.show', $ingreso)->with('toast', [
