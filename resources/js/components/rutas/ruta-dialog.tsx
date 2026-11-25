@@ -1,5 +1,6 @@
 import { Link, router, useForm } from '@inertiajs/react';
 import { Plus, X } from 'lucide-react';
+import { Fragment } from 'react';
 import tramosRutas from '@/actions/App/Http/Controllers/GalonesPorTramoController';
 import rutas from '@/actions/App/Http/Controllers/RutaController';
 import { useConfirmar } from '@/components/confirmar';
@@ -161,10 +162,13 @@ function avisoDelFull(lineas: LineaRuta[]): string | null {
 export function RutaDialog({
     ruta,
     opciones,
+    otrasRutas,
     onCerrar,
 }: {
     ruta: RutaCatalogo | null;
     opciones: OpcionesRutas;
+    /** Las demás rutas: un complemento puede valer menos si el ticket ya lleva una. */
+    otrasRutas: Opcion[];
     onCerrar: () => void;
 }) {
     const confirmar = useConfirmar();
@@ -705,174 +709,272 @@ export function RutaDialog({
                             }
 
                             return (
-                                <div
-                                    key={linea.id ?? `n${indice}`}
-                                    className="grid grid-cols-2 gap-2 sm:grid-cols-[8rem_9rem_1fr_9rem_7rem_auto]"
-                                >
-                                    <Elegir
-                                        valor={linea.tipo}
-                                        opciones={opciones.tiposLinea}
-                                        onCambiar={(valor) =>
-                                            cambiarLinea(indice, {
-                                                tipo: valor as LineaRuta['tipo'],
-                                            })
-                                        }
-                                    />
-                                    <Elegir
-                                        valor={
-                                            linea.variante === null
-                                                ? NINGUNO
-                                                : String(linea.variante)
-                                        }
-                                        opciones={opcionesVariante}
-                                        onCambiar={(valor) =>
-                                            cambiarLinea(indice, {
-                                                variante:
-                                                    valor === NINGUNO
-                                                        ? null
-                                                        : Number(valor),
-                                            })
-                                        }
-                                    />
-                                    <Input
-                                        placeholder="Concepto"
-                                        aria-invalid={
-                                            Boolean(
-                                                errores[
-                                                    `lineas.${indice}.concepto`
-                                                ],
-                                            ) || undefined
-                                        }
-                                        value={linea.concepto}
-                                        onChange={(evento) =>
-                                            cambiarLinea(indice, {
-                                                concepto: evento.target.value,
-                                            })
-                                        }
-                                    />
-                                    {combustible ? (
+                                <Fragment key={linea.id ?? `n${indice}`}>
+                                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-[8rem_9rem_1fr_9rem_7rem_auto]">
                                         <Elegir
-                                            valor={
-                                                linea.punto_abastecimiento_id ===
-                                                null
-                                                    ? NINGUNO
-                                                    : String(
-                                                          linea.punto_abastecimiento_id,
-                                                      )
-                                            }
-                                            opciones={[
-                                                {
-                                                    value: NINGUNO,
-                                                    label: 'Sin grifo (todo el tramo)',
-                                                },
-                                                ...opciones.puntos,
-                                            ]}
+                                            valor={linea.tipo}
+                                            opciones={opciones.tiposLinea}
                                             onCambiar={(valor) =>
                                                 cambiarLinea(indice, {
-                                                    punto_abastecimiento_id:
+                                                    tipo: valor as LineaRuta['tipo'],
+                                                })
+                                            }
+                                        />
+                                        <Elegir
+                                            valor={
+                                                linea.variante === null
+                                                    ? NINGUNO
+                                                    : String(linea.variante)
+                                            }
+                                            opciones={opcionesVariante}
+                                            onCambiar={(valor) =>
+                                                cambiarLinea(indice, {
+                                                    variante:
                                                         valor === NINGUNO
                                                             ? null
                                                             : Number(valor),
                                                 })
                                             }
                                         />
-                                    ) : (
-                                        <span />
-                                    )}
-                                    <div className="flex flex-col gap-1">
                                         <Input
-                                            type="number"
-                                            disabled={
-                                                combustible &&
-                                                linea.tanque_lleno
-                                            }
-                                            min="0"
-                                            step="0.01"
-                                            placeholder={
-                                                combustible
-                                                    ? linea.tanque_lleno
-                                                        ? 'full'
-                                                        : 'gal (¿?)'
-                                                    : 'S/'
-                                            }
+                                            placeholder="Concepto"
                                             aria-invalid={
                                                 Boolean(
                                                     errores[
-                                                        `lineas.${indice}.monto`
-                                                    ] ??
-                                                    errores[
-                                                        `lineas.${indice}.galones`
+                                                        `lineas.${indice}.concepto`
                                                     ],
                                                 ) || undefined
                                             }
-                                            value={
-                                                (combustible
-                                                    ? linea.galones
-                                                    : linea.monto) ?? ''
-                                            }
+                                            value={linea.concepto}
                                             onChange={(evento) =>
-                                                cambiarLinea(
-                                                    indice,
+                                                cambiarLinea(indice, {
+                                                    concepto:
+                                                        evento.target.value,
+                                                })
+                                            }
+                                        />
+                                        {combustible ? (
+                                            <Elegir
+                                                valor={
+                                                    linea.punto_abastecimiento_id ===
+                                                    null
+                                                        ? NINGUNO
+                                                        : String(
+                                                              linea.punto_abastecimiento_id,
+                                                          )
+                                                }
+                                                opciones={[
+                                                    {
+                                                        value: NINGUNO,
+                                                        label: 'Sin grifo (todo el tramo)',
+                                                    },
+                                                    ...opciones.puntos,
+                                                ]}
+                                                onCambiar={(valor) =>
+                                                    cambiarLinea(indice, {
+                                                        punto_abastecimiento_id:
+                                                            valor === NINGUNO
+                                                                ? null
+                                                                : Number(valor),
+                                                    })
+                                                }
+                                            />
+                                        ) : (
+                                            <span />
+                                        )}
+                                        <div className="flex flex-col gap-1">
+                                            <Input
+                                                type="number"
+                                                disabled={
+                                                    combustible &&
+                                                    linea.tanque_lleno
+                                                }
+                                                min="0"
+                                                step="0.01"
+                                                placeholder={
                                                     combustible
-                                                        ? {
-                                                              galones:
-                                                                  numeroONulo(
+                                                        ? linea.tanque_lleno
+                                                            ? 'full'
+                                                            : 'gal (¿?)'
+                                                        : 'S/'
+                                                }
+                                                aria-invalid={
+                                                    Boolean(
+                                                        errores[
+                                                            `lineas.${indice}.monto`
+                                                        ] ??
+                                                        errores[
+                                                            `lineas.${indice}.galones`
+                                                        ],
+                                                    ) || undefined
+                                                }
+                                                value={
+                                                    (combustible
+                                                        ? linea.galones
+                                                        : linea.monto) ?? ''
+                                                }
+                                                onChange={(evento) =>
+                                                    cambiarLinea(
+                                                        indice,
+                                                        combustible
+                                                            ? {
+                                                                  galones:
+                                                                      numeroONulo(
+                                                                          evento
+                                                                              .target
+                                                                              .value,
+                                                                      ),
+                                                              }
+                                                            : {
+                                                                  monto: numeroONulo(
                                                                       evento
                                                                           .target
                                                                           .value,
                                                                   ),
-                                                          }
-                                                        : {
-                                                              monto: numeroONulo(
-                                                                  evento.target
-                                                                      .value,
-                                                              ),
-                                                          },
+                                                              },
+                                                    )
+                                                }
+                                            />
+                                            {combustible && (
+                                                <label
+                                                    className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
+                                                    title="Se llena el tanque: sin galones fijos; lo que dice el voucher descuenta del tope"
+                                                >
+                                                    <Checkbox
+                                                        checked={
+                                                            linea.tanque_lleno
+                                                        }
+                                                        onCheckedChange={(
+                                                            marcado,
+                                                        ) =>
+                                                            cambiarLinea(
+                                                                indice,
+                                                                {
+                                                                    tanque_lleno:
+                                                                        marcado ===
+                                                                        true,
+                                                                    galones:
+                                                                        marcado ===
+                                                                        true
+                                                                            ? null
+                                                                            : linea.galones,
+                                                                },
+                                                            )
+                                                        }
+                                                    />
+                                                    Tanque full
+                                                </label>
+                                            )}
+                                        </div>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="icon"
+                                            aria-label="Quitar línea"
+                                            onClick={() =>
+                                                setData(
+                                                    'lineas',
+                                                    data.lineas.filter(
+                                                        (_, i) => i !== indice,
+                                                    ),
                                                 )
                                             }
-                                        />
-                                        {combustible && (
-                                            <label
-                                                className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                                                title="Se llena el tanque: sin galones fijos; lo que dice el voucher descuenta del tope"
-                                            >
-                                                <Checkbox
-                                                    checked={linea.tanque_lleno}
-                                                    onCheckedChange={(
-                                                        marcado,
-                                                    ) =>
-                                                        cambiarLinea(indice, {
-                                                            tanque_lleno:
-                                                                marcado ===
-                                                                true,
-                                                            galones:
-                                                                marcado === true
-                                                                    ? null
-                                                                    : linea.galones,
-                                                        })
-                                                    }
-                                                />
-                                                Tanque full
-                                            </label>
-                                        )}
+                                        >
+                                            <X className="size-4" />
+                                        </Button>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="icon"
-                                        aria-label="Quitar línea"
-                                        onClick={() =>
-                                            setData(
-                                                'lineas',
-                                                data.lineas.filter(
-                                                    (_, i) => i !== indice,
-                                                ),
-                                            )
-                                        }
-                                    >
-                                        <X className="size-4" />
-                                    </Button>
-                                </div>
+                                    {data.es_complemento &&
+                                        combustible &&
+                                        !linea.tanque_lleno && (
+                                            <div className="flex flex-wrap items-center gap-2 rounded-md bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+                                                <span>
+                                                    Si el ticket ya lleva
+                                                </span>
+                                                <div className="w-56">
+                                                    <Elegir
+                                                        valor={
+                                                            linea.si_lleva_ruta_id
+                                                                ? String(
+                                                                      linea.si_lleva_ruta_id,
+                                                                  )
+                                                                : NINGUNO
+                                                        }
+                                                        opciones={[
+                                                            {
+                                                                value: NINGUNO,
+                                                                label: 'Ninguna: vale siempre lo mismo',
+                                                            },
+                                                            ...otrasRutas,
+                                                        ]}
+                                                        invalido={Boolean(
+                                                            errores[
+                                                                `lineas.${indice}.si_lleva_ruta_id`
+                                                            ],
+                                                        )}
+                                                        onCambiar={(valor) =>
+                                                            cambiarLinea(
+                                                                indice,
+                                                                valor ===
+                                                                    NINGUNO
+                                                                    ? {
+                                                                          si_lleva_ruta_id:
+                                                                              null,
+                                                                          galones_si_la_lleva:
+                                                                              null,
+                                                                      }
+                                                                    : {
+                                                                          si_lleva_ruta_id:
+                                                                              Number(
+                                                                                  valor,
+                                                                              ),
+                                                                      },
+                                                            )
+                                                        }
+                                                    />
+                                                </div>
+                                                {linea.si_lleva_ruta_id && (
+                                                    <>
+                                                        <span>vale solo</span>
+                                                        <Input
+                                                            type="number"
+                                                            min="0"
+                                                            step="0.01"
+                                                            className="w-24"
+                                                            placeholder="gal"
+                                                            aria-label="Galones si el ticket ya lleva esa ruta"
+                                                            aria-invalid={
+                                                                Boolean(
+                                                                    errores[
+                                                                        `lineas.${indice}.galones_si_la_lleva`
+                                                                    ],
+                                                                ) || undefined
+                                                            }
+                                                            value={
+                                                                linea.galones_si_la_lleva ??
+                                                                ''
+                                                            }
+                                                            onChange={(
+                                                                evento,
+                                                            ) =>
+                                                                cambiarLinea(
+                                                                    indice,
+                                                                    {
+                                                                        galones_si_la_lleva:
+                                                                            numeroONulo(
+                                                                                evento
+                                                                                    .target
+                                                                                    .value,
+                                                                            ),
+                                                                    },
+                                                                )
+                                                            }
+                                                        />
+                                                        <span>gal</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        )}
+                                </Fragment>
                             );
                         })}
                         {!data.por_tramos && avisoDelFull(data.lineas) && (

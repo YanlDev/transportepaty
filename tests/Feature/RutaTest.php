@@ -520,3 +520,109 @@ it('has the Uraca (Corire) rice detour as a 40 gal add-on for any leg', function
         ->and($ruta->paradas)->toBe([])
         ->and($ruta->topePara(null))->toBe(40.0);
 });
+
+/*
+ * Un complemento puede valer menos cuando el ticket ya lleva otra ruta que
+ * cubre parte del camino: Huaral suma 20 gal desde Pisco, pero solo 10 si la
+ * unidad ya llegó al Callao con el metálico (que ya dio 10).
+ */
+function ticketConRutas(Vehiculo $tracto, array $rutas): Vuelta
+{
+    $vuelta = Vuelta::factory()->create(['tracto_id' => $tracto->id]);
+
+    foreach ($rutas as $orden => [$sentido, $nombre]) {
+        $ruta = rutaDelCatalogo($nombre)->load(['lineas.punto', 'variantes']);
+        $vuelta->rutas()->create([...RutaVuelta::copiaDe($ruta, null), 'sentido' => $sentido, 'orden' => $orden + 1]);
+    }
+
+    return $vuelta->fresh();
+}
+
+it('comes with Huaral worth 20 gallons, or 10 after the metal to Callao', function (): void {
+    $linea = rutaDelCatalogo('Ida y vuelta Huaral')->lineas()->where('tipo', TipoLineaAbastecimiento::Combustible)->sole();
+
+    expect((float) $linea->galones)->toBe(20.0)
+        ->and($linea->si_lleva_ruta_id)->toBe(rutaDelCatalogo('Metálico al Callao')->id)
+        ->and((float) $linea->galones_si_la_lleva)->toBe(10.0);
+});
+
+it('adds only 10 gallons for Huaral when the ticket already carries the metal to Callao', function (): void {
+    $vuelta = ticketConRutas($this->tracto, [
+        [SentidoTramo::Ida, 'Concentrado a Pisco'],
+        [SentidoTramo::Ida, 'Metálico al Callao'],
+        [SentidoTramo::Regreso, 'Particular a Juliaca'],
+        [SentidoTramo::Regreso, 'Ida y vuelta Huaral'],
+    ]);
+
+    $huaral = $vuelta->rutas->firstWhere('nombre', 'Ida y vuelta Huaral');
+
+    expect($vuelta->topeDe(SentidoTramo::Ida))->toBe(230.0)
+        ->and($huaral->tope())->toBe(10.0)
+        ->and($huaral->lineasDeCombustible()[0]['concepto'])->toContain('ya lleva «Metálico al Callao»')
+        ->and($vuelta->topeDe(SentidoTramo::Regreso))->toBe(200.0);
+});
+
+it('keeps the 20 gallons for Huaral when the unit comes empty from Pisco', function (): void {
+    $vuelta = ticketConRutas($this->tracto, [
+        [SentidoTramo::Ida, 'Concentrado a Pisco'],
+        [SentidoTramo::Ida, 'Vacía de Pisco a Lima'],
+        [SentidoTramo::Regreso, 'Particular a Juliaca'],
+        [SentidoTramo::Regreso, 'Ida y vuelta Huaral'],
+    ]);
+
+    expect($vuelta->rutas->firstWhere('nombre', 'Ida y vuelta Huaral')->tope())->toBe(20.0)
+        ->and($vuelta->topeDe(SentidoTramo::Regreso))->toBe(210.0);
+});
+
+it('lowers Huaral to 10 gallons when the metal is added to the ticket afterwards', function (): void {
+    $vuelta = ticketConRutas($this->tracto, [
+        [SentidoTramo::Ida, 'Concentrado a Pisco'],
+        [SentidoTramo::Ida, 'Ida y vuelta Huaral'],
+    ]);
+
+    expect($vuelta->topeDe(SentidoTramo::Ida))->toBe(240.0);
+
+    $metalico = rutaDelCatalogo('Metálico al Callao')->load(['lineas.punto', 'variantes']);
+    $vuelta->rutas()->create([...RutaVuelta::copiaDe($metalico, null), 'sentido' => SentidoTramo::Ida, 'orden' => 3]);
+
+    // 220 del concentrado + 10 del metálico + 10 de Huaral.
+    expect($vuelta->fresh()->topeDe(SentidoTramo::Ida))->toBe(240.0)
+        ->and($vuelta->fresh()->rutas->firstWhere('nombre', 'Ida y vuelta Huaral')->tope())->toBe(10.0);
+});
+
+it('saves in the catalog what a complement is worth when the ticket carries another route', function (): void {
+    $admin = actorConRol('admin');
+    $huaral = rutaDelCatalogo('Ida y vuelta Huaral')->load('lineas');
+    $metalico = rutaDelCatalogo('Metálico al Callao');
+    $lineas = $huaral->lineas->map(fn (LineaRuta $linea): array => [
+        'id' => $linea->id,
+        'variante' => null,
+        'tipo' => $linea->tipo->value,
+        'concepto' => $linea->concepto,
+        'punto_abastecimiento_id' => $linea->punto_abastecimiento_id,
+        'galones' => $linea->galones,
+        'tanque_lleno' => false,
+        'monto' => $linea->monto,
+        'si_lleva_ruta_id' => $linea->tipo === TipoLineaAbastecimiento::Combustible ? $metalico->id : null,
+        'galones_si_la_lleva' => $linea->tipo === TipoLineaAbastecimiento::Combustible ? 12 : null,
+    ])->all();
+
+    actingAs($admin)
+        ->put(route('rutas.update', $huaral), [
+            'nombre' => $huaral->nombre, 'sentido' => null, 'es_complemento' => true, 'activa' => true,
+            'paradas' => [], 'variantes' => [], 'lineas' => $lineas,
+        ])
+        ->assertSessionHasNoErrors();
+
+    $linea = $huaral->lineas()->where('tipo', TipoLineaAbastecimiento::Combustible)->sole();
+
+    expect((float) $linea->galones_si_la_lleva)->toBe(12.0)
+        ->and($linea->si_lleva_ruta_id)->toBe($metalico->id);
+
+    actingAs($admin)
+        ->get(route('rutas.index'))
+        ->assertInertia(fn (Assert $page) => $page->where(
+            'rutas',
+            fn ($rutas) => collect($rutas)->firstWhere('id', $huaral->id)['lineas'][0]['galones_si_la_lleva'] == 12,
+        ));
+});

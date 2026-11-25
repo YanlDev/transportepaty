@@ -54,9 +54,10 @@ it('builds the ticket of a finished trip from its waybills, with the fuel cap an
     expect($ticket->estado)->toBe(EstadoVuelta::EnCurso)
         ->and($ticket->inicio->toDateString())->toBe('2026-11-07')
         ->and($ticket->rutas->pluck('nombre')->all())->toBe(['Concentrado a Pisco', 'Metálico al Callao', 'Particular a Juliaca', 'Ida y vuelta Huaral'])
-        // 220 del concentrado + 10 del metálico; 190 hasta Juliaca + 20 de Huaral.
+        // 220 del concentrado + 10 del metálico; 190 hasta Juliaca + 10 de
+        // Huaral (serían 20, pero el metálico ya dio 10 hasta el Callao).
         ->and($ticket->topeDe(SentidoTramo::Ida))->toBe(230.0)
-        ->and($ticket->topeDe(SentidoTramo::Regreso))->toBe(210.0)
+        ->and($ticket->topeDe(SentidoTramo::Regreso))->toBe(200.0)
         ->and($ticket->tieneOkDeTaller())->toBeTrue()
         ->and($ticket->abastecimientos()->count())->toBe(0)
         ->and($ticket->viajes()->pluck('viajes.id')->sort()->values()->all())->toBe([$concentrado->id, $metalico->id, $crisar->id])

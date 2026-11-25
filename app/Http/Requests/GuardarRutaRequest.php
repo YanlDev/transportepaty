@@ -72,6 +72,10 @@ class GuardarRutaRequest extends FormRequest
             // Sin galones: «por definir», y el tramo no tiene tope hasta
             // que alguien los ponga.
             'lineas.*.galones' => ['nullable', 'numeric', 'min:0', 'max:999'],
+            // Si el ticket también lleva esa otra ruta, la línea vale estos
+            // galones (Huaral después del metálico al Callao).
+            'lineas.*.si_lleva_ruta_id' => ['nullable', 'integer', Rule::exists('rutas', 'id'), 'required_with:lineas.*.galones_si_la_lleva'],
+            'lineas.*.galones_si_la_lleva' => ['nullable', 'numeric', 'min:0', 'max:999', 'required_with:lineas.*.si_lleva_ruta_id'],
             'lineas.*.tanque_lleno' => ['boolean'],
             'lineas.*.monto' => ['nullable', 'required_unless:lineas.*.tipo,'.$combustible, 'numeric', 'min:0', 'max:99999'],
         ];
@@ -116,6 +120,8 @@ class GuardarRutaRequest extends FormRequest
             'variantes.*.nombre' => 'nombre de la variante',
             'lineas.*.concepto' => 'concepto',
             'lineas.*.galones' => 'galones',
+            'lineas.*.si_lleva_ruta_id' => 'ruta que ya lleva el ticket',
+            'lineas.*.galones_si_la_lleva' => 'galones si ya la lleva',
             'lineas.*.monto' => 'monto',
             'tramos_nuevos.*.galones' => 'galones del tramo',
             'dias_viaje' => 'días de viaje',

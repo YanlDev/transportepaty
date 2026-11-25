@@ -19,7 +19,7 @@ use Illuminate\Support\Carbon;
  * elegirla: su dotación es lo autorizado. Si el catálogo cambia después,
  * esto no. Un tramo tiene su ruta principal y, si hace falta, complementos.
  *
- * @phpstan-type LineaCopiada array{linea_id: int|null, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno?: bool, monto: float|null, tramo?: bool, zona_origen?: string|null, zona_destino?: string|null, cargado?: bool, peso?: float|null, tipo_carga?: string|null}
+ * @phpstan-type LineaCopiada array{linea_id: int|null, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno?: bool, monto: float|null, tramo?: bool, zona_origen?: string|null, zona_destino?: string|null, cargado?: bool, peso?: float|null, tipo_carga?: string|null, si_lleva_ruta_id?: int, galones_si_la_lleva?: float}
  *
  * @property int $id
  * @property int $vuelta_id
@@ -96,10 +96,48 @@ class RutaVuelta extends Model
             return app(TablaDeTramos::class)->lineasDelTicket($tramos, $this->paradasDelTramo());
         }
 
-        return array_values(array_filter(
+        return array_map($this->conRebaja(...), array_values(array_filter(
             $this->lineas,
             fn (array $linea): bool => $linea['tipo'] === TipoLineaAbastecimiento::Combustible->value && ! ($linea['tanque_lleno'] ?? false),
-        ));
+        )));
+    }
+
+    /**
+     * Una línea que vale menos cuando el ticket también lleva otra ruta
+     * (Huaral suma 20 gal, pero 10 si el metálico al Callao ya dio los
+     * suyos). Se mira el ticket entero y cada vez: da igual cuál de las dos
+     * rutas se puso primero o en qué tramo está cada una.
+     *
+     * @param  LineaCopiada  $linea
+     * @return LineaCopiada
+     */
+    private function conRebaja(array $linea): array
+    {
+        if (! isset($linea['si_lleva_ruta_id'], $linea['galones_si_la_lleva'])) {
+            return $linea;
+        }
+
+        $otra = $this->rutasDelTicket()->firstWhere('ruta_id', $linea['si_lleva_ruta_id']);
+
+        return $otra === null ? $linea : [
+            ...$linea,
+            'galones' => (float) $linea['galones_si_la_lleva'],
+            'concepto' => "{$linea['concepto']} · ya lleva «{$otra->nombre}»",
+        ];
+    }
+
+    /**
+     * Las rutas del ticket: las ya cargadas si las hay, si no se consultan.
+     *
+     * @return Collection<int, RutaVuelta>
+     */
+    private function rutasDelTicket(): Collection
+    {
+        if ($this->relationLoaded('vuelta') && $this->vuelta->relationLoaded('rutas')) {
+            return $this->vuelta->rutas;
+        }
+
+        return self::query()->where('vuelta_id', $this->vuelta_id)->get(['id', 'vuelta_id', 'ruta_id', 'nombre']);
     }
 
     /**

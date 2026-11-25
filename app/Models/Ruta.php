@@ -94,7 +94,7 @@ class Ruta extends Model
      * Las líneas que tocan con esa variante (o sin ninguna): las comunes más
      * las propias de la variante. Necesita `lineas.punto` cargado.
      *
-     * @return list<array{linea_id: int, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno: bool, monto: float|null}>
+     * @return list<array{linea_id: int, tipo: string, concepto: string, punto_id: int|null, punto: string|null, galones: float|null, tanque_lleno: bool, monto: float|null, si_lleva_ruta_id?: int, galones_si_la_lleva?: float}>
      */
     public function lineasPara(?VarianteRuta $variante): array
     {

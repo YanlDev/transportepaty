@@ -195,6 +195,13 @@ class RutaController extends Controller
         $idsLineas = [];
         $combustible = TipoLineaAbastecimiento::Combustible->value;
 
+        // La rebaja por otra ruta solo tiene sentido en combustible con
+        // galones fijos, y nunca contra la misma ruta.
+        $conRebaja = fn (array $datos): bool => $datos['tipo'] === $combustible
+            && ! ($datos['tanque_lleno'] ?? false)
+            && isset($datos['si_lleva_ruta_id'], $datos['galones_si_la_lleva'])
+            && (int) $datos['si_lleva_ruta_id'] !== $ruta->id;
+
         foreach (array_values((array) $request->validated('lineas', [])) as $orden => $datos) {
             $esCombustible = $datos['tipo'] === $combustible;
 
@@ -210,6 +217,8 @@ class RutaController extends Controller
                 'concepto' => trim($datos['concepto']),
                 'punto_abastecimiento_id' => $esCombustible ? ($datos['punto_abastecimiento_id'] ?? null) : null,
                 'galones' => $esCombustible && ! ($datos['tanque_lleno'] ?? false) ? ($datos['galones'] ?? null) : null,
+                'si_lleva_ruta_id' => $conRebaja($datos) ? $datos['si_lleva_ruta_id'] : null,
+                'galones_si_la_lleva' => $conRebaja($datos) ? $datos['galones_si_la_lleva'] : null,
                 'tanque_lleno' => $esCombustible && (bool) ($datos['tanque_lleno'] ?? false),
                 'monto' => $esCombustible ? null : ($datos['monto'] ?? null),
                 'orden' => $orden + 1,
@@ -270,6 +279,8 @@ class RutaController extends Controller
                 'punto_abastecimiento_id' => $linea->punto_abastecimiento_id,
                 'punto' => $linea->punto?->nombre,
                 'galones' => $linea->galones === null ? null : (float) $linea->galones,
+                'si_lleva_ruta_id' => $linea->si_lleva_ruta_id,
+                'galones_si_la_lleva' => $linea->galones_si_la_lleva === null ? null : (float) $linea->galones_si_la_lleva,
                 'tanque_lleno' => $linea->tanque_lleno,
                 'monto' => $linea->monto === null ? null : (float) $linea->monto,
             ])->all(),

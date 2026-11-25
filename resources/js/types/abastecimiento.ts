@@ -207,6 +207,9 @@ export type LineaRuta = {
     punto?: string | null;
     /** null: galones por definir (o tanque full). */
     galones: number | null;
+    /** Si el ticket también lleva esa ruta, la línea vale `galones_si_la_lleva`. */
+    si_lleva_ruta_id?: number | null;
+    galones_si_la_lleva?: number | null;
     /** Se llena el tanque (Kio): sin galones; los del voucher descuentan del tope. */
     tanque_lleno: boolean;
     monto: number | null;

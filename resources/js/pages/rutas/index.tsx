@@ -318,6 +318,14 @@ export default function RutasIndex({ rutas: lista, opciones }: Props) {
                     key={editando?.id ?? 'nueva'}
                     ruta={editando}
                     opciones={opciones}
+                    otrasRutas={lista
+                        .filter(
+                            (otra) => otra.activa && otra.id !== editando?.id,
+                        )
+                        .map((otra) => ({
+                            value: String(otra.id),
+                            label: otra.nombre,
+                        }))}
                     onCerrar={() => setEditando(false)}
                 />
             )}
