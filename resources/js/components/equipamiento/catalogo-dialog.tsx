@@ -23,6 +23,7 @@ type Fila = {
     minimo: string;
     aplica_a: ItemCatalogo['aplica_a'];
     lleva_vencimiento: boolean;
+    por_pieza: boolean;
     articulo: string | null;
 };
 
@@ -44,6 +45,7 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
             minimo: item.minimo === null ? '' : String(item.minimo),
             aplica_a: item.aplica_a,
             lleva_vencimiento: item.lleva_vencimiento,
+            por_pieza: item.por_pieza,
             articulo: item.articulo,
         })),
     });
@@ -66,6 +68,7 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
                 minimo: fila.minimo === '' ? null : Number(fila.minimo),
                 aplica_a: fila.aplica_a,
                 lleva_vencimiento: fila.lleva_vencimiento,
+                por_pieza: fila.por_pieza,
             })),
         }));
 
@@ -184,6 +187,19 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
                                         />
                                         Tiene vencimiento
                                     </label>
+                                    <label className="flex items-center gap-1.5">
+                                        <input
+                                            type="checkbox"
+                                            className="size-4"
+                                            checked={fila.por_pieza}
+                                            onChange={(e) =>
+                                                cambiar(indice, {
+                                                    por_pieza: e.target.checked,
+                                                })
+                                            }
+                                        />
+                                        Pieza por pieza, con código
+                                    </label>
                                     <span>
                                         {fila.articulo
                                             ? `Almacén: ${fila.articulo}`
@@ -214,6 +230,7 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
                                     minimo: '',
                                     aplica_a: 'carreta',
                                     lleva_vencimiento: false,
+                                    por_pieza: false,
                                     articulo: null,
                                 },
                             ])

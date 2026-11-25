@@ -19,12 +19,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int|null $articulo_id
  * @property AplicaEquipamiento $aplica_a
  * @property bool $lleva_vencimiento
+ * @property bool $por_pieza Cada una lleva su código propio (extintor, botiquín).
+ * @property string|null $prefijo Con qué letras empieza el código de sus piezas.
  * @property int|null $minimo
  * @property int $orden
  * @property bool $activo
  * @property-read Articulo|null $articulo
  */
-#[Fillable(['nombre', 'articulo_id', 'aplica_a', 'lleva_vencimiento', 'minimo', 'orden', 'activo'])]
+#[Fillable(['nombre', 'articulo_id', 'aplica_a', 'lleva_vencimiento', 'por_pieza', 'prefijo', 'minimo', 'orden', 'activo'])]
 class ItemEquipamiento extends Model
 {
     use RegistraHistorial;
@@ -59,6 +61,7 @@ class ItemEquipamiento extends Model
         return [
             'aplica_a' => AplicaEquipamiento::class,
             'lleva_vencimiento' => 'boolean',
+            'por_pieza' => 'boolean',
             'minimo' => 'integer',
             'orden' => 'integer',
             'activo' => 'boolean',

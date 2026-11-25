@@ -30,6 +30,7 @@ class UpdateItemsEquipamientoRequest extends FormRequest
             'items.*.minimo' => ['nullable', 'integer', 'min:0', 'max:999'],
             'items.*.aplica_a' => ['nullable', Rule::enum(AplicaEquipamiento::class)],
             'items.*.lleva_vencimiento' => ['nullable', 'boolean'],
+            'items.*.por_pieza' => ['nullable', 'boolean'],
         ];
     }
 
@@ -44,7 +45,7 @@ class UpdateItemsEquipamientoRequest extends FormRequest
     }
 
     /**
-     * @return list<array{id: int|null, nombre: string, minimo: int|null, aplica_a: string|null, lleva_vencimiento: bool|null}>
+     * @return list<array{id: int|null, nombre: string, minimo: int|null, aplica_a: string|null, lleva_vencimiento: bool|null, por_pieza: bool|null}>
      */
     public function items(): array
     {
@@ -54,6 +55,7 @@ class UpdateItemsEquipamientoRequest extends FormRequest
             'minimo' => isset($item['minimo']) ? (int) $item['minimo'] : null,
             'aplica_a' => isset($item['aplica_a']) ? (string) $item['aplica_a'] : null,
             'lleva_vencimiento' => isset($item['lleva_vencimiento']) ? (bool) $item['lleva_vencimiento'] : null,
+            'por_pieza' => isset($item['por_pieza']) ? (bool) $item['por_pieza'] : null,
         ], $this->validated('items')));
     }
 }

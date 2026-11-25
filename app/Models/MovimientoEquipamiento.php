@@ -17,6 +17,7 @@ use Illuminate\Support\Carbon;
  * @property int $id
  * @property int $vehiculo_id
  * @property int $item_equipamiento_id
+ * @property int|null $pieza_equipamiento_id La pieza que se movió, si el ítem va por pieza.
  * @property TipoMovimientoEquipamiento $tipo
  * @property int $cantidad
  * @property Carbon $fecha
@@ -27,12 +28,13 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $anulado_at
  * @property Carbon|null $created_at
  * @property-read ItemEquipamiento $item
+ * @property-read PiezaEquipamiento|null $pieza
  * @property-read Vehiculo $vehiculo
  * @property-read Vehiculo|null $destino
  * @property-read User|null $user
  */
 #[Fillable([
-    'vehiculo_id', 'item_equipamiento_id', 'tipo', 'cantidad', 'fecha', 'vehiculo_destino_id',
+    'vehiculo_id', 'item_equipamiento_id', 'pieza_equipamiento_id', 'tipo', 'cantidad', 'fecha', 'vehiculo_destino_id',
     'conteo_equipamiento_id', 'motivo', 'user_id', 'anulado_at', 'anulado_por', 'motivo_anulacion',
 ])]
 class MovimientoEquipamiento extends Model
@@ -47,6 +49,14 @@ class MovimientoEquipamiento extends Model
     public function item(): BelongsTo
     {
         return $this->belongsTo(ItemEquipamiento::class, 'item_equipamiento_id');
+    }
+
+    /**
+     * @return BelongsTo<PiezaEquipamiento, $this>
+     */
+    public function pieza(): BelongsTo
+    {
+        return $this->belongsTo(PiezaEquipamiento::class, 'pieza_equipamiento_id');
     }
 
     /**

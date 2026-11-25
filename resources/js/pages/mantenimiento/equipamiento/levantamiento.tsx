@@ -194,6 +194,14 @@ export default function LevantamientoEquipamiento({
                             <div className="flex items-baseline justify-between gap-2">
                                 <span className="font-medium">
                                     {item.nombre}
+                                    {item.piezas.map((pieza) => (
+                                        <span
+                                            key={pieza.id}
+                                            className="ml-2 rounded bg-primary/10 px-1.5 py-0.5 font-mono text-xs font-semibold text-primary"
+                                        >
+                                            {pieza.codigo}
+                                        </span>
+                                    ))}
                                 </span>
                                 <span className="shrink-0 text-xs text-muted-foreground">
                                     {item.minimo !== null
@@ -345,6 +353,15 @@ export default function LevantamientoEquipamiento({
                                     </Button>
                                 )
                             )}
+
+                            {item.por_pieza &&
+                                hayAlgo &&
+                                item.piezas.length === 0 && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Al guardar recibe su código propio para
+                                        marcarlo en la pieza.
+                                    </p>
+                                )}
 
                             <InputError message={errorDe(indice)} />
                         </li>

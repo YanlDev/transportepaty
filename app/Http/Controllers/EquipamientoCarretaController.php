@@ -12,11 +12,13 @@ use App\Models\ConteoEquipamiento;
 use App\Models\DetalleConteoEquipamiento;
 use App\Models\ItemEquipamiento;
 use App\Models\MovimientoEquipamiento;
+use App\Models\PiezaEquipamiento;
 use App\Models\Vehiculo;
 use App\Models\VencimientoEquipamiento;
 use App\Services\ArticulosDeEquipamiento;
 use App\Services\EquipamientoDeUnidades;
 use App\Services\FileUploadService;
+use App\Services\PiezasDeEquipamiento;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -120,7 +122,7 @@ class EquipamientoCarretaController extends Controller
             // Saldos iniciales, traslados (los que salen y los que llegan) y bajas.
             'movimientos' => MovimientoEquipamiento::query()
                 ->where(fn ($query) => $query->where('vehiculo_id', $vehiculo->id)->orWhere('vehiculo_destino_id', $vehiculo->id))
-                ->with(['item:id,nombre', 'vehiculo:id,placa', 'destino:id,placa', 'user:id,name'])
+                ->with(['item:id,nombre', 'pieza:id,codigo', 'vehiculo:id,placa', 'destino:id,placa', 'user:id,name'])
                 ->orderByDesc('fecha')
                 ->orderByDesc('id')
                 ->limit(60)
@@ -130,6 +132,7 @@ class EquipamientoCarretaController extends Controller
                     'tipo' => $movimiento->tipo->value,
                     'tipo_label' => $movimiento->tipo->label(),
                     'item' => $movimiento->item->nombre,
+                    'codigo' => $movimiento->pieza?->codigo,
                     'cantidad' => $movimiento->cantidad,
                     'fecha' => $movimiento->fecha->toDateString(),
                     // En un traslado: si esta unidad lo recibió o lo entregó.
@@ -184,14 +187,15 @@ class EquipamientoCarretaController extends Controller
      * Guarda el levantamiento. No toca el almacén: lo que la unidad ya tenía
      * queda como su saldo inicial.
      */
-    public function store(StoreConteoEquipamientoRequest $request, Vehiculo $vehiculo, FileUploadService $subidas): RedirectResponse
+    public function store(StoreConteoEquipamientoRequest $request, Vehiculo $vehiculo, FileUploadService $subidas, PiezasDeEquipamiento $piezas): RedirectResponse
     {
         $this->authorize('create', ConteoEquipamiento::class);
 
         $datos = $request->validated();
         $filas = collect($this->equipamiento->paraVehiculo($vehiculo)['items'])->keyBy('id');
 
-        DB::transaction(function () use ($request, $vehiculo, $datos, $filas, $subidas): void {
+        $codigos = DB::transaction(function () use ($request, $vehiculo, $datos, $filas, $subidas, $piezas): array {
+            $vencimientos = [];
             $conteo = ConteoEquipamiento::create([
                 'vehiculo_id' => $vehiculo->id,
                 'fecha' => $datos['fecha'],
@@ -213,7 +217,9 @@ class EquipamientoCarretaController extends Controller
                     $subidas->guardar($detalle, $foto, 'fotos', "items.{$indice}.fotos.{$numero}");
                 }
 
-                if ($fila['lleva_vencimiento'] && ($item['vence_el'] ?? null) !== null) {
+                if ($fila['lleva_vencimiento'] && $fila['por_pieza']) {
+                    $vencimientos[(int) $item['id']] = $item['vence_el'] ?? null;
+                } elseif ($fila['lleva_vencimiento'] && ($item['vence_el'] ?? null) !== null) {
                     VencimientoEquipamiento::query()->updateOrCreate(
                         ['vehiculo_id' => $vehiculo->id, 'item_equipamiento_id' => $item['id']],
                         ['vence_el' => $item['vence_el'], 'user_id' => $request->user()?->id],
@@ -236,6 +242,8 @@ class EquipamientoCarretaController extends Controller
                     ]);
                 }
             }
+
+            return $this->identificarPiezas($vehiculo, $conteo, $vencimientos, $request->user()?->id, $piezas);
         });
 
         $estado = $this->equipamiento->paraVehiculo($vehiculo);
@@ -243,7 +251,8 @@ class EquipamientoCarretaController extends Controller
         return to_route('mantenimiento.equipamiento.show', $vehiculo)->with('toast', [
             'type' => $estado['faltan'] > 0 ? 'warning' : 'success',
             'message' => "Levantamiento de {$vehiculo->placa} registrado."
-                .($estado['faltan'] > 0 ? " Le faltan {$estado['faltan']}." : ''),
+                .($estado['faltan'] > 0 ? " Le faltan {$estado['faltan']}." : '')
+                .($codigos === [] ? '' : ' Códigos nuevos: '.implode(', ', $codigos).'. Márcalos en cada pieza.'),
         ]);
     }
 
@@ -321,6 +330,17 @@ class EquipamientoCarretaController extends Controller
 
         abort_if($movimiento->estaAnulado() || $movimiento->tipo === TipoMovimientoEquipamiento::SaldoInicial, 404);
 
+        $pieza = $movimiento->pieza;
+
+        // La pieza ya siguió su camino: deshacer esto la traería de donde no está.
+        if ($pieza !== null && ($movimiento->tipo === TipoMovimientoEquipamiento::Traslado
+            ? $pieza->vehiculo_id !== $movimiento->vehiculo_destino_id || $pieza->baja_at !== null
+            : $pieza->baja_at === null)) {
+            throw ValidationException::withMessages([
+                'motivo' => "{$pieza->codigo} ya tuvo otro movimiento después: anula primero el más reciente.",
+            ]);
+        }
+
         if ($movimiento->tipo === TipoMovimientoEquipamiento::Traslado && $movimiento->destino !== null
             && $this->equipamiento->asignado($movimiento->destino, $movimiento->item) < $movimiento->cantidad) {
             throw ValidationException::withMessages([
@@ -333,6 +353,9 @@ class EquipamientoCarretaController extends Controller
             'anulado_por' => $request->user()?->id,
             'motivo_anulacion' => $request->validated('motivo'),
         ]);
+
+        // La pieza vuelve a la unidad de la que salió.
+        $pieza?->update(['vehiculo_id' => $movimiento->vehiculo_id, 'baja_at' => null]);
 
         return back()->with('toast', ['type' => 'success', 'message' => "{$movimiento->tipo->label()} anulado."]);
     }
@@ -352,10 +375,19 @@ class EquipamientoCarretaController extends Controller
             'vence_el.required' => 'Anota la fecha de vencimiento.',
         ]);
 
-        VencimientoEquipamiento::query()->updateOrCreate(
-            ['vehiculo_id' => $vehiculo->id, 'item_equipamiento_id' => $datos['item_equipamiento_id']],
-            ['vence_el' => $datos['vence_el'], 'user_id' => $request->user()?->id],
-        );
+        // Lo que va pieza por pieza lleva la fecha en cada pieza.
+        if (ItemEquipamiento::query()->whereKey($datos['item_equipamiento_id'])->value('por_pieza')) {
+            PiezaEquipamiento::query()
+                ->enUso()
+                ->where('vehiculo_id', $vehiculo->id)
+                ->where('item_equipamiento_id', $datos['item_equipamiento_id'])
+                ->update(['vence_el' => $datos['vence_el']]);
+        } else {
+            VencimientoEquipamiento::query()->updateOrCreate(
+                ['vehiculo_id' => $vehiculo->id, 'item_equipamiento_id' => $datos['item_equipamiento_id']],
+                ['vence_el' => $datos['vence_el'], 'user_id' => $request->user()?->id],
+            );
+        }
 
         return back()->with('toast', ['type' => 'success', 'message' => 'Vencimiento guardado.']);
     }
@@ -385,6 +417,7 @@ class EquipamientoCarretaController extends Controller
                         // Lo que no llega se queda como estaba (o por defecto).
                         ...($datos['aplica_a'] === null ? [] : ['aplica_a' => $datos['aplica_a']]),
                         ...($datos['lleva_vencimiento'] === null ? [] : ['lleva_vencimiento' => $datos['lleva_vencimiento']]),
+                        ...($datos['por_pieza'] === null ? [] : ['por_pieza' => $datos['por_pieza']]),
                     ],
                 );
 
@@ -403,16 +436,67 @@ class EquipamientoCarretaController extends Controller
     {
         $datos = $request->validated();
 
-        return MovimientoEquipamiento::create([
-            'vehiculo_id' => $vehiculo->id,
-            'item_equipamiento_id' => $datos['item_equipamiento_id'],
-            'tipo' => $tipo,
-            'cantidad' => $datos['cantidad'],
-            'fecha' => $datos['fecha'],
-            'vehiculo_destino_id' => $datos['vehiculo_destino_id'] ?? null,
-            'motivo' => $datos['motivo'] ?? null,
-            'user_id' => $request->user()?->id,
-        ])->load(['item', 'destino']);
+        $pieza = PiezaEquipamiento::query()
+            ->enUso()
+            ->where('vehiculo_id', $vehiculo->id)
+            ->where('item_equipamiento_id', $datos['item_equipamiento_id'])
+            ->whereKey($datos['pieza_equipamiento_id'] ?? null)
+            ->first();
+
+        return DB::transaction(function () use ($request, $vehiculo, $tipo, $datos, $pieza): MovimientoEquipamiento {
+            // La pieza sigue al movimiento: cambia de unidad o queda de baja.
+            $pieza?->update($tipo === TipoMovimientoEquipamiento::Traslado
+                ? ['vehiculo_id' => $datos['vehiculo_destino_id']]
+                : ['baja_at' => now()]);
+
+            return MovimientoEquipamiento::create([
+                'vehiculo_id' => $vehiculo->id,
+                'item_equipamiento_id' => $datos['item_equipamiento_id'],
+                'pieza_equipamiento_id' => $pieza?->id,
+                'tipo' => $tipo,
+                'cantidad' => $datos['cantidad'],
+                'fecha' => $datos['fecha'],
+                'vehiculo_destino_id' => $datos['vehiculo_destino_id'] ?? null,
+                'motivo' => $datos['motivo'] ?? null,
+                'user_id' => $request->user()?->id,
+            ])->load(['item', 'destino']);
+        });
+    }
+
+    /**
+     * Le pone código a cada pieza que la unidad tiene y todavía no lo
+     * tiene, y anota el vencimiento que se leyó en el levantamiento cuando
+     * la unidad lleva una sola de ese ítem.
+     *
+     * @param  array<int, string|null>  $vencimientos  por id de ítem
+     * @return list<string> los códigos nuevos
+     */
+    private function identificarPiezas(Vehiculo $vehiculo, ConteoEquipamiento $conteo, array $vencimientos, ?int $userId, PiezasDeEquipamiento $piezas): array
+    {
+        $codigos = [];
+
+        foreach ($this->equipamiento->paraVehiculo($vehiculo)['items'] as $fila) {
+            if (! $fila['por_pieza']) {
+                continue;
+            }
+
+            $item = ItemEquipamiento::query()->findOrFail($fila['id']);
+            $vence = $vencimientos[$fila['id']] ?? null;
+
+            foreach ($piezas->identificar($vehiculo, $item, $fila['asignado'], $conteo, $vence, $userId) as $nueva) {
+                $codigos[] = $nueva->codigo;
+            }
+
+            if ($vence !== null && $fila['asignado'] === 1) {
+                PiezaEquipamiento::query()
+                    ->enUso()
+                    ->where('vehiculo_id', $vehiculo->id)
+                    ->where('item_equipamiento_id', $item->id)
+                    ->update(['vence_el' => $vence]);
+            }
+        }
+
+        return $codigos;
     }
 
     /**
@@ -462,7 +546,7 @@ class EquipamientoCarretaController extends Controller
     }
 
     /**
-     * @return list<array{id: int, nombre: string, minimo: int|null, aplica_a: string, lleva_vencimiento: bool, articulo: string|null}>
+     * @return list<array{id: int, nombre: string, minimo: int|null, aplica_a: string, lleva_vencimiento: bool, por_pieza: bool, articulo: string|null}>
      */
     private function catalogo(): array
     {
@@ -476,6 +560,7 @@ class EquipamientoCarretaController extends Controller
                 'minimo' => $item->minimo,
                 'aplica_a' => $item->aplica_a->value,
                 'lleva_vencimiento' => $item->lleva_vencimiento,
+                'por_pieza' => $item->por_pieza,
                 'articulo' => $item->articulo?->codigo,
             ])
             ->all());

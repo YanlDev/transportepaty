@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\ItemEquipamiento;
+use App\Models\PiezaEquipamiento;
 use App\Models\Vehiculo;
 use App\Services\EquipamientoDeUnidades;
 use Illuminate\Contracts\Validation\ValidationRule;
@@ -32,6 +33,7 @@ class StoreMovimientoEquipamientoRequest extends FormRequest
         return [
             'item_equipamiento_id' => ['required', 'integer', Rule::exists('items_equipamiento', 'id')->where('activo', true)],
             'cantidad' => ['required', 'integer', 'min:1', 'max:999'],
+            'pieza_equipamiento_id' => ['nullable', 'integer'],
             'fecha' => ['required', 'date', 'before_or_equal:today'],
             'vehiculo_destino_id' => $esTraslado
                 ? ['required', 'integer', Rule::exists('vehiculos', 'id')->whereNull('deleted_at')]
@@ -60,6 +62,22 @@ class StoreMovimientoEquipamientoRequest extends FormRequest
 
                 if ($this->integer('cantidad') > $asignado) {
                     $validator->errors()->add('cantidad', "{$vehiculo->placa} tiene {$asignado} de {$item->nombre}: no se puede sacar más.");
+                }
+
+                // Lo que va por pieza se mueve de a una, diciendo cuál.
+                if ($item->por_pieza) {
+                    $pieza = PiezaEquipamiento::query()
+                        ->enUso()
+                        ->where('vehiculo_id', $vehiculo->id)
+                        ->where('item_equipamiento_id', $item->id)
+                        ->whereKey($this->integer('pieza_equipamiento_id'))
+                        ->first();
+
+                    if ($pieza === null) {
+                        $validator->errors()->add('pieza_equipamiento_id', "Elige cuál {$item->nombre}, por su código. Si no tiene código, pónselo primero.");
+                    } elseif ($this->integer('cantidad') !== 1) {
+                        $validator->errors()->add('cantidad', "{$item->nombre} va pieza por pieza: de a una.");
+                    }
                 }
 
                 if (! $this->filled('vehiculo_destino_id')) {

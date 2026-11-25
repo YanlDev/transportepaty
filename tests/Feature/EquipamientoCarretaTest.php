@@ -5,6 +5,7 @@ use App\Enums\Permiso;
 use App\Models\ConteoEquipamiento;
 use App\Models\ItemEquipamiento;
 use App\Models\MovimientoEquipamiento;
+use App\Models\PiezaEquipamiento;
 use App\Models\User;
 use App\Models\Vehiculo;
 use App\Models\VencimientoEquipamiento;
@@ -253,7 +254,10 @@ it('saves the survey with its photos, notes and expiry, without touching the war
     expect($detalles[$extintor->id]->getMedia('fotos'))->toHaveCount(1)
         ->and($detalles[$pala->id]->nota)->toBe('No está en la cabina')
         ->and($detalles[$pala->id]->getMedia('fotos'))->toHaveCount(0)
-        ->and(VencimientoEquipamiento::query()->where('vehiculo_id', $tracto->id)->sole()->vence_el->toDateString())->toBe('2027-03-14')
+        // El extintor va pieza por pieza: su vencimiento queda en la pieza.
+        ->and(VencimientoEquipamiento::query()->count())->toBe(0)
+        ->and(PiezaEquipamiento::query()->where('vehiculo_id', $tracto->id)->orderBy('codigo')->get()->mapWithKeys(fn (PiezaEquipamiento $pieza): array => [$pieza->codigo => $pieza->vence_el?->toDateString()])->all())
+        ->toBe(['BO-001' => null, 'EX-001' => '2027-03-14'])
         // Lo que ya tenía queda como saldo inicial; lo que falta, no.
         ->and(MovimientoEquipamiento::query()->where('vehiculo_id', $tracto->id)->pluck('cantidad', 'item_equipamiento_id')->all())
         ->toBe([$extintor->id => 1, $botiquin->id => 1]);
@@ -297,4 +301,113 @@ it('rejects more photos than an item admits and files that are not photos', func
         ->assertSessionHasErrors('items.0.fotos.0');
 
     expect(ConteoEquipamiento::query()->count())->toBe(0);
+});
+
+/** Un tracto con su levantamiento hecho: extintor, botiquín y pala. */
+function tractoLevantado(): Vehiculo
+{
+    $tracto = Vehiculo::factory()->create();
+    contar($tracto, ['Extintor' => [1, 0], 'Botiquín' => [1, 0], 'Pala' => [1, 0]]);
+
+    return $tracto;
+}
+
+it('gives its own code to each piece found in the survey, and only once', function (): void {
+    $uno = tractoLevantado();
+    $otro = tractoLevantado();
+
+    expect(PiezaEquipamiento::query()->where('vehiculo_id', $uno->id)->orderBy('codigo')->pluck('codigo')->all())->toBe(['BO-001', 'EX-001'])
+        ->and(PiezaEquipamiento::query()->where('vehiculo_id', $otro->id)->orderBy('codigo')->pluck('codigo')->all())->toBe(['BO-002', 'EX-002']);
+
+    // Revisarlo de nuevo no le cambia el código ni le da otro.
+    contar($uno, ['Extintor' => [1, 0], 'Botiquín' => [0, 1], 'Pala' => [1, 0]], '2026-10-20');
+
+    $filas = collect(app(EquipamientoDeUnidades::class)->paraVehiculo($uno)['items'])->keyBy('nombre');
+
+    expect(PiezaEquipamiento::query()->count())->toBe(4)
+        ->and($filas['Extintor'])->toMatchArray(['por_pieza' => true, 'sin_codigo' => 0])
+        ->and($filas['Extintor']['piezas'][0]['codigo'])->toBe('EX-001')
+        // La pala va por cantidad: no lleva código.
+        ->and($filas['Pala'])->toMatchArray(['por_pieza' => false, 'piezas' => [], 'sin_codigo' => 0]);
+});
+
+it('keeps the data and the expiry of each piece, and warns with the one that expires first', function (): void {
+    $tracto = tractoLevantado();
+    $extintor = PiezaEquipamiento::query()->where('codigo', 'EX-001')->sole();
+
+    actingAs(contador())
+        ->put(route('mantenimiento.equipamiento.piezas.update', $extintor), ['descripcion' => 'PQS de 6 kg', 'serie' => 'A-4471', 'vence_el' => '2020-01-31'])
+        ->assertSessionHasNoErrors();
+
+    $estado = app(EquipamientoDeUnidades::class)->paraVehiculo($tracto);
+    $fila = collect($estado['items'])->firstWhere('nombre', 'Extintor');
+
+    expect($fila)->toMatchArray(['vence_el' => '2020-01-31', 'vencido' => true])
+        ->and($fila['piezas'][0])->toMatchArray(['descripcion' => 'PQS de 6 kg', 'serie' => 'A-4471', 'vencido' => true])
+        ->and($estado['estado'])->toBe(EstadoEquipamiento::Falta);
+
+    $rol = Role::findOrCreate('mirador', 'web');
+    $rol->syncPermissions([Permiso::MantenimientoVer->value]);
+
+    actingAs(User::factory()->create()->assignRole($rol))
+        ->put(route('mantenimiento.equipamiento.piezas.update', $extintor), ['descripcion' => 'Otro'])
+        ->assertForbidden();
+});
+
+it('moves or writes off a piece by its code, and brings it back when the movement is cancelled', function (): void {
+    $origen = tractoLevantado();
+    $destino = Vehiculo::factory()->create();
+    $extintor = PiezaEquipamiento::query()->where('codigo', 'EX-001')->sole();
+    $item = faja('Extintor');
+
+    $traslado = fn (array $datos) => actingAs(contador())->post(route('mantenimiento.equipamiento.traslados.store', $origen), [
+        'item_equipamiento_id' => $item->id, 'fecha' => '2026-10-20', 'cantidad' => 1, 'vehiculo_destino_id' => $destino->id, ...$datos,
+    ]);
+
+    // Sin decir cuál, no se mueve.
+    $traslado([])->assertSessionHasErrors('pieza_equipamiento_id');
+    $traslado(['pieza_equipamiento_id' => $extintor->id])->assertSessionHasNoErrors();
+
+    expect($extintor->refresh()->vehiculo_id)->toBe($destino->id)
+        ->and(app(EquipamientoDeUnidades::class)->asignado($origen, $item))->toBe(0)
+        ->and(app(EquipamientoDeUnidades::class)->asignado($destino, $item))->toBe(1);
+
+    actingAs(contador())->post(route('mantenimiento.equipamiento.bajas.store', $destino), [
+        'item_equipamiento_id' => $item->id, 'fecha' => '2026-10-21', 'cantidad' => 1, 'pieza_equipamiento_id' => $extintor->id, 'motivo' => 'Descargado y sin recarga posible',
+    ])->assertSessionHasNoErrors();
+
+    expect($extintor->refresh()->baja_at)->not->toBeNull()
+        ->and(collect(app(EquipamientoDeUnidades::class)->paraVehiculo($destino)['items'])->firstWhere('id', $item->id))->toMatchArray(['asignado' => 0, 'piezas' => []]);
+
+    $admin = User::factory()->create()->assignRole(tap(Role::findOrCreate('anulador', 'web'))->syncPermissions([Permiso::MantenimientoVer->value, Permiso::MantenimientoAnular->value]));
+    $movimientos = MovimientoEquipamiento::query()->where('pieza_equipamiento_id', $extintor->id)->orderBy('id')->get();
+
+    // Primero se deshace lo último: la baja; recién después, el traslado.
+    actingAs($admin)->post(route('mantenimiento.equipamiento.movimientos.anular', $movimientos[0]), ['motivo' => 'Se registró por error'])->assertSessionHasErrors('motivo');
+    actingAs($admin)->post(route('mantenimiento.equipamiento.movimientos.anular', $movimientos[1]), ['motivo' => 'Se registró por error'])->assertSessionHasNoErrors();
+    actingAs($admin)->post(route('mantenimiento.equipamiento.movimientos.anular', $movimientos[0]), ['motivo' => 'Se registró por error'])->assertSessionHasNoErrors();
+
+    expect($extintor->refresh())->vehiculo_id->toBe($origen->id)->baja_at->toBeNull();
+});
+
+it('puts a code on a piece that arrived without one, and on new items marked piece by piece', function (): void {
+    $tracto = Vehiculo::factory()->create();
+    $gata = faja('Gata');
+    $gata->update(['por_pieza' => true]);
+
+    // Llegó sin pasar por un levantamiento: la unidad la tiene, sin código.
+    MovimientoEquipamiento::create(['vehiculo_id' => $tracto->id, 'item_equipamiento_id' => $gata->id, 'tipo' => 'saldo_inicial', 'cantidad' => 1, 'fecha' => '2026-10-15']);
+
+    expect(collect(app(EquipamientoDeUnidades::class)->paraVehiculo($tracto)['items'])->firstWhere('id', $gata->id)['sin_codigo'])->toBe(1);
+
+    $poner = fn (ItemEquipamiento $item) => actingAs(contador())->post(route('mantenimiento.equipamiento.piezas.store', $tracto), ['item_equipamiento_id' => $item->id]);
+
+    $poner($gata)->assertSessionHasNoErrors();
+    $poner($gata)->assertSessionHasNoErrors();
+    // La pala va por cantidad.
+    $poner(faja('Pala'))->assertSessionHasErrors('item_equipamiento_id');
+
+    // Sus letras salen del nombre; una sola pieza aunque se pida dos veces.
+    expect(PiezaEquipamiento::query()->pluck('codigo')->all())->toBe(['GA-001'])
+        ->and($gata->refresh()->prefijo)->toBe('GA');
 });

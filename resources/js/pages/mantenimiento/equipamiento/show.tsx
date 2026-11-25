@@ -1,8 +1,9 @@
-import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
+import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/react';
 import {
     ArrowLeftRight,
     CalendarClock,
     ClipboardList,
+    Tag,
     Trash2,
     XCircle,
 } from 'lucide-react';
@@ -14,6 +15,7 @@ import equipamiento, {
     vencimiento,
 } from '@/actions/App/Http/Controllers/EquipamientoCarretaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
+import piezas from '@/actions/App/Http/Controllers/PiezaEquipamientoController';
 import { AnularDialog } from '@/components/almacen/anular-dialog';
 import { ConfirmarBorradoDialog } from '@/components/confirmar-borrado-dialog';
 import { EstadoEquipamientoBadge } from '@/components/equipamiento/estado-equipamiento';
@@ -41,6 +43,7 @@ import type {
     FotoEquipamiento,
     ItemCarreta,
     MovimientoEquipamiento,
+    PiezaEquipamiento,
 } from '@/types/equipamiento';
 
 type Props = {
@@ -75,6 +78,7 @@ export default function EquipamientoCarretaShow({
     const { puede } = usePermisos();
     const puedeContar = puede('mantenimiento.equipamiento');
     const [accion, setAccion] = useState<Accion | null>(null);
+    const [pieza, setPieza] = useState<PiezaEquipamiento | null>(null);
     const placa = formatearPlaca(carreta.placa);
 
     setLayoutProps({
@@ -156,7 +160,7 @@ export default function EquipamientoCarretaShow({
                                         </span>
                                     )}
                                 </span>
-                                {item.lleva_vencimiento && (
+                                {item.lleva_vencimiento && !item.por_pieza && (
                                     <span
                                         className={cn(
                                             'block text-xs',
@@ -185,8 +189,84 @@ export default function EquipamientoCarretaShow({
                             </div>
                         </div>
                         <Fotos fotos={fotos[item.id] ?? []} de={item.nombre} />
+                        {item.por_pieza &&
+                            (item.piezas.length > 0 || item.sin_codigo > 0) && (
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                    {item.piezas.map((una) => (
+                                        <button
+                                            key={una.id}
+                                            type="button"
+                                            disabled={!puedeContar}
+                                            onClick={() => setPieza(una)}
+                                            className={cn(
+                                                'flex flex-col rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors enabled:hover:bg-accent/50',
+                                                una.vencido &&
+                                                    'border-red-300 dark:border-red-800',
+                                                una.por_vencer &&
+                                                    'border-amber-300 dark:border-amber-800',
+                                            )}
+                                            aria-label={`Datos de ${una.codigo}`}
+                                        >
+                                            <span className="font-mono text-sm font-semibold text-primary">
+                                                {una.codigo}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                                {[
+                                                    una.descripcion,
+                                                    una.serie &&
+                                                        `serie ${una.serie}`,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(' · ') ||
+                                                    (puedeContar
+                                                        ? 'Anota qué es'
+                                                        : 'Sin datos')}
+                                            </span>
+                                            {item.lleva_vencimiento && (
+                                                <span
+                                                    className={cn(
+                                                        una.vencido
+                                                            ? 'font-medium text-red-700 dark:text-red-400'
+                                                            : una.por_vencer
+                                                              ? 'text-amber-700 dark:text-amber-400'
+                                                              : 'text-muted-foreground',
+                                                    )}
+                                                >
+                                                    {una.vence_el
+                                                        ? `${una.vencido ? 'Venció' : 'Vence'} el ${formatearFecha(una.vence_el)}`
+                                                        : 'Sin vencimiento anotado'}
+                                                </span>
+                                            )}
+                                        </button>
+                                    ))}
+                                    {puedeContar && item.sin_codigo > 0 && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                                router.post(
+                                                    piezas.store(carreta.id)
+                                                        .url,
+                                                    {
+                                                        item_equipamiento_id:
+                                                            item.id,
+                                                    },
+                                                    { preserveScroll: true },
+                                                )
+                                            }
+                                        >
+                                            <Tag className="size-3.5" />
+                                            Poner código
+                                            {item.sin_codigo > 1 &&
+                                                ` (${item.sin_codigo})`}
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         {puedeContar &&
-                            (item.asignado > 0 || item.lleva_vencimiento) && (
+                            (item.asignado > 0 ||
+                                (item.lleva_vencimiento &&
+                                    !item.por_pieza)) && (
                                 <div className="flex flex-wrap gap-1.5">
                                     {item.asignado > 0 && (
                                         <>
@@ -218,21 +298,22 @@ export default function EquipamientoCarretaShow({
                                             </Button>
                                         </>
                                     )}
-                                    {item.lleva_vencimiento && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() =>
-                                                setAccion({
-                                                    tipo: 'vencimiento',
-                                                    item,
-                                                })
-                                            }
-                                        >
-                                            <CalendarClock className="size-3.5" />
-                                            Vencimiento
-                                        </Button>
-                                    )}
+                                    {item.lleva_vencimiento &&
+                                        !item.por_pieza && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setAccion({
+                                                        tipo: 'vencimiento',
+                                                        item,
+                                                    })
+                                                }
+                                            >
+                                                <CalendarClock className="size-3.5" />
+                                                Vencimiento
+                                            </Button>
+                                        )}
                                 </div>
                             )}
                     </li>
@@ -268,6 +349,8 @@ export default function EquipamientoCarretaShow({
                                     >
                                         {movimiento.entra ? '+' : '−'}
                                         {movimiento.cantidad} {movimiento.item}
+                                        {movimiento.codigo &&
+                                            ` · ${movimiento.codigo}`}
                                     </span>
                                     <span className="text-xs text-muted-foreground">
                                         {formatearFecha(movimiento.fecha)} ·{' '}
@@ -392,6 +475,14 @@ export default function EquipamientoCarretaShow({
                 )}
             </section>
 
+            {pieza && (
+                <PiezaDialog
+                    key={pieza.id}
+                    pieza={pieza}
+                    onCerrar={() => setPieza(null)}
+                />
+            )}
+
             {accion && (
                 <AccionDialog
                     key={`${accion.tipo}-${accion.item.id}`}
@@ -404,6 +495,105 @@ export default function EquipamientoCarretaShow({
                 />
             )}
         </div>
+    );
+}
+
+/** Los datos de una pieza con código: qué es, su serie y cuándo vence. */
+function PiezaDialog({
+    pieza,
+    onCerrar,
+}: {
+    pieza: PiezaEquipamiento;
+    onCerrar: () => void;
+}) {
+    const { data, setData, put, processing, errors } = useForm({
+        descripcion: pieza.descripcion ?? '',
+        serie: pieza.serie ?? '',
+        vence_el: pieza.vence_el ?? '',
+    });
+
+    const guardar = (evento: React.FormEvent) => {
+        evento.preventDefault();
+        evento.stopPropagation();
+
+        put(piezas.update(pieza.id).url, {
+            preserveScroll: true,
+            onSuccess: onCerrar,
+        });
+    };
+
+    return (
+        <Dialog open onOpenChange={(abierto) => !abierto && onCerrar()}>
+            <DialogContent className="sm:max-w-md">
+                <form onSubmit={guardar} className="grid gap-4">
+                    <DialogHeader>
+                        <DialogTitle className="font-mono">
+                            {pieza.codigo}
+                        </DialogTitle>
+                        <DialogDescription>
+                            Este código va marcado en la pieza. Anota qué es
+                            para reconocerla.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-1.5">
+                        <Label htmlFor="pieza-descripcion">Qué es</Label>
+                        <Input
+                            id="pieza-descripcion"
+                            placeholder="PQS de 6 kg, marca…"
+                            maxLength={120}
+                            value={data.descripcion}
+                            onChange={(e) =>
+                                setData('descripcion', e.target.value)
+                            }
+                        />
+                        <InputError message={errors.descripcion} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="pieza-serie">
+                                Serie (opcional)
+                            </Label>
+                            <Input
+                                id="pieza-serie"
+                                maxLength={60}
+                                value={data.serie}
+                                onChange={(e) =>
+                                    setData('serie', e.target.value)
+                                }
+                            />
+                            <InputError message={errors.serie} />
+                        </div>
+                        <div className="grid gap-1.5">
+                            <Label htmlFor="pieza-vence">Vence el</Label>
+                            <Input
+                                id="pieza-vence"
+                                type="date"
+                                value={data.vence_el}
+                                onChange={(e) =>
+                                    setData('vence_el', e.target.value)
+                                }
+                            />
+                            <InputError message={errors.vence_el} />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={onCerrar}
+                        >
+                            Cancelar
+                        </Button>
+                        <Button type="submit" disabled={processing}>
+                            {processing && <Spinner />}
+                            Guardar
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }
 
@@ -459,6 +649,7 @@ function AccionDialog({
         useForm<{
             item_equipamiento_id: number;
             cantidad: string;
+            pieza_equipamiento_id: number | null;
             fecha: string;
             vehiculo_destino_id: number | null;
             motivo: string;
@@ -466,6 +657,7 @@ function AccionDialog({
         }>({
             item_equipamiento_id: item.id,
             cantidad: '1',
+            pieza_equipamiento_id: item.piezas[0]?.id ?? null,
             fecha: hoy,
             vehiculo_destino_id: null,
             motivo: '',
@@ -491,6 +683,9 @@ function AccionDialog({
         transform((datos) => ({
             item_equipamiento_id: datos.item_equipamiento_id,
             cantidad: datos.cantidad,
+            ...(item.por_pieza && {
+                pieza_equipamiento_id: datos.pieza_equipamiento_id,
+            }),
             fecha: datos.fecha,
             motivo: datos.motivo || null,
             ...(tipo === 'traslado' && {
@@ -574,26 +769,73 @@ function AccionDialog({
                                 </div>
                             )}
                             <div className="grid grid-cols-2 gap-3">
-                                <div className="grid gap-1.5">
-                                    <Label htmlFor="equipo-cantidad">
-                                        Cantidad
-                                    </Label>
-                                    <Input
-                                        id="equipo-cantidad"
-                                        inputMode="numeric"
-                                        value={data.cantidad}
-                                        onChange={(e) =>
-                                            setData(
-                                                'cantidad',
-                                                e.target.value.replace(
-                                                    /\D/g,
-                                                    '',
-                                                ),
-                                            )
-                                        }
-                                    />
-                                    <InputError message={errors.cantidad} />
-                                </div>
+                                {item.por_pieza ? (
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="equipo-pieza">
+                                            Cuál
+                                        </Label>
+                                        <select
+                                            id="equipo-pieza"
+                                            value={
+                                                data.pieza_equipamiento_id ?? ''
+                                            }
+                                            onChange={(e) =>
+                                                setData(
+                                                    'pieza_equipamiento_id',
+                                                    Number(e.target.value) ||
+                                                        null,
+                                                )
+                                            }
+                                            className="h-9 rounded-md border bg-background px-2 text-sm"
+                                        >
+                                            {item.piezas.length === 0 && (
+                                                <option value="">
+                                                    Sin código todavía
+                                                </option>
+                                            )}
+                                            {item.piezas.map((una) => (
+                                                <option
+                                                    key={una.id}
+                                                    value={una.id}
+                                                >
+                                                    {una.codigo}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        <InputError
+                                            message={
+                                                (
+                                                    errors as Record<
+                                                        string,
+                                                        string | undefined
+                                                    >
+                                                ).pieza_equipamiento_id ??
+                                                errors.cantidad
+                                            }
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="grid gap-1.5">
+                                        <Label htmlFor="equipo-cantidad">
+                                            Cantidad
+                                        </Label>
+                                        <Input
+                                            id="equipo-cantidad"
+                                            inputMode="numeric"
+                                            value={data.cantidad}
+                                            onChange={(e) =>
+                                                setData(
+                                                    'cantidad',
+                                                    e.target.value.replace(
+                                                        /\D/g,
+                                                        '',
+                                                    ),
+                                                )
+                                            }
+                                        />
+                                        <InputError message={errors.cantidad} />
+                                    </div>
+                                )}
                                 <div className="grid gap-1.5">
                                     <Label htmlFor="equipo-fecha">Fecha</Label>
                                     <Input

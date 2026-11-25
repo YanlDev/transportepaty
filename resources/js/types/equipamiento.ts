@@ -5,6 +5,18 @@ export type EstadoEquipamiento =
     | 'contado'
     | 'sin_contar';
 
+/** Una pieza con código propio: este extintor, este botiquín. */
+export type PiezaEquipamiento = {
+    id: number;
+    codigo: string;
+    /** Qué es: capacidad, tipo, marca. */
+    descripcion: string | null;
+    serie: string | null;
+    vence_el: string | null;
+    vencido: boolean;
+    por_vencer: boolean;
+};
+
 /** Un ítem del catálogo frente a lo que la unidad tiene asignado. */
 export type ItemCarreta = {
     id: number;
@@ -12,6 +24,12 @@ export type ItemCarreta = {
     /** Su artículo en el almacén; null si todavía no se le creó. */
     articulo_id: number | null;
     lleva_vencimiento: boolean;
+    /** Cada una lleva su código propio. */
+    por_pieza: boolean;
+    /** Las que la unidad tiene, ya con código. */
+    piezas: PiezaEquipamiento[];
+    /** Las que tiene y todavía no llevan código. */
+    sin_codigo: number;
     /** Null: se cuenta, pero no avisa faltantes. */
     minimo: number | null;
     /** Lo que tiene: saldo inicial + vales de almacén ± traslados − bajas. */
@@ -49,6 +67,7 @@ export type ItemCatalogo = {
     minimo: number | null;
     aplica_a: 'carreta' | 'tracto' | 'todas';
     lleva_vencimiento: boolean;
+    por_pieza: boolean;
     /** El código de su artículo en el almacén. */
     articulo: string | null;
 };
@@ -76,6 +95,8 @@ export type MovimientoEquipamiento = {
     tipo: 'saldo_inicial' | 'traslado' | 'baja';
     tipo_label: string;
     item: string;
+    /** El código de la pieza que se movió, si el ítem va por pieza. */
+    codigo: string | null;
     cantidad: number;
     fecha: string;
     /** Suma a lo que tiene la unidad (saldo inicial o traslado que llega). */

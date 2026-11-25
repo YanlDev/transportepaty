@@ -46,6 +46,7 @@ use App\Http\Controllers\MisOrdenesController;
 use App\Http\Controllers\NovedadController;
 use App\Http\Controllers\OrdenTrabajoController;
 use App\Http\Controllers\ParametroCostoController;
+use App\Http\Controllers\PiezaEquipamientoController;
 use App\Http\Controllers\PlanMantenimientoController;
 use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\ReporteCobranzaController;
@@ -406,6 +407,10 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.equipamiento.bajas.store');
     Route::put('mantenimiento/equipamiento/{vehiculo}/vencimientos', [EquipamientoCarretaController::class, 'vencimiento'])
         ->name('mantenimiento.equipamiento.vencimientos.update');
+    Route::post('mantenimiento/equipamiento/{vehiculo}/piezas', [PiezaEquipamientoController::class, 'store'])
+        ->name('mantenimiento.equipamiento.piezas.store');
+    Route::put('mantenimiento/equipamiento/piezas/{pieza}', [PiezaEquipamientoController::class, 'update'])
+        ->name('mantenimiento.equipamiento.piezas.update');
     Route::post('mantenimiento/equipamiento/movimientos/{movimiento}/anular', [EquipamientoCarretaController::class, 'anularMovimiento'])
         ->name('mantenimiento.equipamiento.movimientos.anular');
     Route::get('mantenimiento/planes/{plan}/editar', [PlanMantenimientoController::class, 'edit'])

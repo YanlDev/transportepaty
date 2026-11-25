@@ -78,7 +78,7 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                             key={catalogo
                                 .map(
                                     (item) =>
-                                        `${item.id}:${item.minimo}:${item.aplica_a}:${item.lleva_vencimiento}:${item.articulo}`,
+                                        `${item.id}:${item.minimo}:${item.aplica_a}:${item.lleva_vencimiento}:${item.por_pieza}:${item.articulo}`,
                                 )
                                 .join()}
                             catalogo={catalogo}

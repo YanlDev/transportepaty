@@ -9,6 +9,7 @@ use App\Models\DetalleIngreso;
 use App\Models\DetalleSalida;
 use App\Models\ItemEquipamiento;
 use App\Models\MovimientoEquipamiento;
+use App\Models\PiezaEquipamiento;
 use App\Models\SalidaAlmacen;
 use App\Models\Vehiculo;
 use App\Models\VencimientoEquipamiento;
@@ -31,11 +32,26 @@ use Illuminate\Support\Collection;
  * dañadas, no cuentan para el mínimo hasta que se den de baja; si encuentra
  * menos de lo asignado, queda a la vista como «sin explicar».
  *
+ * Lo que va pieza por pieza (extintor, botiquín) además dice cuál es cada
+ * una: su código, y el vencimiento es el de la pieza que vence primero.
+ *
+ * @phpstan-type PiezaDeUnidad array{
+ *     id: int,
+ *     codigo: string,
+ *     descripcion: string|null,
+ *     serie: string|null,
+ *     vence_el: string|null,
+ *     vencido: bool,
+ *     por_vencer: bool,
+ * }
  * @phpstan-type FilaEquipamiento array{
  *     id: int,
  *     nombre: string,
  *     articulo_id: int|null,
  *     lleva_vencimiento: bool,
+ *     por_pieza: bool,
+ *     piezas: list<PiezaDeUnidad>,
+ *     sin_codigo: int,
  *     minimo: int|null,
  *     asignado: int,
  *     buenas: int|null,
@@ -115,6 +131,14 @@ class EquipamientoDeUnidades
             ->get()
             ->keyBy(fn (VencimientoEquipamiento $vencimiento): string => "{$vencimiento->vehiculo_id}-{$vencimiento->item_equipamiento_id}");
 
+        $piezas = PiezaEquipamiento::query()
+            ->enUso()
+            ->whereIn('vehiculo_id', $ids)
+            ->orderBy('codigo')
+            ->get()
+            ->groupBy(fn (PiezaEquipamiento $pieza): string => "{$pieza->vehiculo_id}-{$pieza->item_equipamiento_id}");
+
+        $limite = $hoy->addDays(self::AVISO_DIAS);
         $resultado = [];
 
         foreach ($vehiculos as $vehiculo) {
@@ -147,13 +171,31 @@ class EquipamientoDeUnidades
                     : 0;
                 $buenas = $asignado - $danadas;
 
-                $vence = $item->lleva_vencimiento ? $vencimientos->get("{$vehiculo->id}-{$item->id}")?->vence_el : null;
+                $delItem = $item->por_pieza ? ($piezas->get("{$vehiculo->id}-{$item->id}") ?? collect()) : collect();
+
+                // Por pieza, manda la que vence primero; si no, la fecha de la unidad.
+                $vence = match (true) {
+                    ! $item->lleva_vencimiento => null,
+                    $item->por_pieza => $delItem->pluck('vence_el')->filter()->min(),
+                    default => $vencimientos->get("{$vehiculo->id}-{$item->id}")?->vence_el,
+                };
 
                 $filas[] = [
                     'id' => $item->id,
                     'nombre' => $item->nombre,
                     'articulo_id' => $item->articulo_id,
                     'lleva_vencimiento' => $item->lleva_vencimiento,
+                    'por_pieza' => $item->por_pieza,
+                    'piezas' => array_values($delItem->map(fn (PiezaEquipamiento $pieza): array => [
+                        'id' => $pieza->id,
+                        'codigo' => $pieza->codigo,
+                        'descripcion' => $pieza->descripcion,
+                        'serie' => $pieza->serie,
+                        'vence_el' => $pieza->vence_el?->toDateString(),
+                        'vencido' => $pieza->vence_el !== null && $pieza->vence_el->lt($hoy),
+                        'por_vencer' => $pieza->vence_el !== null && $pieza->vence_el->gte($hoy) && $pieza->vence_el->lte($limite),
+                    ])->all()),
+                    'sin_codigo' => $item->por_pieza ? max(0, $asignado - $delItem->count()) : 0,
                     'minimo' => $item->minimo,
                     'asignado' => $asignado,
                     'buenas' => $conHistorial || $conteo !== null ? $buenas : null,
@@ -166,7 +208,7 @@ class EquipamientoDeUnidades
                     'con_historial' => $conHistorial,
                     'vence_el' => $vence?->toDateString(),
                     'vencido' => $vence !== null && $asignado > 0 && $vence->lt($hoy),
-                    'por_vencer' => $vence !== null && $asignado > 0 && $vence->gte($hoy) && $vence->lte($hoy->addDays(self::AVISO_DIAS)),
+                    'por_vencer' => $vence !== null && $asignado > 0 && $vence->gte($hoy) && $vence->lte($limite),
                 ];
             }
 
