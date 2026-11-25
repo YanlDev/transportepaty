@@ -17,6 +17,8 @@ export type ArticuloStock = {
     stock: number;
     stock_minimo: number | null;
     bajo_minimo: boolean;
+    /** Equipamiento sin stock ni mínimo: se compra cuando taller lo pide. */
+    a_pedido?: boolean;
     activo: boolean;
     costo_promedio: number | null;
     valor: number | null;

@@ -4,6 +4,7 @@ import {
     ArrowUpFromLine,
     CircleCheck,
     PackagePlus,
+    ShieldCheck,
     ShoppingCart,
     Stamp,
 } from 'lucide-react';
@@ -49,6 +50,26 @@ type PorComprar = {
     }[];
 };
 
+/** Una unidad a la que taller pidió reponerle equipamiento. */
+type Reposicion = {
+    vehiculo_id: number;
+    placa: string;
+    pedido_por: string | null;
+    lineas: {
+        reposicion_id: number;
+        descripcion: string;
+        nota: string | null;
+        pendiente: number;
+        hay: number;
+        /** El pedido de compra que ya lo trae, si hay uno en camino. */
+        en_compra: string | null;
+    }[];
+    /** Hay stock de al menos una línea. */
+    se_puede: boolean;
+    /** Falta algo que nadie pidió comprar todavía. */
+    por_comprar: boolean;
+};
+
 type Pedido = {
     id: number;
     numero: string;
@@ -63,6 +84,10 @@ export type PorHacerAlmacen = {
     /** Null: no le toca a quien entra. */
     entregas: Entrega[] | null;
     por_comprar: PorComprar[] | null;
+    /** El equipamiento que taller pidió reponer en las unidades. */
+    reposiciones: Reposicion[] | null;
+    puede_entregar: boolean;
+    puede_pedir_compra: boolean;
     por_aprobar: Pedido[] | null;
     por_recibir: Pedido[] | null;
     /** Lo que ya entró y espera su comprobante. */
@@ -87,6 +112,7 @@ export function PorHacer({ porHacer }: { porHacer: PorHacerAlmacen }) {
         (porHacer.sin_comprobante?.length ?? 0) +
         (entregas?.length ?? 0) +
         (por_comprar?.length ?? 0) +
+        (porHacer.reposiciones?.length ?? 0) +
         (por_aprobar?.length ?? 0) +
         (por_recibir?.length ?? 0);
 
@@ -104,8 +130,8 @@ export function PorHacer({ porHacer }: { porHacer: PorHacerAlmacen }) {
         return (
             <p className="flex items-center gap-2 rounded-xl border border-dashed p-4 text-sm text-muted-foreground">
                 <CircleCheck className="size-5 text-emerald-600" />
-                No hay nada pendiente: ninguna orden espera repuestos ni hay
-                pedidos de compra por atender.
+                No hay nada pendiente: ninguna orden espera repuestos, ninguna
+                unidad espera equipamiento ni hay pedidos de compra por atender.
             </p>
         );
     }
@@ -314,6 +340,105 @@ function Tarjetas({ porHacer }: { porHacer: PorHacerAlmacen }) {
                     })}
                 </Grupo>
             )}
+
+            {porHacer.reposiciones !== null &&
+                porHacer.reposiciones.length > 0 && (
+                    <Grupo
+                        titulo="Equipamiento por reponer"
+                        icono={<ShieldCheck className="size-4" />}
+                        cantidad={porHacer.reposiciones.length}
+                        tono="azul"
+                    >
+                        {porHacer.reposiciones.map((unidad) => (
+                            <div
+                                key={unidad.vehiculo_id}
+                                className="flex flex-col gap-2 rounded-lg border bg-background p-3"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <Placa placa={unidad.placa} />
+                                    <span className="text-xs text-muted-foreground">
+                                        {unidad.pedido_por
+                                            ? `Lo pidió ${unidad.pedido_por}`
+                                            : 'Pedido de taller'}
+                                    </span>
+                                </div>
+                                <ul className="grid gap-1 text-sm">
+                                    {unidad.lineas.map((linea) => (
+                                        <li
+                                            key={linea.reposicion_id}
+                                            className="flex items-center justify-between gap-2"
+                                        >
+                                            <span className="min-w-0">
+                                                {linea.pendiente} ·{' '}
+                                                {linea.descripcion}
+                                                {linea.nota && (
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        {linea.nota}
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <span
+                                                className={cn(
+                                                    'shrink-0 text-xs font-medium',
+                                                    linea.hay >= linea.pendiente
+                                                        ? 'text-emerald-700 dark:text-emerald-400'
+                                                        : linea.en_compra ||
+                                                            linea.hay > 0
+                                                          ? 'text-amber-700 dark:text-amber-400'
+                                                          : 'text-red-700 dark:text-red-400',
+                                                )}
+                                            >
+                                                {linea.hay >= linea.pendiente
+                                                    ? 'Hay'
+                                                    : linea.en_compra
+                                                      ? `En compra · ${linea.en_compra}`
+                                                      : linea.hay > 0
+                                                        ? `Hay ${linea.hay}`
+                                                        : 'No hay'}
+                                            </span>
+                                        </li>
+                                    ))}
+                                </ul>
+                                {unidad.se_puede && porHacer.puede_entregar && (
+                                    <Button asChild className="h-11">
+                                        <Link
+                                            href={salidas.create.url({
+                                                query: {
+                                                    vehiculo:
+                                                        unidad.vehiculo_id,
+                                                    reposicion: 1,
+                                                },
+                                            })}
+                                        >
+                                            <ArrowUpFromLine className="size-4" />
+                                            Entregar lo que hay
+                                        </Link>
+                                    </Button>
+                                )}
+                                {unidad.por_comprar &&
+                                    porHacer.puede_pedir_compra && (
+                                        <Button
+                                            asChild
+                                            variant="outline"
+                                            className="h-11"
+                                        >
+                                            <Link
+                                                href={compras.create.url({
+                                                    query: {
+                                                        reposicion:
+                                                            unidad.vehiculo_id,
+                                                    },
+                                                })}
+                                            >
+                                                <ShoppingCart className="size-4" />
+                                                Pedir la compra
+                                            </Link>
+                                        </Button>
+                                    )}
+                            </div>
+                        ))}
+                    </Grupo>
+                )}
 
             {por_recibir !== null && por_recibir.length > 0 && (
                 <Grupo

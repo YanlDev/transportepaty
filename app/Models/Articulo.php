@@ -125,6 +125,30 @@ class Articulo extends Model
         $query->whereNotNull('stock_minimo')->whereColumn('stock', '<=', 'stock_minimo');
     }
 
+    /**
+     * Los agotados que hay que mirar. El equipamiento de las unidades sin
+     * mínimo no cuenta: se compra a pedido, cuando taller pide reponerlo, y
+     * su stock normal es cero.
+     *
+     * @param  Builder<self>  $query
+     */
+    public function scopeAgotados(Builder $query): void
+    {
+        $query->where('stock', '<=', 0)->where(fn (Builder $query) => $query
+            ->whereNotNull('stock_minimo')
+            ->orWhereNull('categoria_articulo_id')
+            ->orWhereNotIn('categoria_articulo_id', CategoriaArticulo::query()->where('clave', 'equipamiento')->select('id')));
+    }
+
+    /**
+     * Equipamiento sin mínimo y sin stock: no es un faltante, se compra
+     * cuando se pide.
+     */
+    public function esAPedido(): bool
+    {
+        return $this->stock_minimo === null && (float) $this->stock <= 0 && $this->categoria?->clave === 'equipamiento';
+    }
+
     public function estaBajoMinimo(): bool
     {
         return $this->stock_minimo !== null && (float) $this->stock <= (float) $this->stock_minimo;

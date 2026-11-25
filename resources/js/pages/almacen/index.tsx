@@ -493,8 +493,19 @@ export default function AlmacenIndex({
     );
 }
 
-/** El stock con su color: rojo sin stock, ámbar en el mínimo. */
+/**
+ * El stock con su color: rojo sin stock, ámbar en el mínimo. El equipamiento
+ * que se compra a pedido no es un faltante: va en gris.
+ */
 function Stock({ articulo }: { articulo: ArticuloStock }) {
+    if (articulo.a_pedido) {
+        return (
+            <span className="text-xs whitespace-nowrap text-muted-foreground">
+                A pedido
+            </span>
+        );
+    }
+
     return (
         <span
             className={cn(

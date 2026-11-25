@@ -17,6 +17,7 @@ use App\Models\UbicacionAlmacen;
 use App\Models\ValeCompra;
 use App\Services\ExportadorAlmacen;
 use App\Services\RelojOperativo;
+use App\Services\ReposicionesDeEquipamiento;
 use App\Services\RepuestosDeOrden;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
@@ -32,7 +33,10 @@ class AlmacenController extends Controller
 {
     use CatalogosAlmacen;
 
-    public function __construct(private readonly RepuestosDeOrden $repuestos) {}
+    public function __construct(
+        private readonly RepuestosDeOrden $repuestos,
+        private readonly ReposicionesDeEquipamiento $reposiciones,
+    ) {}
 
     public function index(Request $request): Response
     {
@@ -58,6 +62,7 @@ class AlmacenController extends Controller
                 'stock' => (float) $articulo->stock,
                 'stock_minimo' => $articulo->stock_minimo === null ? null : (float) $articulo->stock_minimo,
                 'bajo_minimo' => $articulo->estaBajoMinimo(),
+                'a_pedido' => $articulo->esAPedido(),
                 'activo' => $articulo->activo,
                 'costo_promedio' => $this->costo($veCostos, $articulo->costo_promedio),
                 'valor' => $this->costo($veCostos, $articulo->valor),
@@ -91,6 +96,10 @@ class AlmacenController extends Controller
             'porHacer' => [
                 'entregas' => $entrega ? $this->repuestos->porEntregar() : null,
                 'por_comprar' => $pideCompras ? $this->repuestos->porComprar() : null,
+                // El equipamiento que taller pidió reponer en las unidades.
+                'reposiciones' => $entrega || $pideCompras ? $this->reposiciones->porAtender() : null,
+                'puede_entregar' => $entrega,
+                'puede_pedir_compra' => $pideCompras,
                 'por_aprobar' => $veCompras
                     ? $pedidos->filter(fn (ValeCompra $vale): bool => $vale->situacion() === SituacionValeCompra::PorAprobar)->map($pedido)->values()->all()
                     : null,
@@ -139,7 +148,7 @@ class AlmacenController extends Controller
             'resumen' => [
                 'articulos' => (clone $activos)->count(),
                 'bajo_minimo' => (clone $activos)->bajoMinimo()->count(),
-                'sin_stock' => (clone $activos)->where('stock', '<=', 0)->count(),
+                'sin_stock' => (clone $activos)->agotados()->count(),
                 // Todo lo que hay, aunque el artículo esté dado de baja: mientras
                 // tenga stock, vale.
                 'valor' => $this->costo($veCostos, Articulo::query()->sum('valor')),
@@ -195,7 +204,7 @@ class AlmacenController extends Controller
             ->when($filtros['categoria'] !== '', fn (Builder $query) => $query->where('categoria_articulo_id', (int) $filtros['categoria']))
             ->when($filtros['ubicacion'] !== '', fn (Builder $query) => $query->where('ubicacion_almacen_id', (int) $filtros['ubicacion']))
             ->when($filtros['estado'] === 'bajo_minimo', fn (Builder $query) => $query->bajoMinimo())
-            ->when($filtros['estado'] === 'sin_stock', fn (Builder $query) => $query->where('stock', '<=', 0))
+            ->when($filtros['estado'] === 'sin_stock', fn (Builder $query) => $query->agotados())
             ->when($filtros['estado'] === 'con_stock', fn (Builder $query) => $query->where('stock', '>', 0));
     }
 }

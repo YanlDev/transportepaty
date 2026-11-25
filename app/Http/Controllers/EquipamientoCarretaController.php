@@ -20,6 +20,7 @@ use App\Services\EquipamientoDeUnidades;
 use App\Services\FileUploadService;
 use App\Services\PiezasDeEquipamiento;
 use App\Services\RelojOperativo;
+use App\Services\ReposicionesDeEquipamiento;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -78,7 +79,7 @@ class EquipamientoCarretaController extends Controller
         ]);
     }
 
-    public function show(Request $request, Vehiculo $vehiculo): Response
+    public function show(Request $request, Vehiculo $vehiculo, ReposicionesDeEquipamiento $reposiciones): Response
     {
         $this->authorize('viewAny', ConteoEquipamiento::class);
 
@@ -95,6 +96,15 @@ class EquipamientoCarretaController extends Controller
                 ...$this->estado($estado),
             ],
             'fotos' => $this->ultimasFotos($vehiculo),
+            // Lo que taller ya pidió reponer y el almacén todavía no entregó.
+            'reposiciones' => collect($reposiciones->porAtender($vehiculo)[0]['lineas'] ?? [])
+                ->mapWithKeys(fn (array $linea): array => [$linea['item_equipamiento_id'] => [
+                    'id' => $linea['reposicion_id'],
+                    'pendiente' => $linea['pendiente'],
+                    'hay' => $linea['hay'],
+                    'en_compra' => $linea['en_compra'],
+                ]])
+                ->all(),
             'conteos' => ConteoEquipamiento::query()
                 ->where('vehiculo_id', $vehiculo->id)
                 ->with(['detalles.item:id,nombre', 'detalles.media', 'user:id,name'])

@@ -50,6 +50,7 @@ use App\Http\Controllers\PiezaEquipamientoController;
 use App\Http\Controllers\PlanMantenimientoController;
 use App\Http\Controllers\ReciboWhatsappController;
 use App\Http\Controllers\ReporteCobranzaController;
+use App\Http\Controllers\ReposicionEquipamientoController;
 use App\Http\Controllers\RolController;
 use App\Http\Controllers\RutaController;
 use App\Http\Controllers\SolicitudTrabajoController;
@@ -411,6 +412,10 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.equipamiento.piezas.store');
     Route::put('mantenimiento/equipamiento/piezas/{pieza}', [PiezaEquipamientoController::class, 'update'])
         ->name('mantenimiento.equipamiento.piezas.update');
+    Route::post('mantenimiento/equipamiento/{vehiculo}/reposiciones', [ReposicionEquipamientoController::class, 'store'])
+        ->name('mantenimiento.equipamiento.reposiciones.store');
+    Route::delete('mantenimiento/equipamiento/reposiciones/{reposicion}', [ReposicionEquipamientoController::class, 'destroy'])
+        ->name('mantenimiento.equipamiento.reposiciones.destroy');
     Route::post('mantenimiento/equipamiento/movimientos/{movimiento}/anular', [EquipamientoCarretaController::class, 'anularMovimiento'])
         ->name('mantenimiento.equipamiento.movimientos.anular');
     Route::get('mantenimiento/planes/{plan}/editar', [PlanMantenimientoController::class, 'edit'])

@@ -3,6 +3,7 @@ import {
     ArrowLeftRight,
     CalendarClock,
     ClipboardList,
+    PackagePlus,
     Tag,
     Trash2,
     XCircle,
@@ -16,6 +17,7 @@ import equipamiento, {
 } from '@/actions/App/Http/Controllers/EquipamientoCarretaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import piezas from '@/actions/App/Http/Controllers/PiezaEquipamientoController';
+import reposicionesRutas from '@/actions/App/Http/Controllers/ReposicionEquipamientoController';
 import { AnularDialog } from '@/components/almacen/anular-dialog';
 import { ConfirmarBorradoDialog } from '@/components/confirmar-borrado-dialog';
 import { EstadoEquipamientoBadge } from '@/components/equipamiento/estado-equipamiento';
@@ -50,6 +52,16 @@ type Props = {
     carreta: EquipamientoCarreta;
     /** Las fotos más recientes de cada ítem, por su id. */
     fotos: Record<number, FotoEquipamiento[]>;
+    /** Lo pedido al almacén que todavía no llegó, por id de ítem. */
+    reposiciones: Record<
+        number,
+        {
+            id: number;
+            pendiente: number;
+            hay: number;
+            en_compra: string | null;
+        }
+    >;
     conteos: ConteoEquipamiento[];
     movimientos: MovimientoEquipamiento[];
     /** Las demás unidades, para los traslados. */
@@ -58,7 +70,10 @@ type Props = {
     hoy: string;
 };
 
-type Accion = { tipo: 'traslado' | 'baja' | 'vencimiento'; item: ItemCarreta };
+type Accion = {
+    tipo: 'traslado' | 'baja' | 'vencimiento' | 'reposicion';
+    item: ItemCarreta;
+};
 
 /**
  * La ficha de equipamiento de una unidad: lo que tiene frente a lo que debe
@@ -69,6 +84,7 @@ type Accion = { tipo: 'traslado' | 'baja' | 'vencimiento'; item: ItemCarreta };
 export default function EquipamientoCarretaShow({
     carreta,
     fotos,
+    reposiciones,
     conteos,
     movimientos,
     unidades,
@@ -263,6 +279,57 @@ export default function EquipamientoCarretaShow({
                                     )}
                                 </div>
                             )}
+                        {reposiciones[item.id] ? (
+                            <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-sky-500/40 bg-sky-500/5 px-3 py-2 text-xs">
+                                <span>
+                                    <span className="font-medium">
+                                        Reposición pedida al almacén:{' '}
+                                        {reposiciones[item.id].pendiente}
+                                    </span>
+                                    <span className="block text-muted-foreground">
+                                        {reposiciones[item.id].hay >=
+                                        reposiciones[item.id].pendiente
+                                            ? 'Hay en el almacén: falta que la entreguen'
+                                            : reposiciones[item.id].en_compra
+                                              ? `En compra · ${reposiciones[item.id].en_compra}`
+                                              : 'No hay en el almacén: hay que comprarla'}
+                                    </span>
+                                </span>
+                                {puedeContar && (
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                            router.delete(
+                                                reposicionesRutas.destroy(
+                                                    reposiciones[item.id].id,
+                                                ).url,
+                                                { preserveScroll: true },
+                                            )
+                                        }
+                                    >
+                                        Retirar pedido
+                                    </Button>
+                                )}
+                            </div>
+                        ) : (
+                            puedeContar &&
+                            (item.faltan > 0 || item.minimo === null) && (
+                                <Button
+                                    variant={
+                                        item.faltan > 0 ? 'default' : 'outline'
+                                    }
+                                    size="sm"
+                                    className="self-start"
+                                    onClick={() =>
+                                        setAccion({ tipo: 'reposicion', item })
+                                    }
+                                >
+                                    <PackagePlus className="size-3.5" />
+                                    Pedir reposición
+                                </Button>
+                            )
+                        )}
                         {puedeContar &&
                             (item.asignado > 0 ||
                                 (item.lleva_vencimiento &&
@@ -653,14 +720,17 @@ function AccionDialog({
             fecha: string;
             vehiculo_destino_id: number | null;
             motivo: string;
+            nota: string;
             vence_el: string;
         }>({
             item_equipamiento_id: item.id,
-            cantidad: '1',
+            cantidad:
+                tipo === 'reposicion' ? String(Math.max(1, item.faltan)) : '1',
             pieza_equipamiento_id: item.piezas[0]?.id ?? null,
             fecha: hoy,
             vehiculo_destino_id: null,
             motivo: '',
+            nota: '',
             vence_el: item.vence_el ?? '',
         });
 
@@ -676,6 +746,17 @@ function AccionDialog({
                 vence_el: datos.vence_el,
             }));
             put(vencimiento(unidadId).url, opciones);
+
+            return;
+        }
+
+        if (tipo === 'reposicion') {
+            transform((datos) => ({
+                item_equipamiento_id: datos.item_equipamiento_id,
+                cantidad: datos.cantidad,
+                nota: datos.nota || null,
+            }));
+            post(reposicionesRutas.store(unidadId).url, opciones);
 
             return;
         }
@@ -704,6 +785,7 @@ function AccionDialog({
         traslado: 'Pasar a otra unidad',
         baja: 'Dar de baja',
         vencimiento: 'Fecha de vencimiento',
+        reposicion: 'Pedir reposición al almacén',
     }[tipo];
 
     return (
@@ -716,10 +798,60 @@ function AccionDialog({
                             {item.nombre} · {placa}
                             {tipo !== 'vencimiento' &&
                                 ` tiene ${item.asignado}`}
+                            {tipo === 'reposicion' &&
+                                item.minimo !== null &&
+                                ` y debe llevar ${item.minimo}`}
                         </DialogDescription>
                     </DialogHeader>
 
-                    {tipo === 'vencimiento' ? (
+                    {tipo === 'reposicion' ? (
+                        <>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="reposicion-cantidad">
+                                    Cuántas pides
+                                </Label>
+                                <Input
+                                    id="reposicion-cantidad"
+                                    inputMode="numeric"
+                                    value={data.cantidad}
+                                    onChange={(e) =>
+                                        setData(
+                                            'cantidad',
+                                            e.target.value.replace(/\D/g, ''),
+                                        )
+                                    }
+                                    className="w-28"
+                                />
+                                <InputError
+                                    message={
+                                        errors.cantidad ??
+                                        errors.item_equipamiento_id
+                                    }
+                                />
+                            </div>
+                            <div className="grid gap-1.5">
+                                <Label htmlFor="reposicion-nota">
+                                    Nota para el almacén (opcional)
+                                </Label>
+                                <Textarea
+                                    id="reposicion-nota"
+                                    rows={2}
+                                    maxLength={300}
+                                    placeholder="Capacidad, tipo, por qué se pide…"
+                                    value={data.nota}
+                                    onChange={(e) =>
+                                        setData('nota', e.target.value)
+                                    }
+                                />
+                                <InputError message={errors.nota} />
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                El almacén lo ve en su «Por hacer»: si hay, lo
+                                entrega con vale a nombre de {placa}; si no,
+                                pide su compra.
+                            </p>
+                        </>
+                    ) : tipo === 'vencimiento' ? (
                         <div className="grid gap-1.5">
                             <Label htmlFor="equipo-vence">Vence el</Label>
                             <Input

@@ -24,6 +24,7 @@ use App\Models\PagoCompra;
 use App\Models\Proveedor;
 use App\Models\UbicacionAlmacen;
 use App\Models\ValeCompra;
+use App\Models\Vehiculo;
 use App\Rules\FechaDelAlmacen;
 use App\Services\AlertasDeTaller;
 use App\Services\Archivos\ReglasDeArchivo;
@@ -33,6 +34,7 @@ use App\Services\FirmaDeVales;
 use App\Services\PdfDelPedido;
 use App\Services\RecepcionDeCompra;
 use App\Services\RelojOperativo;
+use App\Services\ReposicionesDeEquipamiento;
 use App\Services\RepuestosDeOrden;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\RedirectResponse;
@@ -88,12 +90,15 @@ class ValeCompraController extends Controller
         ]);
     }
 
-    public function create(Request $request, RepuestosDeOrden $repuestos): Response
+    public function create(Request $request, RepuestosDeOrden $repuestos, ReposicionesDeEquipamiento $reposiciones): Response
     {
         $this->authorize('create', ValeCompra::class);
 
         // Desde una orden de trabajo se llega con la orden ya elegida.
         $orden = OrdenTrabajo::query()->vigentes()->find($request->integer('orden'));
+
+        // O desde una reposición de equipamiento, con la unidad que lo pide.
+        $unidad = $orden === null ? Vehiculo::query()->find($request->integer('reposicion')) : null;
 
         return Inertia::render('almacen/compras/form', [
             'vale' => null,
@@ -104,14 +109,22 @@ class ValeCompraController extends Controller
                 'forma_pago' => FormaPago::Contado->value,
                 'dias_credito' => null,
                 'directo_a_unidad' => false,
-                'motivo' => $orden === null ? '' : "Para la {$orden->numero()}: {$orden->trabajo}",
+                'motivo' => match (true) {
+                    $orden !== null => "Para la {$orden->numero()}: {$orden->trabajo}",
+                    $unidad !== null => "Reposición de equipamiento de {$unidad->placa}",
+                    default => '',
+                },
                 'sustento_precio' => '',
                 'orden_trabajo_id' => $orden?->id,
-                'vehiculo_id' => $orden?->vehiculo_id,
-                // Nace con lo que a la orden le falta y el stock no cubre.
-                'detalles' => $orden === null ? [] : array_map(
+                'vehiculo_id' => $orden !== null ? $orden->vehiculo_id : $unidad?->id,
+                // Nace con lo que falta y el stock no cubre.
+                'detalles' => array_map(
                     fn (array $linea): array => ['es_servicio' => false, 'articulo_id' => $linea['articulo_id'], 'descripcion' => null, 'cantidad' => $linea['cantidad'], 'precio_unitario' => null],
-                    $repuestos->faltanteParaComprar($orden),
+                    match (true) {
+                        $orden !== null => $repuestos->faltanteParaComprar($orden),
+                        $unidad !== null => $reposiciones->porComprar($unidad),
+                        default => [],
+                    },
                 ),
             ],
             ...$this->catalogos(),

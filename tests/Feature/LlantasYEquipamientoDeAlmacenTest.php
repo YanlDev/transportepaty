@@ -13,6 +13,7 @@ use App\Models\Llanta;
 use App\Models\MovimientoEquipamiento;
 use App\Models\OrdenTrabajo;
 use App\Models\Proveedor;
+use App\Models\ReposicionEquipamiento;
 use App\Models\SalidaAlmacen;
 use App\Models\Vehiculo;
 use App\Services\ArticulosDeEquipamiento;
@@ -752,4 +753,132 @@ it('keeps the expiry date of what enters the warehouse and warns when it is clos
             ->where('porVencer.0.nombre', 'EXTINTOR PQS 6 KG')
             ->where('porVencer.0.vence_el', '2026-11-25')
             ->where('porVencer.0.vencido', false));
+});
+
+// ─── Reposición de equipamiento ─────────────────────────────────────────────
+
+/** Taller pide al almacén reponer algo de la unidad. */
+function pedirReposicion(Vehiculo $unidad, string $item, int $cantidad = 1, ?string $nota = null)
+{
+    return actingAs(actorConRol('taller'))
+        ->post(route('mantenimiento.equipamiento.reposiciones.store', $unidad), ['item_equipamiento_id' => itemDeEquipo($item)->id, 'cantidad' => $cantidad, 'nota' => $nota]);
+}
+
+it('takes a replacement request from the unit to the warehouse: buy it, deliver it, done', function (): void {
+    $tracto = Vehiculo::factory()->create(['placa' => 'VEP-918']);
+    conteoDe($tracto, ['Extintor' => [1, 0], 'Pala' => [0, 0]])->assertSessionHasNoErrors();
+
+    pedirReposicion($tracto, 'Pala', 1, 'Pala punta redonda')->assertSessionHasNoErrors();
+
+    $pala = itemDeEquipo('Pala')->articulo;
+
+    // No hay stock: el almacén la ve por reponer y puede pedir su compra.
+    actingAs(actorConRol('admin'))->get(route('almacen.index'))->assertInertia(fn (Assert $page) => $page
+        ->has('porHacer.reposiciones', 1)
+        ->where('porHacer.reposiciones.0.placa', 'VEP-918')
+        ->where('porHacer.reposiciones.0.se_puede', false)
+        ->where('porHacer.reposiciones.0.por_comprar', true)
+        ->where('porHacer.reposiciones.0.lineas.0.descripcion', 'Pala')
+        ->where('porHacer.reposiciones.0.lineas.0.nota', 'Pala punta redonda')
+        ->where('porHacer.reposiciones.0.lineas.0.pendiente', 1)
+        ->where('porHacer.reposiciones.0.lineas.0.hay', 0));
+
+    actingAs(actorConRol('admin'))->get(route('almacen.compras.create', ['reposicion' => $tracto->id]))->assertInertia(fn (Assert $page) => $page
+        ->where('inicial.motivo', 'Reposición de equipamiento de VEP-918')
+        ->where('inicial.vehiculo_id', $tracto->id)
+        ->has('inicial.detalles', 1)
+        ->where('inicial.detalles.0.articulo_id', $pala->id)
+        ->where('inicial.detalles.0.cantidad', 1));
+
+    // Llega la compra: ahora se puede entregar, con el vale ya armado.
+    stockDe($pala, 3, 45);
+
+    actingAs(actorConRol('admin'))->get(route('almacen.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('porHacer.reposiciones.0.se_puede', true)
+        ->where('porHacer.reposiciones.0.por_comprar', false)
+        ->where('porHacer.reposiciones.0.lineas.0.hay', 1));
+
+    actingAs(actorConRol('admin'))->get(route('almacen.salidas.create', ['vehiculo' => $tracto->id, 'reposicion' => 1]))->assertInertia(fn (Assert $page) => $page
+        ->where('inicial.destino', 'unidad')
+        ->where('inicial.vehiculo_id', $tracto->id)
+        ->has('inicial.detalles', 1)
+        ->where('inicial.detalles.0.articulo_id', $pala->id));
+
+    actingAs(actorConRol('taller'))->get(route('mantenimiento.equipamiento.show', $tracto))->assertInertia(fn (Assert $page) => $page
+        ->where('reposiciones.'.itemDeEquipo('Pala')->id.'.pendiente', 1)
+        ->where('reposiciones.'.itemDeEquipo('Pala')->id.'.hay', 1));
+
+    valeALaUnidad($tracto, $pala->refresh(), 1);
+
+    // Salió el vale: baja el stock, la pala queda en la unidad y el pedido se cierra solo.
+    expect((float) $pala->refresh()->stock)->toBe(2.0)
+        ->and(asignadoDe($tracto, 'Pala'))->toBe(1);
+
+    actingAs(actorConRol('admin'))->get(route('almacen.index'))->assertInertia(fn (Assert $page) => $page->has('porHacer.reposiciones', 0));
+    actingAs(actorConRol('taller'))->get(route('mantenimiento.equipamiento.show', $tracto))->assertInertia(fn (Assert $page) => $page->where('reposiciones', []));
+});
+
+it('keeps one open request per item, lets the workshop withdraw it and rejects what is not of the unit', function (): void {
+    $tracto = Vehiculo::factory()->create();
+
+    pedirReposicion($tracto, 'Conos de seguridad', 1)->assertSessionHasNoErrors();
+    pedirReposicion($tracto, 'Conos de seguridad', 2)->assertSessionHasNoErrors();
+
+    $vigentes = fn () => ReposicionEquipamiento::query()->vigentes()->where('vehiculo_id', $tracto->id)->get();
+
+    // Volver a pedir corrige el pedido: no se suman.
+    expect($vigentes())->toHaveCount(1)
+        ->and($vigentes()[0]->cantidad)->toBe(2);
+
+    // Las fajas son de la carreta.
+    pedirReposicion($tracto, 'Faja de 4" con chicharra')->assertSessionHasErrors('item_equipamiento_id');
+    pedirReposicion($tracto, 'Pala', 0)->assertSessionHasErrors('cantidad');
+
+    actingAs(actorConRol('visor'))
+        ->post(route('mantenimiento.equipamiento.reposiciones.store', $tracto), ['item_equipamiento_id' => itemDeEquipo('Pala')->id, 'cantidad' => 1])
+        ->assertForbidden();
+
+    actingAs(actorConRol('taller'))->delete(route('mantenimiento.equipamiento.reposiciones.destroy', $vigentes()[0]))->assertSessionHasNoErrors();
+
+    expect($vigentes())->toHaveCount(0);
+});
+
+it('says when what is missing is already on its way in a purchase order', function (): void {
+    $tracto = Vehiculo::factory()->create();
+    pedirReposicion($tracto, 'Pala')->assertSessionHasNoErrors();
+    $pala = itemDeEquipo('Pala')->articulo;
+
+    actingAs(actorConRol('admin'))->post(route('almacen.compras.store'), [
+        'tipo' => 'normal', 'proveedor_id' => Proveedor::factory()->create()->id, 'moneda' => 'PEN', 'forma_pago' => 'contado',
+        'motivo' => 'Reposición de equipamiento', 'sustento_precio' => 'Precio de lista del proveedor', 'vehiculo_id' => $tracto->id,
+        'detalles' => [['es_servicio' => false, 'articulo_id' => $pala->id, 'cantidad' => 1, 'precio_unitario' => 45]],
+    ])->assertSessionHasNoErrors();
+
+    actingAs(actorConRol('admin'))->get(route('almacen.index'))->assertInertia(fn (Assert $page) => $page
+        ->where('porHacer.reposiciones.0.lineas.0.en_compra', 'VC-000001')
+        // Ya está pedida: no se ofrece pedirla otra vez.
+        ->where('porHacer.reposiciones.0.por_comprar', false));
+});
+
+it('does not count on-demand equipment as out of stock in the warehouse', function (): void {
+    app(ArticulosDeEquipamiento::class)->asegurar();
+    $pala = itemDeEquipo('Pala')->articulo;
+    $filtro = Articulo::factory()->create(['nombre' => 'FILTRO DE ACEITE', 'stock' => 0]);
+    $agotados = fn (): int => Articulo::query()->where('activo', true)->agotados()->count();
+    $antes = $agotados();
+
+    expect(Articulo::query()->agotados()->whereKey($pala->id)->exists())->toBeFalse()
+        ->and(Articulo::query()->agotados()->whereKey($filtro->id)->exists())->toBeTrue()
+        ->and($pala->esAPedido())->toBeTrue()
+        ->and($filtro->esAPedido())->toBeFalse();
+
+    actingAs(actorConRol('admin'))->get(route('almacen.index', ['buscar' => 'PALA']))->assertInertia(fn (Assert $page) => $page
+        ->where('resumen.sin_stock', $antes)
+        ->where('articulos.data.0.a_pedido', true));
+
+    // Con un mínimo definido, vuelve a ser un faltante como cualquier otro.
+    $pala->update(['stock_minimo' => 2]);
+
+    expect($agotados())->toBe($antes + 1)
+        ->and($pala->refresh()->esAPedido())->toBeFalse();
 });

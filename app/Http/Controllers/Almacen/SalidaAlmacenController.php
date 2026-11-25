@@ -15,11 +15,13 @@ use App\Models\IngresoAlmacen;
 use App\Models\Llanta;
 use App\Models\OrdenTrabajo;
 use App\Models\SalidaAlmacen;
+use App\Models\Vehiculo;
 use App\Services\Kardex;
 use App\Services\LlantasDeAlmacen;
 use App\Services\MaterialesDeOrden;
 use App\Services\PeriodoAlmacen;
 use App\Services\RelojOperativo;
+use App\Services\ReposicionesDeEquipamiento;
 use App\Services\RepuestosDeOrden;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -82,7 +84,7 @@ class SalidaAlmacenController extends Controller
         ]);
     }
 
-    public function create(Request $request, MaterialesDeOrden $materiales, RepuestosDeOrden $repuestos): Response
+    public function create(Request $request, MaterialesDeOrden $materiales, RepuestosDeOrden $repuestos, ReposicionesDeEquipamiento $reposiciones): Response
     {
         $this->authorize('create', SalidaAlmacen::class);
 
@@ -91,6 +93,10 @@ class SalidaAlmacenController extends Controller
         // o, si es una preventiva sin pedido, lo que pide su nivel.
         $orden = OrdenTrabajo::query()->with(['servicio', 'mecanicos:id,name'])->find($request->integer('orden'));
         $pedido = $orden === null ? [] : $this->entregables($repuestos->pendientes($orden));
+
+        // Desde una reposición de equipamiento se llega con la unidad
+        // elegida y lo que taller pidió para ella y hay en stock.
+        $unidad = $orden === null && $request->boolean('reposicion') ? Vehiculo::query()->find($request->integer('vehiculo')) : null;
 
         return Inertia::render('almacen/salidas/create', [
             'articulos' => $this->articulosParaElegir($this->veCostos($request->user()), soloConStock: true),
@@ -105,6 +111,7 @@ class SalidaAlmacenController extends Controller
                 'detalles' => match (true) {
                     $pedido !== [] => $pedido,
                     $orden?->servicio !== null => $this->pendientesDe($materiales->requeridos($orden->servicio, $orden)),
+                    $unidad !== null => $reposiciones->entregables($unidad),
                     default => [],
                 },
             ],
