@@ -110,6 +110,37 @@ it('lists the board from the newest ticket, with every step for the progress bar
             ->where('tablero.0.siguiente.clave', 'taller'));
 });
 
+/**
+ * A un ticket que ya salió se le programa después la carga de retorno: el
+ * tablero dice cuándo, para que la lista lo suba con lo recién programado.
+ */
+it('tells when the last pending stop of a ticket was programmed', function (): void {
+    $enRuta = Vuelta::factory()->create(['origen' => OrigenVuelta::Programacion, 'inicio' => '2026-11-18']);
+    $ida = ParadaVuelta::factory()->create(['vuelta_id' => $enRuta->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1]);
+    Viaje::factory()->create(['tracto_id' => null])->forceFill(['parada_vuelta_id' => $ida->id])->save();
+
+    $sinRetorno = Vuelta::factory()->create(['origen' => OrigenVuelta::Programacion, 'inicio' => '2026-11-18']);
+    $hecha = ParadaVuelta::factory()->create(['vuelta_id' => $sinRetorno->id, 'sentido' => SentidoTramo::Ida, 'orden' => 1]);
+    Viaje::factory()->create(['tracto_id' => null])->forceFill(['parada_vuelta_id' => $hecha->id])->save();
+
+    $this->travelTo('2026-11-24 18:34:00');
+    ParadaVuelta::factory()->create([
+        'vuelta_id' => $enRuta->id, 'sentido' => SentidoTramo::Regreso, 'orden' => 2,
+        'zona_origen' => ZonaRuta::Lima, 'zona_destino' => ZonaRuta::Mina, 'tipo_carga' => TipoCarga::Materiales,
+        'lugar_origen' => null, 'lugar_destino' => null, 'cliente' => null, 'fecha' => null,
+    ]);
+
+    actingAs(actorConRol('admin'))
+        ->get(route('vueltas.index'))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('tablero', function ($tablero) use ($enRuta, $sinRetorno): bool {
+                $filas = collect($tablero)->keyBy('id');
+
+                return str_starts_with((string) $filas[$enRuta->id]['programado_en'], '2026-11-24T')
+                    && $filas[$sinRetorno->id]['programado_en'] === null;
+            }));
+});
+
 it('lists the history of a unit with the GR of each stop', function (): void {
     $parada = ParadaVuelta::factory()->create();
     // Sin tracto para que no se asigne sola: se engancha a mano.

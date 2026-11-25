@@ -206,6 +206,11 @@ export type TarjetaVuelta = Vuelta & {
         fecha: string | null;
         hecha: boolean;
     } | null;
+    /**
+     * Cuándo se programó lo último que el ticket tiene por hacer (una carga
+     * de retorno agregada después); null si no espera ninguna GR.
+     */
+    programado_en: string | null;
     dias_en_ruta: number | null;
     /** Cuántos días lleva en la base esperando la siguiente vuelta. */
     dias_en_base: number | null;

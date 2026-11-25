@@ -48,6 +48,17 @@ function tiempo(vuelta: TarjetaVuelta): string | null {
     return vuelta.dias_en_ruta !== null ? `día ${vuelta.dias_en_ruta}` : null;
 }
 
+/**
+ * Lo más reciente entre el día de salida y el momento en que se le programó
+ * algo que todavía no hizo. Las dos son fechas ISO: se comparan como texto.
+ */
+function ultimaProgramacion(vuelta: TarjetaVuelta): string {
+    const salida = vuelta.inicio ?? '';
+    const programado = vuelta.programado_en ?? '';
+
+    return programado > salida ? programado : salida;
+}
+
 /** Los nombres de las rutas del ticket, la ida primero y sin repetir. */
 function rutasDe(vuelta: TarjetaVuelta): string[] {
     const ordenadas = [...vuelta.rutas].sort(
@@ -94,11 +105,27 @@ function Tiempo({ vuelta }: { vuelta: TarjetaVuelta }) {
 
 /** El día en que salió: el del ticket por salir ya lo dice su tiempo. */
 function Salida({ vuelta }: { vuelta: TarjetaVuelta }) {
-    return vuelta.inicio && vuelta.etapa !== 'programada' ? (
-        <span className="block truncate text-xs text-muted-foreground">
-            salió {formatearFecha(vuelta.inicio)}
-        </span>
-    ) : null;
+    if (!vuelta.inicio || vuelta.etapa === 'programada') {
+        return null;
+    }
+
+    // Ya salió y le programaron algo después: se dice, que es por lo que
+    // la fila subió en la lista.
+    const reprogramado =
+        vuelta.programado_en !== null && vuelta.programado_en > vuelta.inicio;
+
+    return (
+        <>
+            <span className="block truncate text-xs text-muted-foreground">
+                salió {formatearFecha(vuelta.inicio)}
+            </span>
+            {reprogramado && (
+                <span className="block truncate text-xs font-medium text-primary">
+                    programado {formatearFecha(vuelta.programado_en)}
+                </span>
+            )}
+        </>
+    );
 }
 
 function Sigue({ vuelta }: { vuelta: TarjetaVuelta }) {
@@ -238,10 +265,14 @@ export function ListaProgramacion({
     onAbrir: (vuelta: TarjetaVuelta) => void;
     onEditar: (vuelta: Vuelta) => void;
 }) {
-    // Por día de salida: los tickets que se regularizaron después tienen
-    // número alto aunque hayan salido antes.
+    // Lo último programado arriba: el ticket que sale más tarde o al que se
+    // le acaba de programar algo (la carga de retorno), aunque haya salido
+    // hace días. No por número: los que se regularizaron después lo tienen
+    // alto aunque hayan salido antes.
     const ordenadas = [...vueltas].sort(
-        (a, b) => (b.inicio ?? '').localeCompare(a.inicio ?? '') || b.id - a.id,
+        (a, b) =>
+            ultimaProgramacion(b).localeCompare(ultimaProgramacion(a)) ||
+            b.id - a.id,
     );
 
     if (ordenadas.length === 0) {

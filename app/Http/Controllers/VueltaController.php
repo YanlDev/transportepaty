@@ -374,6 +374,7 @@ class VueltaController extends Controller
             ...$this->vuelta($vuelta, $request),
             'etapa' => $etapa,
             'actual' => $this->dondeVa($vuelta),
+            'programado_en' => $this->ultimaProgramacion($vuelta),
             'dias_en_ruta' => in_array($etapa, ['en_ida', 'en_vuelta'], true) && $vuelta->inicio
                 ? (int) $vuelta->inicio->diffInDays($hoy) + 1
                 : null,
@@ -495,6 +496,25 @@ class VueltaController extends Controller
             'fecha' => $parada->fecha?->toDateString(),
             'hecha' => $hecha !== null,
         ];
+    }
+
+    /**
+     * Cuándo se programó lo último que el ticket tiene por hacer (la carga
+     * de retorno que se le agregó ayer, por ejemplo); null si no espera
+     * ninguna GR. La lista lo usa para poner arriba lo recién programado,
+     * aunque el ticket haya salido hace días.
+     */
+    private function ultimaProgramacion(Vuelta $vuelta): ?string
+    {
+        if ($vuelta->origen !== OrigenVuelta::Programacion || $vuelta->estado === EstadoVuelta::Cerrada) {
+            return null;
+        }
+
+        return $vuelta->paradas
+            ->filter(fn (ParadaVuelta $parada): bool => ! $parada->esVacio() && ! $parada->esContinuacion() && $parada->viajes->isEmpty())
+            ->max('created_at')
+            ?->setTimezone(RelojOperativo::ahora()->getTimezone())
+            ->toIso8601String();
     }
 
     /**
