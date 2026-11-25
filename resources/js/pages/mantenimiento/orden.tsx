@@ -8,6 +8,7 @@ import {
 import compras from '@/actions/App/Http/Controllers/Almacen/ValeCompraController';
 import { show as llantasDeUnidad } from '@/actions/App/Http/Controllers/LlantaController';
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
+import { show as pantallaDelMecanico } from '@/actions/App/Http/Controllers/MisOrdenesController';
 import {
     anular,
     agregarRepuesto,
@@ -82,6 +83,8 @@ type Props = {
         puede_rechazar: boolean;
         /** El mecánico envió su requerimiento y se puede aprobar o devolver. */
         puede_aprobar_requerimiento: boolean;
+        /** La orden sigue en manos del mecánico y se puede anotar por él. */
+        puede_registrar_por_mecanico: boolean;
         estado: string;
         estado_label: string;
         fotos: FotoOrden[];
@@ -380,6 +383,38 @@ export default function OrdenTrabajo({
                     )}
                 </div>
             </div>
+
+            {editando && orden.puede_registrar_por_mecanico && ejecucion && (
+                <div className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm">
+                    <p>
+                        <span className="font-semibold">
+                            ¿El mecánico no puede anotarlo desde su
+                            celular?{' '}
+                        </span>
+                        Anótalo tú por él, con las mismas fotos del antes y del
+                        después. Queda como hecho por el mecánico y registrado
+                        por ti.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                        {ejecucion.mecanicos.map((mecanico) => (
+                            <Button
+                                key={mecanico.id}
+                                asChild
+                                variant="outline"
+                                className="h-11"
+                            >
+                                <Link
+                                    href={pantallaDelMecanico(orden.id, {
+                                        query: { por: mecanico.id },
+                                    })}
+                                >
+                                    Registrar por {mecanico.nombre}
+                                </Link>
+                            </Button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {editando && orden.puede_aprobar_requerimiento && (
                 <div className="flex flex-col gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
@@ -1022,6 +1057,8 @@ export default function OrdenTrabajo({
                                                     {tarea.hecha_por && (
                                                         <span className="ml-2 text-xs text-muted-foreground">
                                                             {tarea.hecha_por}
+                                                            {tarea.registrada_por &&
+                                                                ` (registrado por ${tarea.registrada_por})`}
                                                         </span>
                                                     )}
                                                 </span>

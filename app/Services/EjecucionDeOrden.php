@@ -27,11 +27,15 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * Las reglas viven acá y no en los controladores para que la pantalla web y
  * una futura app de mecánicos apliquen exactamente las mismas.
  *
+ * Si el mecánico no puede anotar desde su celular, quien gestiona la orden
+ * anota por él con las mismas reglas: el paso queda a nombre del mecánico
+ * que hizo el trabajo y, aparte, quién lo anotó (`$registra`).
+ *
  * La evidencia es parte del paso: no se empieza sin foto del antes ni se
  * termina sin foto del después.
  *
- * @phpstan-type Tarea array{id: int, descripcion: string, hecha: bool, hecha_por: string|null, hecha_at: string|null}
- * @phpstan-type Paso array{paso: string, usuario: string|null, cuando: string|null, nota: string|null}
+ * @phpstan-type Tarea array{id: int, descripcion: string, hecha: bool, hecha_por: string|null, registrada_por: string|null, hecha_at: string|null}
+ * @phpstan-type Paso array{paso: string, usuario: string|null, registrado_por: string|null, cuando: string|null, nota: string|null}
  */
 class EjecucionDeOrden
 {
@@ -90,7 +94,7 @@ class EjecucionDeOrden
      *
      * @param  array{articulo_id?: int|null, descripcion?: string|null, cantidad: float|int|string, unidad?: string|null}  $datos
      */
-    public function pedirRepuesto(OrdenTrabajo $orden, User $mecanico, array $datos): RepuestoOrden
+    public function pedirRepuesto(OrdenTrabajo $orden, User $mecanico, array $datos, ?User $registra = null): RepuestoOrden
     {
         $enRequerimiento = $orden->estado === EstadoOrdenTrabajo::Solicitada;
         $enTrabajo = in_array($orden->estado, [EstadoOrdenTrabajo::Pendiente, EstadoOrdenTrabajo::EnProceso, EstadoOrdenTrabajo::Observada], true);
@@ -108,6 +112,7 @@ class EjecucionDeOrden
             'unidad' => $articulo?->unidad->value ?? ($datos['unidad'] ?? null),
             'adicional' => $enTrabajo,
             'user_id' => $mecanico->id,
+            'registrado_por' => $registra?->id,
         ]);
     }
 
@@ -140,7 +145,7 @@ class EjecucionDeOrden
      * va a hacer y mostrar cómo llegó la unidad. Los repuestos son
      * opcionales: hay trabajos que no los necesitan.
      */
-    public function enviarRequerimiento(OrdenTrabajo $orden, User $mecanico): void
+    public function enviarRequerimiento(OrdenTrabajo $orden, User $mecanico, ?User $registra = null): void
     {
         $this->exigirPreOrden($orden, 'estado', "La {$orden->numero()} ya no es una pre-orden: el requerimiento ya se envió.");
 
@@ -156,6 +161,7 @@ class EjecucionDeOrden
             'estado' => EstadoOrdenTrabajo::Requerimiento,
             'requerimiento_at' => now(),
             'requerimiento_por' => $mecanico->id,
+            'requerimiento_registrado_por' => $registra?->id,
             'devolucion_requerimiento' => null,
         ]);
     }
@@ -284,7 +290,7 @@ class EjecucionDeOrden
      * El mecánico empieza: la orden tiene que estar aprobada y con al menos
      * una foto de cómo llegó la unidad (las del requerimiento valen).
      */
-    public function iniciar(OrdenTrabajo $orden, User $mecanico, ?int $kilometraje = null): void
+    public function iniciar(OrdenTrabajo $orden, User $mecanico, ?int $kilometraje = null, ?User $registra = null): void
     {
         if ($orden->estado !== EstadoOrdenTrabajo::Pendiente) {
             $this->rechazar('estado', "La {$orden->numero()} está ".mb_strtolower($orden->estado->label()).': no se puede empezar.');
@@ -298,6 +304,7 @@ class EjecucionDeOrden
             'estado' => EstadoOrdenTrabajo::EnProceso,
             'inicio' => now(),
             'iniciado_por' => $mecanico->id,
+            'inicio_registrado_por' => $registra?->id,
             'kilometraje' => $kilometraje ?? $orden->kilometraje,
         ]);
     }
@@ -306,7 +313,7 @@ class EjecucionDeOrden
      * El mecánico termina: con foto de cómo quedó y, si dejó tareas sin
      * marcar, diciendo por qué. La orden pasa a operaciones para validarla.
      */
-    public function terminar(OrdenTrabajo $orden, User $mecanico, ?string $nota = null, ?int $kilometraje = null): void
+    public function terminar(OrdenTrabajo $orden, User $mecanico, ?string $nota = null, ?int $kilometraje = null, ?User $registra = null): void
     {
         if (! $orden->estado->enEjecucion()) {
             $this->rechazar('estado', "La {$orden->numero()} está ".mb_strtolower($orden->estado->label()).': no se puede terminar.');
@@ -328,6 +335,7 @@ class EjecucionDeOrden
             'estado' => EstadoOrdenTrabajo::PorRevisar,
             'termino' => now(),
             'terminado_por' => $mecanico->id,
+            'termino_registrado_por' => $registra?->id,
             'nota_mecanico' => filled($nota) ? $nota : $orden->nota_mecanico,
             'kilometraje' => $kilometraje ?? $orden->kilometraje,
         ]);
@@ -353,7 +361,7 @@ class EjecucionDeOrden
     /**
      * Marca o desmarca una tarea, con quién la hizo.
      */
-    public function marcarTarea(TareaOrden $tarea, User $mecanico, bool $hecha): void
+    public function marcarTarea(TareaOrden $tarea, User $mecanico, bool $hecha, ?User $registra = null): void
     {
         if (! $tarea->orden->estado->enEjecucion()) {
             $this->rechazar('tarea', 'Las tareas se marcan con la orden en proceso: empiézala primero.');
@@ -362,6 +370,7 @@ class EjecucionDeOrden
         $tarea->update([
             'hecha_at' => $hecha ? now() : null,
             'hecha_por' => $hecha ? $mecanico->id : null,
+            'registrada_por' => $hecha ? $registra?->id : null,
         ]);
     }
 
@@ -375,9 +384,11 @@ class EjecucionDeOrden
     public function vista(OrdenTrabajo $orden): array
     {
         $orden->loadMissing([
-            'mecanicos:id,name', 'tareas.hechaPor:id,name', 'media',
+            'mecanicos:id,name', 'tareas.hechaPor:id,name', 'tareas.registradaPor:id,name', 'media',
             'creador:id,name', 'iniciadoPor:id,name', 'terminadoPor:id,name', 'revisadoPor:id,name',
             'requerimientoPor:id,name', 'aprobadoPor:id,name', 'repuestos.articulo:id,stock', 'repuestos.pedidoPor:id,name',
+            'requerimientoRegistradoPor:id,name', 'inicioRegistradoPor:id,name', 'terminoRegistradoPor:id,name',
+            'repuestos.registradoPor:id,name',
         ]);
 
         return [
@@ -395,6 +406,7 @@ class EjecucionDeOrden
                     'descripcion' => $tarea->descripcion,
                     'hecha' => $tarea->estaHecha(),
                     'hecha_por' => $tarea->hechaPor?->name,
+                    'registrada_por' => $tarea->registradaPor?->name,
                     'hecha_at' => $tarea->hecha_at?->toIso8601String(),
                 ])
                 ->values()
@@ -421,7 +433,7 @@ class EjecucionDeOrden
      * la orden. Solo un repuesto del catálogo se puede cruzar con los vales;
      * lo entregado se reparte en orden entre las líneas del mismo artículo.
      *
-     * @return list<array{id: int, descripcion: string, cantidad: float, unidad: string|null, del_catalogo: bool, stock: float|null, adicional: bool, aprobado: bool, entregado: float|null, pedido_por: string|null}>
+     * @return list<array{id: int, descripcion: string, cantidad: float, unidad: string|null, del_catalogo: bool, stock: float|null, adicional: bool, aprobado: bool, entregado: float|null, pedido_por: string|null, registrado_por: string|null}>
      */
     private function repuestos(OrdenTrabajo $orden): array
     {
@@ -452,6 +464,7 @@ class EjecucionDeOrden
                     'aprobado' => $repuesto->estaAprobado(),
                     'entregado' => $recibido,
                     'pedido_por' => $repuesto->pedidoPor?->name,
+                    'registrado_por' => $repuesto->registradoPor?->name,
                 ];
             })
             ->values()
@@ -459,7 +472,8 @@ class EjecucionDeOrden
     }
 
     /**
-     * La línea de tiempo: cada paso dado, con el usuario que lo dio.
+     * La línea de tiempo: cada paso dado, con el usuario que lo dio y, si
+     * otro lo anotó por él, quién.
      *
      * @return list<Paso>
      */
@@ -472,36 +486,42 @@ class EjecucionDeOrden
             [
                 'paso' => $preOrden ? 'Pre-orden creada' : 'Registrada',
                 'usuario' => $orden->creador?->name,
+                'registrado_por' => null,
                 'cuando' => $orden->created_at?->toIso8601String(),
                 'nota' => null,
             ],
             $orden->requerimiento_at === null ? null : [
                 'paso' => 'Envió el requerimiento',
                 'usuario' => $orden->requerimientoPor?->name,
+                'registrado_por' => $orden->requerimientoRegistradoPor?->name,
                 'cuando' => $orden->requerimiento_at->toIso8601String(),
                 'nota' => null,
             ],
             $orden->aprobado_at === null ? null : [
                 'paso' => 'Requerimiento aprobado: orden generada',
                 'usuario' => $orden->aprobadoPor?->name,
+                'registrado_por' => null,
                 'cuando' => $orden->aprobado_at->toIso8601String(),
                 'nota' => null,
             ],
             $orden->inicio === null ? null : [
                 'paso' => 'Empezó el trabajo',
                 'usuario' => $orden->iniciadoPor?->name,
+                'registrado_por' => $orden->inicioRegistradoPor?->name,
                 'cuando' => $orden->inicio->toIso8601String(),
                 'nota' => null,
             ],
             $orden->termino === null ? null : [
                 'paso' => 'Terminó el trabajo',
                 'usuario' => $orden->terminadoPor?->name,
+                'registrado_por' => $orden->terminoRegistradoPor?->name,
                 'cuando' => $orden->termino->toIso8601String(),
                 'nota' => $orden->nota_mecanico,
             ],
             ! $revisada ? null : [
                 'paso' => $orden->estado === EstadoOrdenTrabajo::Finalizada ? 'Validada y finalizada' : 'Observada',
                 'usuario' => $orden->revisadoPor?->name,
+                'registrado_por' => null,
                 'cuando' => $orden->revisado_at?->toIso8601String(),
                 'nota' => $orden->estado === EstadoOrdenTrabajo::Finalizada ? null : $orden->observacion_revision,
             ],

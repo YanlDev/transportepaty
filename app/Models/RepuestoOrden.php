@@ -27,11 +27,13 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $aprobado_at
  * @property int|null $aprobado_por
  * @property int|null $user_id
+ * @property int|null $registrado_por
  * @property-read OrdenTrabajo $orden
  * @property-read Articulo|null $articulo
  * @property-read User|null $pedidoPor
+ * @property-read User|null $registradoPor
  */
-#[Fillable(['orden_trabajo_id', 'articulo_id', 'descripcion', 'cantidad', 'unidad', 'adicional', 'aprobado_at', 'aprobado_por', 'user_id'])]
+#[Fillable(['orden_trabajo_id', 'articulo_id', 'descripcion', 'cantidad', 'unidad', 'adicional', 'aprobado_at', 'aprobado_por', 'user_id', 'registrado_por'])]
 class RepuestoOrden extends Model
 {
     /** @use HasFactory<RepuestoOrdenFactory> */
@@ -61,6 +63,16 @@ class RepuestoOrden extends Model
     public function pedidoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    /**
+     * Quien lo anotó por el mecánico, cuando no lo pidió él desde su usuario.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function registradoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'registrado_por');
     }
 
     public function estaAprobado(): bool

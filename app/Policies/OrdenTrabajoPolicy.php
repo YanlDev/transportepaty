@@ -80,6 +80,16 @@ class OrdenTrabajoPolicy
     }
 
     /**
+     * Anotar los pasos del mecánico por él, cuando no puede hacerlo desde su
+     * celular: quien gestiona la orden, y solo a nombre de uno de los
+     * mecánicos que la tienen asignada.
+     */
+    public function registrarPorMecanico(User $user, OrdenTrabajo $orden, User $mecanico): bool
+    {
+        return $this->update($user, $orden) && $orden->esDeMecanico($mecanico);
+    }
+
+    /**
      * Una orden no se borra: se anula, y eso deja un hueco en el plan de la
      * unidad, así que tiene su propio permiso.
      */

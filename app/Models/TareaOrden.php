@@ -19,10 +19,12 @@ use Illuminate\Support\Carbon;
  * @property int $posicion
  * @property Carbon|null $hecha_at
  * @property int|null $hecha_por
+ * @property int|null $registrada_por
  * @property-read OrdenTrabajo $orden
  * @property-read User|null $hechaPor
+ * @property-read User|null $registradaPor
  */
-#[Fillable(['orden_trabajo_id', 'descripcion', 'posicion', 'hecha_at', 'hecha_por'])]
+#[Fillable(['orden_trabajo_id', 'descripcion', 'posicion', 'hecha_at', 'hecha_por', 'registrada_por'])]
 class TareaOrden extends Model
 {
     /** @use HasFactory<TareaOrdenFactory> */
@@ -44,6 +46,16 @@ class TareaOrden extends Model
     public function hechaPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'hecha_por');
+    }
+
+    /**
+     * Quien la marcó por el mecánico, cuando no la marcó él.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function registradaPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'registrada_por');
     }
 
     public function estaHecha(): bool

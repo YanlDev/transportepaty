@@ -204,6 +204,11 @@ class OrdenTrabajoController extends Controller
                 'puede_observar' => $request->user()?->can('observar', $orden) ?? false,
                 'puede_rechazar' => $request->user()?->can('rechazar', $orden) ?? false,
                 'puede_aprobar_requerimiento' => $request->user()?->can('aprobarRequerimiento', $orden) ?? false,
+                // Si el mecánico no puede anotar desde su celular, quien
+                // gestiona la orden anota por él mientras siga en sus manos.
+                'puede_registrar_por_mecanico' => $orden->mecanicos->isNotEmpty() && in_array($orden->estado, [
+                    EstadoOrdenTrabajo::Solicitada, EstadoOrdenTrabajo::Pendiente, EstadoOrdenTrabajo::EnProceso, EstadoOrdenTrabajo::Observada,
+                ], true),
                 'estado' => $orden->estado->value,
                 'estado_label' => $orden->estado->label(),
                 'fotos' => $orden->media

@@ -34,6 +34,11 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * paso queda con su usuario y su hora.
  *
  * No ve costos, ni el almacén, ni las órdenes de otros.
+ *
+ * Si el mecánico no puede anotar desde su celular, quien gestiona la orden
+ * abre esta misma pantalla con `?por={mecánico}` y anota por él: mismas
+ * reglas y mismos pasos, que quedan a nombre del mecánico y con quién los
+ * anotó (ver `actores`).
  */
 class MisOrdenesController extends Controller
 {
@@ -89,10 +94,7 @@ class MisOrdenesController extends Controller
 
     public function show(Request $request, OrdenTrabajo $orden, MaterialesDeOrden $materiales): Response
     {
-        $this->authorize('ejecutar', $orden);
-
-        /** @var User $mecanico */
-        $mecanico = $request->user();
+        [$mecanico, $registra] = $this->actores($request, $orden);
         $orden->load(['vehiculo:id,placa,marca,tipo', 'servicio']);
 
         return Inertia::render('mecanico/orden', [
@@ -101,7 +103,7 @@ class MisOrdenesController extends Controller
                 'kilometraje' => $orden->kilometraje,
                 'vehiculo_id' => $orden->vehiculo_id,
                 // Con la orden aprobada, el mecánico ve las llantas de la unidad.
-                'puede_ver_llantas' => ! $orden->estado->sinAprobar() && $mecanico->can('verUnidad', [Llanta::class, $orden->vehiculo]),
+                'puede_ver_llantas' => ! $orden->estado->sinAprobar() && ($registra ?? $mecanico)->can('verUnidad', [Llanta::class, $orden->vehiculo]),
                 'pide_km' => $orden->servicio !== null,
                 'observacion' => $orden->observacion,
                 ...$this->ejecucion->vista($orden),
@@ -119,6 +121,8 @@ class MisOrdenesController extends Controller
                 ),
                 'faltantes' => $orden->servicio === null ? [] : $materiales->faltantes($orden->servicio, $orden),
             ],
+            // Quien gestiona la orden está anotando por este mecánico.
+            'por' => $registra === null ? null : ['id' => $mecanico->id, 'nombre' => $mecanico->name],
             'maximo_fotos' => IniciarOrdenRequest::MAXIMO_FOTOS,
             // El catálogo del almacén, para pedir repuestos por su nombre:
             // sin costos, solo si hay o no hay.
@@ -132,22 +136,21 @@ class MisOrdenesController extends Controller
      */
     public function enviar(Request $request, OrdenTrabajo $orden): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        [$mecanico, $registra] = $this->actores($request, $orden);
+        $this->ejecucion->enviarRequerimiento($orden, $mecanico, $registra);
+        $this->alertas->requerimientoEnviado($orden, $registra ?? $mecanico);
 
-        /** @var User $mecanico */
-        $mecanico = $request->user();
-        $this->ejecucion->enviarRequerimiento($orden, $mecanico);
-        $this->alertas->requerimientoEnviado($orden, $mecanico);
-
-        return to_route('mis-ordenes.index')->with('toast', [
+        return $this->alSalir($orden, $registra)->with('toast', [
             'type' => 'success',
-            'message' => "Requerimiento de la {$orden->numero()} enviado a operaciones.",
+            'message' => $registra === null
+                ? "Requerimiento de la {$orden->numero()} enviado a operaciones."
+                : "Requerimiento de la {$orden->numero()} anotado por {$mecanico->name}: falta aprobarlo.",
         ]);
     }
 
     public function agregarTarea(Request $request, OrdenTrabajo $orden): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        $this->actores($request, $orden);
 
         $datos = $request->validate(
             ['descripcion' => ['required', 'string', 'min:3', 'max:500']],
@@ -159,9 +162,9 @@ class MisOrdenesController extends Controller
         return back();
     }
 
-    public function quitarTarea(OrdenTrabajo $orden, TareaOrden $tarea): RedirectResponse
+    public function quitarTarea(Request $request, OrdenTrabajo $orden, TareaOrden $tarea): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        $this->actores($request, $orden);
 
         abort_unless($tarea->orden_trabajo_id === $orden->id, 404);
 
@@ -172,14 +175,11 @@ class MisOrdenesController extends Controller
 
     public function pedirRepuesto(PedirRepuestoRequest $request, OrdenTrabajo $orden): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
-
-        /** @var User $mecanico */
-        $mecanico = $request->user();
-        $repuesto = $this->ejecucion->pedirRepuesto($orden, $mecanico, $request->validated());
+        [$mecanico, $registra] = $this->actores($request, $orden);
+        $repuesto = $this->ejecucion->pedirRepuesto($orden, $mecanico, $request->validated(), $registra);
 
         if ($repuesto->adicional) {
-            $this->alertas->adicionalPedido($orden, $repuesto, $mecanico);
+            $this->alertas->adicionalPedido($orden, $repuesto, $registra ?? $mecanico);
         }
 
         return back()->with('toast', [
@@ -193,9 +193,9 @@ class MisOrdenesController extends Controller
     /**
      * El mecánico quita un repuesto que él pidió y nadie aprobó todavía.
      */
-    public function quitarRepuesto(OrdenTrabajo $orden, RepuestoOrden $repuesto): RedirectResponse
+    public function quitarRepuesto(Request $request, OrdenTrabajo $orden, RepuestoOrden $repuesto): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        $this->actores($request, $orden);
 
         abort_unless($repuesto->orden_trabajo_id === $orden->id, 404);
 
@@ -209,14 +209,11 @@ class MisOrdenesController extends Controller
      */
     public function iniciar(IniciarOrdenRequest $request, OrdenTrabajo $orden, FileUploadService $subidas): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        [$mecanico, $registra] = $this->actores($request, $orden);
 
-        /** @var User $mecanico */
-        $mecanico = $request->user();
-
-        DB::transaction(function () use ($request, $orden, $subidas, $mecanico): void {
+        DB::transaction(function () use ($request, $orden, $subidas, $mecanico, $registra): void {
             $this->guardarFotos($request, $orden, 'antes', $subidas);
-            $this->ejecucion->iniciar($orden->refresh(), $mecanico, $request->filled('kilometraje') ? $request->integer('kilometraje') : null);
+            $this->ejecucion->iniciar($orden->refresh(), $mecanico, $request->filled('kilometraje') ? $request->integer('kilometraje') : null, $registra);
         });
 
         return back()->with('toast', ['type' => 'success', 'message' => "{$orden->numero()} en proceso."]);
@@ -227,26 +224,26 @@ class MisOrdenesController extends Controller
      */
     public function terminar(TerminarOrdenRequest $request, OrdenTrabajo $orden, FileUploadService $subidas): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        [$mecanico, $registra] = $this->actores($request, $orden);
 
-        /** @var User $mecanico */
-        $mecanico = $request->user();
-
-        DB::transaction(function () use ($request, $orden, $subidas, $mecanico): void {
+        DB::transaction(function () use ($request, $orden, $subidas, $mecanico, $registra): void {
             $this->guardarFotos($request, $orden, 'despues', $subidas);
             $this->ejecucion->terminar(
                 $orden->refresh(),
                 $mecanico,
                 $request->validated('nota'),
                 $request->filled('kilometraje') ? $request->integer('kilometraje') : null,
+                $registra,
             );
         });
 
-        $this->alertas->trabajoTerminado($orden, $mecanico);
+        $this->alertas->trabajoTerminado($orden, $registra ?? $mecanico);
 
-        return to_route('mis-ordenes.index')->with('toast', [
+        return $this->alSalir($orden, $registra)->with('toast', [
             'type' => 'success',
-            'message' => "{$orden->numero()} terminada: taller la revisa.",
+            'message' => $registra === null
+                ? "{$orden->numero()} terminada: taller la revisa."
+                : "{$orden->numero()} terminada por {$mecanico->name}: falta validarla.",
         ]);
     }
 
@@ -255,7 +252,7 @@ class MisOrdenesController extends Controller
      */
     public function fotos(SubirFotosOrdenRequest $request, OrdenTrabajo $orden, FileUploadService $subidas): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        $this->actores($request, $orden);
         $this->exigirAbierta($orden);
 
         $this->guardarFotos($request, $orden, $request->validated('coleccion'), $subidas);
@@ -267,9 +264,9 @@ class MisOrdenesController extends Controller
      * El mecánico quita una foto que subió por error, mientras la orden
      * siga en sus manos.
      */
-    public function eliminarFoto(OrdenTrabajo $orden, Media $foto): RedirectResponse
+    public function eliminarFoto(Request $request, OrdenTrabajo $orden, Media $foto): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        $this->actores($request, $orden);
         $this->exigirAbierta($orden);
 
         abort_unless($foto->model_type === $orden->getMorphClass() && $foto->model_id === $orden->id, 404);
@@ -281,15 +278,49 @@ class MisOrdenesController extends Controller
 
     public function marcarTarea(Request $request, OrdenTrabajo $orden, TareaOrden $tarea): RedirectResponse
     {
-        $this->authorize('ejecutar', $orden);
+        [$mecanico, $registra] = $this->actores($request, $orden);
 
         abort_unless($tarea->orden_trabajo_id === $orden->id, 404);
 
-        /** @var User $mecanico */
-        $mecanico = $request->user();
-        $this->ejecucion->marcarTarea($tarea->setRelation('orden', $orden), $mecanico, $request->boolean('hecha'));
+        $this->ejecucion->marcarTarea($tarea->setRelation('orden', $orden), $mecanico, $request->boolean('hecha'), $registra);
 
         return back();
+    }
+
+    /**
+     * Quién hace el trabajo y, si lo anota otro por él, quién. Lo normal es
+     * el mecánico desde su usuario. Con `por` es quien gestiona la orden
+     * anotando por uno de los mecánicos asignados: el paso queda a nombre
+     * del mecánico y aparte queda quién lo anotó.
+     *
+     * @return array{0: User, 1: User|null}
+     */
+    private function actores(Request $request, OrdenTrabajo $orden): array
+    {
+        /** @var User $usuario */
+        $usuario = $request->user();
+
+        if (! $request->filled('por')) {
+            $this->authorize('ejecutar', $orden);
+
+            return [$usuario, null];
+        }
+
+        $mecanico = User::query()->findOrFail($request->integer('por'));
+        $this->authorize('registrarPorMecanico', [$orden, $mecanico]);
+
+        return [$mecanico, $mecanico->is($usuario) ? null : $usuario];
+    }
+
+    /**
+     * A dónde se vuelve al cerrar un paso: el mecánico a su lista; quien
+     * anotó por él, a la orden, donde le toca aprobar o validar.
+     */
+    private function alSalir(OrdenTrabajo $orden, ?User $registra): RedirectResponse
+    {
+        return $registra === null
+            ? to_route('mis-ordenes.index')
+            : to_route('mantenimiento.ordenes.edit', $orden);
     }
 
     /**

@@ -585,3 +585,149 @@ it('lists every order for the workshop with what is waiting for review', functio
         ->get(route('mantenimiento.ordenes.index', ['estado' => 'todas', 'mecanico' => $this->mecanico->id]))
         ->assertInertia(fn (Assert $page) => $page->has('ordenes.data', 1));
 });
+
+/*
+ * Cuando el mecánico no puede anotar desde su celular, quien gestiona la
+ * orden anota por él: mismos pasos y mismas reglas, a nombre del mecánico y
+ * con quién lo anotó.
+ */
+it('lets the workshop register every step on behalf of the assigned mechanic', function (): void {
+    $orden = ordenAsignada($this->tracto, $this->mecanico);
+    $orden->update(['estado' => EstadoOrdenTrabajo::Solicitada]);
+    $por = ['por' => $this->mecanico->id];
+
+    actingAs($this->taller)
+        ->get(route('mantenimiento.ordenes.edit', $orden))
+        ->assertInertia(fn (Assert $page) => $page->where('orden.puede_registrar_por_mecanico', true));
+
+    actingAs($this->taller)
+        ->get(route('mis-ordenes.show', [$orden, ...$por]))
+        ->assertInertia(fn (Assert $page) => $page
+            ->component('mecanico/orden')
+            ->where('por.id', $this->mecanico->id)
+            ->where('por.nombre', $this->mecanico->name));
+
+    // El requerimiento: tarea, repuesto, foto del antes y envío.
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.tareas.store', [$orden, ...$por]), ['descripcion' => 'Cambiar llanta de la posición 3'])
+        ->assertSessionHasNoErrors();
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.repuestos.store', [$orden, ...$por]), ['descripcion' => 'Válvula', 'cantidad' => 1, 'unidad' => 'und'])
+        ->assertSessionHasNoErrors();
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.fotos.store', [$orden, ...$por]), ['coleccion' => 'antes', 'fotos' => [foto()]])
+        ->assertSessionHasNoErrors();
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.enviar', [$orden, ...$por]))
+        ->assertRedirect(route('mantenimiento.ordenes.edit', $orden));
+
+    $orden->refresh();
+    $repuesto = $orden->repuestos()->sole();
+
+    expect($orden->estado)->toBe(EstadoOrdenTrabajo::Requerimiento)
+        ->and($orden->requerimiento_por)->toBe($this->mecanico->id)
+        ->and($orden->requerimiento_registrado_por)->toBe($this->taller->id)
+        ->and($repuesto->user_id)->toBe($this->mecanico->id)
+        ->and($repuesto->registrado_por)->toBe($this->taller->id);
+
+    actingAs($this->taller)
+        ->post(route('mantenimiento.ordenes.requerimiento.aprobar', $orden))
+        ->assertSessionHasNoErrors();
+
+    // La ejecución: empezar, marcar la tarea y terminar con la foto del después.
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.iniciar', [$orden, ...$por]))
+        ->assertSessionHasNoErrors();
+
+    $tarea = $orden->tareas()->sole();
+
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.tareas.marcar', [$orden, $tarea, ...$por]), ['hecha' => true])
+        ->assertSessionHasNoErrors();
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.terminar', [$orden, ...$por]), ['fotos' => [foto()]])
+        ->assertRedirect(route('mantenimiento.ordenes.edit', $orden));
+
+    $orden->refresh();
+    $tarea->refresh();
+
+    expect($orden->estado)->toBe(EstadoOrdenTrabajo::PorRevisar)
+        ->and($orden->iniciado_por)->toBe($this->mecanico->id)
+        ->and($orden->inicio_registrado_por)->toBe($this->taller->id)
+        ->and($orden->terminado_por)->toBe($this->mecanico->id)
+        ->and($orden->termino_registrado_por)->toBe($this->taller->id)
+        ->and($tarea->hecha_por)->toBe($this->mecanico->id)
+        ->and($tarea->registrada_por)->toBe($this->taller->id);
+
+    // El historial dice quién hizo el trabajo y quién lo anotó.
+    actingAs($this->taller)
+        ->get(route('mantenimiento.ordenes.edit', $orden))
+        ->assertInertia(fn (Assert $page) => $page
+            ->where('orden.puede_registrar_por_mecanico', false)
+            ->where('ejecucion.tareas.0.registrada_por', $this->taller->name)
+            ->where('ejecucion.pasos', fn ($pasos) => collect($pasos)
+                ->where('paso', 'Terminó el trabajo')
+                ->where('usuario', $this->mecanico->name)
+                ->where('registrado_por', $this->taller->name)
+                ->isNotEmpty()));
+
+    // Quien anotó también puede validar: queda a la vista en el historial.
+    actingAs($this->taller)
+        ->put(route('mantenimiento.ordenes.update', $orden), datosDeOrden($this->tracto, ['estado' => 'finalizada']))
+        ->assertSessionHasNoErrors();
+
+    expect($orden->refresh()->estado)->toBe(EstadoOrdenTrabajo::Finalizada)
+        ->and($orden->revisado_por)->toBe($this->taller->id);
+});
+
+it('asks for the same evidence when someone registers for the mechanic', function (): void {
+    $orden = ordenAsignada($this->tracto, $this->mecanico);
+    $por = ['por' => $this->mecanico->id];
+
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.iniciar', [$orden, ...$por]))
+        ->assertSessionHasErrors('fotos');
+
+    $orden->update(['estado' => EstadoOrdenTrabajo::EnProceso]);
+
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.terminar', [$orden, ...$por]))
+        ->assertSessionHasErrors('fotos');
+
+    expect($orden->refresh()->estado)->toBe(EstadoOrdenTrabajo::EnProceso);
+});
+
+it('registers only for a mechanic assigned to the order, and only who manages it', function (): void {
+    $orden = ordenAsignada($this->tracto, $this->mecanico);
+    $otro = actorConRol('mecanico');
+
+    // A nombre de alguien que no tiene la orden.
+    actingAs($this->taller)
+        ->post(route('mis-ordenes.iniciar', [$orden, 'por' => $otro->id]), ['fotos' => [foto()]])
+        ->assertForbidden();
+
+    // Un mecánico no anota por otro, aunque el otro sí tenga la orden.
+    actingAs($otro)
+        ->post(route('mis-ordenes.iniciar', [$orden, 'por' => $this->mecanico->id]), ['fotos' => [foto()]])
+        ->assertForbidden();
+
+    // Y taller, sin decir por quién, no entra a la pantalla del mecánico.
+    actingAs($this->taller)->get(route('mis-ordenes.show', $orden))->assertForbidden();
+
+    expect($orden->refresh()->estado)->toBe(EstadoOrdenTrabajo::Pendiente);
+});
+
+it('leaves no registrar when the mechanic works from its own user', function (): void {
+    $orden = ordenAsignada($this->tracto, $this->mecanico);
+
+    actingAs($this->mecanico)
+        ->post(route('mis-ordenes.iniciar', $orden), ['fotos' => [foto()]])
+        ->assertSessionHasNoErrors();
+
+    expect($orden->refresh()->iniciado_por)->toBe($this->mecanico->id)
+        ->and($orden->inicio_registrado_por)->toBeNull();
+
+    actingAs($this->mecanico)
+        ->get(route('mis-ordenes.show', $orden))
+        ->assertInertia(fn (Assert $page) => $page->where('por', null));
+});

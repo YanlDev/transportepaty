@@ -1,4 +1,11 @@
-import { Head, Link, router, setLayoutProps, useForm } from '@inertiajs/react';
+import {
+    Head,
+    Link,
+    router,
+    setLayoutProps,
+    useForm,
+    usePage,
+} from '@inertiajs/react';
 import {
     ArrowLeft,
     Check,
@@ -26,6 +33,7 @@ import {
     quitarTarea,
     terminar,
 } from '@/actions/App/Http/Controllers/MisOrdenesController';
+import { edit as ordenDeTaller } from '@/actions/App/Http/Controllers/OrdenTrabajoController';
 import InputError from '@/components/input-error';
 import { SelectorFotos } from '@/components/mantenimiento/selector-fotos';
 import { EstadoOrden } from '@/components/ordenes/estado-orden';
@@ -78,8 +86,13 @@ type ArticuloPedible = {
     hay: boolean;
 };
 
+/** El mecánico por el que anota quien gestiona la orden. */
+type Por = { id: number; nombre: string };
+
 type Props = {
     orden: Orden;
+    /** Quien gestiona la orden está anotando por este mecánico. */
+    por: Por | null;
     maximo_fotos: number;
     articulos: ArticuloPedible[];
     unidades: EnumOption[];
@@ -100,15 +113,27 @@ const BARRA =
  * - en proceso (u observada): marcar tareas, sumar fotos y «Terminar» con
  *   las fotos de cómo quedó;
  * - por revisar o finalizada: solo se mira.
+ *
+ * Si el mecánico no puede anotar desde su celular, quien gestiona la orden
+ * abre esta misma pantalla «por» él: los pasos quedan a nombre del mecánico
+ * y con quién los anotó.
  */
 export default function OrdenDeMecanicoPagina({
     orden,
+    por,
     articulos,
     unidades,
 }: Props) {
+    const volver = por
+        ? {
+              titulo: `Volver a la ${orden.numero}`,
+              ruta: ordenDeTaller(orden.id),
+          }
+        : { titulo: 'Mis órdenes', ruta: index() };
+
     setLayoutProps({
         breadcrumbs: [
-            { title: 'Mis órdenes', href: index().url },
+            { title: volver.titulo, href: volver.ruta.url },
             { title: orden.numero, href: '#' },
         ],
     });
@@ -123,12 +148,25 @@ export default function OrdenDeMecanicoPagina({
             <Head title={`${orden.numero} · ${orden.placa}`} />
 
             <Link
-                href={index()}
+                href={volver.ruta}
                 className="flex min-h-11 items-center gap-2 self-start text-sm text-muted-foreground"
             >
                 <ArrowLeft className="size-4" />
-                Mis órdenes
+                {volver.titulo}
             </Link>
+
+            {por && (
+                <p className="flex items-start gap-2 rounded-xl border border-sky-500/40 bg-sky-500/10 p-3 text-sm">
+                    <Users className="mt-0.5 size-5 shrink-0 text-sky-600" />
+                    <span>
+                        <span className="font-semibold">
+                            Estás anotando por {por.nombre}.{' '}
+                        </span>
+                        Cada paso queda como hecho por {por.nombre} y registrado
+                        por ti. Las fotos se piden igual.
+                    </span>
+                </p>
+            )}
 
             <header className="flex items-center gap-3">
                 <Placa placa={orden.placa} tamano="lg" />
@@ -388,13 +426,14 @@ function Tareas({
     activas: boolean;
     porEmpezar: boolean;
 }) {
+    const url = usePor();
     const [enviando, setEnviando] = useState<number | null>(null);
     const hechas = tareas.filter((tarea) => tarea.hecha).length;
 
     const marcar = (tarea: TareaDeOrden) => {
         setEnviando(tarea.id);
         router.post(
-            marcarTarea({ orden: ordenId, tarea: tarea.id }).url,
+            url(marcarTarea({ orden: ordenId, tarea: tarea.id })),
             { hecha: !tarea.hecha },
             {
                 preserveScroll: true,
@@ -477,6 +516,7 @@ function Tareas({
  * botón no se habilita (y el servidor tampoco lo acepta).
  */
 function Empezar({ orden }: { orden: Orden }) {
+    const url = usePor();
     const [preparando, setPreparando] = useState(false);
     const { data, setData, post, processing, progress, errors } = useForm<{
         fotos: File[];
@@ -492,7 +532,7 @@ function Empezar({ orden }: { orden: Orden }) {
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
-        post(iniciar(orden.id).url, {
+        post(url(iniciar(orden.id)), {
             preserveScroll: true,
             forceFormData: data.fotos.length > 0,
         });
@@ -509,7 +549,7 @@ function Empezar({ orden }: { orden: Orden }) {
                     titulo="Antes"
                     nuevas={data.fotos}
                     onNuevas={(fotos) => setData('fotos', fotos)}
-                    guardadas={conBorrado(orden.id, guardadas)}
+                    guardadas={conBorrado(orden.id, guardadas, url)}
                     progreso={progress?.percentage ?? null}
                     error={errorDe(errors, 'fotos')}
                     onPreparando={setPreparando}
@@ -541,6 +581,7 @@ function Empezar({ orden }: { orden: Orden }) {
 
 /** Fotos que se suman mientras se trabaja, al grupo del antes. */
 function FotosDurante({ orden }: { orden: Orden }) {
+    const url = usePor();
     const [preparando, setPreparando] = useState(false);
     const { data, setData, post, processing, progress, errors, reset } =
         useForm<{ coleccion: 'antes'; fotos: File[] }>({
@@ -550,7 +591,7 @@ function FotosDurante({ orden }: { orden: Orden }) {
 
     const subir = (evento?: React.FormEvent) => {
         evento?.preventDefault();
-        post(subirFotos(orden.id).url, {
+        post(url(subirFotos(orden.id)), {
             preserveScroll: true,
             forceFormData: data.fotos.length > 0,
             onSuccess: () => reset('fotos'),
@@ -585,6 +626,7 @@ function FotosDurante({ orden }: { orden: Orden }) {
                     guardadas={conBorrado(
                         orden.id,
                         deColeccion(orden.fotos, 'antes'),
+                        url,
                     )}
                     progreso={progress?.percentage ?? null}
                     error={errorDe(errors, 'fotos')}
@@ -614,6 +656,7 @@ function FotosDurante({ orden }: { orden: Orden }) {
  * el km. Si quedan tareas sin marcar, la nota es obligatoria.
  */
 function Terminar({ orden }: { orden: Orden }) {
+    const url = usePor();
     const [preparando, setPreparando] = useState(false);
     const { data, setData, post, processing, progress, errors } = useForm<{
         fotos: File[];
@@ -632,7 +675,7 @@ function Terminar({ orden }: { orden: Orden }) {
 
     const enviar = (evento: React.FormEvent) => {
         evento.preventDefault();
-        post(terminar(orden.id).url, {
+        post(url(terminar(orden.id)), {
             preserveScroll: true,
             forceFormData: data.fotos.length > 0,
         });
@@ -649,7 +692,7 @@ function Terminar({ orden }: { orden: Orden }) {
                     titulo="Después"
                     nuevas={data.fotos}
                     onNuevas={(fotos) => setData('fotos', fotos)}
-                    guardadas={conBorrado(orden.id, guardadas)}
+                    guardadas={conBorrado(orden.id, guardadas, url)}
                     progreso={progress?.percentage ?? null}
                     error={errorDe(errors, 'fotos')}
                     onPreparando={setPreparando}
@@ -716,13 +759,14 @@ function TareasDelRequerimiento({
     ordenId: number;
     tareas: TareaDeOrden[];
 }) {
+    const url = usePor();
     const { data, setData, post, processing, errors, reset } = useForm({
         descripcion: '',
     });
 
     const agregar = (evento: React.FormEvent) => {
         evento.preventDefault();
-        post(agregarTarea(ordenId).url, {
+        post(url(agregarTarea(ordenId)), {
             preserveScroll: true,
             onSuccess: () => reset(),
         });
@@ -757,10 +801,12 @@ function TareasDelRequerimiento({
                                 aria-label={`Quitar la tarea ${tarea.descripcion}`}
                                 onClick={() =>
                                     router.delete(
-                                        quitarTarea({
-                                            orden: ordenId,
-                                            tarea: tarea.id,
-                                        }).url,
+                                        url(
+                                            quitarTarea({
+                                                orden: ordenId,
+                                                tarea: tarea.id,
+                                            }),
+                                        ),
                                         { preserveScroll: true },
                                     )
                                 }
@@ -820,6 +866,7 @@ function RepuestosPedidos({
     puedePedir: boolean;
     adicional: boolean;
 }) {
+    const url = usePor();
     const hayCatalogo = articulos.length > 0;
     const [abierto, setAbierto] = useState(false);
     const [delAlmacen, setDelAlmacen] = useState(hayCatalogo);
@@ -853,7 +900,7 @@ function RepuestosPedidos({
                       unidad: datos.unidad,
                   },
         );
-        post(pedirRepuesto(orden.id).url, {
+        post(url(pedirRepuesto(orden.id)), {
             preserveScroll: true,
             onSuccess: () => {
                 reset();
@@ -902,10 +949,12 @@ function RepuestosPedidos({
                                     aria-label={`Quitar ${repuesto.descripcion}`}
                                     onClick={() =>
                                         router.delete(
-                                            quitarRepuesto({
-                                                orden: orden.id,
-                                                repuesto: repuesto.id,
-                                            }).url,
+                                            url(
+                                                quitarRepuesto({
+                                                    orden: orden.id,
+                                                    repuesto: repuesto.id,
+                                                }),
+                                            ),
                                             { preserveScroll: true },
                                         )
                                     }
@@ -1135,6 +1184,7 @@ function EstadoRepuesto({
  * foto de cómo llegó la unidad; el botón dice qué falta.
  */
 function EnviarRequerimiento({ orden }: { orden: Orden }) {
+    const url = usePor();
     const { post, processing, errors } = useForm({});
     const sinTareas = orden.tareas.length === 0;
     const sinFotos = deColeccion(orden.fotos, 'antes').length === 0;
@@ -1144,7 +1194,7 @@ function EnviarRequerimiento({ orden }: { orden: Orden }) {
         <form
             onSubmit={(evento) => {
                 evento.preventDefault();
-                post(enviar(orden.id).url, { preserveScroll: true });
+                post(url(enviar(orden.id)), { preserveScroll: true });
             }}
             className="flex flex-col gap-2"
         >
@@ -1233,6 +1283,19 @@ function Seccion({
     );
 }
 
+/**
+ * La dirección de cada paso. Cuando quien gestiona la orden anota por el
+ * mecánico, cada pedido lleva por quién: así el paso queda a su nombre.
+ */
+function usePor(): (ruta: { url: string }) => string {
+    const { por } = usePage<{ por: Por | null }>().props;
+
+    return (ruta) =>
+        por
+            ? `${ruta.url}${ruta.url.includes('?') ? '&' : '?'}por=${por.id}`
+            : ruta.url;
+}
+
 function deColeccion(
     fotos: FotoOrden[],
     coleccion: FotoOrden['coleccion'],
@@ -1243,10 +1306,11 @@ function deColeccion(
 function conBorrado(
     ordenId: number,
     fotos: FotoOrden[],
+    url: (ruta: { url: string }) => string,
 ): (FotoOrden & { urlBorrar: string })[] {
     return fotos.map((foto) => ({
         ...foto,
-        urlBorrar: eliminarFoto({ orden: ordenId, foto: foto.id }).url,
+        urlBorrar: url(eliminarFoto({ orden: ordenId, foto: foto.id })),
     }));
 }
 

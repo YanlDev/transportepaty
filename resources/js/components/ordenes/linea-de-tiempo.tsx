@@ -4,7 +4,7 @@ import type { PasoDeOrden } from '@/types/mantenimiento';
 /**
  * Los pasos que dio la orden, cada uno con el usuario que lo dio y la hora:
  * quién la registró, quién la empezó, quién la terminó y quién de taller la
- * finalizó.
+ * finalizó. Si alguien anotó el paso por el mecánico, también se dice.
  */
 export function LineaDeTiempo({ pasos }: { pasos: PasoDeOrden[] }) {
     return (
@@ -15,6 +15,8 @@ export function LineaDeTiempo({ pasos }: { pasos: PasoDeOrden[] }) {
                     <p className="font-medium">{paso.paso}</p>
                     <p className="text-xs text-muted-foreground">
                         {paso.usuario ?? 'Sin usuario'}
+                        {paso.registrado_por &&
+                            ` (registrado por ${paso.registrado_por})`}
                         {paso.cuando && ` · ${formatearFechaHora(paso.cuando)}`}
                     </p>
                     {paso.nota && (

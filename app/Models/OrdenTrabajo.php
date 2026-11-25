@@ -44,6 +44,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property PrioridadOrden $prioridad
  * @property Carbon|null $requerimiento_at
  * @property int|null $requerimiento_por
+ * @property int|null $requerimiento_registrado_por
  * @property Carbon|null $aprobado_at
  * @property int|null $aprobado_por
  * @property string|null $devolucion_requerimiento
@@ -51,8 +52,10 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  * @property int|null $kilometraje
  * @property Carbon|null $inicio
  * @property int|null $iniciado_por
+ * @property int|null $inicio_registrado_por
  * @property Carbon|null $termino
  * @property int|null $terminado_por
+ * @property int|null $termino_registrado_por
  * @property string|null $nota_mecanico
  * @property int|null $revisado_por
  * @property Carbon|null $revisado_at
@@ -76,6 +79,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'prioridad',
     'requerimiento_at',
     'requerimiento_por',
+    'requerimiento_registrado_por',
     'aprobado_at',
     'aprobado_por',
     'devolucion_requerimiento',
@@ -83,8 +87,10 @@ use Spatie\MediaLibrary\InteractsWithMedia;
     'kilometraje',
     'inicio',
     'iniciado_por',
+    'inicio_registrado_por',
     'termino',
     'terminado_por',
+    'termino_registrado_por',
     'nota_mecanico',
     'revisado_por',
     'revisado_at',
@@ -214,6 +220,36 @@ class OrdenTrabajo extends Model implements HasMedia
     public function terminadoPor(): BelongsTo
     {
         return $this->belongsTo(User::class, 'terminado_por');
+    }
+
+    /**
+     * Quien anotó el requerimiento por el mecánico, cuando no lo anotó él.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function requerimientoRegistradoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requerimiento_registrado_por');
+    }
+
+    /**
+     * Quien anotó el inicio por el mecánico, cuando no lo anotó él.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function inicioRegistradoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'inicio_registrado_por');
+    }
+
+    /**
+     * Quien anotó el término por el mecánico, cuando no lo anotó él.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function terminoRegistradoPor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'termino_registrado_por');
     }
 
     /**

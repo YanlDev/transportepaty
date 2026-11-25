@@ -213,6 +213,8 @@ export type TareaDeOrden = {
     descripcion: string;
     hecha: boolean;
     hecha_por: string | null;
+    /** Quien la marcó por el mecánico; null si la marcó él. */
+    registrada_por: string | null;
     hecha_at: string | null;
 };
 
@@ -220,6 +222,8 @@ export type TareaDeOrden = {
 export type PasoDeOrden = {
     paso: string;
     usuario: string | null;
+    /** Quien anotó el paso por el mecánico; null si lo anotó él mismo. */
+    registrado_por: string | null;
     cuando: string | null;
     nota: string | null;
 };
@@ -250,6 +254,8 @@ export type RepuestoPedido = {
     /** Lo que ya salió con vale; null si no se puede cruzar. */
     entregado: number | null;
     pedido_por: string | null;
+    /** Quien lo anotó por el mecánico; null si lo pidió él. */
+    registrado_por: string | null;
 };
 
 /** Lo que se ve de la ejecución de una orden, para el mecánico y para taller. */
