@@ -578,14 +578,14 @@ it('takes the first count of a unit as what it already had, and from then on onl
 });
 
 it('gives each equipment item its article in the warehouse, once', function (): void {
-    expect(app(ArticulosDeEquipamiento::class)->asegurar())->toBe(11)
+    expect(app(ArticulosDeEquipamiento::class)->asegurar())->toBe(15)
         ->and(app(ArticulosDeEquipamiento::class)->asegurar())->toBe(0);
 
     $extintor = itemDeEquipo('Extintor')->articulo;
 
     expect($extintor->nombre)->toBe('EXTINTOR')
         ->and($extintor->categoria->clave)->toBe('equipamiento')
-        ->and(Articulo::query()->where('categoria_articulo_id', $extintor->categoria_articulo_id)->count())->toBe(11);
+        ->and(Articulo::query()->where('categoria_articulo_id', $extintor->categoria_articulo_id)->count())->toBe(15);
 
     // La categoría se puede renombrar, no quitar: Mantenimiento la necesita.
     actingAs(actorConRol('admin'))

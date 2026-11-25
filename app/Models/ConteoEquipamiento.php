@@ -34,7 +34,7 @@ class ConteoEquipamiento extends Model
      */
     public function detalles(): HasMany
     {
-        return $this->hasMany(DetalleConteoEquipamiento::class);
+        return $this->hasMany(DetalleConteoEquipamiento::class)->orderBy('id');
     }
 
     /**

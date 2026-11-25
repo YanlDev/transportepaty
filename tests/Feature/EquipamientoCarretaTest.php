@@ -4,9 +4,13 @@ use App\Enums\EstadoEquipamiento;
 use App\Enums\Permiso;
 use App\Models\ConteoEquipamiento;
 use App\Models\ItemEquipamiento;
+use App\Models\MovimientoEquipamiento;
 use App\Models\User;
 use App\Models\Vehiculo;
+use App\Models\VencimientoEquipamiento;
 use App\Services\EquipamientoDeUnidades;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Spatie\Permission\Models\Role;
 
 use function Pest\Laravel\actingAs;
@@ -55,6 +59,26 @@ it('loads the straps of 4" and 2", with and without chicharra, without a minimum
         'Pico' => false,
         'Pala' => false,
         'Caja de herramientas' => false,
+        'Triángulos de seguridad' => false,
+        'Tacos de seguridad' => false,
+        'Gata' => false,
+        'Llave de ruedas' => false,
+    ]);
+});
+
+it('loads the basic kit of a tractor with how many it must carry', function (): void {
+    expect(ItemEquipamiento::query()->vigentes()->where('aplica_a', 'tracto')->pluck('minimo', 'nombre')->all())->toBe([
+        'Extintor' => 1,
+        'Botiquín' => 1,
+        'Conos de seguridad' => 2,
+        'Kit antiderrame' => 1,
+        'Pico' => 1,
+        'Pala' => 1,
+        'Caja de herramientas' => 1,
+        'Triángulos de seguridad' => 2,
+        'Tacos de seguridad' => 2,
+        'Gata' => 1,
+        'Llave de ruedas' => 1,
     ]);
 });
 
@@ -108,7 +132,7 @@ it('counts on each unit only the equipment that applies to it', function (): voi
     // El tracto tiene lo suyo: extintor, botiquín, conos y herramientas.
     actingAs(contador())
         ->get(route('mantenimiento.equipamiento.show', $tracto))
-        ->assertInertia(fn ($page) => $page->has('carreta.items', 7)->where('carreta.items.0.nombre', 'Extintor'));
+        ->assertInertia(fn ($page) => $page->has('carreta.items', 11)->where('carreta.items.0.nombre', 'Extintor'));
 });
 
 it('lists the carretas missing something first, and shows each one with its counts', function (): void {
@@ -131,7 +155,7 @@ it('lists the carretas missing something first, and shows each one with its coun
             ->where('carretas.1.id', $tracto->id)
             ->where('carretas.1.estado', 'sin_contar')
             ->where('carretas.2.estado', 'completo')
-            ->has('catalogo', 11)
+            ->has('catalogo', 15)
         );
 
     actingAs(contador())
@@ -167,7 +191,7 @@ it('lets whoever configures the plans edit the items and their minimums', functi
         'Faja de 4" con chicharra' => 10,
         'Faja de 2" con chicharra' => 4,
         'Cadena de amarre' => 2,
-    ])->and(ItemEquipamiento::query()->count())->toBe(12);
+    ])->and(ItemEquipamiento::query()->count())->toBe(16);
 });
 
 it('keeps counting for whoever has its permission', function (): void {
@@ -181,4 +205,96 @@ it('keeps counting for whoever has its permission', function (): void {
         ->post(route('mantenimiento.equipamiento.store', $carreta), ['fecha' => '2026-10-15', 'items' => [['id' => faja('Faja de 4" con chicharra')->id, 'buenas' => 1, 'danadas' => 0]]])
         ->assertForbidden();
     actingAs(User::factory()->create())->get(route('mantenimiento.equipamiento.index'))->assertForbidden();
+});
+
+it('shows the survey screen with the kit of the unit to whoever can count', function (): void {
+    $tracto = Vehiculo::factory()->create();
+
+    actingAs(contador())
+        ->get(route('mantenimiento.equipamiento.levantamiento', $tracto))
+        ->assertInertia(fn ($page) => $page
+            ->component('mantenimiento/equipamiento/levantamiento')
+            ->has('carreta.items', 11)
+            ->where('carreta.items.0.minimo', 1)
+            ->where('maximoFotos', 3)
+        );
+
+    $rol = Role::findOrCreate('mirador', 'web');
+    $rol->syncPermissions([Permiso::MantenimientoVer->value]);
+
+    actingAs(User::factory()->create()->assignRole($rol))
+        ->get(route('mantenimiento.equipamiento.levantamiento', $tracto))
+        ->assertForbidden();
+});
+
+it('saves the survey with its photos, notes and expiry, without touching the warehouse', function (): void {
+    Storage::fake('public');
+
+    $tracto = Vehiculo::factory()->create();
+    $extintor = faja('Extintor');
+    $pala = faja('Pala');
+    $botiquin = faja('Botiquín');
+
+    actingAs(contador())
+        ->post(route('mantenimiento.equipamiento.store', $tracto), [
+            'fecha' => '2026-11-20',
+            'items' => [
+                ['id' => $extintor->id, 'buenas' => 1, 'danadas' => 0, 'vence_el' => '2027-03-14', 'fotos' => [UploadedFile::fake()->image('extintor.jpg', 800, 600)]],
+                ['id' => $pala->id, 'buenas' => 0, 'danadas' => 0, 'nota' => 'No está en la cabina'],
+                ['id' => $botiquin->id, 'buenas' => 0, 'danadas' => 1, 'nota' => 'Incompleto'],
+            ],
+        ])
+        ->assertSessionHasNoErrors()
+        ->assertRedirect(route('mantenimiento.equipamiento.show', $tracto));
+
+    $conteo = ConteoEquipamiento::query()->where('vehiculo_id', $tracto->id)->with('detalles')->sole();
+    $detalles = $conteo->detalles->keyBy('item_equipamiento_id');
+
+    expect($detalles[$extintor->id]->getMedia('fotos'))->toHaveCount(1)
+        ->and($detalles[$pala->id]->nota)->toBe('No está en la cabina')
+        ->and($detalles[$pala->id]->getMedia('fotos'))->toHaveCount(0)
+        ->and(VencimientoEquipamiento::query()->where('vehiculo_id', $tracto->id)->sole()->vence_el->toDateString())->toBe('2027-03-14')
+        // Lo que ya tenía queda como saldo inicial; lo que falta, no.
+        ->and(MovimientoEquipamiento::query()->where('vehiculo_id', $tracto->id)->pluck('cantidad', 'item_equipamiento_id')->all())
+        ->toBe([$extintor->id => 1, $botiquin->id => 1]);
+
+    $items = collect(app(EquipamientoDeUnidades::class)->paraVehiculo($tracto)['items'])->keyBy('nombre');
+
+    expect($items['Extintor'])->toMatchArray(['asignado' => 1, 'faltan' => 0, 'vence_el' => '2027-03-14'])
+        ->and($items['Pala'])->toMatchArray(['asignado' => 0, 'faltan' => 1])
+        // El dañado está en la unidad, pero no cuenta para lo que debe llevar.
+        ->and($items['Botiquín'])->toMatchArray(['asignado' => 1, 'danadas' => 1, 'faltan' => 1]);
+
+    actingAs(contador())
+        ->get(route('mantenimiento.equipamiento.show', $tracto))
+        ->assertInertia(fn ($page) => $page
+            ->has("fotos.{$extintor->id}", 1)
+            ->missing("fotos.{$pala->id}")
+            ->where('conteos.0.detalles', fn ($detalles): bool => collect($detalles)->pluck('nota', 'item')->all() === ['Extintor' => null, 'Pala' => 'No está en la cabina', 'Botiquín' => 'Incompleto']
+                && collect($detalles)->mapWithKeys(fn (array $detalle): array => [$detalle['item'] => count($detalle['fotos'])])->all() === ['Extintor' => 1, 'Pala' => 0, 'Botiquín' => 0])
+        );
+});
+
+it('rejects more photos than an item admits and files that are not photos', function (): void {
+    Storage::fake('public');
+
+    $tracto = Vehiculo::factory()->create();
+    $extintor = faja('Extintor');
+    $foto = fn (): UploadedFile => UploadedFile::fake()->image('foto.jpg', 400, 300);
+
+    actingAs(contador())
+        ->post(route('mantenimiento.equipamiento.store', $tracto), [
+            'fecha' => '2026-11-20',
+            'items' => [['id' => $extintor->id, 'buenas' => 1, 'danadas' => 0, 'fotos' => [$foto(), $foto(), $foto(), $foto()]]],
+        ])
+        ->assertSessionHasErrors('items.0.fotos');
+
+    actingAs(contador())
+        ->post(route('mantenimiento.equipamiento.store', $tracto), [
+            'fecha' => '2026-11-20',
+            'items' => [['id' => $extintor->id, 'buenas' => 1, 'danadas' => 0, 'fotos' => [UploadedFile::fake()->createWithContent('nota.txt', 'no es una foto')]]],
+        ])
+        ->assertSessionHasErrors('items.0.fotos.0');
+
+    expect(ConteoEquipamiento::query()->count())->toBe(0);
 });

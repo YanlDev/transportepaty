@@ -2,6 +2,7 @@
 
 use App\Models\Abastecimiento;
 use App\Models\ConductorDocumento;
+use App\Models\DetalleConteoEquipamiento;
 use App\Models\Factura;
 use App\Models\IngresoAlmacen;
 use App\Models\LecturaKilometraje;
@@ -126,6 +127,7 @@ return [
         OrdenTrabajo::class => 'mantenimiento',
         IngresoAlmacen::class => 'almacen',
         ValeGasto::class => 'gastos',
+        DetalleConteoEquipamiento::class => 'equipamiento',
     ],
 
 ];

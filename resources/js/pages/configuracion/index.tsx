@@ -168,7 +168,7 @@ export default function Configuracion({
                       {
                           titulo: 'Equipamiento de carretas',
                           descripcion:
-                              'Las fajas y los mínimos por carreta («Ítems y mínimos» en la pantalla).',
+                              'Lo que debe llevar cada unidad y cuánto («Dotación» en la pantalla).',
                           href: equipamiento.index().url,
                           icono: ShieldCheck,
                       },

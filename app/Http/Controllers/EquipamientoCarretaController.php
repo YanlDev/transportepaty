@@ -16,6 +16,7 @@ use App\Models\Vehiculo;
 use App\Models\VencimientoEquipamiento;
 use App\Services\ArticulosDeEquipamiento;
 use App\Services\EquipamientoDeUnidades;
+use App\Services\FileUploadService;
 use App\Services\RelojOperativo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -24,6 +25,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 /**
  * El equipamiento de las unidades: las fajas de las carretas; el extintor, el
@@ -31,8 +33,8 @@ use Inertia\Response;
  *
  * Lo que una unidad tiene lo dice `EquipamientoDeUnidades`: su saldo inicial,
  * lo que salió del almacén con vale a su nombre, lo que llegó o se fue en un
- * traslado y lo que se dio de baja. Acá se cuenta en base, se pasa de una
- * unidad a otra y se da de baja.
+ * traslado y lo que se dio de baja. Acá se hace el levantamiento en base
+ * (qué hay, con fotos), se pasa de una unidad a otra y se da de baja.
  *
  * @phpstan-import-type EstadoUnidadEquipada from EquipamientoDeUnidades
  */
@@ -90,9 +92,10 @@ class EquipamientoCarretaController extends Controller
                 'tipo' => $vehiculo->tipo->value,
                 ...$this->estado($estado),
             ],
+            'fotos' => $this->ultimasFotos($vehiculo),
             'conteos' => ConteoEquipamiento::query()
                 ->where('vehiculo_id', $vehiculo->id)
-                ->with(['detalles.item:id,nombre', 'user:id,name'])
+                ->with(['detalles.item:id,nombre', 'detalles.media', 'user:id,name'])
                 ->orderByDesc('fecha')
                 ->orderByDesc('id')
                 ->limit(30)
@@ -107,6 +110,8 @@ class EquipamientoCarretaController extends Controller
                             'item' => $detalle->item->nombre,
                             'buenas' => $detalle->buenas,
                             'danadas' => $detalle->danadas,
+                            'nota' => $detalle->nota,
+                            'fotos' => $this->fotos($detalle),
                         ])
                         ->values()
                         ->all(),
@@ -150,14 +155,43 @@ class EquipamientoCarretaController extends Controller
         ]);
     }
 
-    public function store(StoreConteoEquipamientoRequest $request, Vehiculo $vehiculo): RedirectResponse
+    /**
+     * La pantalla del levantamiento, pensada para el celular: la lista de lo
+     * que la unidad debe llevar, para marcar cada cosa y tomarle su foto.
+     */
+    public function levantamiento(Vehiculo $vehiculo): Response
+    {
+        $this->authorize('create', ConteoEquipamiento::class);
+
+        $estado = $this->equipamiento->paraVehiculo($vehiculo);
+
+        abort_if($estado['items'] === [], 404);
+
+        return Inertia::render('mantenimiento/equipamiento/levantamiento', [
+            'carreta' => [
+                'id' => $vehiculo->id,
+                'placa' => $vehiculo->placa,
+                'marca' => $vehiculo->marca,
+                'tipo' => $vehiculo->tipo->value,
+                ...$this->estado($estado),
+            ],
+            'maximoFotos' => DetalleConteoEquipamiento::MAXIMO_FOTOS,
+            'hoy' => RelojOperativo::hoy(),
+        ]);
+    }
+
+    /**
+     * Guarda el levantamiento. No toca el almacén: lo que la unidad ya tenía
+     * queda como su saldo inicial.
+     */
+    public function store(StoreConteoEquipamientoRequest $request, Vehiculo $vehiculo, FileUploadService $subidas): RedirectResponse
     {
         $this->authorize('create', ConteoEquipamiento::class);
 
         $datos = $request->validated();
         $filas = collect($this->equipamiento->paraVehiculo($vehiculo)['items'])->keyBy('id');
 
-        DB::transaction(function () use ($request, $vehiculo, $datos, $filas): void {
+        DB::transaction(function () use ($request, $vehiculo, $datos, $filas, $subidas): void {
             $conteo = ConteoEquipamiento::create([
                 'vehiculo_id' => $vehiculo->id,
                 'fecha' => $datos['fecha'],
@@ -165,18 +199,32 @@ class EquipamientoCarretaController extends Controller
                 'user_id' => $request->user()?->id,
             ]);
 
-            foreach ($datos['items'] as $item) {
-                $conteo->detalles()->create([
+            foreach ($datos['items'] as $indice => $item) {
+                $fila = $filas[(int) $item['id']];
+
+                $detalle = $conteo->detalles()->create([
                     'item_equipamiento_id' => $item['id'],
                     'buenas' => $item['buenas'],
                     'danadas' => $item['danadas'],
+                    'nota' => $item['nota'] ?? null,
                 ]);
+
+                foreach ($item['fotos'] ?? [] as $numero => $foto) {
+                    $subidas->guardar($detalle, $foto, 'fotos', "items.{$indice}.fotos.{$numero}");
+                }
+
+                if ($fila['lleva_vencimiento'] && ($item['vence_el'] ?? null) !== null) {
+                    VencimientoEquipamiento::query()->updateOrCreate(
+                        ['vehiculo_id' => $vehiculo->id, 'item_equipamiento_id' => $item['id']],
+                        ['vence_el' => $item['vence_el'], 'user_id' => $request->user()?->id],
+                    );
+                }
 
                 // Lo que la unidad ya tenía antes de que el almacén llevara
                 // la cuenta: su primer conteo es su saldo inicial.
                 $contado = (int) $item['buenas'] + (int) $item['danadas'];
 
-                if (! $filas[(int) $item['id']]['con_historial'] && $contado > 0) {
+                if (! $fila['con_historial'] && $contado > 0) {
                     MovimientoEquipamiento::create([
                         'vehiculo_id' => $vehiculo->id,
                         'item_equipamiento_id' => $item['id'],
@@ -192,9 +240,9 @@ class EquipamientoCarretaController extends Controller
 
         $estado = $this->equipamiento->paraVehiculo($vehiculo);
 
-        return back()->with('toast', [
+        return to_route('mantenimiento.equipamiento.show', $vehiculo)->with('toast', [
             'type' => $estado['faltan'] > 0 ? 'warning' : 'success',
-            'message' => "Conteo de {$vehiculo->placa} registrado."
+            'message' => "Levantamiento de {$vehiculo->placa} registrado."
                 .($estado['faltan'] > 0 ? " Le faltan {$estado['faltan']}." : ''),
         ]);
     }
@@ -227,7 +275,7 @@ class EquipamientoCarretaController extends Controller
 
         return back()->with('toast', [
             'type' => 'success',
-            'message' => 'Conteo eliminado: la unidad vuelve a su conteo anterior.',
+            'message' => 'Levantamiento eliminado: la unidad vuelve al anterior.',
         ]);
     }
 
@@ -348,7 +396,7 @@ class EquipamientoCarretaController extends Controller
             $articulos->asegurar();
         });
 
-        return back()->with('toast', ['type' => 'success', 'message' => 'Equipamiento y mínimos guardados.']);
+        return back()->with('toast', ['type' => 'success', 'message' => 'Dotación guardada.']);
     }
 
     private function registrar(StoreMovimientoEquipamientoRequest $request, Vehiculo $vehiculo, TipoMovimientoEquipamiento $tipo): MovimientoEquipamiento
@@ -365,6 +413,35 @@ class EquipamientoCarretaController extends Controller
             'motivo' => $datos['motivo'] ?? null,
             'user_id' => $request->user()?->id,
         ])->load(['item', 'destino']);
+    }
+
+    /**
+     * Las fotos más recientes de cada ítem de la unidad: las del último
+     * levantamiento en que se le tomó alguna.
+     *
+     * @return array<int, list<array{id: int, url: string}>>
+     */
+    private function ultimasFotos(Vehiculo $vehiculo): array
+    {
+        return DetalleConteoEquipamiento::query()
+            ->whereIn('conteo_equipamiento_id', ConteoEquipamiento::query()->where('vehiculo_id', $vehiculo->id)->select('id'))
+            ->whereHas('media')
+            ->with('media')
+            ->orderByDesc('conteo_equipamiento_id')
+            ->get()
+            ->unique('item_equipamiento_id')
+            ->mapWithKeys(fn (DetalleConteoEquipamiento $detalle): array => [$detalle->item_equipamiento_id => $this->fotos($detalle)])
+            ->all();
+    }
+
+    /**
+     * @return list<array{id: int, url: string}>
+     */
+    private function fotos(DetalleConteoEquipamiento $detalle): array
+    {
+        return array_values($detalle->getMedia('fotos')
+            ->map(fn (Media $foto): array => ['id' => $foto->id, 'url' => $foto->getUrl()])
+            ->all());
     }
 
     /**

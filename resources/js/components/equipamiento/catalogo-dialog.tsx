@@ -27,9 +27,9 @@ type Fila = {
 };
 
 /**
- * Qué lleva cada unidad y cuántas debe llevar como mínimo. Cada ítem dice a
- * qué unidades aplica y si tiene fecha de vencimiento. El mínimo en blanco
- * se cuenta pero no avisa faltantes. Quitar un ítem no borra su historial.
+ * La dotación: qué debe llevar cada unidad y cuánto. Cada ítem dice a qué
+ * unidades aplica y si tiene fecha de vencimiento. La cantidad en blanco se
+ * cuenta pero no avisa faltantes. Quitar un ítem no borra su historial.
  * Al guardar, cada ítem queda con su artículo en el almacén.
  */
 export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
@@ -85,23 +85,23 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
             <DialogTrigger asChild>
                 <Button variant="outline">
                     <SlidersHorizontal className="size-4" />
-                    Ítems y mínimos
+                    Dotación
                 </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-lg">
                 <form onSubmit={guardar} className="grid gap-4">
                     <DialogHeader>
-                        <DialogTitle>Equipamiento de las unidades</DialogTitle>
+                        <DialogTitle>Dotación de las unidades</DialogTitle>
                         <DialogDescription>
-                            Lo que lleva cada unidad y su mínimo. Sin mínimo, se
-                            cuenta pero no avisa. Cada ítem tiene su artículo en
-                            el almacén: de ahí sale con vale.
+                            Lo que debe llevar cada unidad y cuánto. Agrega o
+                            quita cosas cuando quieras. Sin cantidad, se cuenta
+                            pero no avisa. Lo nuevo sale del almacén con vale.
                         </DialogDescription>
                     </DialogHeader>
 
                     <div className="grid grid-cols-[minmax(0,1fr)_5rem_2.25rem] gap-2 text-xs text-muted-foreground">
-                        <span>Ítem</span>
-                        <span>Mínimo</span>
+                        <span>Qué lleva</span>
+                        <span>Cuánto</span>
                     </div>
                     <div className="-mt-2 flex flex-col gap-2">
                         {data.items.map((fila, indice) => (
@@ -119,7 +119,7 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
                                     }
                                 />
                                 <Input
-                                    aria-label={`Mínimo de ${fila.nombre}`}
+                                    aria-label={`Cuánto debe llevar de ${fila.nombre}`}
                                     inputMode="numeric"
                                     placeholder="—"
                                     value={fila.minimo}
@@ -220,7 +220,7 @@ export function CatalogoDialog({ catalogo }: { catalogo: ItemCatalogo[] }) {
                         }
                     >
                         <Plus className="size-4" />
-                        Agregar ítem
+                        Agregar
                     </Button>
 
                     <DialogFooter>

@@ -24,8 +24,8 @@ type Props = {
 };
 
 /**
- * El equipamiento de las carretas —por ahora, las fajas—: a cuáles les
- * falta algo, cuáles no se contaron y cuáles están completas.
+ * El equipamiento de la flota: a qué unidades les falta algo, cuáles no
+ * tienen levantamiento todavía y cuáles están completas.
  */
 export default function EquipamientoIndex({ carretas, catalogo }: Props) {
     const { puede } = usePermisos();
@@ -47,6 +47,9 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
     );
 
     const conMinimo = catalogo.some((item) => item.minimo !== null);
+    const levantadas = carretas.filter(
+        (carreta) => carreta.estado !== 'sin_contar',
+    ).length;
 
     return (
         <div className="flex h-full flex-1 flex-col gap-6 p-4 md:p-6">
@@ -54,7 +57,11 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
 
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm text-muted-foreground">
-                    {catalogo.map((item) => item.nombre).join(' · ')}
+                    Levantamiento hecho en{' '}
+                    <span className="font-medium text-foreground tabular-nums">
+                        {levantadas} de {carretas.length}
+                    </span>{' '}
+                    unidades
                 </p>
                 <div className="flex gap-2">
                     <div className="relative flex-1 sm:w-64">
@@ -82,10 +89,10 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
 
             {!conMinimo && (
                 <p className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-                    Todavía no hay mínimos: las unidades se cuentan, pero no
-                    avisa a cuáles les falta.
+                    La dotación todavía no tiene cantidades: se hace el
+                    levantamiento, pero no avisa a cuáles les falta.
                     {puede('mantenimiento.configurar') &&
-                        ' Cárgalos en «Ítems y mínimos».'}
+                        ' Cárgalas en «Dotación».'}
                 </p>
             )}
 
@@ -172,7 +179,7 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                                                 <span className="text-xs text-muted-foreground">
                                                     {carreta.estado ===
                                                     'sin_contar'
-                                                        ? 'Nunca se contó'
+                                                        ? 'Sin levantamiento'
                                                         : carreta.faltan > 0
                                                           ? carreta.items
                                                                 .filter(
@@ -197,7 +204,7 @@ export default function EquipamientoIndex({ carretas, catalogo }: Props) {
                                                                   )
                                                                   .join(' · ')
                                                             : carreta.conteo_fecha
-                                                              ? `Contada el ${formatearFecha(carreta.conteo_fecha)}`
+                                                              ? `Levantamiento del ${formatearFecha(carreta.conteo_fecha)}`
                                                               : 'Con equipamiento del almacén, sin contar'}
                                                 </span>
                                             </div>
@@ -245,17 +252,17 @@ const GRUPOS: {
     },
     {
         clave: 'contado',
-        titulo: 'Contadas, sin mínimo con qué comparar',
+        titulo: 'Con levantamiento, sin cantidad con qué comparar',
         tono: 'aviso',
-        ayuda: 'Tienen conteo, pero sus ítems no tienen mínimo definido.',
+        ayuda: 'Tienen levantamiento, pero su dotación no dice cuánto deben llevar.',
         abierto: false,
     },
     { clave: 'completo', titulo: 'Completas', tono: 'bien', abierto: false },
     {
         clave: 'sin_contar',
-        titulo: 'Sin contar',
-        tono: 'neutro',
-        ayuda: 'Nunca se les hizo un conteo: se cuentan cuando la unidad está en base.',
-        abierto: false,
+        titulo: 'Sin levantamiento',
+        tono: 'aviso',
+        ayuda: 'Todavía no se revisó qué llevan: se hace cuando la unidad está en base.',
+        abierto: true,
     },
 ];

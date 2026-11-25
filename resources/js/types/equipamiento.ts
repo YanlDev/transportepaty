@@ -53,12 +53,21 @@ export type ItemCatalogo = {
     articulo: string | null;
 };
 
+/** Una foto tomada en un levantamiento. */
+export type FotoEquipamiento = { id: number; url: string };
+
 export type ConteoEquipamiento = {
     id: number;
     fecha: string;
     observacion: string | null;
     usuario: string | null;
-    detalles: { item: string; buenas: number; danadas: number }[];
+    detalles: {
+        item: string;
+        buenas: number;
+        danadas: number;
+        nota: string | null;
+        fotos: FotoEquipamiento[];
+    }[];
 };
 
 /** Un saldo inicial, un traslado o una baja de equipamiento de la unidad. */

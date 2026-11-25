@@ -25,8 +25,8 @@ enum EstadoEquipamiento: string
         return match ($this) {
             self::Falta => 'Le falta',
             self::Completo => 'Completo',
-            self::Contado => 'Contado',
-            self::SinContar => 'Sin contar',
+            self::Contado => 'Con levantamiento',
+            self::SinContar => 'Sin levantamiento',
         };
     }
 

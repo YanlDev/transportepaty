@@ -1,4 +1,4 @@
-import { Head, setLayoutProps, useForm } from '@inertiajs/react';
+import { Head, Link, setLayoutProps, useForm } from '@inertiajs/react';
 import {
     ArrowLeftRight,
     CalendarClock,
@@ -16,7 +16,6 @@ import equipamiento, {
 import mantenimiento from '@/actions/App/Http/Controllers/MantenimientoController';
 import { AnularDialog } from '@/components/almacen/anular-dialog';
 import { ConfirmarBorradoDialog } from '@/components/confirmar-borrado-dialog';
-import { ConteoDialog } from '@/components/equipamiento/conteo-dialog';
 import { EstadoEquipamientoBadge } from '@/components/equipamiento/estado-equipamiento';
 import InputError from '@/components/input-error';
 import { SelectorBuscable } from '@/components/selector-buscable';
@@ -39,12 +38,15 @@ import { cn } from '@/lib/utils';
 import type {
     ConteoEquipamiento,
     EquipamientoCarreta,
+    FotoEquipamiento,
     ItemCarreta,
     MovimientoEquipamiento,
 } from '@/types/equipamiento';
 
 type Props = {
     carreta: EquipamientoCarreta;
+    /** Las fotos más recientes de cada ítem, por su id. */
+    fotos: Record<number, FotoEquipamiento[]>;
     conteos: ConteoEquipamiento[];
     movimientos: MovimientoEquipamiento[];
     /** Las demás unidades, para los traslados. */
@@ -56,13 +58,14 @@ type Props = {
 type Accion = { tipo: 'traslado' | 'baja' | 'vencimiento'; item: ItemCarreta };
 
 /**
- * El equipamiento de una unidad: lo que tiene asignado frente al mínimo, sus
- * vencimientos, y de dónde salió cada cosa. Lo nuevo llega del almacén con un
- * vale a nombre de la unidad; acá se cuenta, se pasa a otra unidad y se da de
- * baja.
+ * La ficha de equipamiento de una unidad: lo que tiene frente a lo que debe
+ * llevar, con sus fotos y vencimientos, y de dónde salió cada cosa. Lo nuevo
+ * llega del almacén con un vale a nombre de la unidad; acá se hace el
+ * levantamiento, se pasa a otra unidad y se da de baja.
  */
 export default function EquipamientoCarretaShow({
     carreta,
+    fotos,
     conteos,
     movimientos,
     unidades,
@@ -71,7 +74,6 @@ export default function EquipamientoCarretaShow({
 }: Props) {
     const { puede } = usePermisos();
     const puedeContar = puede('mantenimiento.equipamiento');
-    const [contando, setContando] = useState(false);
     const [accion, setAccion] = useState<Accion | null>(null);
     const placa = formatearPlaca(carreta.placa);
 
@@ -102,20 +104,24 @@ export default function EquipamientoCarretaShow({
                         {carreta.tipo === 'carreta' ? 'Carreta' : 'Tracto'}
                         {carreta.marca && ` · ${carreta.marca}`} ·{' '}
                         {carreta.conteo_fecha
-                            ? `contada el ${formatearFecha(carreta.conteo_fecha)}`
-                            : 'nunca se contó'}
+                            ? `levantamiento del ${formatearFecha(carreta.conteo_fecha)}`
+                            : 'sin levantamiento'}
                     </p>
                 </div>
                 {puedeContar && (
-                    <Button onClick={() => setContando(true)}>
-                        <ClipboardList className="size-4" />
-                        Contar equipamiento
+                    <Button asChild>
+                        <Link href={equipamiento.levantamiento(carreta.id)}>
+                            <ClipboardList className="size-4" />
+                            {carreta.conteo_fecha
+                                ? 'Revisar de nuevo'
+                                : 'Hacer levantamiento'}
+                        </Link>
                     </Button>
                 )}
             </div>
 
             <p className="text-xs text-muted-foreground">
-                Lo que la unidad tiene sale de su primer conteo y de los vales
+                Lo que la unidad tiene sale de su levantamiento y de los vales
                 de almacén a su nombre. Si falta algo, se pide al almacén: no se
                 agrega acá.
             </p>
@@ -133,8 +139,8 @@ export default function EquipamientoCarretaShow({
                                 </span>
                                 <span className="block text-xs text-muted-foreground">
                                     {item.minimo !== null
-                                        ? `Mínimo ${item.minimo}`
-                                        : 'Sin mínimo'}
+                                        ? `Debe llevar ${item.minimo}`
+                                        : 'Sin cantidad fija'}
                                     {(item.danadas ?? 0) > 0 && (
                                         <span className="text-amber-700 dark:text-amber-400">
                                             {' '}
@@ -178,6 +184,7 @@ export default function EquipamientoCarretaShow({
                                 )}
                             </div>
                         </div>
+                        <Fotos fotos={fotos[item.id] ?? []} de={item.nombre} />
                         {puedeContar &&
                             (item.asignado > 0 || item.lleva_vencimiento) && (
                                 <div className="flex flex-wrap gap-1.5">
@@ -303,11 +310,11 @@ export default function EquipamientoCarretaShow({
             </section>
 
             <section className="flex flex-col gap-3">
-                <h2 className="font-medium">Conteos</h2>
+                <h2 className="font-medium">Levantamientos</h2>
                 {conteos.length === 0 ? (
                     <p className="rounded-xl border border-dashed p-4 text-center text-sm text-muted-foreground">
-                        Todavía no se contó esta unidad. Su primer conteo es su
-                        saldo inicial.
+                        Todavía no se hizo el levantamiento de esta unidad. Lo
+                        que se encuentre queda como su saldo inicial.
                     </p>
                 ) : (
                     <ul className="flex flex-col divide-y rounded-xl border bg-card">
@@ -333,6 +340,22 @@ export default function EquipamientoCarretaShow({
                                             )
                                             .join(' · ')}
                                     </span>
+                                    {conteo.detalles
+                                        .filter((d) => d.nota)
+                                        .map((d) => (
+                                            <span
+                                                key={d.item}
+                                                className="text-xs"
+                                            >
+                                                {d.item}: {d.nota}
+                                            </span>
+                                        ))}
+                                    <Fotos
+                                        fotos={conteo.detalles.flatMap(
+                                            (d) => d.fotos,
+                                        )}
+                                        de="el levantamiento"
+                                    />
                                     {(conteo.observacion || conteo.usuario) && (
                                         <span className="text-xs">
                                             {[
@@ -349,14 +372,14 @@ export default function EquipamientoCarretaShow({
                                         url={
                                             equipamiento.destroy(conteo.id).url
                                         }
-                                        titulo="¿Eliminar este conteo?"
+                                        titulo="¿Eliminar este levantamiento?"
                                         descripcion="Se borra del historial. Si fue el que fijó el saldo inicial y ya hubo traslados o bajas, no se puede."
                                         trigger={
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
                                                 className="-my-1 size-8"
-                                                aria-label="Eliminar el conteo"
+                                                aria-label="Eliminar el levantamiento"
                                             >
                                                 <Trash2 className="size-3.5" />
                                             </Button>
@@ -369,17 +392,6 @@ export default function EquipamientoCarretaShow({
                 )}
             </section>
 
-            {contando && (
-                <ConteoDialog
-                    carretaId={carreta.id}
-                    placa={placa}
-                    items={carreta.items}
-                    hoy={hoy}
-                    abierto
-                    onAbiertoChange={setContando}
-                />
-            )}
-
             {accion && (
                 <AccionDialog
                     key={`${accion.tipo}-${accion.item.id}`}
@@ -391,6 +403,34 @@ export default function EquipamientoCarretaShow({
                     onCerrar={() => setAccion(null)}
                 />
             )}
+        </div>
+    );
+}
+
+/** Las fotos en miniatura; tocar una la abre entera. */
+function Fotos({ fotos, de }: { fotos: FotoEquipamiento[]; de: string }) {
+    if (fotos.length === 0) {
+        return null;
+    }
+
+    return (
+        <div className="flex flex-wrap gap-2">
+            {fotos.map((foto) => (
+                <a
+                    key={foto.id}
+                    href={foto.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="size-16 overflow-hidden rounded-md border"
+                >
+                    <img
+                        src={foto.url}
+                        alt={`Foto de ${de}`}
+                        loading="lazy"
+                        className="size-full object-cover"
+                    />
+                </a>
+            ))}
         </div>
     );
 }

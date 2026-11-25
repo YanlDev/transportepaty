@@ -394,6 +394,8 @@ Route::middleware('auth')->group(function () {
         ->name('mantenimiento.equipamiento.catalogo');
     Route::get('mantenimiento/equipamiento/{vehiculo}', [EquipamientoCarretaController::class, 'show'])
         ->name('mantenimiento.equipamiento.show');
+    Route::get('mantenimiento/equipamiento/{vehiculo}/levantamiento', [EquipamientoCarretaController::class, 'levantamiento'])
+        ->name('mantenimiento.equipamiento.levantamiento');
     Route::post('mantenimiento/equipamiento/{vehiculo}/conteos', [EquipamientoCarretaController::class, 'store'])
         ->name('mantenimiento.equipamiento.store');
     Route::delete('mantenimiento/equipamiento/conteos/{conteo}', [EquipamientoCarretaController::class, 'destroy'])
