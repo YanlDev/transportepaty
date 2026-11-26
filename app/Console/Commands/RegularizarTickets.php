@@ -471,7 +471,13 @@ class RegularizarTickets extends Command
                 $tipo($subida, TipoCarga::Particular) => 'Particular a mina',
                 default => 'Materiales a mina (Ransa)',
             },
-            ZonaRuta::Juliaca => str_contains(mb_strtoupper($subida->origen), 'CHILCA') ? 'Particular de Chilca a Juliaca' : 'Particular a Juliaca',
+            // Los 180 de Chilca son para quien baja de Pisco a Chilca sin
+            // llegar a Lima. Quien llegó cargado a Lima (cal a Cajamarquilla,
+            // metálico al Callao) y de ahí bajó a Chilca hace el recorrido
+            // entero: 190.
+            ZonaRuta::Juliaca => str_contains(mb_strtoupper($subida->origen), 'CHILCA') && $aLima === null && $metalico === null
+                ? 'Particular de Chilca a Juliaca'
+                : 'Particular a Juliaca',
             ZonaRuta::Arequipa => 'Particular a Arequipa',
             ZonaRuta::Cusco => 'Particular a Cusco',
             ZonaRuta::Moquegua => 'Particular a Moquegua – Ilo',

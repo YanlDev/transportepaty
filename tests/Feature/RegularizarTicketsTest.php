@@ -164,3 +164,32 @@ it('lets whoever can edit the ticket clear the review flag', function (): void {
 
     expect($ticket->fresh()->por_revisar)->toBeNull();
 });
+
+/*
+ * Los 180 gal de Chilca son para quien baja de Pisco a Chilca sin llegar a
+ * Lima. Quien llegó cargado a Lima y de ahí bajó a Chilca hace el recorrido
+ * entero: «Particular a Juliaca», 190.
+ */
+it('gives the full Lima route to a unit that reached Lima loaded before loading in Chilca', function (): void {
+    guiaDe($this->tracto, '2026-11-19', TipoCarga::Particular, 'CAR. JULIACA-PUNO KM. 11 HACIENDA YUNGURA - CARACOTO - SAN ROMAN - PUNO', 'INT. D SEC. PAMPA DE CAJAMARQUILLA (SUB LOTE D) - LURIGANCHO - LIMA - LIMA');
+    guiaDe($this->tracto, '2026-11-23', TipoCarga::Particular, 'OTR. SUB LOTE C-D-E-F AREA INDUSTRIAL - CHILCA - CAÑETE - LIMA', JULIACA);
+
+    artisan('transpaty:regularizar-tickets', ['--aplicar' => true])->assertSuccessful();
+
+    $ticket = Vuelta::query()->sole();
+
+    expect($ticket->rutas->pluck('nombre')->all())->toBe(['Particular a Lima', 'Particular a Juliaca'])
+        ->and($ticket->topeDe(SentidoTramo::Regreso))->toBe(190.0);
+});
+
+it('keeps the Chilca route for a unit that comes down from Pisco without reaching Lima loaded', function (): void {
+    guiaDe($this->tracto, '2026-11-07', TipoCarga::Concentrado, MINA, PLANTA_PISCO);
+    guiaDe($this->tracto, '2026-11-12', TipoCarga::Particular, 'OTR. SUB LOTE C-D-E-F AREA INDUSTRIAL - CHILCA - CAÑETE - LIMA', JULIACA);
+
+    artisan('transpaty:regularizar-tickets', ['--aplicar' => true])->assertSuccessful();
+
+    $ticket = Vuelta::query()->sole();
+
+    expect($ticket->rutas->pluck('nombre')->all())->toContain('Particular de Chilca a Juliaca')
+        ->and($ticket->topeDe(SentidoTramo::Regreso))->toBe(180.0);
+});
